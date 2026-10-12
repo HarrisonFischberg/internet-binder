@@ -3,13 +3,13 @@
 // classification, lets the user adjust anything, and saves through the
 // background worker. Nothing here touches the network.
 
-import { createStore, chromeBackend } from '../shared/storage.js';
+import { createStore, chromeBackend, idbBackend } from '../shared/storage.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, parsePrice, sanitizeText, pluralize } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
 
-const store = createStore(chromeBackend());
+const store = createStore(chromeBackend(), idbBackend());
 const $ = (id) => document.getElementById(id);
 const send = (msg) => new Promise((resolve) => {
   try {
@@ -124,7 +124,7 @@ async function loadProduct() {
   // Pages already saved always get the preview, with its "update existing" option.
   if (!(await store.findByUrl(state.product.canonicalUrl || state.product.url).catch(() => null))) {
     if (await instantSaveOn()) {
-      if (await instantSave({ label: 'Saving with AI…' })) return;
+      if (await instantSave({ label: 'Saving…', instant: true })) return;
     } else {
       const cls = await send({ type: MSG.CLASSIFY, product: state.product });
       const c = cls.ok ? cls.classification : null;
@@ -134,8 +134,8 @@ async function loadProduct() {
   await showPreview();
 }
 
-// With AI on (and a key saved), the popup always saves straight away: the AI
-// tidies the title and picks the collection in the background worker.
+// With AI on (and a key saved), the popup always saves straight away with the local result;
+// the background worker then tidies the title and may re-file it ("Finishing details…").
 async function instantSaveOn() {
   try {
     const settings = await store.getSettings();
@@ -145,9 +145,9 @@ async function instantSaveOn() {
   }
 }
 
-async function instantSave({ label, classification = null }) {
+async function instantSave({ label, classification = null, instant = false }) {
   $('loadingText').textContent = label;
-  const res = await send({ type: MSG.SAVE_ITEM, product: state.product, source: 'toolbar', classification });
+  const res = await send({ type: MSG.SAVE_ITEM, product: state.product, source: 'toolbar', classification, instant });
   if (!res.ok || res.duplicate) return false;
   state.instant = true;
   state.collections = await store.getCollections().catch(() => state.collections); // may include one the save just created
@@ -502,7 +502,10 @@ function showSaved(item, collection) {
   const thumb = $('savedThumb');
   clear(thumb);
   if (item.image) thumb.append(el('img', { src: item.image, alt: '', onError: () => clear(thumb) }));
-  $('savedInboxHint').textContent = isInbox ? 'Keepsake wasn’t sure where this belongs. You’ll find it in Review, ready to sort.' : '';
+  $('savedInboxHint').textContent = [
+    isInbox ? 'Keepsake wasn’t sure where this belongs. You’ll find it in Review, ready to sort.' : '',
+    item.captureState === 'pending' ? 'Finishing details: your AI provider is tidying the title. You can close this.' : '',
+  ].filter(Boolean).join(' ');
   $('savedUndo').classList.toggle('hidden', state.savedMode === 'updated');
   const learnRow = $('learnRow');
   const learnCheck = $('learnCheck');

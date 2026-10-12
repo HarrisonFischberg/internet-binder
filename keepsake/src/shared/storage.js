@@ -1,23 +1,30 @@
-// Keepsake storage. Everything lives in chrome.storage.local under a handful of
-// keys. The store takes an injectable backend so tests can run in Node.
+// Keepsake storage (schema 3).
 //
-// Keys:
-//   keepsake_meta          { schemaVersion, installedAt, updatedAt }
-//   keepsake_collections   { [id]: Collection }
-//   keepsake_items         { [id]: Item }
-//   keepsake_prefs         categorization preferences (threshold, learned keywords…)
-//   keepsake_settings      UI + feature settings
-//   keepsake_importHistory { instagram: { [normalizedUrl]: itemId } }
-//   keepsake_secrets       { aiApiKey } — never exported
-//   keepsake_aiLog         [AiChange] — what "Clean up with AI" changed, for undo. Read on
-//                          its own (not part of readAll) and never exported.
+// chrome.storage.local (the `kv` backend):
+//   keepsake_meta          { schemaVersion, installedAt, updatedAt, migratedToRecordsAt? }
+//   keepsake_settings      UI + feature settings (per device)
+//   keepsake_secrets       { aiApiKey }: never exported
+// IndexedDB "keepsake" (the `db` backend, see db.js):
+//   items                  one record per save, including the Trash (deletedAt set)
+//   collections            one record per collection
+//   kv: prefs              categorization preferences (threshold, learned keywords…)
+//   kv: importHistory      { instagram: { [normalizedUrl]: itemId } }
+//   kv: aiLog              [AiChange]: what AI changed, for undo. Never exported.
+//
+// Schema 1/2 kept everything in chrome.storage.local under keepsake_items, keepsake_collections,
+// keepsake_prefs, keepsake_importHistory and keepsake_aiLog. init() copies those into IndexedDB once,
+// checks the copy, and leaves the old keys untouched so a rollback to 1.3.x still finds its data.
 
 import { uid, nowIso, sanitizeText, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer } from './util.js';
 import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
 import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, forgetCollection } from './categorizer.js';
+import { memoryRecordBackend, STORES } from './db.js';
 
-export const SCHEMA_VERSION = 2;
+export { idbBackend, memoryRecordBackend, StorageFullError } from './db.js';
+
+export const SCHEMA_VERSION = 3;
+const LEGACY_SCHEMA_VERSION = 2; // the last schema stored entirely in chrome.storage.local
 export const KEYS = {
   meta: 'keepsake_meta',
   collections: 'keepsake_collections',
@@ -29,7 +36,13 @@ export const KEYS = {
 };
 const AI_LOG_KEY = 'keepsake_aiLog';
 const AI_LOG_MAX = 3000;
-const EXPORTABLE = [KEYS.meta, KEYS.collections, KEYS.items, KEYS.prefs, KEYS.settings, KEYS.importHistory];
+// Where a schema 1/2 library lives (read once by the migration, then left for rollback).
+const LEGACY = { collections: KEYS.collections, items: KEYS.items, prefs: KEYS.prefs, importHistory: KEYS.importHistory };
+const LEGACY_KEYS = [...Object.values(LEGACY), AI_LOG_KEY];
+export const TRASH_DAYS = 30;
+// Fields a person edits by hand. Once edited, AI and enrichment leave them alone.
+const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'url', 'description'];
+const CAPTURE_STATES = ['pending', 'complete', 'failed'];
 export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024 };
 
 export const DEFAULT_SETTINGS = {
@@ -101,6 +114,7 @@ export function chromeBackend() {
     set: (obj) => area.set(obj),
     remove: (keys) => area.remove(keys),
     clear: () => area.clear(),
+    getBytesInUse: (keys) => area.getBytesInUse(keys),
     onChanged(fn) {
       const handler = (changes, areaName) => {
         if (areaName === 'local') fn(changes);
@@ -149,13 +163,13 @@ function nextColor(collections) {
 export function migrate(data) {
   let version = Number(data[KEYS.meta]?.schemaVersion || 0);
   let out = data;
-  while (version < SCHEMA_VERSION) {
+  while (version < LEGACY_SCHEMA_VERSION) {
     const step = MIGRATIONS[version];
     if (!step) break;
     out = step(out);
     version += 1;
   }
-  out[KEYS.meta] = { ...(out[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION };
+  out[KEYS.meta] = { ...(out[KEYS.meta] || {}), schemaVersion: Math.max(version, LEGACY_SCHEMA_VERSION) };
   return out;
 }
 
@@ -219,6 +233,12 @@ export function makeItem(input = {}) {
     instagram: input.instagram && typeof input.instagram === 'object' ? sanitizeInstagram(input.instagram, now) : null,
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,
     relatedItemId: typeof input.relatedItemId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(input.relatedItemId) ? input.relatedItemId : null,
+    // Schema 3: what was captured, which fields the person edited, how far the save got, and the Trash.
+    originalTitle: sanitizeText(input.originalTitle, 200) || sanitizeText(input.title, 200),
+    userFields: uniqStrings(input.userFields, 20).filter((f) => USER_FIELDS.includes(f) || f === 'collectionId'),
+    captureState: CAPTURE_STATES.includes(input.captureState) ? input.captureState : 'complete',
+    captureError: sanitizeText(input.captureError, 200),
+    deletedAt: typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt)) ? input.deletedAt : null,
     createdAt: input.createdAt || now,
     updatedAt: now,
   };
@@ -293,44 +313,100 @@ function uniqStrings(list, max) {
 
 // --- the store ---------------------------------------------------------------------
 
-export function createStore(backend) {
-  const be = backend;
+// `kv` holds settings, the AI key and meta (chrome.storage.local in the extension); `db` holds
+// saves, collections and learned data (IndexedDB in the extension, see db.js). Both have in-memory
+// versions for tests. On first run of schema 3 the store copies a schema 1/2 library out of
+// chrome.storage.local into `db`, checks the copy, and leaves the old keys in place for rollback.
+export function createStore(kv, db = memoryRecordBackend()) {
+  if (!db) throw new Error('Keepsake needs IndexedDB, which is turned off for this browser profile.');
+  const be = kv;
   let writeQueue = Promise.resolve();
   const serial = (fn) => {
     const run = writeQueue.then(fn, fn);
     writeQueue = run.catch(() => {});
     return run;
   };
+  // One init/migration at a time across popup, dashboard and worker where Web Locks exist.
+  const exclusive = (name, fn) => (globalThis.navigator?.locks?.request ? navigator.locks.request(name, fn) : serial(fn));
+
+  const kvGet = async (name, fallback) => {
+    const r = await db.get('kv', name);
+    return r ? r.value : fallback;
+  };
+  const kvSet = (name, value) => db.put('kv', [{ key: name, value }]);
+  const kvUpdate = async (name, fallback, fn) => {
+    const [r] = await db.update('kv', [name], (rec) => ({ key: name, value: fn(rec ? rec.value : structuredClone(fallback)) }));
+    return r.value;
+  };
+  const live = (i) => i && !i.deletedAt;
+  const mapOf = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
+
+  async function readSettings() {
+    const raw = await be.get([KEYS.meta, KEYS.settings, KEYS.secrets]);
+    return { meta: raw[KEYS.meta] || null, settings: deepMerge(DEFAULT_SETTINGS, raw[KEYS.settings] || {}), secrets: raw[KEYS.secrets] || {} };
+  }
 
   async function readAll() {
-    const raw = await be.get(Object.values(KEYS));
+    const [{ meta, settings, secrets }, items, collections, prefs, importHistory] = await Promise.all([
+      readSettings(), db.all('items'), db.all('collections'), kvGet('prefs', null), kvGet('importHistory', null),
+    ]);
     return {
-      meta: raw[KEYS.meta] || null,
-      collections: raw[KEYS.collections] || {},
-      items: raw[KEYS.items] || {},
-      prefs: { ...emptyPrefs(), ...(raw[KEYS.prefs] || {}) },
-      settings: deepMerge(DEFAULT_SETTINGS, raw[KEYS.settings] || {}),
-      importHistory: raw[KEYS.importHistory] || { instagram: {} },
-      secrets: raw[KEYS.secrets] || {},
+      meta,
+      collections: mapOf(collections),
+      items: mapOf(items.filter(live)),
+      prefs: { ...emptyPrefs(), ...(prefs || {}) },
+      settings,
+      importHistory: importHistory || { instagram: {} },
+      secrets,
     };
+  }
+
+  // v1/v2 library in chrome.storage.local -> v3 records. Returns what was copied, for the check.
+  async function migrateToRecords(raw) {
+    const legacy = migrate({ ...raw });
+    const collections = Object.values(legacy[KEYS.collections] || {}).filter((c) => c && c.id);
+    const items = Object.values(legacy[KEYS.items] || {}).filter((i) => i && i.id).map((i) => ({
+      ...i,
+      originalTitle: i.originalTitle || i.title || '',
+      userFields: Array.isArray(i.userFields) ? i.userFields : [],
+      captureState: 'complete',
+      captureError: '',
+      deletedAt: null,
+    }));
+    if (collections.length) await db.put('collections', collections);
+    if (items.length) {
+      for (let i = 0; i < items.length; i += 500) await db.put('items', items.slice(i, i + 500));
+    }
+    if (legacy[KEYS.prefs]) await kvSet('prefs', { ...emptyPrefs(), ...legacy[KEYS.prefs] });
+    if (legacy[KEYS.importHistory]) await kvSet('importHistory', legacy[KEYS.importHistory]);
+    if (Array.isArray(raw[AI_LOG_KEY])) await kvSet('aiLog', raw[AI_LOG_KEY]);
+    // The check: every id and title arrived.
+    const got = mapOf(await db.all('items'));
+    const missing = items.filter((i) => !got[i.id] || got[i.id].title !== i.title);
+    const gotCols = mapOf(await db.all('collections'));
+    const missingCols = collections.filter((c) => !gotCols[c.id]);
+    if (missing.length || missingCols.length) {
+      throw new Error(`Keepsake couldn't finish updating its storage (${missing.length} saves and ${missingCols.length} collections didn't copy). Your saves are untouched; reload to try again.`);
+    }
+    return { items: items.length, collections: collections.length };
   }
 
   const api = {
     backend: be,
+    db,
 
     async init() {
-      return serial(async () => {
-        const raw = await be.get(Object.values(KEYS));
+      return exclusive('keepsake-init', async () => {
+        const raw = await be.get([...Object.values(KEYS), ...LEGACY_KEYS]);
         const hadMeta = !!raw[KEYS.meta];
-        const migrated = migrate({ ...raw });
+        const version = Number(raw[KEYS.meta]?.schemaVersion || 0);
         const now = nowIso();
-        const meta = { installedAt: now, ...(migrated[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now };
-        const write = { [KEYS.meta]: meta };
-        for (const k of Object.values(KEYS)) if (k !== KEYS.meta && migrated[k] && migrated[k] !== raw[k]) write[k] = migrated[k];
-        if (!raw[KEYS.collections] || !Object.keys(raw[KEYS.collections]).length) {
-          write[KEYS.collections] = defaultCollections();
-        }
-        if (!raw[KEYS.prefs]) write[KEYS.prefs] = emptyPrefs();
+        let migrated = null;
+        if (version < SCHEMA_VERSION && (raw[LEGACY.items] || raw[LEGACY.collections])) migrated = await migrateToRecords(raw);
+        if (!(await db.count('collections'))) await db.put('collections', Object.values(defaultCollections()));
+        if (!(await db.get('kv', 'prefs'))) await kvSet('prefs', emptyPrefs());
+        if (!(await db.get('kv', 'importHistory'))) await kvSet('importHistory', { instagram: {} });
+        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}) } };
         if (!raw[KEYS.settings]) write[KEYS.settings] = structuredClone(DEFAULT_SETTINGS);
         else if (raw[KEYS.settings].ai && raw[KEYS.settings].ai.on === undefined) {
           // Before the single switch, each AI feature had its own. Carry over only the
@@ -338,10 +414,8 @@ export function createStore(backend) {
           const { enabled, useForCategorization, instantSave, ...ai } = raw[KEYS.settings].ai;
           write[KEYS.settings] = { ...raw[KEYS.settings], ai: { ...ai, on: !!instantSave } };
         }
-        if (!raw[KEYS.items]) write[KEYS.items] = {};
-        if (!raw[KEYS.importHistory]) write[KEYS.importHistory] = { instagram: {} };
         await be.set(write);
-        return { fresh: !hadMeta };
+        return { fresh: !hadMeta, migrated };
       });
     },
 
@@ -353,13 +427,11 @@ export function createStore(backend) {
 
     // -- collections --
     async getCollections() {
-      const { collections } = await readAll();
-      return sortCollections(Object.values(collections));
+      return sortCollections(await db.all('collections'));
     },
 
     async getCollection(id) {
-      const { collections } = await readAll();
-      return collections[id] || null;
+      return (await db.get('collections', id)) || null;
     },
 
     // Creates a collection unless one with the same name exists (returns that one then).
@@ -367,8 +439,7 @@ export function createStore(backend) {
     // who types "Food" gets a Food collection even though Kitchen lists food as an alias.
     async createCollection(input, { allowSimilar = false } = {}) {
       return serial(async () => {
-        const { collections } = await readAll();
-        const list = Object.values(collections);
+        const list = await db.all('collections');
         if (list.length >= LIMITS.maxCollections) throw new Error('Collection limit reached');
         if (!allowSimilar) {
           const target = normalizeName(input.name);
@@ -377,8 +448,7 @@ export function createStore(backend) {
         }
         const maxOrder = list.reduce((m, c) => Math.max(m, c.sortOrder || 0), 0);
         const col = makeCollection({ ...input, color: input.color || nextColor(list), sortOrder: input.sortOrder ?? maxOrder + 1 });
-        collections[col.id] = col;
-        await be.set({ [KEYS.collections]: collections });
+        await db.put('collections', [col]);
         return { collection: col, existed: false };
       });
     },
@@ -396,191 +466,189 @@ export function createStore(backend) {
     },
 
     async updateCollection(id, patch) {
-      return serial(async () => {
-        const { collections } = await readAll();
-        const existing = collections[id];
-        if (!existing) throw new Error('Collection not found');
-        const merged = makeCollection({ ...existing, ...patch, id, createdAt: existing.createdAt });
-        collections[id] = merged;
-        await be.set({ [KEYS.collections]: collections });
-        return merged;
-      });
+      const [merged] = await db.update('collections', [id], (existing) => (existing ? makeCollection({ ...existing, ...patch, id, createdAt: existing.createdAt }) : undefined));
+      if (!merged) throw new Error('Collection not found');
+      return merged;
     },
 
     async reorderCollections(orderedIds) {
-      return serial(async () => {
-        const { collections } = await readAll();
-        // Listed ids come first in the given order; anything not listed keeps
-        // its current relative order behind them.
-        const listed = orderedIds.filter((id) => collections[id]);
-        const rest = sortCollections(Object.values(collections))
-          .filter((c) => !listed.includes(c.id))
-          .map((c) => c.id);
-        [...listed, ...rest].forEach((id, i) => {
-          collections[id].sortOrder = i + 1;
-          collections[id].updatedAt = nowIso();
-        });
-        await be.set({ [KEYS.collections]: collections });
-      });
+      const all = await db.all('collections');
+      const byId = mapOf(all);
+      // Listed ids come first in the given order; anything not listed keeps
+      // its current relative order behind them.
+      const listed = orderedIds.filter((id) => byId[id]);
+      const rest = sortCollections(all).filter((c) => !listed.includes(c.id)).map((c) => c.id);
+      const order = new Map([...listed, ...rest].map((id, i) => [id, i + 1]));
+      await db.update('collections', [...order.keys()], (c) => (c ? { ...c, sortOrder: order.get(c.id), updatedAt: nowIso() } : undefined));
     },
 
-    // Deleting uncategorizes its items (or moves them to `moveTo`) unless deleteItems is true.
+    // Deleting uncategorizes its items (or moves them to `moveTo`) unless deleteItems is true,
+    // in which case they go to the Trash.
     async deleteCollection(id, { moveTo = null, deleteItems = false } = {}) {
-      return serial(async () => {
-        const data = await readAll();
-        const col = data.collections[id];
-        if (!col) return;
-        const target = moveTo && data.collections[moveTo] ? moveTo : null;
-        for (const item of Object.values(data.items)) {
-          if (item.collectionId !== id) continue;
-          if (deleteItems) delete data.items[item.id];
-          else {
-            item.collectionId = target;
-            item.needsReview = item.needsReview || !target;
-            item.previousCollections = [...(item.previousCollections || []), id].slice(-20);
-            item.updatedAt = nowIso();
-          }
-        }
-        delete data.collections[id];
-        const prefs = forgetCollection(data.prefs, id, target);
-        await be.set({ [KEYS.collections]: data.collections, [KEYS.items]: data.items, [KEYS.prefs]: prefs });
+      const col = await db.get('collections', id);
+      if (!col) return;
+      const target = moveTo && (await db.get('collections', moveTo)) ? moveTo : null;
+      const ids = (await db.all('items')).filter((i) => i.collectionId === id).map((i) => i.id);
+      const now = nowIso();
+      await db.update('items', ids, (item) => {
+        if (!item || item.collectionId !== id) return undefined;
+        const next = { ...item, collectionId: target, previousCollections: [...(item.previousCollections || []), id].slice(-20), updatedAt: now };
+        if (deleteItems) next.deletedAt = item.deletedAt || now;
+        else next.needsReview = item.needsReview || !target;
+        return next;
       });
+      await db.remove('collections', [id]);
+      await kvUpdate('prefs', emptyPrefs(), (prefs) => forgetCollection(prefs, id, target));
     },
 
     async mergeCollections(sourceId, targetId) {
-      return serial(async () => {
-        const data = await readAll();
-        const source = data.collections[sourceId];
-        const target = data.collections[targetId];
-        if (!source || !target || sourceId === targetId) throw new Error('Pick two different collections');
-        for (const item of Object.values(data.items)) {
-          if (item.collectionId === sourceId) {
-            item.collectionId = targetId;
-            item.previousCollections = [...(item.previousCollections || []), sourceId].slice(-20);
-            item.updatedAt = nowIso();
-          }
-        }
-        target.aliases = uniqStrings([...(target.aliases || []), source.name, ...(source.aliases || [])], 20);
-        target.keywords = uniqStrings([...(target.keywords || []), ...(source.keywords || [])], 40);
-        if (!target.coverImage && source.coverImage) target.coverImage = source.coverImage;
-        if (!target.taxonomyKey && source.taxonomyKey) target.taxonomyKey = source.taxonomyKey;
-        target.updatedAt = nowIso();
-        delete data.collections[sourceId];
-        const prefs = forgetCollection(data.prefs, sourceId, targetId);
-        await be.set({ [KEYS.collections]: data.collections, [KEYS.items]: data.items, [KEYS.prefs]: prefs });
-        return target;
-      });
+      const source = await db.get('collections', sourceId);
+      const target = await db.get('collections', targetId);
+      if (!source || !target || sourceId === targetId) throw new Error('Pick two different collections');
+      const ids = (await db.all('items')).filter((i) => i.collectionId === sourceId).map((i) => i.id);
+      const now = nowIso();
+      await db.update('items', ids, (item) => (item && item.collectionId === sourceId
+        ? { ...item, collectionId: targetId, previousCollections: [...(item.previousCollections || []), sourceId].slice(-20), updatedAt: now }
+        : undefined));
+      const [merged] = await db.update('collections', [targetId], (t) => (t ? {
+        ...t,
+        aliases: uniqStrings([...(t.aliases || []), source.name, ...(source.aliases || [])], 20),
+        keywords: uniqStrings([...(t.keywords || []), ...(source.keywords || [])], 40),
+        coverImage: t.coverImage || source.coverImage || '',
+        taxonomyKey: t.taxonomyKey || source.taxonomyKey || null,
+        updatedAt: now,
+      } : undefined));
+      await db.remove('collections', [sourceId]);
+      await kvUpdate('prefs', emptyPrefs(), (prefs) => forgetCollection(prefs, sourceId, targetId));
+      return merged;
     },
 
     // -- items --
     async getItems() {
-      const { items } = await readAll();
-      return Object.values(items).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+      return (await db.all('items')).filter(live).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     },
 
+    // Includes items in the Trash, so links to them still resolve.
     async getItem(id) {
-      const { items } = await readAll();
-      return items[id] || null;
+      return (await db.get('items', id)) || null;
     },
 
     async findByUrl(url) {
       const key = normalizeUrl(url);
       if (!key) return null;
-      const { items } = await readAll();
-      return Object.values(items).find((i) => i.urlKey === key) || null;
+      return (await db.byIndex('items', 'urlKey', key)).find(live) || null;
     },
 
     async addItem(input) {
-      return serial(async () => {
-        const { items } = await readAll();
-        if (Object.keys(items).length >= LIMITS.maxItems) throw new Error('Item limit reached');
-        const item = makeItem(input);
-        items[item.id] = item;
-        await be.set({ [KEYS.items]: items });
-        return item;
-      });
+      if ((await db.count('items')) >= LIMITS.maxItems) throw new Error('Item limit reached');
+      const item = makeItem(input);
+      await db.put('items', [item]);
+      return item;
     },
 
-    async updateItem(id, patch) {
-      return serial(async () => {
-        const { items } = await readAll();
-        const existing = items[id];
-        if (!existing) throw new Error('Item not found');
-        const next = makeItem({ ...existing, ...patch, id, createdAt: existing.createdAt });
-        items[id] = next;
-        await be.set({ [KEYS.items]: items });
-        return next;
+    // by: 'user' records hand-edited fields in userFields, so AI and enrichment never overwrite them.
+    async updateItem(id, patch, { by = 'user' } = {}) {
+      const [next] = await db.update('items', [id], (existing) => {
+        if (!existing) return undefined;
+        const userFields = new Set(existing.userFields || []);
+        if (by === 'user') for (const f of USER_FIELDS) if (f in patch && patch[f] !== existing[f]) userFields.add(f);
+        return makeItem({ ...existing, ...patch, id, createdAt: existing.createdAt, userFields: [...userFields] });
       });
+      if (!next) throw new Error('Item not found');
+      return next;
     },
 
+    // Moves items to the Trash. They stay restorable for TRASH_DAYS.
     async deleteItems(ids) {
-      return serial(async () => {
-        const { items, importHistory } = await readAll();
-        for (const id of ids) {
-          const it = items[id];
-          if (it && it.type === 'instagram' && importHistory.instagram) {
-            for (const [k, v] of Object.entries(importHistory.instagram)) if (v === id) delete importHistory.instagram[k];
-          }
-          delete items[id];
-        }
-        await be.set({ [KEYS.items]: items, [KEYS.importHistory]: importHistory });
+      const now = nowIso();
+      await db.update('items', ids, (item) => (item && !item.deletedAt ? { ...item, deletedAt: now, updatedAt: now } : undefined));
+    },
+
+    async restoreItems(ids) {
+      const cols = mapOf(await db.all('collections'));
+      const now = nowIso();
+      await db.update('items', ids, (item) => {
+        if (!item || !item.deletedAt) return undefined;
+        const gone = item.collectionId && !cols[item.collectionId];
+        return { ...item, deletedAt: null, updatedAt: now, ...(gone ? { collectionId: null, needsReview: true } : {}) };
       });
+    },
+
+    async getTrash() {
+      return (await db.all('items')).filter((i) => i.deletedAt).sort((a, b) => (a.deletedAt < b.deletedAt ? 1 : -1));
+    },
+
+    // Permanently removes items (Trash → Delete forever, emptying the Trash, or undoing a save).
+    async deleteForever(ids) {
+      const set = new Set(ids);
+      await db.remove('items', ids);
+      await kvUpdate('importHistory', { instagram: {} }, (h) => {
+        const ig = { ...(h.instagram || {}) };
+        for (const [k, v] of Object.entries(ig)) if (set.has(v)) delete ig[k];
+        return { ...h, instagram: ig };
+      });
+    },
+
+    async purgeTrash({ olderThanDays = TRASH_DAYS, now = Date.now() } = {}) {
+      const cutoff = new Date(now - olderThanDays * 864e5).toISOString();
+      const old = (await db.all('items')).filter((i) => i.deletedAt && i.deletedAt < cutoff).map((i) => i.id);
+      if (old.length) await api.deleteForever(old);
+      return old.length;
+    },
+
+    async getPendingItems() {
+      return (await db.all('items')).filter((i) => live(i) && i.captureState === 'pending');
     },
 
     // Move items; optionally learn from the correction. `learn`: 'light' | 'strong' | false
     async moveItems(ids, collectionId, { learn = 'light' } = {}) {
-      return serial(async () => {
-        const data = await readAll();
-        if (!data.collections[collectionId]) throw new Error('Collection not found');
-        let prefs = data.prefs;
-        for (const id of ids) {
-          const item = data.items[id];
-          if (!item || item.collectionId === collectionId) continue;
-          if (learn) prefs = learnFromCorrection(item, item.collectionId, collectionId, prefs, { strong: learn === 'strong' });
-          item.previousCollections = [...(item.previousCollections || []), item.collectionId].filter(Boolean).slice(-20);
-          item.collectionId = collectionId;
-          item.needsReview = false;
-          item.categorizationSource = 'manual';
-          item.confidence = 1;
-          item.updatedAt = nowIso();
-        }
-        await be.set({ [KEYS.items]: data.items, [KEYS.prefs]: prefs });
+      if (!(await db.get('collections', collectionId))) throw new Error('Collection not found');
+      const learned = [];
+      const now = nowIso();
+      await db.update('items', ids, (item) => {
+        if (!item || item.collectionId === collectionId) return undefined;
+        learned.push({ item, from: item.collectionId });
+        const userFields = new Set(item.userFields || []);
+        userFields.add('collectionId');
+        return {
+          ...item,
+          previousCollections: [...(item.previousCollections || []), item.collectionId].filter(Boolean).slice(-20),
+          collectionId, needsReview: false, categorizationSource: 'manual', confidence: 1, userFields: [...userFields], updatedAt: now,
+        };
       });
+      if (learn && learned.length) {
+        await kvUpdate('prefs', emptyPrefs(), (prefs) => learned.reduce((p, { item, from }) => learnFromCorrection(item, from, collectionId, p, { strong: learn === 'strong' }), { ...emptyPrefs(), ...prefs }));
+      }
     },
 
     // -- prefs & settings --
     async getPrefs() {
-      return (await readAll()).prefs;
+      return { ...emptyPrefs(), ...((await kvGet('prefs', null)) || {}) };
     },
     async setPrefs(prefs) {
-      return serial(() => be.set({ [KEYS.prefs]: { ...emptyPrefs(), ...prefs } }));
+      return kvSet('prefs', { ...emptyPrefs(), ...prefs });
     },
     async updatePrefs(patch) {
-      return serial(async () => {
-        const { prefs } = await readAll();
-        const next = { ...prefs, ...patch };
-        await be.set({ [KEYS.prefs]: next });
-        return next;
-      });
+      return kvUpdate('prefs', emptyPrefs(), (prefs) => ({ ...emptyPrefs(), ...prefs, ...patch }));
     },
     async getSettings() {
-      return (await readAll()).settings;
+      return (await readSettings()).settings;
     },
     async updateSettings(patch) {
       return serial(async () => {
-        const { settings } = await readAll();
+        const { settings } = await readSettings();
         const next = deepMerge(settings, patch);
         await be.set({ [KEYS.settings]: next });
         return next;
       });
     },
     async getSecret(name) {
-      const { secrets } = await readAll();
+      const { secrets } = await readSettings();
       return secrets[name] || '';
     },
     async setSecret(name, value) {
       return serial(async () => {
-        const { secrets } = await readAll();
+        const { secrets } = await readSettings();
         if (value) secrets[name] = String(value);
         else delete secrets[name];
         await be.set({ [KEYS.secrets]: secrets });
@@ -588,120 +656,129 @@ export function createStore(backend) {
     },
 
     // -- AI change log --
-    // Entry: { id, runId, at, itemId, itemTitle, changes: [{ field, before, after }], reason, undone }
+    // Entry: { id, runId, at, itemId, itemTitle, changes: [{ field, from, to }], before, after, reason, undone }
     async getAiLog() {
-      const raw = await be.get(AI_LOG_KEY);
-      return Array.isArray(raw[AI_LOG_KEY]) ? raw[AI_LOG_KEY] : [];
+      const log = await kvGet('aiLog', []);
+      return Array.isArray(log) ? log : [];
     },
     async appendAiLog(entries) {
-      return serial(async () => {
-        const raw = await be.get(AI_LOG_KEY);
-        const log = Array.isArray(raw[AI_LOG_KEY]) ? raw[AI_LOG_KEY] : [];
-        await be.set({ [AI_LOG_KEY]: [...log, ...entries].slice(-AI_LOG_MAX) });
-      });
+      return kvUpdate('aiLog', [], (log) => [...(Array.isArray(log) ? log : []), ...entries].slice(-AI_LOG_MAX));
     },
     async markAiLogUndone(ids) {
-      return serial(async () => {
-        const raw = await be.get(AI_LOG_KEY);
-        const set = new Set(ids);
-        const log = (Array.isArray(raw[AI_LOG_KEY]) ? raw[AI_LOG_KEY] : []).map((e) => (set.has(e.id) ? { ...e, undone: true } : e));
-        await be.set({ [AI_LOG_KEY]: log });
-      });
+      const set = new Set(ids);
+      return kvUpdate('aiLog', [], (log) => (Array.isArray(log) ? log : []).map((e) => (set.has(e.id) ? { ...e, undone: true } : e)));
     },
     async clearAiLog() {
-      return serial(() => be.remove(AI_LOG_KEY));
+      return db.remove('kv', ['aiLog']);
     },
 
     // -- import history (Instagram) --
     async getImportHistory() {
-      return (await readAll()).importHistory;
+      return kvGet('importHistory', { instagram: {} });
+    },
+    async clearImportHistory() {
+      return kvSet('importHistory', { instagram: {} });
     },
     async markImported(entries) {
-      return serial(async () => {
-        const { importHistory } = await readAll();
-        importHistory.instagram = importHistory.instagram || {};
+      return kvUpdate('importHistory', { instagram: {} }, (h) => {
+        const ig = { ...(h.instagram || {}) };
         for (const [url, itemId] of entries) {
           const key = normalizeUrl(url);
-          if (key) importHistory.instagram[key] = itemId;
+          if (key) ig[key] = itemId;
         }
-        await be.set({ [KEYS.importHistory]: importHistory });
+        return { ...h, instagram: ig };
       });
     },
     async importedItemIdFor(url) {
-      const { importHistory, items } = await readAll();
-      const id = (importHistory.instagram || {})[normalizeUrl(url)];
-      return id && items[id] ? id : null;
+      const h = await kvGet('importHistory', { instagram: {} });
+      const id = (h.instagram || {})[normalizeUrl(url)];
+      return id && (await db.get('items', id)) ? id : null;
     },
 
     // -- export / import --
+    // Every save is exported, including the Trash (with deletedAt), so a backup restores everything.
     async exportJSON() {
-      const raw = await be.get(EXPORTABLE);
+      const [items, collections, prefs, importHistory, { settings }] = await Promise.all([
+        db.all('items'), db.all('collections'), kvGet('prefs', emptyPrefs()), kvGet('importHistory', { instagram: {} }), readSettings(),
+      ]);
       return {
         format: 'keepsake-export',
         schemaVersion: SCHEMA_VERSION,
         exportedAt: nowIso(),
-        collections: raw[KEYS.collections] || {},
-        items: raw[KEYS.items] || {},
-        prefs: raw[KEYS.prefs] || emptyPrefs(),
-        settings: raw[KEYS.settings] || DEFAULT_SETTINGS,
-        importHistory: raw[KEYS.importHistory] || { instagram: {} },
+        collections: mapOf(collections),
+        items: mapOf(items),
+        prefs,
+        settings,
+        importHistory,
       };
     },
 
     async importJSON(payload, { mode = 'merge' } = {}) {
       const validated = validateExport(payload);
       return serial(async () => {
-        const data = await readAll();
-        let collections = mode === 'replace' ? {} : data.collections;
-        let items = mode === 'replace' ? {} : data.items;
-        let prefs = mode === 'replace' ? emptyPrefs() : data.prefs;
-        let importHistory = mode === 'replace' ? { instagram: {} } : data.importHistory;
+        if (mode === 'replace') {
+          await db.clear(['items', 'collections']);
+          await kvSet('prefs', emptyPrefs());
+          await kvSet('importHistory', { instagram: {} });
+        }
+        const collections = mapOf(await db.all('collections'));
+        const existingItems = await db.all('items');
+        let prefs = await api.getPrefs();
+        const importHistory = await api.getImportHistory();
         const idMap = new Map();
         let addedCollections = 0;
         let addedItems = 0;
         let skippedItems = 0;
+        const newCols = [];
         for (const col of Object.values(validated.collections)) {
-          const existingById = collections[col.id];
+          const existing = Object.values(collections);
           // Same collection: same id, same name (give or take case and plurals), or the same
           // default category. Not just a related name, or a backup's Kitchen lands in Food.
-          const existing = Object.values(collections);
-          const similar = existingById
+          const similar = collections[col.id]
             || existing.find((c) => normalizeName(c.name) === normalizeName(col.name))
             || (col.taxonomyKey && existing.find((c) => c.taxonomyKey === col.taxonomyKey));
           if (similar) {
             idMap.set(col.id, similar.id);
-            if (col.keywords.length) collections[similar.id] = { ...similar, keywords: uniqStrings([...(similar.keywords || []), ...col.keywords], 40) };
+            if (col.keywords.length) {
+              collections[similar.id] = { ...similar, keywords: uniqStrings([...(similar.keywords || []), ...col.keywords], 40) };
+              newCols.push(collections[similar.id]);
+            }
             continue;
           }
           collections[col.id] = col;
+          newCols.push(col);
           idMap.set(col.id, col.id);
           addedCollections++;
         }
-        const existingKeys = new Set(Object.values(items).map((i) => i.urlKey).filter(Boolean));
+        const ids = new Set(existingItems.map((i) => i.id));
+        const keys = new Set(existingItems.filter(live).map((i) => i.urlKey).filter(Boolean));
+        const newItems = [];
         for (const item of Object.values(validated.items)) {
-          if (items[item.id] || (item.urlKey && existingKeys.has(item.urlKey))) {
+          if (ids.has(item.id) || (item.urlKey && !item.deletedAt && keys.has(item.urlKey))) {
             skippedItems++;
             continue;
           }
           const resolvedId = idMap.get(item.collectionId) || (collections[item.collectionId] ? item.collectionId : null);
           item.collectionId = resolvedId;
           if (!resolvedId) item.needsReview = true;
-          items[item.id] = item;
-          if (item.urlKey) existingKeys.add(item.urlKey);
+          newItems.push(item);
+          ids.add(item.id);
+          if (item.urlKey && !item.deletedAt) keys.add(item.urlKey);
           addedItems++;
         }
-        if (validated.prefs) {
-          prefs = mergePrefs(prefs, validated.prefs, idMap);
-        }
+        if ((await db.count('items')) + newItems.length > LIMITS.maxItems) throw new Error('Item limit reached');
+        if (newCols.length) await db.put('collections', newCols);
+        for (let i = 0; i < newItems.length; i += 500) await db.put('items', newItems.slice(i, i + 500));
+        if (validated.prefs) prefs = mergePrefs(prefs, validated.prefs, idMap);
+        await kvSet('prefs', prefs);
         if (validated.importHistory?.instagram) {
-          importHistory.instagram = { ...(importHistory.instagram || {}) };
-          for (const [k, v] of Object.entries(validated.importHistory.instagram)) if (items[v]) importHistory.instagram[k] = v;
+          const ig = { ...(importHistory.instagram || {}) };
+          for (const [k, v] of Object.entries(validated.importHistory.instagram)) if (ids.has(v)) ig[k] = v;
+          await kvSet('importHistory', { ...importHistory, instagram: ig });
         }
-        const settings = mode === 'replace' && validated.settings ? deepMerge(DEFAULT_SETTINGS, validated.settings) : data.settings;
-        await be.set({
-          [KEYS.collections]: collections, [KEYS.items]: items, [KEYS.prefs]: prefs, [KEYS.settings]: settings, [KEYS.importHistory]: importHistory,
-          [KEYS.meta]: { ...(data.meta || {}), schemaVersion: SCHEMA_VERSION, updatedAt: nowIso() },
-        });
+        const write = { [KEYS.meta]: { ...((await readSettings()).meta || {}), schemaVersion: SCHEMA_VERSION, updatedAt: nowIso() } };
+        if (mode === 'replace' && validated.settings) write[KEYS.settings] = deepMerge(DEFAULT_SETTINGS, validated.settings);
+        await be.set(write);
         return { addedCollections, addedItems, skippedItems };
       });
     },
@@ -720,14 +797,29 @@ export function createStore(backend) {
       return samples.length;
     },
 
+    // Wipes everything Keepsake keeps: records, settings, the AI key and the v2 rollback copy.
     async clearAll() {
-      return serial(async () => {
-        await be.remove([...Object.values(KEYS), AI_LOG_KEY]);
-      });
+      await db.clear(STORES);
+      await be.remove([...Object.values(KEYS), ...LEGACY_KEYS]);
+    },
+
+    // Bytes used: settings in chrome.storage.local plus the origin's IndexedDB estimate where available.
+    async storageUsage() {
+      let kvBytes = null;
+      let dbBytes = null;
+      try { kvBytes = be.getBytesInUse ? await be.getBytesInUse(null) : null; } catch { /* unknown */ }
+      try { dbBytes = globalThis.navigator?.storage?.estimate ? (await navigator.storage.estimate()).usage : null; } catch { /* unknown */ }
+      return { kvBytes, dbBytes };
     },
 
     onChanged(fn) {
-      return be.onChanged ? be.onChanged(fn) : () => {};
+      const offKv = be.onChanged ? be.onChanged(fn) : () => {};
+      const offDb = db.onChanged ? db.onChanged(({ stores = [] } = {}) => {
+        const changes = {};
+        for (const s of stores) changes[s === 'kv' ? KEYS.prefs : `keepsake_${s}`] = {};
+        fn(changes);
+      }) : () => {};
+      return () => { offKv(); offDb(); };
     },
   };
   return api;

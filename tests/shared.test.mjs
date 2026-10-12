@@ -44,8 +44,19 @@ test('parsePrice: common formats', () => {
   assert.equal(parsePrice('free'), null);
 });
 
-test('parsePrice: yen without separators', { todo: 'known bug found in M0: ¥1200 parses as 120' }, () => {
+test('parsePrice: plain numbers are read whole (fixed in 1.4: ¥1200 used to read as 120)', () => {
   assert.deepEqual(parsePrice('¥1200'), { amount: 1200, currency: 'JPY' });
+  assert.deepEqual(parsePrice('$1299.99'), { amount: 1299.99, currency: 'USD' });
+  assert.deepEqual(parsePrice('1.299,00 €'), { amount: 1299, currency: 'EUR' });
+  assert.deepEqual(parsePrice('$12,345,678.90'), { amount: 12345678.9, currency: 'USD' });
+});
+
+test('parsePrice: Swiss apostrophe thousands', { todo: 'known limitation: CHF 1’200 reads as 1' }, () => {
+  assert.deepEqual(parsePrice('CHF 1\u2019200'), { amount: 1200, currency: 'CHF' });
+});
+
+test('parsePrice: multi-buy text', { todo: 'known limitation: "2 for $10" reads as 2' }, () => {
+  assert.equal(parsePrice('2 for $10').amount, 10);
 });
 
 test('sanitizers reject script URLs and strip control characters', () => {

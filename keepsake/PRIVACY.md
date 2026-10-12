@@ -1,23 +1,24 @@
 # Keepsake privacy policy
 
-_Last updated: September 2026 · applies to Keepsake 1.2.0_
+_Last updated: October 2026 · applies to Keepsake 1.4.0 (in development)_
 
 Keepsake is a browser extension that saves products and inspiration into collections **stored only in your browser**. It has no server, no account, no analytics and no advertising. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
 
 ## What Keepsake stores (locally)
 
-All data lives in `chrome.storage.local` for the browser profile you installed it in. It is never uploaded by Keepsake.
+All data lives in the browser profile you installed Keepsake in: your saves, collections and learned preferences in the extension's own **IndexedDB** database, and settings and the AI key in `chrome.storage.local`. None of it is uploaded by Keepsake.
 
-| Key | Contents |
+| Where | Contents |
 | --- | --- |
-| `keepsake_items` | Each save: title, price and currency, retailer/host, page URL and canonical URL, image URL(s) — or, for Instagram imports, a small locally stored thumbnail (JPEG, ≤ 320 px), your note, flags (favorite, purchased, archived), the collection it is in, the confidence and one-line reason the categorizer gave, the store's own product type and tags when the page publishes them (used to sort the item), and for Instagram cards the creator name, caption, Saved-collection name, post date, location, hashtags, caption links and creator-tagged products. Products you save from a post keep a reference to that post's id. |
-| `keepsake_collections` | Collection names, descriptions, keywords, aliases, cover image URL, placeholder color, whether it's pinned, and order. |
-| `keepsake_prefs` | The confidence threshold, the auto-create setting, keyword and retailer weights learned from your moves, and a capped history of the last 200 corrections (title, from → to). |
+| IndexedDB `items` | Each save: title, price and currency, retailer/host, page URL and canonical URL, image URL(s) — or, for Instagram imports, a small locally stored thumbnail (JPEG, ≤ 320 px), your note, flags (favorite, purchased, archived), the collection it is in, the confidence and one-line reason the categorizer gave, the store's own product type and tags when the page publishes them (used to sort the item), and for Instagram cards the creator name, caption, Saved-collection name, post date, location, hashtags, caption links and creator-tagged products. Products you save from a post keep a reference to that post's id. Also the title as first captured (kept when you or the AI change it), which fields you edited by hand, whether details are still being finished, and, for saves in the Trash, when they were deleted. |
+| IndexedDB `collections` | Collection names, descriptions, keywords, aliases, cover image URL, placeholder color, whether it's pinned, and order. |
+| IndexedDB `prefs` | The confidence threshold, the auto-create setting, keyword and retailer weights learned from your moves, and a capped history of the last 200 corrections (title, from → to). |
 | `keepsake_settings` | Theme, on-page button options, Instagram import options, AI provider settings (provider, base URL, model, enabled flags), onboarding flag. |
-| `keepsake_importHistory` | Which Instagram post URLs have already been imported, so re-scans don't duplicate. |
+| IndexedDB `importHistory` | Which Instagram post URLs have already been imported, so re-scans don't duplicate. |
 | `keepsake_secrets` | Your AI API key, if you added one. **Excluded from exports.** |
-| `keepsake_aiLog` | What *Fix with AI* changed (item id and title, each field's value before and after, the AI's one-line reason), capped at 3,000 entries, so changes can be undone. **Excluded from exports.** |
+| IndexedDB `aiLog` | What *Fix with AI*, and the AI tidy after a save, changed (item id and title, each field's value before and after, the AI's one-line reason), capped at 3,000 entries, so changes can be undone. **Excluded from exports.** |
 | `keepsake_meta` | Schema version for migrations. |
+| `keepsake_items`, `keepsake_collections`, `keepsake_prefs`, `keepsake_importHistory`, `keepsake_aiLog` | Only if you used Keepsake 1.3 or earlier: your library as it was before 1.4 moved it to IndexedDB, left unchanged so an older version still works. Erased by *Delete all local data*. |
 | `keepsake_igScan` (session only) | Progress and results of an Instagram scan in progress; cleared after import or when the browser closes. |
 
 Keepsake does **not** store browsing history, page contents beyond the fields above, cookies, form data, credentials, or anything from pages you did not save from.
@@ -41,7 +42,7 @@ Keepsake makes **no network requests of its own**, with two exceptions that you 
 - You choose the provider (OpenAI, Anthropic, or a custom OpenAI-compatible endpoint) and supply **your own API key**. Keepsake asks Chrome for permission to contact only that provider's origin; turning AI off gives that permission back.
 - When you click *Find this product online*, Keepsake shows the exact payload first: the post's locally stored thumbnail (as an image) and its caption, creator and Saved-collection name (as text). Remote Instagram URLs are not forwarded. Nothing else is sent.
 - With web search enabled, the provider runs its own web searches (up to three per post) using that text. Those searches happen on the provider's servers under its policy; Keepsake sends nothing extra and keeps only links that appear in the provider's own search results, discarding any the model invented.
-- Every save (toolbar icon, on-page button or right-click) sends that item's title, price, description, retailer, category/breadcrumbs, the store's product type and the **names** of your collections, from the extension's background worker. The AI's tidied title and collection choice are applied immediately; the save toast offers Undo and Move.
+- After every save (toolbar icon, on-page button or right-click), once the save is already stored on your device, Keepsake sends that item's title, price, description, retailer, category/breadcrumbs, the store's product type and the **names** of your collections, from the extension's background worker. The AI's tidied title and collection choice are then applied, unless you already changed them yourself, and recorded in the change log with Undo. If the provider can't be reached, the save simply stays as it was.
 - When you start *Fix with AI* (from Review or the AI page), Keepsake sends, for each item in the scope you picked: its title, price, retailer, a short description or caption, its current collection name, and — if you allowed live-page reading — the title, price and availability found on its product page, plus your collection names. Every change it applies is recorded in a local change log (`keepsake_aiLog`) so it can be undone; the log is never exported.
 - The provider's own privacy policy and pricing apply to those requests. *Find products* results are stored with the item as clearly labelled, possibly inaccurate suggestions, and links a model made up are discarded. Instant-save and *Fix with AI* results are applied to the item directly (the tidied title, a price that was already on the page, the collection) and can be undone.
 
@@ -51,10 +52,11 @@ Keepsake makes **no network requests of its own**, with two exceptions that you 
 
 | Permission | Purpose |
 | --- | --- |
-| `storage` | Keep your data locally. |
+| `storage` | Keep your settings locally. |
+| `unlimitedStorage` | Let your library grow past Chrome's 10 MB default for extension storage. It stays on your device. |
 | `activeTab`, `scripting` | Read the page you explicitly asked Keepsake to save from, and show the confirmation toast there. |
 | `contextMenus` | The "Save to Keepsake" right-click item. |
-| Optional site access (`*://*/*` or individual sites) | Requested **only** if you enable on-page save buttons, or start a *Fix with AI* run with live-page reading ticked (all sites, to fetch your saved items' product pages). Revoke in Keepsake's settings or at `chrome://extensions`. Leaving "all sites" mode returns the permission automatically. |
+| Optional site access (`*://*/*` or individual sites) | Requested **only** if you enable on-page save buttons, use *Import from tabs* (all sites, to read the open tabs you choose to import), or start a *Fix with AI* run with live-page reading ticked (all sites, to fetch your saved items' product pages). Revoke in Keepsake's settings or at `chrome://extensions`. Leaving "all sites" mode returns the permission automatically. |
 | Optional `https://www.instagram.com/*` | Requested **only** when you use "Read post details" during an Instagram import. Revoke under Settings → Instagram. |
 | Optional provider origin (e.g. `https://api.openai.com/*`) | Requested **only** if you turn AI on; given back when you turn it off. |
 
@@ -62,9 +64,10 @@ Keepsake does not request `tabs`, `history`, `cookies`, `webRequest`, `identity`
 
 ## Your controls
 
-- **Export**: Settings → Data → *Export JSON* downloads everything except the AI key.
+- **Export**: Settings → Data → *Export JSON* downloads everything, including the Trash, except the AI key and the AI change log.
+- **Trash**: deleting a save moves it to the Trash, where it stays for 30 days (cleared when you next open the dashboard after that). *Delete forever* and *Empty Trash* remove saves immediately.
 - **Import**: merge or replace from an export file, after validation.
-- **Erase**: *Delete all local data* wipes every key above (including the API key) after a typed confirmation. Uninstalling the extension also removes its storage.
+- **Erase**: *Delete all local data* wipes everything above, in IndexedDB and `chrome.storage.local` (including the API key and any pre-1.4 copy), after a typed confirmation. Uninstalling the extension also removes its storage.
 - **Inspect**: the in-extension *Privacy* page repeats this policy; the source is readable — there is no build step or minification.
 
 ## Children, sales, tracking

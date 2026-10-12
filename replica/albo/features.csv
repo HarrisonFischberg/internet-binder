@@ -1,0 +1,44 @@
+feature,area,priority,original,clone,notes
+Save current page from browser toolbar in one action,capture,must,yes,yes,[A] Albo Browse extension; Keepsake popup instant save at >=0.75 local confidence (code)
+Save from any iOS app via the share sheet,capture,must,yes,no,[T+A] core capture for both; Keepsake has no mobile app (iOS plan Phase 1)
+Save screenshots and photos with text extraction,capture,should,yes,no,[T+A] Albo via share sheet and Siri Shortcut; Thingz via gallery; would need on-device OCR (Vision) to stay local
+Save straight into a chosen collection at capture time,capture,must,yes,partial,[T+A] Thingz reviewer asks for it (14456616637); Albo reviewer praises it (13586686391); Keepsake popup preview has a collection picker but instant save files first then offers Move
+Bulk import existing Instagram saved collections,import,should,yes,yes,[A] Albo via computer; Keepsake reads the user's own Saved collection in their tab
+Bulk import TikTok and Pinterest saves,import,could,yes,no,[A] Albo; TikTok/Pinterest data-export import would be local file parsing
+Saved record survives the source post being deleted,context,must,yes,partial,[T+A] Albo FAQ; Thingz downloads media; Keepsake keeps text fields and local IG thumbnails but remote product images can rot
+Original source URL always kept and openable,context,must,yes,yes,[A] 1.18 source links; Keepsake keeps url sourceUrl canonicalUrl and an editable link field
+Practical details enrichment (address hours price ingredients),context,should,yes,partial,[T+A] AI server-side for both; Keepsake extracts price retailer from structured data only for products
+Personal notes on a save,context,must,yes,yes,[T+A] Thingz notes hidden until opened (13650335996); Keepsake shows note on the card
+Ratings and personal review or take on a save,context,could,yes,no,[T+A] Thingz Recommend/Want to try; Albo ratings and reviews 1.24
+Automatic categorization into collections,organize,must,yes,yes,[T+A] Keepsake local deterministic with confidence and reasons
+Correct a wrong category directly and teach it,organize,must,yes,yes,[T+A] Thingz reviewer could only chat with a bot (13638986352); Albo could not remove from auto category (13697730838); Keepsake moves and learns
+User-defined collections with keywords,organize,must,yes,yes,[T+A]
+Nested collections or folders,organize,could,yes,no,[A] 1.15 collection folders; requested in 13578727659
+Smart collections filled by rule or tag,organize,should,yes,no,[A] 1.18 and 1.21
+Bulk select move archive delete,organize,should,partial,yes,[A] requested in 13597754083; Keepsake select mode
+Content kinds beyond products (place recipe video article workout film-show book),organize,must,yes,no,[T+A] both span many kinds; Keepsake types are product inspiration instagram only (audit V2)
+Search across all saved text,find,must,yes,partial,[T+A] Keepsake linear substring over title retailer note description caption; no ranking or typo tolerance
+Filters by kind status source and place,find,should,yes,partial,[A] 1.20 library filters; Keepsake filters retailer and source only
+Natural-language ask over your own saves,find,could,yes,no,[T+A] Loop and Ask Albo are server AI; Keepsake could only do this with opt-in BYOK or on-device model
+Resurface saves by context or a periodic recap,rediscover,should,yes,no,[T+A] Thingz Loop; Albo weekly recap 1.14 and widgets 1.22
+Home screen widget for capture or rediscovery,rediscover,could,yes,no,[A] 1.22
+Map of saved places,act,must,yes,no,[A] loved for trips (13868501849) and broken in Oct 2026 (14635372354); owner decision 2026-10-11: map of saved restaurants and places is in the first places release
+Trip planner from saved places,act,could,yes,no,[A] 1.19
+Recipe built from a saved food item (ingredients and steps),act,must,yes,no,[T+A] owner decision 2026-10-11: save a dish or recipe and Keepsake extracts ingredients and steps into a recipe view; no cook mode or meal planning
+Meal planner and grocery list,act,could,yes,skip,[A] out of first-release scope; deep vertical feature
+Film show and book lists to scroll,act,should,yes,no,[A] owner decision 2026-10-11: simple saved lists only; no status tracking ratings or progress
+Wishlist with purchased state,act,must,yes,yes,[A] product tracking on site; Keepsake Purchased view
+Price history and drop alerts,act,should,yes,no,[A] site claims price history; iOS plan designs local checks plus CloudKit records
+Mark done or tried for non-products,act,should,yes,partial,[T+A] Albo Made it; Thingz tried; Keepsake has Purchased and Archive only
+Reminders by date or place,act,could,yes,no,[A] video index; place reminders need location permission
+Undo after save and after AI changes,recovery,must,partial,yes,[A] Keepsake save Undo and AI change log with Undo
+Delete all data from the device in one step,data,must,partial,yes,[A] account deletion target 14 days
+Sync across iPhone iPad Mac,sync,should,yes,no,[T+A] server accounts; Keepsake plan uses the user's CloudKit private database
+Sync with Chrome extension,sync,could,yes,no,[A] web and extension share the account; iOS plan experiment 2 must prove CloudKit Web access
+iPad layout,platform,should,yes,no,[A] 1.14; Thingz reviewers ask for iPad (14097559024 13657175679)
+Native Mac app,platform,could,partial,no,[A] Safari Mac extension only
+Siri and Shortcuts capture,platform,could,yes,no,[A] 1.16 and 1.22
+Share collection privately with a link or friend,social,could,yes,no,[T+A] needs hosting or CloudKit sharing; deferred
+AI chat connector for outside assistants (MCP),integrations,could,yes,skip,[A] hosted OAuth MCP; a local-only variant could be revisited later
+Weekly free save limits and paywall,business,could,yes,skip,[A] the most frequent current complaint; Keepsake does not cap core use
+Workout saves with exercises sets and reps,act,must,yes,no,[A] site lists workouts; owner decision 2026-10-11

@@ -9,7 +9,7 @@ Save products from any site with one click, let your collections sort themselves
 - Optional on-page save buttons for product grids — off until you turn them on, and only on sites you grant.
 - Import your own **Instagram Saved collections**, then **read each post's page** for the real caption, creator, links and creator-tagged products (name, price, shop URL) — no login, no credentials, just your existing session.
 - Calm dashboard: a Home page with search, your latest saves and your top collections; a masonry grid with search, sort, filters, favorites, purchased, archive, bulk actions; collection tiles that scale to hundreds of collections; light/dark.
-- **No account. No server. No telemetry.** Everything lives in `chrome.storage.local`. Export/import as JSON. Delete everything in one click.
+- **No account. No server. No telemetry.** Everything lives in this browser profile (IndexedDB for your saves, `chrome.storage.local` for settings). Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
 - Optional, opt-in, bring-your-own-key AI to help identify products in Instagram saves — with a preview of exactly what leaves the browser.
 
 Manifest V3, plain HTML/CSS/JS, no build step, no dependencies at runtime.
@@ -115,8 +115,9 @@ Open it from the popup or from the extension's Options; it opens on **Home**, an
 - **Menu**: Home, All saves, Favorites, Purchased (everything marked purchased; purchased items leave All saves, Favorites and their collection until un-marked, when they return to the collection they were in) and Archive. **Review** appears only while something is waiting to be filed.
 - **Masonry grid** of cards with image (or a text placeholder when there is none), title, price, retailer or Instagram creator, note, favorite star, source badge and "Needs sorting" label. Clicking a card opens a lightweight **Quick view** (image, title, price, a link to the original page); "Edit details" from there or from a card's **⋯** menu opens the full editor.
 - **Search** across titles, retailers, notes, descriptions, prices, captions and creators; **sort** newest/oldest/price and **filter** by retailer or source from the compact bar above the grid; empty states for every view.
-- **Item details**: the **exact link** the item was saved from, shown in full as a selectable field with **Copy** and **Visit page** (**Open post** for Instagram) — and editable, so you can point an item at the right product page if the extractor grabbed a listing or a redirect. Changing the link updates the host, refreshes an auto-derived retailer name, re-keys duplicate detection, and refuses a link another item already has. Alongside it: edit title/price/note, choose a cover from the candidates, move collection (optionally "use for similar"), favorite / purchased / archived, delete with confirmation.
-- **Select** mode for bulk move, favorite, archive/unarchive, delete and (when AI is on) *Find products*.
+- **Item details**: the **exact link** the item was saved from, shown in full as a selectable field with **Copy** and **Visit page** (**Open post** for Instagram) — and editable, so you can point an item at the right product page if the extractor grabbed a listing or a redirect. Changing the link updates the host, refreshes an auto-derived retailer name, re-keys duplicate detection, and refuses a link another item already has. Alongside it: edit title/price/note, choose a cover from the candidates, move collection (optionally "use for similar"), favorite / purchased / archived, delete (moves to the **Trash**, with Undo).
+- **Select** mode for bulk move, favorite, archive/unarchive, delete (to Trash) and (when AI is on) *Find products*.
+- **Trash** (`#trash`): deleted saves stay 30 days, with Restore (back to their collection, or Review if it's gone), Delete forever and Empty Trash.
 - **Collections**: the sidebar lists every pinned collection, then the ones you saved into most recently, up to eight; the collection you have open is always listed. **All collections** opens every collection as a cover tile (a collage of its latest images), pinned first, with a name/keyword search and sorting by recently saved to, A–Z or most saves. Pin a collection from its tile, its page, or the sidebar (drag or Alt+↑/↓ to reorder pinned ones). Rename by editing the name on the collection's page; keywords, description and cover (newest image or your own URL) under *Keywords*; merge by selecting items and ticking *Merge* in **Move to…**; delete (items become uncategorized, waiting in Review, unless you choose otherwise).
 - **Theme**: system / light / dark (toolbar sun icon or Settings → Appearance).
 - **Load sample data** from the welcome page or the empty state to see the layout; delete it any time.
@@ -149,7 +150,7 @@ Off by default, and it needs **your own API key**. It's one switch (**Use AI**):
 - With **web search** ticked (OpenAI and Anthropic only — custom endpoints have no search tool), the provider runs up to three web searches per post and returns real listings: product name, brand, retailer, price and a link. Each link is checked against the URLs its search actually returned; anything the model made up is **dropped**, and the candidate is shown without a link rather than with a fake one. Every result gets an **Open** and a **Save as product** button, so a found listing becomes a normal Keepsake item with price and URL, linked back to the post.
 - *Identify only* skips the search and just names the likely item, with category, brand and 2–4 **Search the web** phrases you can click yourself.
 - Everything here is labelled as a guess: the model can identify the wrong item, and prices go stale. Check the listing before buying.
-- **Instant save**: clicking the toolbar icon or an on-page button saves immediately with no preview. The AI tidies the title and picks the collection; if it isn't confident (below your confidence threshold) a confident local pick is used, otherwise the item waits in Review. The popup shows *Saved to …* with Undo and a *Move to* menu; the on-page toast offers Move and Undo. Undo in the popup opens the normal editable preview.
+- **Instant save**: clicking the toolbar icon or an on-page button saves immediately with no preview, using the local categorizer (at 75% or more it's filed, otherwise it waits in Review). The save is stored **before** anything is sent; then the AI tidies the title and may re-file it if it's confident (at or above your threshold), unless you already edited the title or moved the item. Those changes go to the AI change log with Undo, and the original title is kept. If the provider is slow or offline the save is unaffected. The popup says *Finishing details…* while the AI works. The popup shows *Saved to …* with Undo and a *Move to* menu; the on-page toast offers Move and Undo. Undo in the popup opens the normal editable preview.
 - **Fix with AI** (Review → *Fix all with AI*, or Optional AI → *Fix with AI* for all items or one collection): reads each item's live product page (optional, without cookies), then tidies titles, updates prices (the model may only choose a number that appears on the page or in the saved data), replaces missing/broken images, and files items into collections. From Review, an item is filed when the AI's confidence meets your threshold; elsewhere an item is only moved at ≥ 85% and never if you filed it yourself. Fixes apply immediately, and every change goes to the **AI change log** (`#ailog`) with per-item and per-run Undo. Dead links, out-of-stock items and unfixable broken images are listed at the end of a run.
 
 Local vs cloud in one sentence: everything in Keepsake — saving, extraction, categorization, dashboard, Instagram import — runs on your machine with no network; the only network calls Keepsake makes are to the AI provider **you** configured (when Optional AI is on: each save, and runs you start) and, for a *Fix with AI* run with live-page reading ticked, to your saved items' own product pages (without cookies).
@@ -167,14 +168,15 @@ See [PRIVACY.md](PRIVACY.md) and the in-extension **Privacy** page. In short:
 
 | Permission | When | Why |
 | --- | --- | --- |
-| `storage` | install | Keep your items, collections and settings in `chrome.storage.local`. |
+| `storage` | install | Keep settings and the optional AI key in `chrome.storage.local`. |
+| `unlimitedStorage` | install | Store your library in IndexedDB without Chrome's 10 MB default cap. Stays on your device. |
 | `activeTab` + `scripting` | install | When you click the icon, press the shortcut or use the context menu, read *that* page's title/price/images at that moment and show the confirmation toast. Nothing runs on pages otherwise. |
 | `contextMenus` | install | The "Save to Keepsake" right-click item. |
-| Site access (`optional_host_permissions`: `*://*/*`) | **only if you enable on-page buttons, or start a *Fix with AI* run with live-page reading** | Run the hover-button script on the sites you granted (per site or all); read saved items' product pages during *Fix with AI*. Revocable in Settings or at `chrome://extensions`. |
+| Site access (`optional_host_permissions`: `*://*/*`) | **only if you enable on-page buttons, use *Import from tabs*, or start a *Fix with AI* run with live-page reading** | Run the hover-button script on the sites you granted (per site or all); read saved items' product pages during *Fix with AI*. Revocable in Settings or at `chrome://extensions`. |
 | `https://www.instagram.com/*` | **only if you use "Read post details"** | Read each imported post's own page (caption, creator, links, tagged products) with your existing session. Revocable under Settings → Instagram. |
 | Provider origin (e.g. `https://api.openai.com/*`) | **only if you turn AI on** | Let the dashboard and background worker call the API you configured. Given back when you turn AI off. |
 
-No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider on save when Optional AI is on.
+No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on.
 
 ## Limitations
 
@@ -220,7 +222,7 @@ Releases are automated with GitHub Actions (`.github/workflows/release.yml`):
 3. The workflow checks out the tag, verifies the tag matches `manifest.json`'s `version`, zips the extension (`manifest.json`, `background.js`, `icons/`, `src/` — docs excluded), uploads it to the existing Chrome Web Store listing via the Chrome Web Store Publish API, and publishes it. It also attaches the zip to a GitHub release for that tag.
 4. Chrome reviews the update (usually within a few hours to a few days) before it rolls out to users; the workflow's "Publish item" step succeeds once the item is submitted for publishing, not once review finishes.
 
-This requires one-time setup of Google OAuth credentials stored as GitHub Secrets — see the repository's Actions secrets for `CHROME_CLIENT_ID`, `CHROME_CLIENT_SECRET`, `CHROME_REFRESH_TOKEN`. The target listing (`icons/`, `icon128.png` as the store icon, single purpose, permission justifications from the table above, remote code: none, data usage: none collected, `PRIVACY.md` as the privacy policy text) is configured once in the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole) and does not need to change per release.
+This requires a Google Cloud service account with Chrome Web Store access, stored as GitHub Secrets: `CHROME_SERVICE_ACCOUNT_KEY` (the JSON key) and `CHROME_PUBLISHER_ID`. The target listing (`icons/`, `icon128.png` as the store icon, single purpose, permission justifications from the table above, remote code: none, data usage: none collected, `PRIVACY.md` as the privacy policy text) is configured once in the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole) and does not need to change per release.
 
 ## Project layout
 
@@ -228,7 +230,7 @@ This requires one-time setup of Google OAuth credentials stored as GitHub Secret
 manifest.json                MV3 manifest
 background.js                service worker: context menu, message hub, saving, content-script registration
 icons/                       original bookmark mark (16/32/48/128 PNG + SVG source)
-src/shared/                  util, url, taxonomy, categorizer, storage (schema v1 + migrations), messages, base.css
+src/shared/                  util, url, taxonomy, categorizer, storage (schema 3 + migrations), db (IndexedDB records), messages, base.css
 src/extract/extract.js       page extractor (JSON-LD → OG/Twitter → microdata → visible heuristics)
 src/content/                 toast.js (Shadow DOM toast), detector.js (card detection), floating.js (hover button)
 src/instagram/               adapter.js (all Instagram selectors), scan.js (scroll + collect + report),

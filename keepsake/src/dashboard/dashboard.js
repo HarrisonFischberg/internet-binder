@@ -1,8 +1,8 @@
-// Keepsake dashboard (full-tab page). Talks to chrome.storage.local directly
+// Keepsake dashboard (full-tab page). Talks to Keepsake's storage (IndexedDB + chrome.storage.local) directly
 // through the shared store and to the background worker only for a couple of
 // helpers (opening tabs, refreshing floating buttons). No network access.
 
-import { createStore, chromeBackend } from '../shared/storage.js';
+import { createStore, chromeBackend, idbBackend, TRASH_DAYS } from '../shared/storage.js';
 import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
@@ -13,7 +13,7 @@ import { renderImport } from './importer.js';
 import { renderTabsImport } from './tabsImport.js';
 import { runAiCleanup, renderAiLog } from './aiCleanup.js';
 
-const store = createStore(chromeBackend());
+const store = createStore(chromeBackend(), idbBackend());
 const $ = (id) => document.getElementById(id);
 
 // Sort and filter controls sit at the top of the grid. The view is cleared on every
@@ -78,6 +78,11 @@ const ctx = {
 
 async function boot() {
   await store.init();
+  // No alarms: the Trash is emptied of anything older than 30 days whenever the dashboard opens,
+  // and saves still "finishing details" (worker stopped mid-way) are picked up again.
+  await store.purgeTrash().catch(() => 0);
+  send({ type: MSG.ENRICH_PENDING });
+  state.trash = await store.getTrash().catch(() => []);
   await reload();
   applyTheme();
   bindChrome();
@@ -111,6 +116,7 @@ async function reload() {
   state.prefs = data.prefs;
   state.settings = data.settings;
   state.importHistory = data.importHistory;
+  state.trash = await store.getTrash().catch(() => state.trash || []);
   for (const id of [...state.selected]) if (!data.items[id]) state.selected.delete(id);
 }
 
@@ -233,6 +239,7 @@ function renderNav() {
   // Review is only in the menu while something is waiting (or while it's open).
   $('navReview').classList.toggle('hidden', !toReview && state.route.name !== 'review');
   setCount('countArchive', state.items.filter((i) => i.archived).length);
+  setCount('countTrash', (state.trash || []).length);
   setCount('countCollections', state.collections.length);
   setCount('countImport', state.scan && state.scan.posts && state.scan.status === 'done' ? state.scan.posts.length : 0);
 }
@@ -440,6 +447,7 @@ function renderToolbar() {
   else if (r.name === 'favorites') title = 'Favorites';
   else if (r.name === 'purchased') title = 'Purchased';
   else if (r.name === 'archive') title = 'Archive';
+  else if (r.name === 'trash') title = 'Trash';
   else if (r.name === 'review') title = 'Review queue';
   else if (r.name === 'import') title = 'Instagram import';
   else if (r.name === 'tabsimport') title = 'Import from tabs';
@@ -520,6 +528,9 @@ function renderView({ keepScroll = false } = {}) {
       break;
     case 'review':
       renderReview(view);
+      break;
+    case 'trash':
+      renderTrash(view);
       break;
     case 'welcome':
       renderWelcome(view);
@@ -910,17 +921,62 @@ async function moveDialog(items) {
   return result === true;
 }
 
+// Deleting moves saves to the Trash (kept 30 days), so it needs no confirmation: Undo is right there.
 async function deleteItems(items) {
-  const ok = await UI.confirmDialog({
-    title: items.length === 1 ? 'Delete this item?' : `Delete ${pluralize(items.length, 'item', 'items')}?`,
-    message: items.length === 1 ? `“${cut(items[0].title, 80)}” will be removed from Keepsake. This can’t be undone.` : 'They will be removed from Keepsake. This can’t be undone.',
-    confirmLabel: 'Delete',
-    danger: true,
+  const ids = items.map((i) => i.id);
+  await store.deleteItems(ids);
+  UI.toast(items.length === 1 ? 'Moved to Trash.' : `Moved ${pluralize(items.length, 'item', 'items')} to Trash.`, {
+    duration: 8000,
+    action: { label: 'Undo', onClick: () => store.restoreItems(ids) },
   });
-  if (!ok) return false;
-  await store.deleteItems(items.map((i) => i.id));
-  UI.toast(items.length === 1 ? 'Item deleted.' : `Deleted ${pluralize(items.length, 'item', 'items')}.`);
   return true;
+}
+
+function renderTrash(view) {
+  const trash = state.trash || [];
+  const page = el('div', { class: 'page' });
+  const intro = el('p', { class: 'help' }, [`Deleted saves stay here for ${TRASH_DAYS} days, then they're removed for good. Restoring puts a save back in its collection (or in Review if that collection is gone).`]);
+  page.append(intro);
+  if (!trash.length) {
+    page.append(UI.emptyState({ title: 'Nothing in Trash', message: `Deleted saves stay here for ${TRASH_DAYS} days.`, icon: UI.trashIcon() }));
+    view.append(page);
+    return;
+  }
+  page.append(el('div', { class: 'review-actions' }, [
+    el('button', { type: 'button', class: 'btn btn-sm', onClick: async () => {
+      await store.restoreItems(trash.map((i) => i.id));
+      UI.toast(`Restored ${pluralize(trash.length, 'item', 'items')}.`);
+    } }, ['Restore all']),
+    el('button', { type: 'button', class: 'btn btn-sm btn-danger', onClick: async () => {
+      const ok = await UI.confirmDialog({ title: 'Empty the Trash?', message: `${pluralize(trash.length, 'item', 'items')} will be deleted for good. This can’t be undone.`, confirmLabel: 'Delete forever', danger: true });
+      if (!ok) return;
+      await store.deleteForever(trash.map((i) => i.id));
+      UI.toast('Trash emptied.');
+    } }, ['Empty Trash']),
+  ]));
+  const list = el('div', { class: 'review-list', role: 'list' });
+  for (const item of trash) {
+    const days = Math.max(0, TRASH_DAYS - Math.floor((Date.now() - Date.parse(item.deletedAt)) / 864e5));
+    list.append(el('div', { class: 'review-row', role: 'listitem' }, [
+      UI.pictureNode({ src: item.image, title: item.title, className: 'review-pic' }),
+      el('div', {}, [
+        el('div', { class: 'review-title' }, [item.title]),
+        el('div', { class: 'review-reason' }, [[item.retailer || item.host, `deleted ${formatDate(item.deletedAt)}`, `removed for good in ${pluralize(days, 'day', 'days')}`].filter(Boolean).join(' · ')]),
+        el('div', { class: 'review-actions' }, [
+          el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: async () => {
+            await store.restoreItems([item.id]);
+            UI.toast('Restored.');
+          } }, ['Restore']),
+          el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: async () => {
+            const ok = await UI.confirmDialog({ title: 'Delete forever?', message: `“${cut(item.title, 80)}” will be removed for good. This can’t be undone.`, confirmLabel: 'Delete forever', danger: true });
+            if (ok) await store.deleteForever([item.id]);
+          } }, ['Delete forever']),
+        ]),
+      ]),
+    ]));
+  }
+  page.append(list);
+  view.append(page);
 }
 
 function cut(s, n) {

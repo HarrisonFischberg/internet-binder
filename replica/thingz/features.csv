@@ -1,0 +1,22 @@
+feature,area,priority,original,clone,notes
+Save from any iOS app via the share sheet,capture,must,yes,no,[T+A] core capture for both; Keepsake has no mobile app (iOS plan Phase 1)
+Save screenshots and photos with text extraction,capture,should,yes,no,[T+A] Albo via share sheet and Siri Shortcut; Thingz via gallery; would need on-device OCR (Vision) to stay local
+Save straight into a chosen collection at capture time,capture,must,yes,partial,[T+A] Thingz reviewer asks for it (14456616637); Albo reviewer praises it (13586686391); Keepsake popup preview has a collection picker but instant save files first then offers Move
+Saved record survives the source post being deleted,context,must,yes,partial,[T+A] Albo FAQ; Thingz downloads media; Keepsake keeps text fields and local IG thumbnails but remote product images can rot
+Practical details enrichment (address hours price ingredients),context,should,yes,partial,[T+A] AI server-side for both; Keepsake extracts price retailer from structured data only for products
+Personal notes on a save,context,must,yes,yes,[T+A] Thingz notes hidden until opened (13650335996); Keepsake shows note on the card
+Add own photos to a save,context,could,yes,no,[T] 1.0.19
+Ratings and personal review or take on a save,context,could,yes,no,[T+A] Thingz Recommend/Want to try; Albo ratings and reviews 1.24
+Automatic categorization into collections,organize,must,yes,yes,[T+A] Keepsake local deterministic with confidence and reasons
+Correct a wrong category directly and teach it,organize,must,yes,yes,[T+A] Thingz reviewer could only chat with a bot (13638986352); Albo could not remove from auto category (13697730838); Keepsake moves and learns
+User-defined collections with keywords,organize,must,yes,yes,[T+A]
+Content kinds beyond products (place recipe video article workout film-show book),organize,must,yes,no,[T+A] both span many kinds; Keepsake types are product inspiration instagram only (audit V2)
+Search across all saved text,find,must,yes,partial,[T+A] Keepsake linear substring over title retailer note description caption; no ranking or typo tolerance
+Natural-language ask over your own saves,find,could,yes,no,[T+A] Loop and Ask Albo are server AI; Keepsake could only do this with opt-in BYOK or on-device model
+Resurface saves by context or a periodic recap,rediscover,should,yes,no,[T+A] Thingz Loop; Albo weekly recap 1.14 and widgets 1.22
+Recipe built from a saved food item (ingredients and steps),act,must,yes,no,[T+A] owner decision 2026-10-11: save a dish or recipe and Keepsake extracts ingredients and steps into a recipe view; no cook mode or meal planning
+Mark done or tried for non-products,act,should,yes,partial,[T+A] Albo Made it; Thingz tried; Keepsake has Purchased and Archive only
+Partial save when details fail (link-first),recovery,must,partial,partial,[T] Facebook save fails outright (14045643071); Keepsake saves page with no product data to Review but has no pending state
+No account required for core use,privacy,must,partial,yes,[T] policy says optional but reviews describe sign-up; [A] account required
+Sync across iPhone iPad Mac,sync,should,yes,no,[T+A] server accounts; Keepsake plan uses the user's CloudKit private database
+Share collection privately with a link or friend,social,could,yes,no,[T+A] needs hosting or CloudKit sharing; deferred

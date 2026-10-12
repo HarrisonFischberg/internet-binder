@@ -5,7 +5,8 @@ export const MSG = {
   CLASSIFY: 'keepsake:classify', // { product } -> { ok, classification }
   SAVE_ITEM: 'keepsake:save-item', // { product, collectionId?, force?, source } -> { ok, item, collection, duplicate?, existing? }
   UPDATE_ITEM: 'keepsake:update-item', // { itemId, patch } -> { ok, item }
-  UNDO_SAVE: 'keepsake:undo-save', // { itemId } -> { ok }
+  UNDO_SAVE: 'keepsake:undo-save', // { itemId } -> { ok }  (removes a just-saved item outright)
+  ENRICH_PENDING: 'keepsake:enrich-pending', // extension pages -> background: finish saves still marked pending
   OPEN_DASHBOARD: 'keepsake:open-dashboard', // { hash } -> { ok }
   FLOATING_CONFIG: 'keepsake:floating-config', // { host } -> { ok, enabled, settings, collections }
   FLOATING_REFRESH: 'keepsake:floating-refresh', // background -> content scripts when settings change

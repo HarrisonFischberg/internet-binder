@@ -187,7 +187,7 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
       const before = {};
       for (const f of FIELDS) if (f in patch) before[f] = current[f] === undefined ? null : current[f];
       try {
-        await ctx.store.updateItem(current.id, patch);
+        await ctx.store.updateItem(current.id, patch, { by: 'ai' });
       } catch {
         report.failed++;
         continue;
@@ -210,26 +210,28 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
 function planFixes(item, ai, prepared, { scope, threshold }) {
   const patch = {};
   const changes = [];
+  // Fields the person edited by hand stay as they are.
+  const mine = new Set(item.userFields || []);
   if (item.type === 'product') {
-    if (ai.title && ai.title !== item.title) {
+    if (ai.title && ai.title !== item.title && !mine.has('title')) {
       patch.title = ai.title;
       changes.push({ kind: 'titles', field: 'title', from: item.title, to: ai.title });
     }
     const currency = ai.currency || item.currency || '';
-    if (ai.price !== null && (ai.price !== item.price || (ai.currency && ai.currency !== item.currency))) {
+    if (ai.price !== null && !mine.has('price') && (ai.price !== item.price || (ai.currency && ai.currency !== item.currency))) {
       patch.price = ai.price;
       patch.currency = currency;
       changes.push({ kind: 'prices', field: 'price', from: formatPrice(item.price, item.currency) || 'none', to: formatPrice(ai.price, currency) });
     }
     const liveImage = prepared.live && prepared.live.image;
-    if (liveImage && liveImage !== item.image && (!item.image || !prepared.imageOk)) {
+    if (liveImage && liveImage !== item.image && !mine.has('image') && (!item.image || !prepared.imageOk)) {
       patch.image = liveImage;
       patch.images = [liveImage, ...(item.images || []).filter((u) => u !== liveImage && u !== item.image)].slice(0, 8);
       changes.push({ kind: 'images', field: 'image', from: item.image ? 'broken image' : 'no image', to: 'image from the live page' });
     }
   }
   if (ai.collectionId && ai.collectionId !== item.collectionId) {
-    const filedByUser = item.collectionId && item.categorizationSource === 'manual';
+    const filedByUser = item.collectionId && (item.categorizationSource === 'manual' || mine.has('collectionId'));
     const needed = item.collectionId ? Math.max(threshold, REFILE_CONFIDENCE) : threshold;
     const allowed = scope === 'review' ? !item.collectionId : !filedByUser;
     if (allowed && ai.confidence >= needed) {
@@ -315,7 +317,7 @@ export async function undoEntries(ctx, entries) {
       restore.collectionId = null;
       restore.needsReview = true;
     }
-    await ctx.store.updateItem(item.id, restore);
+    await ctx.store.updateItem(item.id, restore, { by: 'ai' });
     done.push(e.id);
   }
   if (done.length) await ctx.store.markAiLogUndone(done);

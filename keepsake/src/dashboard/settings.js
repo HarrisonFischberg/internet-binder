@@ -263,7 +263,7 @@ function instagramSection(ctx) {
     UI.settingRow('Stop after no new posts for (seconds)', idleInput),
     UI.settingRow('Imported post history', el('button', { type: 'button', class: 'btn btn-sm', disabled: !n, onClick: async () => {
       const ok = await UI.confirmDialog({ title: 'Forget imported posts?', message: 'Keepsake will no longer mark these posts as already imported. Items you imported are kept.', confirmLabel: 'Forget' });
-      if (ok) await ctx.store.backend.set({ keepsake_importHistory: { instagram: {} } });
+      if (ok) await ctx.store.clearImportHistory();
     } }, [`Forget ${pluralize(n, 'remembered post', 'remembered posts')}`]), 'Used to skip posts you already imported.'),
   ]);
 }
@@ -309,10 +309,13 @@ function dataSection(ctx) {
     usage,
   ]);
   Promise.resolve()
-    .then(() => chrome.storage.local.getBytesInUse(null))
-    .then((bytes) => { usage.querySelector('.stat-value').textContent = formatBytes(bytes); })
+    .then(() => ctx.store.storageUsage())
+    .then(({ kvBytes, dbBytes }) => {
+      const total = (kvBytes || 0) + (dbBytes || 0);
+      usage.querySelector('.stat-value').textContent = kvBytes === null && dbBytes === null ? '—' : formatBytes(total);
+    })
     .catch(() => { usage.querySelector('.stat-value').textContent = '—'; });
-  return UI.section('Your data', 'Stored in chrome.storage.local — this browser profile only. Export a JSON backup any time; it never includes your AI key.', [
+  return UI.section('Your data', 'Stored in this browser profile only (IndexedDB for your saves, chrome.storage.local for settings). Export a JSON backup any time; it includes the Trash and never includes your AI key.', [
     stats,
     el('div', { class: 'actions-row' }, [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: async () => {
@@ -450,7 +453,7 @@ export function renderAI(ctx, view) {
         }
         const confirmed = await UI.confirmDialog({
           title: 'Turn on Optional AI?',
-          message: `Every save will send the item’s title, price, description, retailer and your collection names to ${cfg.baseUrl}, and be saved right away into the collection the AI picks. “Fix with AI” and “Find products” also become available; they only send anything when you start them.`,
+          message: `After each save, once it’s stored on this device, Keepsake will send the item’s title, price, description, retailer and your collection names to ${cfg.baseUrl}. The AI then tidies the title and may move the save to a better collection, unless you already changed them; every change can be undone. “Fix with AI” and “Find products” also become available; they only send anything when you start them.`,
           confirmLabel: 'Turn on',
         });
         if (!confirmed) return false;
@@ -573,7 +576,7 @@ export function renderPrivacy(ctx, view) {
   page.append(UI.section('The short version', '', [
     el('div', { class: 'prose' }, [
       el('ul', {}, [
-        el('li', {}, [el('strong', {}, ['Local only. ']), 'Everything you save lives in chrome.storage.local on this device. There is no Keepsake server, account or sync.']),
+        el('li', {}, [el('strong', {}, ['Local only. ']), 'Everything you save lives in this browser profile (IndexedDB and chrome.storage.local). There is no Keepsake server, account or sync. Deleted saves wait in the Trash for 30 days.']),
         el('li', {}, [el('strong', {}, ['No tracking. ']), 'No analytics, no telemetry, no crash reports, no ads, no third-party scripts.']),
         el('li', {}, [el('strong', {}, ['Nothing runs on pages until you ask. ']), 'The toolbar popup reads a page only when you click it. On-page buttons are off until you enable them and grant a site.']),
         el('li', {}, [el('strong', {}, ['Instagram: ']), 'the importer only reads the Saved collection you have open. It never reads cookies, tokens, messages, or anything about your account.']),
@@ -586,16 +589,17 @@ export function renderPrivacy(ctx, view) {
     el('div', { class: 'table-wrap' }, [el('table', { class: 'table' }, [
       el('thead', {}, [el('tr', {}, [el('th', {}, ['Permission']), el('th', {}, ['Why'])])]),
       el('tbody', {}, [
-        permRow('storage', 'Keep your collections, items and settings in your browser.'),
+        permRow('storage', 'Keep your settings in your browser.'),
+        permRow('unlimitedStorage', 'Let your library grow past Chrome’s 10 MB default. It still stays in this browser.'),
         permRow('activeTab + scripting', 'Read the page you clicked the icon on (title, price, images) at that moment only, and show the save toast.'),
         permRow('contextMenus', 'The “Save to Keepsake” right-click item.'),
-        permRow('Site access (optional)', 'Only requested if you enable on-page buttons for a site or all sites, connect an AI provider (its address only), or let “Fix with AI” read your saved items’ product pages (all sites). Revoke any time here or at chrome://extensions.'),
+        permRow('Site access (optional)', 'Only requested if you enable on-page buttons for a site or all sites, use Import from tabs (all sites, to read the tabs you import), connect an AI provider (its address only), or let “Fix with AI” read your saved items’ product pages (all sites). Revoke any time here or at chrome://extensions.'),
       ]),
     ])]),
   ]));
   page.append(UI.section('What is stored', '', [
     el('div', { class: 'prose' }, [
-      el('p', {}, ['For each save: title, price, retailer, page URL, image URL (or, for Instagram imports, a small stored thumbnail), your note, flags such as favorite/purchased, which collection it is in and why, and the store’s product type and tags when the page publishes them. For categorization: your collections’ keywords, and word/retailer weights learned from moves. For Instagram: which post URLs were already imported. Optional AI: your API key and provider settings, and a log of what “Fix with AI” changed so it can be undone.']),
+      el('p', {}, ['For each save: title, price, retailer, page URL, image URL (or, for Instagram imports, a small stored thumbnail), your note, flags such as favorite/purchased, which collection it is in and why, and the store’s product type and tags when the page publishes them. For categorization: your collections’ keywords, and word/retailer weights learned from moves. For Instagram: which post URLs were already imported. Optional AI: your API key and provider settings, and a log of what the AI changed (after a save or in “Fix with AI”) so it can be undone. Deleted saves stay in the Trash for 30 days.']),
       el('p', {}, ['Keepsake does not store browsing history, page contents beyond the fields above, or anything from pages you did not save from.']),
     ]),
   ]));

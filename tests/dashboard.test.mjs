@@ -3,6 +3,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import 'fake-indexeddb/auto';
 import { JSDOM } from 'jsdom';
 import { fakeChrome } from './helpers/fake-chrome.mjs';
 
@@ -50,7 +51,7 @@ test('the dashboard boots without errors', () => {
   assert.doesNotMatch(view().textContent, /couldn.t start/i);
 });
 
-const ROUTES = ['#home', '#all', '#favorites', '#purchased', '#archive', '#collections', '#import', '#settings', '#ai', '#ailog', '#privacy', '#welcome'];
+const ROUTES = ['#home', '#all', '#favorites', '#purchased', '#archive', '#trash', '#collections', '#import', '#settings', '#ai', '#ailog', '#privacy', '#welcome'];
 for (const r of ROUTES) {
   test(`route ${r} renders`, async () => {
     const text = await go(r);
@@ -65,8 +66,8 @@ test('an empty library shows the first-run empty state', async () => {
 });
 
 test('sample data appears in All saves and Review', async () => {
-  const { createStore, chromeBackend } = await import('../keepsake/src/shared/storage.js');
-  const store = createStore(chromeBackend());
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
   await store.loadSampleData();
   await settle();
   await settle();
@@ -74,6 +75,26 @@ test('sample data appears in All saves and Review', async () => {
   assert.match(all, /Two-person ultralight backpacking tent/);
   const review = await go('#review');
   assert.match(review, /Morning light, kitchen corner/);
+});
+
+test('deleting from Review moves the save to Trash, with Undo, and Trash can restore it', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  assert.match(await go('#trash'), /Nothing in Trash/);
+  await go('#review');
+  const del = [...view().querySelectorAll('button')].find((b) => b.textContent === 'Delete');
+  del.click();
+  await settle();
+  await settle();
+  const toast = window.document.body.textContent;
+  assert.match(toast, /Moved to Trash/);
+  assert.equal((await store.getTrash()).length, 1);
+  const trashText = await go('#trash');
+  assert.match(trashText, /Morning light, kitchen corner/);
+  assert.match(trashText, /removed for good in 30 days/);
+  [...view().querySelectorAll('button')].find((b) => b.textContent === 'Restore').click();
+  await settle();
+  assert.equal((await store.getTrash()).length, 0);
 });
 
 test('an unknown collection route says so', async () => {

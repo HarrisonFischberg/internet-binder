@@ -1,13 +1,25 @@
 // storage.js against its in-memory backend: the data contract M1's migration must preserve.
-import { test } from 'node:test';
+// Every test runs twice: against the in-memory record backend and against the real IndexedDB
+// backend (db.js) on fake-indexeddb. Neither is Chrome; real-browser checks are listed in the audit.
+import { test as nodeTest, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStore, memoryBackend, migrate, validateExport, KEYS, SCHEMA_VERSION, LIMITS, makeItem } from '../keepsake/src/shared/storage.js';
+import 'fake-indexeddb/auto';
+import { createStore, memoryBackend, memoryRecordBackend, idbBackend, migrate, validateExport, KEYS, SCHEMA_VERSION, LIMITS, makeItem, TRASH_DAYS, StorageFullError } from '../keepsake/src/shared/storage.js';
 
-async function fresh(initial) {
+let dbn = 0;
+const KINDS = {
+  memory: () => memoryRecordBackend(),
+  idb: () => idbBackend(indexedDB, `keepsake-test-${process.pid}-${++dbn}`),
+};
+let makeDb = KINDS.memory;
+const tests = [];
+const test = (name, fn) => tests.push([name, fn]);
+
+async function fresh(initial, db = makeDb()) {
   const be = memoryBackend(initial);
-  const store = createStore(be);
+  const store = createStore(be, db);
   const r = await store.init();
-  return { store, be, fresh: r.fresh };
+  return { store, be, db, fresh: r.fresh, migrated: r.migrated };
 }
 
 test('init on an empty profile creates meta, settings and the three starter collections', async () => {
@@ -22,9 +34,9 @@ test('init on an empty profile creates meta, settings and the three starter coll
 });
 
 test('init is idempotent and keeps user data', async () => {
-  const { store, be } = await fresh();
+  const { store, be, db } = await fresh();
   const it = await store.addItem({ title: 'Lamp', url: 'https://a.example/lamp' });
-  const again = createStore(be);
+  const again = createStore(be, db);
   const r = await again.init();
   assert.equal(r.fresh, false);
   assert.equal((await again.getItem(it.id)).title, 'Lamp');
@@ -234,13 +246,17 @@ test('init upgrades old per-feature AI settings to the single switch', async () 
   assert.equal(s.ai.instantSave, undefined);
 });
 
-test('Instagram import history: marked posts resolve, deleting the item frees the post', async () => {
+test('Instagram import history: trashed posts stay remembered; deleting forever frees the post', async () => {
   const { store } = await fresh();
   const it = await store.addItem({ title: 'Post', url: 'https://www.instagram.com/p/AbCdE1/', type: 'instagram' });
   await store.markImported([['https://www.instagram.com/someone/p/AbCdE1/?igsh=x', it.id]]);
   assert.equal(await store.importedItemIdFor('https://www.instagram.com/p/AbCdE1/'), it.id);
   await store.deleteItems([it.id]);
+  assert.equal(await store.importedItemIdFor('https://www.instagram.com/p/AbCdE1/'), it.id, 'restorable, so a re-scan does not duplicate it');
+  await store.deleteForever([it.id]);
   assert.equal(await store.importedItemIdFor('https://www.instagram.com/p/AbCdE1/'), null);
+  await store.clearImportHistory();
+  assert.deepEqual((await store.getImportHistory()).instagram, {});
 });
 
 test('AI log: append, mark undone, capped at 3000', async () => {
@@ -253,12 +269,13 @@ test('AI log: append, mark undone, capped at 3000', async () => {
   assert.equal((await store.getAiLog()).find((e) => e.id === 'e10').undone, true);
 });
 
-test('clearAll removes every Keepsake key including the secret and the AI log', async () => {
-  const { store, be } = await fresh();
+test('clearAll removes every Keepsake key and record, including the secret, the AI log and the v2 copy', async () => {
+  const { store, be, db } = await fresh({ [KEYS.items]: { a1b2: { id: 'a1b2', title: 'old' } } });
   await store.setSecret('aiApiKey', 'x');
   await store.appendAiLog([{ id: 'a' }]);
   await store.clearAll();
   assert.deepEqual(Object.keys(await be.get(null)), []);
+  for (const s of ['items', 'collections', 'kv']) assert.equal(await db.count(s), 0);
 });
 
 test('sample data loads into the right collections and leaves one item in Review', async () => {
@@ -270,9 +287,8 @@ test('sample data loads into the right collections and leaves one item in Review
 });
 
 test('item limit is enforced', async () => {
-  const items = {};
-  for (let i = 0; i < LIMITS.maxItems; i++) items[`i${i}`] = { id: `i${i}` };
-  const { store } = await fresh({ [KEYS.items]: items });
+  const { store, db } = await fresh();
+  await db.put('items', Array.from({ length: LIMITS.maxItems }, (_, i) => makeItem({ id: `item${i}`, title: `t${i}` })));
   await assert.rejects(store.addItem({ title: 'one too many' }), /Item limit reached/);
 });
 
@@ -282,15 +298,185 @@ test('writes from one store instance are serialized', async () => {
   assert.equal((await store.getItems()).length, 25);
 });
 
-test('KNOWN RISK (audit A5): two store instances writing at once can lose a write', async () => {
-  // Popup, dashboard and worker each create their own store over the same chrome.storage.local.
-  // Each write rewrites the whole items map, so concurrent writes race. M1 fixes this; this test
-  // documents today's behaviour and will be inverted when it does.
+test('two store instances writing at once both land (fixes audit A5)', async () => {
+  // Popup, dashboard and worker each create their own store over the same storage.
   const be = memoryBackend();
-  const a = createStore(be);
-  const b = createStore(be);
+  const db = makeDb();
+  const a = createStore(be, db);
+  const b = createStore(be, db);
   await a.init();
-  await Promise.all([a.addItem({ title: 'from popup', url: 'https://a.example/1' }), b.addItem({ title: 'from dashboard', url: 'https://a.example/2' })]);
-  const n = (await a.getItems()).length;
-  assert.equal(n, 1, 'one of the two concurrent writes was lost');
+  await Promise.all([
+    a.addItem({ title: 'from popup', url: 'https://a.example/1' }),
+    b.addItem({ title: 'from dashboard', url: 'https://a.example/2' }),
+    ...Array.from({ length: 10 }, (_, i) => (i % 2 ? a : b).addItem({ title: `burst ${i}`, url: `https://a.example/b${i}` })),
+  ]);
+  assert.equal((await a.getItems()).length, 12);
 });
+
+test('concurrent edits to different fields of one item from two contexts both survive', async () => {
+  const be = memoryBackend();
+  const db = makeDb();
+  const a = createStore(be, db);
+  const b = createStore(be, db);
+  await a.init();
+  const it = await a.addItem({ title: 'Lamp', url: 'https://a.example/1' });
+  await Promise.all([a.updateItem(it.id, { note: 'n' }), b.updateItem(it.id, { favorite: true })]);
+  const got = await a.getItem(it.id);
+  assert.equal(got.note, 'n');
+  assert.equal(got.favorite, true);
+});
+
+// --- schema 3 ------------------------------------------------------------------------------------
+
+function v2Library() {
+  return {
+    [KEYS.meta]: { schemaVersion: 2, installedAt: '2026-09-01T00:00:00.000Z' },
+    [KEYS.collections]: { colA1: { id: 'colA1', name: 'Kitchen', keywords: ['pan'], sortOrder: 1 } },
+    [KEYS.items]: {
+      itm001: { id: 'itm001', title: 'Dutch oven', url: 'https://shop.example/oven', collectionId: 'colA1', createdAt: '2026-09-02T00:00:00.000Z', image: 'data:image/jpeg;base64,QUJD' },
+      itm002: { id: 'itm002', title: 'Post', url: 'https://www.instagram.com/p/AbCdE1/', type: 'instagram', collectionId: null, needsReview: true, createdAt: '2026-09-03T00:00:00.000Z' },
+    },
+    [KEYS.prefs]: { confidenceThreshold: 0.7, learnedKeywords: { oven: { colA1: 2 } }, retailerPrefs: {}, corrections: [] },
+    [KEYS.importHistory]: { instagram: { 'instagram.com/p/AbCdE1': 'itm002' } },
+    keepsake_aiLog: [{ id: 'log1', itemId: 'itm001', changes: [] }],
+    [KEYS.settings]: { theme: 'dark' },
+    [KEYS.secrets]: { aiApiKey: 'keep-me' },
+  };
+}
+
+test('migration v2 -> v3 copies every save, collection, preference, history and log entry', async () => {
+  const { store, be, migrated } = await fresh(v2Library());
+  assert.deepEqual(migrated, { items: 2, collections: 1 });
+  const all = await store.getAll();
+  assert.equal(all.meta.schemaVersion, 3);
+  assert.equal(all.items.itm001.title, 'Dutch oven');
+  assert.equal(all.items.itm001.originalTitle, 'Dutch oven');
+  assert.equal(all.items.itm001.captureState, 'complete');
+  assert.equal(all.items.itm001.image, 'data:image/jpeg;base64,QUJD');
+  assert.equal(all.items.itm002.needsReview, true);
+  assert.equal(all.collections.colA1.name, 'Kitchen');
+  assert.equal(all.prefs.confidenceThreshold, 0.7);
+  assert.equal(all.prefs.learnedKeywords.oven.colA1, 2);
+  assert.equal(all.settings.theme, 'dark');
+  assert.equal(await store.getSecret('aiApiKey'), 'keep-me');
+  assert.equal(await store.importedItemIdFor('https://www.instagram.com/p/AbCdE1/'), 'itm002');
+  assert.equal((await store.getAiLog())[0].id, 'log1');
+  // The v2 copy is left in place for rollback.
+  const raw = await be.get(null);
+  assert.ok(raw[KEYS.items].itm001);
+});
+
+test('migration runs once; later edits are not overwritten by a second init', async () => {
+  const { store, be, db } = await fresh(v2Library());
+  await store.updateItem('itm001', { title: 'Edited after migration' });
+  const again = createStore(be, db);
+  const r = await again.init();
+  assert.equal(r.migrated, null);
+  assert.equal((await again.getItem('itm001')).title, 'Edited after migration');
+});
+
+test('a v1 library (rules) migrates straight to v3', async () => {
+  const { store } = await fresh({
+    [KEYS.meta]: { schemaVersion: 1 },
+    [KEYS.collections]: { g1g1: { id: 'g1g1', name: 'Gifts' } },
+    [KEYS.items]: {},
+    [KEYS.prefs]: { rules: [{ collectionId: 'g1g1', keywords: ['Birthday'] }] },
+  });
+  const gifts = (await store.getCollections()).find((c) => c.name === 'Gifts');
+  assert.ok(gifts.keywords.includes('birthday'));
+  assert.equal((await store.getPrefs()).rules, undefined);
+});
+
+test('trash: delete hides, restore returns, collection gone sends to Review', async () => {
+  const { store } = await fresh();
+  const [home] = await store.getCollections();
+  const it = await store.addItem({ title: 'Lamp', url: 'https://a.example/lamp', collectionId: home.id });
+  await store.deleteItems([it.id]);
+  assert.equal((await store.getItems()).length, 0);
+  assert.equal((await store.getAll()).items[it.id], undefined);
+  assert.equal(await store.findByUrl('https://a.example/lamp'), null, 'a trashed page can be saved again');
+  assert.equal((await store.getTrash()).length, 1);
+  await store.restoreItems([it.id]);
+  assert.equal((await store.getItem(it.id)).collectionId, home.id);
+  await store.deleteItems([it.id]);
+  await store.deleteCollection(home.id);
+  await store.restoreItems([it.id]);
+  const back = await store.getItem(it.id);
+  assert.equal(back.deletedAt, null);
+  assert.equal(back.collectionId, null);
+  assert.equal(back.needsReview, true);
+});
+
+test('trash: purge removes only saves older than 30 days', async () => {
+  const { store } = await fresh();
+  const old = await store.addItem({ title: 'old', url: 'https://a.example/o' });
+  const recent = await store.addItem({ title: 'recent', url: 'https://a.example/r' });
+  await store.deleteItems([old.id, recent.id]);
+  await store.updateItem(old.id, { deletedAt: new Date(Date.now() - (TRASH_DAYS + 1) * 864e5).toISOString() }, { by: 'machine' });
+  assert.equal(await store.purgeTrash(), 1);
+  assert.equal(await store.getItem(old.id), null);
+  assert.ok(await store.getItem(recent.id));
+});
+
+test('trash is exported and restored by import', async () => {
+  const src = await fresh();
+  const it = await src.store.addItem({ title: 'Binned', url: 'https://a.example/b' });
+  await src.store.deleteItems([it.id]);
+  const exp = await src.store.exportJSON();
+  assert.equal(exp.schemaVersion, 3);
+  assert.ok(exp.items[it.id].deletedAt);
+  const dst = await fresh();
+  await dst.store.importJSON(exp);
+  assert.equal((await dst.store.getTrash())[0].id, it.id);
+});
+
+test('hand-edited fields are recorded; machine edits are not', async () => {
+  const { store } = await fresh();
+  const it = await store.addItem({ title: 'tent', url: 'https://a.example/t' });
+  const a = await store.updateItem(it.id, { title: 'Ultralight tent', favorite: true });
+  assert.deepEqual(a.userFields, ['title']);
+  assert.equal(a.originalTitle, 'tent');
+  const b = await store.updateItem(it.id, { price: 99 }, { by: 'ai' });
+  assert.deepEqual(b.userFields, ['title']);
+  const [home] = await store.getCollections();
+  await store.moveItems([it.id], home.id);
+  assert.ok((await store.getItem(it.id)).userFields.includes('collectionId'));
+});
+
+test('pending saves are listed until finished', async () => {
+  const { store } = await fresh();
+  const it = await store.addItem({ title: 'x', url: 'https://a.example/x', captureState: 'pending' });
+  assert.deepEqual((await store.getPendingItems()).map((i) => i.id), [it.id]);
+  await store.updateItem(it.id, { captureState: 'complete' }, { by: 'machine' });
+  assert.equal((await store.getPendingItems()).length, 0);
+});
+
+test('a full disk gives a clear error and loses nothing already saved', async () => {
+  const db = memoryRecordBackend();
+  const { store } = await fresh(undefined, db);
+  const kept = await store.addItem({ title: 'kept', url: 'https://a.example/k' });
+  db.setFailWrites(() => Object.assign(new Error('The quota has been exceeded.'), { name: 'QuotaExceededError' }));
+  await assert.rejects(store.addItem({ title: 'new', url: 'https://a.example/n' }), (e) => e instanceof StorageFullError && /out of space/.test(e.message) && /Nothing already saved was lost/.test(e.message));
+  db.setFailWrites(null);
+  assert.equal((await store.getItem(kept.id)).title, 'kept');
+});
+
+test('changes are announced to listeners', async () => {
+  const { store } = await fresh();
+  const seen = [];
+  const off = store.onChanged((c) => seen.push(Object.keys(c)));
+  await store.addItem({ title: 'x', url: 'https://a.example/x' });
+  off();
+  assert.ok(seen.some((k) => k.includes('keepsake_items')));
+});
+
+for (const [kind, factory] of Object.entries(KINDS)) {
+  describe(`storage on ${kind}`, () => {
+    for (const [name, fn] of tests) {
+      nodeTest(name, async () => {
+        makeDb = factory;
+        await fn();
+      });
+    }
+  });
+}

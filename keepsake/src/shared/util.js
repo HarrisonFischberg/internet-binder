@@ -129,7 +129,8 @@ export function parsePrice(text, fallbackCurrency = '') {
     }
   }
   // First number-looking token (supports 1,299.00 / 1.299,00 / 1 299,00 / 45).
-  const m = s.match(/(\d{1,3}(?:[ .,\u202f]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)/);
+  // The grouped form needs at least one separator, so a plain "1200" is read whole (not "120").
+  const m = s.match(/(\d{1,3}(?:[ .,\u202f]\d{3})+(?:[.,]\d{1,2})?(?!\d)|\d+(?:[.,]\d{1,2})?)/);
   if (!m) return null;
   let raw = m[1].replace(/[ \u202f]/g, '');
   const lastComma = raw.lastIndexOf(',');

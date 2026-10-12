@@ -34,7 +34,8 @@ test('every file the manifest references exists', () => {
 });
 
 test('permissions stay least-privilege (changes here need a privacy review)', () => {
-  assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'contextMenus', 'scripting', 'storage']);
+  // unlimitedStorage (1.4): saves live in IndexedDB without the 10 MB chrome.storage.local cap.
+  assert.deepEqual([...manifest.permissions].sort(), ['activeTab', 'contextMenus', 'scripting', 'storage', 'unlimitedStorage']);
   assert.deepEqual(manifest.optional_host_permissions, ['*://*/*']);
   assert.equal(manifest.host_permissions, undefined);
   for (const forbidden of ['tabs', 'history', 'cookies', 'webRequest', 'identity', 'alarms']) {

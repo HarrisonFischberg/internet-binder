@@ -27,6 +27,7 @@
   "options_page": "src/dashboard/dashboard.html",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "activeTab",
     "scripting",
     "contextMenus"

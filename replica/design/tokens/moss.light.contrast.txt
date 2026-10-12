@@ -1,0 +1,42 @@
+  AAA   14.22:1  text                     on bg                   
+  AAA   15.53:1  text                     on surface              
+  AAA   13.14:1  text                     on surface-2            
+  AA     6.36:1  text-muted               on bg                   
+  AA     6.95:1  text-muted               on surface              
+  AA     5.88:1  text-muted               on surface-2            
+  AAA    7.27:1  on-accent                on accent               
+  AA     6.66:1  accent                   on bg                   
+  AAA    7.27:1  accent                   on surface              
+  AA     5.87:1  accent                   on accent-soft          
+  AA     5.91:1  highlight                on surface              
+  AA     4.90:1  highlight                on highlight-soft       
+  AA     6.61:1  danger                   on surface              
+  AA     5.34:1  danger                   on danger-soft          
+  AA     6.61:1  success                  on surface              
+  AA     5.45:1  success                  on success-soft         
+  AA     6.27:1  warning                  on surface              
+  AA     5.18:1  warning                  on warning-soft         
+  PASS   3.84:1  border-input             on surface              ui
+  PASS   3.52:1  border-input             on bg                   ui
+  PASS   4.78:1  focus                    on bg                   ui
+  PASS   5.22:1  focus                    on surface              ui
+  AA     4.90:1  kind-product             on kind-product-soft    
+  AA     5.91:1  kind-product             on surface              
+  AA     5.19:1  kind-place               on kind-place-soft      
+  AA     6.50:1  kind-place               on surface              
+  AA     5.03:1  kind-recipe              on kind-recipe-soft     
+  AA     5.96:1  kind-recipe              on surface              
+  AA     6.33:1  kind-video               on kind-video-soft      
+  AAA    7.93:1  kind-video               on surface              
+  AA     6.11:1  kind-article             on kind-article-soft    
+  AAA    7.56:1  kind-article             on surface              
+  AA     5.44:1  kind-workout             on kind-workout-soft    
+  AA     6.58:1  kind-workout             on surface              
+  AA     6.56:1  kind-film                on kind-film-soft       
+  AAA    8.23:1  kind-film                on surface              
+  AA     6.63:1  kind-book                on kind-book-soft       
+  AAA    8.26:1  kind-book                on surface              
+  AA     5.88:1  kind-link                on kind-link-soft       
+  AA     6.95:1  kind-link                on surface              
+
+  40 pairs, 0 failing AA
