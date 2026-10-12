@@ -1,6 +1,6 @@
 // Settings, Optional AI and Privacy views for the dashboard.
 
-import { LIMITS } from '../shared/storage.js';
+import { LIMITS, STYLES } from '../shared/storage.js';
 import { MSG } from '../shared/messages.js';
 import { el, clear, pluralize } from '../shared/util.js';
 import { originPattern, hostFromPattern } from '../shared/url.js';
@@ -61,6 +61,7 @@ export function renderSettings(ctx, view) {
 function appearanceSection(ctx) {
   const s = ctx.state.settings;
   return UI.section('Appearance', '', [
+    UI.settingRow('Style', UI.selectInput({ value: s.style || 'modern', options: STYLES, onChange: (v) => ctx.store.updateSettings({ style: v }), label: 'Style' }), 'Modern is crisp and cool, Moss is the original warm Keepsake look, Minimalist is black and white. Applies to the popup, the dashboard and the save card on pages.'),
     UI.settingRow('Theme', UI.selectInput({ value: s.theme || 'system', options: [{ value: 'system', label: 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], onChange: (v) => ctx.store.updateSettings({ theme: v }), label: 'Theme' }), 'Also toggled from the sun icon in the toolbar.'),
     UI.settingRow('Keyboard shortcut', el('span', {}, [el('span', { class: 'kbd' }, ['Alt']), ' + ', el('span', { class: 'kbd' }, ['Shift']), ' + ', el('span', { class: 'kbd' }, ['K'])]), 'Opens Keepsake for the current page. Change it at chrome://extensions/shortcuts.'),
   ]);

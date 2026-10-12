@@ -3,9 +3,9 @@
 // classification, lets the user adjust anything, and saves through the
 // background worker. Nothing here touches the network.
 
-import { createStore, chromeBackend, idbBackend } from '../shared/storage.js';
+import { createStore, chromeBackend, idbBackend, applyLook } from '../shared/storage.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
-import { el, clear, parsePrice, sanitizeText, pluralize } from '../shared/util.js';
+import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
 
@@ -54,10 +54,7 @@ function openDashboard(hash = '') {
 
 async function applyTheme() {
   try {
-    const settings = await store.getSettings();
-    const theme = settings?.theme || 'system';
-    if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
-    else delete document.documentElement.dataset.theme;
+    applyLook(document.documentElement, await store.getSettings());
   } catch {
     /* defaults */
   }
@@ -153,7 +150,7 @@ async function instantSave({ label, classification = null, instant = false }) {
   state.collections = await store.getCollections().catch(() => state.collections); // may include one the save just created
   state.savedItem = res.item;
   state.savedMode = 'saved';
-  showSaved(res.item, res.collection);
+  showSaved(res.item, res.collection, res.classification);
   return true;
 }
 
@@ -457,7 +454,7 @@ async function save({ force }) {
     // The save may have created a collection (typed in, or a default one on demand);
     // reload so the "Move to" menu lists it and shows it selected.
     if (res.collection && !state.collections.some((c) => c.id === res.collection.id)) state.collections = await store.getCollections();
-    showSaved(res.item, res.collection);
+    showSaved(res.item, res.collection, res.classification);
   } catch (e) {
     if (e === ASKED) return;
     err.textContent = String((e && e.message) || e);
@@ -494,19 +491,22 @@ async function updateExisting() {
   }
 }
 
-function showSaved(item, collection) {
+function showSaved(item, collection, classification = null) {
   const isInbox = !collection;
-  const name = collection ? collection.name : 'Keepsake';
-  $('savedTitle').textContent = state.savedMode === 'updated' ? 'Updated' : isInbox ? 'Not sure — saved for review' : `Saved to ${name}`;
-  $('savedSubtitle').textContent = cut(item.title, 80);
+  const updated = state.savedMode === 'updated';
+  $('savedTitle').textContent = updated ? 'Updated' : isInbox ? 'Saved. Pick a collection now or later' : 'Saved to';
+  document.querySelector('.capture').classList.toggle('is-review', isInbox && !updated);
+  $('savedSubtitle').textContent = cut(item.title, 90);
+  $('savedMeta').textContent = [formatPrice(item.price, item.currency), item.retailer || item.host].filter(Boolean).join(' · ');
   const thumb = $('savedThumb');
   clear(thumb);
   if (item.image) thumb.append(el('img', { src: item.image, alt: '', onError: () => clear(thumb) }));
   $('savedInboxHint').textContent = [
-    isInbox ? 'Keepsake wasn’t sure where this belongs. You’ll find it in Review, ready to sort.' : '',
     item.captureState === 'pending' ? 'Finishing details: your AI provider is tidying the title. You can close this.' : '',
+    'Saved on this device.',
   ].filter(Boolean).join(' ');
-  $('savedUndo').classList.toggle('hidden', state.savedMode === 'updated');
+  renderSuggestions(item, isInbox && !updated ? classification : null);
+  $('savedUndo').classList.toggle('hidden', updated);
   const learnRow = $('learnRow');
   const learnCheck = $('learnCheck');
   learnCheck.checked = false;
@@ -551,6 +551,7 @@ function renderSavedMove(item) {
   if (!item.collectionId) sel.append(el('option', { value: '', text: 'Review (not sorted)' }));
   for (const c of state.collections) sel.append(el('option', { value: c.id, text: c.name }));
   sel.value = item.collectionId || '';
+  row.classList.toggle('is-user', item.categorizationSource === 'manual');
   sel.onchange = async () => {
     if (!sel.value) return;
     sel.disabled = true;
@@ -558,11 +559,57 @@ function renderSavedMove(item) {
     sel.disabled = false;
     if (!res.ok) return;
     state.savedItem = res.item;
-    const col = state.collections.find((c) => c.id === sel.value);
-    $('savedTitle').textContent = `Moved to ${col ? col.name : 'collection'}`;
-    $('savedInboxHint').textContent = '';
-    const placeholder = sel.querySelector('option[value=""]');
-    if (placeholder) placeholder.remove();
+    filedTo(sel.value, 'Moved to');
+  };
+}
+
+// Reflects a collection the person chose: heading, chip (filled = their choice), no more suggestions.
+function filedTo(collectionId, heading) {
+  const sel = $('savedMove');
+  if (![...sel.options].some((o) => o.value === collectionId)) {
+    const col = state.collections.find((c) => c.id === collectionId);
+    if (col) sel.append(el('option', { value: col.id, text: col.name }));
+  }
+  sel.value = collectionId;
+  const placeholder = sel.querySelector('option[value=""]');
+  if (placeholder) placeholder.remove();
+  $('savedTitle').textContent = heading;
+  $('savedMoveRow').classList.add('is-user');
+  document.querySelector('.capture').classList.remove('is-review');
+  renderSuggestions(null, null);
+}
+
+// Review: up to three likely collections, one tap (or 1/2/3) to file and teach the sorter.
+function renderSuggestions(item, classification) {
+  const box = $('savedSuggest');
+  clear(box);
+  document.onkeydown = null;
+  const alts = (classification?.alternatives || []).filter((a, i, all) => a.collectionName && all.findIndex((b) => b.collectionName === a.collectionName) === i).slice(0, 3);
+  box.classList.toggle('hidden', !item || !alts.length);
+  if (!item || !alts.length) return;
+  const file = async (alt) => {
+    let id = alt.collectionId;
+    if (alt.isNew && alt.taxonomyKey) {
+      const col = await store.ensureCollectionForTaxonomy(alt.taxonomyKey).catch(() => null);
+      if (!col) return;
+      id = col.id;
+      state.collections = await store.getCollections().catch(() => state.collections);
+    }
+    const res = await send({ type: MSG.UPDATE_ITEM, itemId: item.id, patch: { collectionId: id }, learn: 'light' });
+    if (!res.ok) return;
+    state.savedItem = res.item;
+    filedTo(id, 'Filed to');
+  };
+  alts.forEach((alt, i) => {
+    box.append(el('button', { type: 'button', class: 'suggest-chip', onClick: () => file(alt), 'aria-keyshortcuts': String(i + 1) }, [el('kbd', {}, [String(i + 1)]), alt.collectionName]));
+  });
+  document.onkeydown = (e) => {
+    if (e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const n = Number(e.key);
+    if (n >= 1 && n <= alts.length) {
+      e.preventDefault();
+      file(alts[n - 1]);
+    }
   };
 }
 

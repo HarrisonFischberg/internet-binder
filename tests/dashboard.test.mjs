@@ -38,6 +38,8 @@ before(async () => {
 });
 
 const settle = () => new Promise((r) => setTimeout(r, 60));
+// The dashboard re-renders 150 ms after a storage change (debounced); wait past that.
+const afterChange = () => new Promise((r) => setTimeout(r, 400));
 const view = () => window.document.getElementById('view');
 async function go(hash) {
   window.location.hash = hash;
@@ -95,6 +97,42 @@ test('deleting from Review moves the save to Trash, with Undo, and Trash can res
   [...view().querySelectorAll('button')].find((b) => b.textContent === 'Restore').click();
   await settle();
   assert.equal((await store.getTrash()).length, 0);
+});
+
+test('the Style setting restyles the page (Modern by default, no attribute)', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  assert.equal(window.document.documentElement.dataset.style, undefined);
+  const text = await go('#settings');
+  assert.match(text, /Style/);
+  assert.match(text, /Minimalist/);
+  await store.updateSettings({ style: 'moss', theme: 'dark' });
+  await afterChange();
+  assert.equal(window.document.documentElement.dataset.style, 'moss');
+  assert.equal(window.document.documentElement.dataset.theme, 'dark');
+  await store.updateSettings({ style: 'modern', theme: 'system' });
+  await afterChange();
+  assert.equal(window.document.documentElement.dataset.style, undefined);
+  assert.equal(window.document.documentElement.dataset.theme, undefined);
+});
+
+test('Review rows offer numbered suggestions and file with a number key', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'Two-person ultralight backpacking tent', url: 'https://a.example/tent-review', collectionId: null, needsReview: true });
+  await afterChange();
+  await go('#review');
+  const row = [...view().querySelectorAll('.review-row')].find((r) => r.textContent.includes('backpacking tent'));
+  assert.ok(row, 'the save is listed in Review');
+  const chips = [...row.querySelectorAll('.suggest-chip')];
+  assert.ok(chips.length >= 1 && chips.length <= 3);
+  assert.equal(chips[0].querySelector('kbd').textContent, '1');
+  row.focus();
+  row.dispatchEvent(new window.KeyboardEvent('keydown', { key: '1', bubbles: true }));
+  await afterChange();
+  const filed = await store.getItem(it.id);
+  assert.ok(filed.collectionId, 'pressing 1 filed it');
+  assert.equal(filed.needsReview, false);
 });
 
 test('an unknown collection route says so', async () => {

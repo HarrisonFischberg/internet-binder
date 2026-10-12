@@ -4,16 +4,16 @@
   AAA    8.12:1  text-muted               on bg                   
   AAA    7.41:1  text-muted               on surface              
   AA     6.57:1  text-muted               on surface-2            
-  AAA    8.48:1  on-accent                on accent               
-  AAA    9.07:1  accent                   on bg                   
-  AAA    8.28:1  accent                   on surface              
-  AA     6.62:1  accent                   on accent-soft          
+  AAA    8.20:1  on-accent                on accent               
+  AAA    8.77:1  accent                   on bg                   
+  AAA    8.01:1  accent                   on surface              
+  AAA    7.01:1  accent                   on accent-soft          
   AAA    8.23:1  highlight                on surface              
   AA     6.96:1  highlight                on highlight-soft       
   AA     6.74:1  danger                   on surface              
   AA     6.02:1  danger                   on danger-soft          
-  AAA    8.20:1  success                  on surface              
-  AA     6.87:1  success                  on success-soft         
+  AAA    7.85:1  success                  on surface              
+  AAA    7.04:1  success                  on success-soft         
   AAA    8.28:1  warning                  on surface              
   AAA    7.08:1  warning                  on warning-soft         
   PASS   4.28:1  border-input             on surface              ui
@@ -24,8 +24,8 @@
   AAA    8.23:1  kind-product             on surface              
   AA     6.61:1  kind-place               on kind-place-soft      
   AAA    7.66:1  kind-place               on surface              
-  AAA    7.61:1  kind-recipe              on kind-recipe-soft     
-  AAA    9.31:1  kind-recipe              on surface              
+  AAA    7.30:1  kind-recipe              on kind-recipe-soft     
+  AAA    8.44:1  kind-recipe              on surface              
   AA     6.86:1  kind-video               on kind-video-soft      
   AAA    7.68:1  kind-video               on surface              
   AAA    7.48:1  kind-article             on kind-article-soft    

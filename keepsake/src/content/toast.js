@@ -1,6 +1,8 @@
-// Keepsake in-page toast. Classic script; exposes globalThis.__keepsakeToast.
+// Keepsake in-page capture card (formerly a toast). Classic script; exposes globalThis.__keepsakeToast.
 // Rendered inside a closed Shadow DOM with adopted stylesheets so host page CSS
 // cannot leak in and ours cannot leak out. All text is set via textContent.
+// Colours, type and shape come from the Keepsake design tokens (tokens-content.js, injected
+// first); the host element carries data-style / data-theme from the person's settings.
 
 (function keepsakeToastModule() {
   if (globalThis.__keepsakeToast) return;
@@ -8,47 +10,49 @@
   const CSS = `
     :host { all: initial; }
     .wrap {
-      position: fixed; z-index: 2147483647; right: 20px; bottom: 20px; max-width: min(380px, calc(100vw - 40px));
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 13.5px; line-height: 1.4;
-      color: #2A2926; pointer-events: none;
+      position: fixed; z-index: 2147483647; right: 20px; bottom: 20px; width: min(360px, calc(100vw - 40px));
+      font: var(--t-body-web); color: var(--c-text); pointer-events: none;
     }
-    .toast {
-      pointer-events: auto; background: #F7F3EC; border: 1px solid #E1DACE; border-radius: 12px; padding: 12px 14px 12px 14px;
-      box-shadow: 0 10px 30px rgba(42,41,38,.16), 0 1px 2px rgba(42,41,38,.08); display: grid; gap: 8px; min-width: 240px;
-      transform: translateY(8px); opacity: 0; transition: transform .18s ease, opacity .18s ease;
+    .card {
+      position: relative; pointer-events: auto; background: var(--c-surface); border-radius: var(--r-xl);
+      box-shadow: var(--shadow-overlay); padding: 14px; display: grid; gap: 10px;
+      transform: translateY(8px); opacity: 0; transition: transform var(--m-base) var(--m-ease), opacity var(--m-base) var(--m-ease);
     }
-    .toast.in { transform: none; opacity: 1; }
-    .row { display: flex; align-items: flex-start; gap: 10px; }
-    .mark { width: 22px; height: 22px; flex: none; border-radius: 6px; background: #8A9A88; display: grid; place-items: center; margin-top: 1px; }
-    .mark svg { width: 13px; height: 13px; }
-    .title { font-weight: 600; letter-spacing: -.01em; }
-    .msg { color: #5D5A54; margin-top: 2px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 32px; }
-    button, select {
-      font: inherit; font-size: 12.5px; border-radius: 8px; border: 1px solid #D8D1C5; background: #FFFDF9; color: #2A2926; padding: 5px 10px; cursor: pointer;
+    .card.in { transform: none; opacity: 1; }
+    .head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-right: 24px; }
+    .icon { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--c-success-soft); color: var(--c-success); }
+    .icon svg { width: 13px; height: 13px; }
+    .card.tone-review .icon { background: var(--c-warning-soft); color: var(--c-warning); }
+    .card.tone-error .icon { background: var(--c-danger-soft); color: var(--c-danger); }
+    .card.tone-info .icon { background: var(--c-accent-soft); color: var(--c-accent); }
+    .heading { font: var(--t-subhead); font-weight: 600; color: var(--c-text); }
+    .row { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
+    .thumb { width: 52px; height: 52px; flex: none; border-radius: var(--r-md); overflow: hidden; background: var(--c-surface-2); }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .text { min-width: 0; display: grid; gap: 3px; }
+    .title { font: var(--t-footnote); font-weight: 600; color: var(--c-text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .msg { font: var(--t-footnote); color: var(--c-text-muted); }
+    .chip { position: relative; display: inline-flex; align-items: center; }
+    .chip select {
+      appearance: none; -webkit-appearance: none; font: var(--t-footnote); font-weight: 600; color: var(--c-accent); background: transparent;
+      border: 1px solid var(--c-accent); border-radius: var(--r-pill); padding: 3px 24px 3px 10px; max-width: 200px; cursor: pointer;
     }
-    button:hover { background: #F0EBE2; }
-    button:focus-visible, select:focus-visible { outline: 2px solid #5F6F5E; outline-offset: 1px; }
-    button.primary { background: #5F6F5E; border-color: #5F6F5E; color: #FBF8F2; }
-    button.primary:hover { background: #4F5E4E; }
-    button.quiet { border-color: transparent; background: transparent; color: #5D5A54; }
-    button.quiet:hover { background: #EEE8DE; }
-    select { max-width: 200px; }
-    .close { position: absolute; top: 6px; right: 6px; border: 0; background: transparent; width: 26px; height: 26px; padding: 0; border-radius: 6px; color: #8B867C; }
-    .toast { position: relative; }
-    @media (prefers-color-scheme: dark) {
-      .wrap { color: #EFEAE1; }
-      .toast { background: #26251F; border-color: #3A382F; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
-      .msg { color: #B5AFA3; }
-      button, select { background: #2F2E27; border-color: #46443B; color: #EFEAE1; }
-      button:hover { background: #3A382F; }
-      button.primary { background: #8A9A88; border-color: #8A9A88; color: #1C1B19; }
-      button.primary:hover { background: #9BAB99; }
-      button.quiet { color: #B5AFA3; }
-      button.quiet:hover { background: #33322B; }
-      .close { color: #9A948A; }
-    }
-    @media (prefers-reduced-motion: reduce) { .toast { transition: none; transform: none; } }
+    .chip svg { position: absolute; right: 7px; width: 12px; height: 12px; color: var(--c-accent); pointer-events: none; }
+    .suggest { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sugg { display: inline-flex; align-items: center; gap: 6px; font: var(--t-footnote); color: var(--c-text); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-pill); padding: 4px 10px; cursor: pointer; }
+    .sugg:hover { border-color: var(--c-accent); }
+    .sugg kbd { font: 10px/1 var(--font-mono); color: var(--c-text-muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    button.btn { font: var(--t-footnote); font-weight: 600; border-radius: var(--r-md); border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); padding: 5px 11px; cursor: pointer; }
+    button.btn:hover { background: var(--c-surface-2); }
+    button.btn.primary { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
+    button.btn.quiet { border-color: transparent; background: transparent; color: var(--c-text-muted); }
+    button.btn.quiet:hover { background: var(--c-surface-2); color: var(--c-text); }
+    button:focus-visible, select:focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }
+    .status { font: var(--t-caption); color: var(--c-text-muted); border-top: 1px solid var(--c-border); padding-top: 8px; }
+    .close { position: absolute; top: 8px; right: 8px; border: 0; background: transparent; width: 26px; height: 26px; padding: 0; border-radius: var(--r-sm); color: var(--c-text-muted); font: 18px/1 var(--font-sans); cursor: pointer; }
+    .close:hover { background: var(--c-surface-2); color: var(--c-text); }
+    @media (prefers-reduced-motion: reduce) { .card { transition: none; transform: none; } }
   `;
 
   let host = null;
@@ -56,6 +60,7 @@
   let wrap = null;
   let current = null;
   let hideTimer = null;
+  let keyHandler = null;
 
   function ensure() {
     if (host && host.isConnected) return;
@@ -69,13 +74,14 @@
     host.style.height = '0';
     host.setAttribute('aria-live', 'polite');
     shadow = host.attachShadow({ mode: 'closed' });
+    const text = (globalThis.__keepsakeTokenCss || '') + CSS;
     try {
       const sheet = new CSSStyleSheet();
-      sheet.replaceSync(CSS);
+      sheet.replaceSync(text);
       shadow.adoptedStyleSheets = [sheet];
     } catch {
       const style = document.createElement('style');
-      style.textContent = CSS;
+      style.textContent = text;
       shadow.append(style);
     }
     wrap = document.createElement('div');
@@ -84,18 +90,40 @@
     (document.documentElement || document.body).append(host);
   }
 
-  function markSvg() {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', 'M6 3.5h12a1 1 0 0 1 1 1V21l-7-4.2L5 21V4.5a1 1 0 0 1 1-1z');
-    path.setAttribute('fill', '#FBF8F2');
-    svg.append(path);
-    return svg;
+  function setLook(look) {
+    const style = look && ['moss', 'minimal'].includes(look.style) ? look.style : '';
+    const theme = look && ['light', 'dark'].includes(look.theme) ? look.theme : '';
+    if (style) host.setAttribute('data-style', style);
+    else host.removeAttribute('data-style');
+    if (theme) host.setAttribute('data-theme', theme);
+    else host.removeAttribute('data-theme');
   }
+
+  function svg(d, { fill = 'none', stroke = 'currentColor', width = '2.2' } = {}) {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 24 24');
+    s.setAttribute('aria-hidden', 'true');
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('fill', fill);
+    p.setAttribute('stroke', stroke);
+    p.setAttribute('stroke-width', width);
+    p.setAttribute('stroke-linecap', 'round');
+    p.setAttribute('stroke-linejoin', 'round');
+    s.append(p);
+    return s;
+  }
+  const ICONS = {
+    ok: 'm5 12.5 4.5 4.5L19 7.5',
+    review: 'M12 7v6m0 4h.01',
+    error: 'M12 7v6m0 4h.01',
+    info: 'M7 3.5h10v17l-5-3.6-5 3.6z',
+  };
 
   function hide() {
     clearTimeout(hideTimer);
+    if (keyHandler) document.removeEventListener('keydown', keyHandler, true);
+    keyHandler = null;
     if (!current) return;
     const node = current;
     current = null;
@@ -103,36 +131,33 @@
     setTimeout(() => node.remove(), 200);
   }
 
-  // show({ title, message, actions: [{ label, primary, quiet, onClick }], picker: { options: [{id,name}], selectedId, label }, duration })
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  };
+
+  // show({ title, message, tone: ok|review|error|info, thumb, meta, status, look: { style, theme },
+  //        actions: [{ label, primary, quiet, onClick, keepOpen }],
+  //        picker: { options: [{id,name}], selectedId, label, onChange },
+  //        suggestions: { items: [{ id, name }], onPick }, duration })
   function show(opts) {
     ensure();
     hide();
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.setAttribute('role', 'status');
-    const row = document.createElement('div');
-    row.className = 'row';
-    const mark = document.createElement('div');
-    mark.className = 'mark';
-    mark.append(markSvg());
-    const body = document.createElement('div');
-    const title = document.createElement('div');
-    title.className = 'title';
-    title.textContent = opts.title || 'Keepsake';
-    body.append(title);
-    if (opts.message) {
-      const msg = document.createElement('div');
-      msg.className = 'msg';
-      msg.textContent = opts.message;
-      body.append(msg);
-    }
-    row.append(mark, body);
-    toast.append(row);
+    setLook(opts.look);
+    const tone = ['ok', 'review', 'error', 'info'].includes(opts.tone) ? opts.tone : (/couldn|not saved|error/i.test(opts.title || '') ? 'error' : 'ok');
+    const card = el('div', `card tone-${tone}`);
+    card.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+
+    const head = el('div', 'head');
+    const icon = el('span', 'icon');
+    icon.append(svg(ICONS[tone]));
+    head.append(icon, el('span', 'heading', opts.title || 'Keepsake'));
 
     let pickerEl = null;
     if (opts.picker && Array.isArray(opts.picker.options) && opts.picker.options.length) {
-      const actions = document.createElement('div');
-      actions.className = 'actions';
+      const chip = el('span', 'chip');
       pickerEl = document.createElement('select');
       pickerEl.setAttribute('aria-label', opts.picker.label || 'Collection');
       for (const o of opts.picker.options) {
@@ -142,16 +167,67 @@
         if (o.id === opts.picker.selectedId) opt.selected = true;
         pickerEl.append(opt);
       }
-      actions.append(pickerEl);
-      toast.append(actions);
+      if (typeof opts.picker.onChange === 'function') pickerEl.addEventListener('change', () => opts.picker.onChange(pickerEl.value, { close: hide }));
+      chip.append(pickerEl, svg('m7 10 5 5 5-5', { width: '2' }));
+      head.append(chip);
     }
-    if (Array.isArray(opts.actions) && opts.actions.length) {
-      const actions = document.createElement('div');
-      actions.className = 'actions';
-      for (const a of opts.actions) {
-        const b = document.createElement('button');
+    card.append(head);
+
+    if (opts.thumb || opts.message || opts.meta) {
+      const row = el('div', 'row');
+      if (opts.thumb) {
+        const t = el('div', 'thumb');
+        const img = document.createElement('img');
+        img.alt = '';
+        img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => t.remove());
+        img.src = opts.thumb;
+        t.append(img);
+        row.append(t);
+      }
+      const text = el('div', 'text');
+      if (opts.message) text.append(el('div', opts.thumb ? 'title' : 'msg', opts.message));
+      if (opts.meta) text.append(el('div', 'msg', opts.meta));
+      row.append(text);
+      card.append(row);
+    }
+
+    const sugg = opts.suggestions && Array.isArray(opts.suggestions.items) ? opts.suggestions.items.slice(0, 3) : [];
+    if (sugg.length) {
+      const box = el('div', 'suggest');
+      box.setAttribute('role', 'group');
+      box.setAttribute('aria-label', 'Suggested collections');
+      sugg.forEach((s, i) => {
+        const b = el('button', 'sugg');
         b.type = 'button';
-        b.textContent = a.label;
+        b.append(el('kbd', '', String(i + 1)), document.createTextNode(s.name));
+        b.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          opts.suggestions.onPick(s.id, { close: hide });
+        });
+        box.append(b);
+      });
+      card.append(box);
+      // 1/2/3 while the card is showing and focus isn't in a form field on the page.
+      keyHandler = (e) => {
+        const t = e.composedPath ? e.composedPath()[0] : e.target;
+        if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '') || (t && t.isContentEditable)) return;
+        const n = Number(e.key);
+        if (n >= 1 && n <= sugg.length && !e.altKey && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          opts.suggestions.onPick(sugg[n - 1].id, { close: hide });
+        }
+      };
+      document.addEventListener('keydown', keyHandler, true);
+    }
+
+    if (Array.isArray(opts.actions) && opts.actions.length) {
+      const actions = el('div', 'actions');
+      for (const a of opts.actions) {
+        const b = el('button', 'btn', a.label);
+        b.type = 'button';
         if (a.primary) b.classList.add('primary');
         if (a.quiet) b.classList.add('quiet');
         b.addEventListener('click', (ev) => {
@@ -165,25 +241,26 @@
         });
         actions.append(b);
       }
-      toast.append(actions);
+      card.append(actions);
     }
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'close';
-    close.setAttribute('aria-label', 'Dismiss');
-    close.textContent = '×';
-    close.addEventListener('click', hide);
-    toast.append(close);
+    if (opts.status) card.append(el('div', 'status', opts.status));
 
-    wrap.append(toast);
-    current = toast;
-    requestAnimationFrame(() => toast.classList.add('in'));
-    // Every toast stays up 25% longer than the duration it asks for.
-    const duration = (Number.isFinite(opts.duration) ? opts.duration : 6500) * 1.25;
+    const close = el('button', 'close', '×');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Dismiss');
+    close.addEventListener('click', hide);
+    card.append(close);
+
+    wrap.append(card);
+    current = card;
+    requestAnimationFrame(() => card.classList.add('in'));
+    // Every card stays up 25% longer than the duration it asks for; errors stay until dismissed.
+    const duration = tone === 'error' && opts.duration === undefined ? 0 : (Number.isFinite(opts.duration) ? opts.duration : 6500) * 1.25;
     if (duration > 0) {
       hideTimer = setTimeout(hide, duration);
-      toast.addEventListener('mouseenter', () => clearTimeout(hideTimer));
-      toast.addEventListener('mouseleave', () => {
+      card.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+      card.addEventListener('focusin', () => clearTimeout(hideTimer));
+      card.addEventListener('mouseleave', () => {
         clearTimeout(hideTimer);
         hideTimer = setTimeout(hide, 2500 * 1.25);
       });

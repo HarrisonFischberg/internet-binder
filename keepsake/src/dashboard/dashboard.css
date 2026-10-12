@@ -890,7 +890,7 @@ a.sidebar-brand:hover .brand-name {
   outline: none;
   border-color: var(--moss);
   background: var(--paper);
-  box-shadow: 0 0 0 3px rgba(95, 111, 94, 0.18);
+  box-shadow: var(--focus-ring);
 }
 
 .collection-name-actions {
@@ -1035,7 +1035,7 @@ a.sidebar-brand:hover .brand-name {
 
 .radio.checked {
   border-color: var(--moss);
-  background: rgba(95, 111, 94, 0.06);
+  background: var(--accent-tint);
 }
 
 .radio input {
@@ -1302,7 +1302,7 @@ a.sidebar-brand:hover .brand-name {
   height: 26px;
   border-radius: 50%;
   background: var(--moss);
-  color: #fff;
+  color: var(--on-accent);
   display: grid;
   place-items: center;
   font-size: 12.5px;
@@ -1323,30 +1323,50 @@ a.sidebar-brand:hover .brand-name {
 }
 
 /* Review list --------------------------------------------------------------- */
+.review-intro {
+  font: var(--t-footnote);
+  color: var(--c-text-muted);
+  margin-bottom: 12px;
+  max-width: 900px;
+}
+
 .review-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   max-width: 900px;
 }
 
 .review-row {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
   gap: 14px;
-  padding: 12px;
-  border-radius: var(--radius-l);
-  background: var(--card);
-  box-shadow: var(--shadow-1);
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--m-fast) var(--m-ease), opacity var(--m-base) var(--m-ease), transform var(--m-base) var(--m-ease);
+}
+
+.review-row:focus-within,
+.review-row:focus-visible {
+  box-shadow: var(--shadow-raised);
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.review-row.is-filed {
+  opacity: 0;
+  transform: translateX(16px);
 }
 
 .review-row .pic {
-  border-radius: 10px;
+  border-radius: var(--r-md);
   aspect-ratio: 1 / 1;
 }
 
 .review-row .pic-initial {
-  font-size: 26px;
+  font-size: 22px;
 }
 
 .review-row .pic-title {
@@ -1354,14 +1374,15 @@ a.sidebar-brand:hover .brand-name {
 }
 
 .review-title {
-  font-weight: 500;
-  line-height: 1.35;
+  font: var(--t-subhead);
+  font-weight: 600;
+  color: var(--c-text);
   overflow-wrap: anywhere;
 }
 
 .review-reason {
-  font-size: 12.5px;
-  color: var(--ink-3);
+  font: var(--t-caption);
+  color: var(--c-text-muted);
   margin-top: 3px;
 }
 
@@ -1378,6 +1399,41 @@ a.sidebar-brand:hover .brand-name {
   min-width: 160px;
   height: 30px;
   font-size: 12.5px;
+}
+
+.suggest-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg);
+  color: var(--c-text);
+  border-radius: var(--r-pill);
+  padding: 0 12px;
+  font: var(--t-footnote);
+  cursor: pointer;
+}
+
+.suggest-chip:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+
+.suggest-chip:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.suggest-chip kbd {
+  font: 10px/1 var(--font-mono);
+  color: var(--c-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-row.is-filed {
+    transform: none;
+  }
 }
 
 /* Import (Instagram) --------------------------------------------------------- */
@@ -1791,7 +1847,7 @@ body.modal-open {
 .toggle-chip.on {
   border-color: var(--moss);
   color: var(--moss-2);
-  background: rgba(95, 111, 94, 0.08);
+  background: var(--accent-tint);
 }
 
 .price-inline {

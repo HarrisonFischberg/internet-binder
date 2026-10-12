@@ -119,7 +119,7 @@ Open it from the popup or from the extension's Options; it opens on **Home**, an
 - **Select** mode for bulk move, favorite, archive/unarchive, delete (to Trash) and (when AI is on) *Find products*.
 - **Trash** (`#trash`): deleted saves stay 30 days, with Restore (back to their collection, or Review if it's gone), Delete forever and Empty Trash.
 - **Collections**: the sidebar lists every pinned collection, then the ones you saved into most recently, up to eight; the collection you have open is always listed. **All collections** opens every collection as a cover tile (a collage of its latest images), pinned first, with a name/keyword search and sorting by recently saved to, A–Z or most saves. Pin a collection from its tile, its page, or the sidebar (drag or Alt+↑/↓ to reorder pinned ones). Rename by editing the name on the collection's page; keywords, description and cover (newest image or your own URL) under *Keywords*; merge by selecting items and ticking *Merge* in **Move to…**; delete (items become uncategorized, waiting in Review, unless you choose otherwise).
-- **Theme**: system / light / dark (toolbar sun icon or Settings → Appearance).
+- **Style and theme**: three styles (Modern, the default; Moss, the original warm look; Minimalist, black and white), each with system / light / dark (Settings → Appearance; the toolbar sun icon toggles the theme). The style applies to the popup, the dashboard and the save card shown on pages.
 - **Load sample data** from the welcome page or the empty state to see the layout; delete it any time.
 
 ## Instagram Saved-collection import

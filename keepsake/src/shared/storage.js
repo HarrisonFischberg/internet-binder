@@ -45,8 +45,26 @@ const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'u
 const CAPTURE_STATES = ['pending', 'complete', 'failed'];
 export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024 };
 
+// Styles a person can pick in Settings → Appearance. The first is the default.
+export const STYLES = [
+  { value: 'modern', label: 'Modern' },
+  { value: 'moss', label: 'Moss' },
+  { value: 'minimal', label: 'Minimalist' },
+];
+
+// Sets data-style / data-theme on <html> (or any element) from settings. Modern needs no attribute.
+export function applyLook(node, settings) {
+  const theme = settings?.theme || 'system';
+  const style = STYLES.some((s) => s.value === settings?.style) ? settings.style : 'modern';
+  if (theme === 'light' || theme === 'dark') node.dataset.theme = theme;
+  else delete node.dataset.theme;
+  if (style === 'modern') delete node.dataset.style;
+  else node.dataset.style = style;
+}
+
 export const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
+  style: 'modern', // modern | moss | minimal: the look, per device (see src/shared/tokens.css)
   floating: {
     mode: 'off', // off | all | selected
     sites: [], // origin patterns like *://www.example.com/*
@@ -361,25 +379,37 @@ export function createStore(kv, db = memoryRecordBackend()) {
     };
   }
 
-  // v1/v2 library in chrome.storage.local -> v3 records. Returns what was copied, for the check.
-  async function migrateToRecords(raw) {
+  // v1/v2 library in chrome.storage.local -> v3 records. Never overwrites a record that already
+  // exists in `db`, so running it again is always safe. `since` (the first migration time) limits a
+  // re-run to saves and collections an older Keepsake created after that point: e.g. a rollback to
+  // 1.3.x, or an old background worker still running after an update. Older v2 entries are not
+  // brought back, so something deleted for good in schema 3 stays deleted.
+  async function migrateToRecords(raw, { since = null } = {}) {
     const legacy = migrate({ ...raw });
-    const collections = Object.values(legacy[KEYS.collections] || {}).filter((c) => c && c.id);
-    const items = Object.values(legacy[KEYS.items] || {}).filter((i) => i && i.id).map((i) => ({
-      ...i,
-      originalTitle: i.originalTitle || i.title || '',
-      userFields: Array.isArray(i.userFields) ? i.userFields : [],
-      captureState: 'complete',
-      captureError: '',
-      deletedAt: null,
-    }));
+    const newer = (r) => !since || (typeof r.createdAt === 'string' && r.createdAt > since);
+    const haveCols = mapOf(await db.all('collections'));
+    const haveItems = mapOf(await db.all('items'));
+    const collections = Object.values(legacy[KEYS.collections] || {}).filter((c) => c && c.id && !haveCols[c.id] && newer(c));
+    const colIds = new Set([...Object.keys(haveCols), ...collections.map((c) => c.id)]);
+    const items = Object.values(legacy[KEYS.items] || {}).filter((i) => i && i.id && !haveItems[i.id] && newer(i)).map((i) => {
+      const known = !i.collectionId || colIds.has(i.collectionId);
+      return {
+        ...i,
+        ...(known ? {} : { collectionId: null, needsReview: true }),
+        originalTitle: i.originalTitle || i.title || '',
+        userFields: Array.isArray(i.userFields) ? i.userFields : [],
+        captureState: 'complete',
+        captureError: '',
+        deletedAt: null,
+      };
+    });
     if (collections.length) await db.put('collections', collections);
-    if (items.length) {
-      for (let i = 0; i < items.length; i += 500) await db.put('items', items.slice(i, i + 500));
+    for (let i = 0; i < items.length; i += 500) await db.put('items', items.slice(i, i + 500));
+    if (!since) {
+      if (legacy[KEYS.prefs] && !(await db.get('kv', 'prefs'))) await kvSet('prefs', { ...emptyPrefs(), ...legacy[KEYS.prefs] });
+      if (legacy[KEYS.importHistory] && !(await db.get('kv', 'importHistory'))) await kvSet('importHistory', legacy[KEYS.importHistory]);
+      if (Array.isArray(raw[AI_LOG_KEY]) && !(await db.get('kv', 'aiLog'))) await kvSet('aiLog', raw[AI_LOG_KEY]);
     }
-    if (legacy[KEYS.prefs]) await kvSet('prefs', { ...emptyPrefs(), ...legacy[KEYS.prefs] });
-    if (legacy[KEYS.importHistory]) await kvSet('importHistory', legacy[KEYS.importHistory]);
-    if (Array.isArray(raw[AI_LOG_KEY])) await kvSet('aiLog', raw[AI_LOG_KEY]);
     // The check: every id and title arrived.
     const got = mapOf(await db.all('items'));
     const missing = items.filter((i) => !got[i.id] || got[i.id].title !== i.title);
@@ -401,12 +431,21 @@ export function createStore(kv, db = memoryRecordBackend()) {
         const hadMeta = !!raw[KEYS.meta];
         const version = Number(raw[KEYS.meta]?.schemaVersion || 0);
         const now = nowIso();
+        const since = raw[KEYS.meta]?.migratedToRecordsAt || null;
         let migrated = null;
-        if (version < SCHEMA_VERSION && (raw[LEGACY.items] || raw[LEGACY.collections])) migrated = await migrateToRecords(raw);
+        let caughtUp = null;
+        if (raw[LEGACY.items] || raw[LEGACY.collections]) {
+          if (!since && version < SCHEMA_VERSION) migrated = await migrateToRecords(raw);
+          else if (since) {
+            // An older Keepsake wrote to the v2 keys after the upgrade: bring its new saves across.
+            const r = await migrateToRecords(raw, { since });
+            if (r.items || r.collections) caughtUp = r;
+          }
+        }
         if (!(await db.count('collections'))) await db.put('collections', Object.values(defaultCollections()));
         if (!(await db.get('kv', 'prefs'))) await kvSet('prefs', emptyPrefs());
         if (!(await db.get('kv', 'importHistory'))) await kvSet('importHistory', { instagram: {} });
-        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}) } };
+        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}) } };
         if (!raw[KEYS.settings]) write[KEYS.settings] = structuredClone(DEFAULT_SETTINGS);
         else if (raw[KEYS.settings].ai && raw[KEYS.settings].ai.on === undefined) {
           // Before the single switch, each AI feature had its own. Carry over only the
@@ -415,7 +454,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
           write[KEYS.settings] = { ...raw[KEYS.settings], ai: { ...ai, on: !!instantSave } };
         }
         await be.set(write);
-        return { fresh: !hadMeta, migrated };
+        return { fresh: !hadMeta, migrated, caughtUp };
       });
     },
 

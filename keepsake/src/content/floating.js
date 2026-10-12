@@ -7,6 +7,8 @@
   if (globalThis.__keepsakeFloating) return;
   const detector = globalThis.__keepsakeDetector;
   const toast = globalThis.__keepsakeToast;
+  // Every card uses the person's chosen style and theme (from FLOATING_CONFIG).
+  const showCard = (o) => toast.show({ look: config && config.look, ...o });
   if (!detector || !toast || !globalThis.chrome?.runtime?.id) return;
 
   const MSG = {
@@ -285,19 +287,19 @@
 
   function handleSaveResult(product, res) {
     if (!res || !res.ok) {
-      toast.show({ title: 'Couldn’t save', message: res && res.error ? res.error : 'Keepsake could not reach its storage. Try reloading the page.' });
+      showCard({ title: 'Couldn’t save', message: res && res.error ? res.error : 'Keepsake could not reach its storage. Try reloading the page.' });
       return;
     }
     if (res.duplicate) {
       const ex = res.existing;
-      toast.show({
+      showCard({
         title: 'Already in Keepsake',
         message: `Saved ${ex.collectionName ? 'in ' + ex.collectionName : 'earlier'}. Update it with the current price and image, or save another copy.`,
         duration: 12000,
         actions: [
           { label: 'Update existing', primary: true, onClick: async () => {
             const up = await send({ type: MSG.UPDATE_ITEM, itemId: ex.id, patch: { price: product.price, priceText: product.priceText, currency: product.currency, image: product.image, images: product.images, title: product.title } });
-            toast.show({ title: up && up.ok ? 'Updated' : 'Couldn’t update', message: up && up.ok ? `“${shorten(ex.title || product.title, 60)}” now has the latest details.` : (up && up.error) || '' });
+            showCard({ title: up && up.ok ? 'Updated' : 'Couldn’t update', message: up && up.ok ? `“${shorten(ex.title || product.title, 60)}” now has the latest details.` : (up && up.error) || '' });
           } },
           { label: 'Save another copy', onClick: async () => {
             const again = await send({ type: MSG.SAVE_ITEM, product, source: 'floating', force: true, instant: true });
@@ -315,7 +317,8 @@
     // The save may have created this collection since the options were loaded.
     if (col && !options.some((o) => o.id === col.id)) options.push({ id: col.id, name: col.name });
     if (cls.isInbox) {
-      toast.show({
+      showCard({
+        tone: 'review',
         title: 'Not sure — saved for review',
         message: cls.suggested ? `Not sure where this belongs — maybe ${cls.suggested.collectionName}? Pick a collection or sort it later.` : 'Not sure where this belongs. Pick a collection now or sort it later.',
         picker: { options, selectedId: cls.suggested?.collectionId || options[0]?.id, label: 'Move to collection' },
@@ -323,7 +326,7 @@
         actions: [
           { label: 'Move', primary: true, onClick: async ({ pickedId }) => {
             const up = await send({ type: MSG.UPDATE_ITEM, itemId: item.id, patch: { collectionId: pickedId }, learn: 'light' });
-            toast.show({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Keepsake will remember this for similar items.' : (up && up.error) || '' });
+            showCard({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Keepsake will remember this for similar items.' : (up && up.error) || '' });
           } },
           { label: 'Undo', quiet: true, onClick: () => send({ type: MSG.UNDO_SAVE, itemId: item.id }) },
         ],
@@ -331,7 +334,7 @@
       return;
     }
     // Say where it went, with a one-step move in case that's the wrong collection.
-    toast.show({
+    showCard({
       title: `Saved to ${col ? col.name : 'Keepsake'}`,
       message: shorten(item.title, 70),
       picker: { options, selectedId: item.collectionId, label: 'Move to collection' },
@@ -340,11 +343,11 @@
         { label: 'Move', onClick: async ({ pickedId }) => {
           if (!pickedId || pickedId === item.collectionId) return;
           const up = await send({ type: MSG.UPDATE_ITEM, itemId: item.id, patch: { collectionId: pickedId }, learn: 'light' });
-          toast.show({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Keepsake will remember this for similar items.' : (up && up.error) || '' });
+          showCard({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Keepsake will remember this for similar items.' : (up && up.error) || '' });
         } },
         { label: 'Undo', quiet: true, onClick: async () => {
           const r = await send({ type: MSG.UNDO_SAVE, itemId: item.id });
-          toast.show({ title: r && r.ok ? 'Removed' : 'Couldn’t undo', message: r && r.ok ? 'The item was removed from Keepsake.' : (r && r.error) || '', duration: 3000 });
+          showCard({ title: r && r.ok ? 'Removed' : 'Couldn’t undo', message: r && r.ok ? 'The item was removed from Keepsake.' : (r && r.error) || '', duration: 3000 });
         } },
         { label: 'Edit', quiet: true, onClick: () => send({ type: MSG.OPEN_DASHBOARD, hash: `#item/${item.id}` }) },
       ],
@@ -379,7 +382,7 @@
       start();
       sendResponse({ ok: true });
     } else if (msg.type === MSG.PAGE_TOAST && msg.toast) {
-      toast.show(sanitizeToast(msg.toast));
+      showCard(sanitizeToast(msg.toast));
       sendResponse({ ok: true });
     }
   });

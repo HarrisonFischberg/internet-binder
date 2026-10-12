@@ -1,90 +1,42 @@
 /* Keepsake shared tokens + base styles (popup and dashboard). */
 
+/* The colour, shape, type and motion values come from tokens.css (generated from the design
+   tokens: Modern, Moss and Minimalist, each light and dark; loaded before this file). These
+   names are the ones the existing components use; they now point at the token roles, so the
+   Style setting (data-style on <html>) and the theme (data-theme) restyle every page at once. */
 :root {
-  --paper: #f5f1ea;
-  --paper-2: #fbf9f5;
-  --paper-3: #ece7de;
-  --ink: #2a2926;
-  --ink-2: #5a5852;
-  --ink-3: #8b8880;
-  --line: rgba(42, 41, 38, 0.1);
-  --line-2: rgba(42, 41, 38, 0.18);
-  --sage: #8a9a88;
-  --moss: #5f6f5e;
-  --moss-2: #4c5a4b;
-  --brass: #b9924f;
-  --brass-2: #9a7738;
-  --danger: #a6503f;
-  --danger-bg: rgba(166, 80, 63, 0.1);
-  --ok: #4f6f57;
-  --ok-bg: rgba(79, 111, 87, 0.12);
-  --card: #ffffff;
-  --shadow-1: 0 1px 2px rgba(42, 41, 38, 0.06), 0 1px 1px rgba(42, 41, 38, 0.04);
-  --shadow-2: 0 8px 24px rgba(42, 41, 38, 0.12), 0 2px 6px rgba(42, 41, 38, 0.06);
-  --shadow-3: 0 18px 50px rgba(42, 41, 38, 0.2), 0 4px 12px rgba(42, 41, 38, 0.08);
-  --radius-s: 8px;
-  --radius-m: 12px;
-  --radius-l: 18px;
-  --radius-xl: 24px;
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --t-fast: 120ms;
-  --t-med: 200ms;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #1d1c19;
-    --paper-2: #24231f;
-    --paper-3: #2d2c27;
-    --ink: #efeae1;
-    --ink-2: #b8b3a8;
-    --ink-3: #85817a;
-    --line: rgba(239, 234, 225, 0.1);
-    --line-2: rgba(239, 234, 225, 0.2);
-    --sage: #8fa08c;
-    --moss: #8a9a88;
-    --moss-2: #a3b2a1;
-    --brass: #c9a25b;
-    --brass-2: #d9b56d;
-    --danger: #d17b69;
-    --danger-bg: rgba(209, 123, 105, 0.14);
-    --ok: #8fb59a;
-    --ok-bg: rgba(143, 181, 154, 0.14);
-    --card: #26251f;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
-    --shadow-3: 0 18px 50px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --paper: #1d1c19;
-  --paper-2: #24231f;
-  --paper-3: #2d2c27;
-  --ink: #efeae1;
-  --ink-2: #b8b3a8;
-  --ink-3: #85817a;
-  --line: rgba(239, 234, 225, 0.1);
-  --line-2: rgba(239, 234, 225, 0.2);
-  --sage: #8fa08c;
-  --moss: #8a9a88;
-  --moss-2: #a3b2a1;
-  --brass: #c9a25b;
-  --brass-2: #d9b56d;
-  --danger: #d17b69;
-  --danger-bg: rgba(209, 123, 105, 0.14);
-  --ok: #8fb59a;
-  --ok-bg: rgba(143, 181, 154, 0.14);
-  --card: #26251f;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-3: 0 18px 50px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
-  color-scheme: dark;
+  --paper: var(--c-bg);
+  --paper-2: var(--c-surface);
+  --paper-3: var(--c-surface-2);
+  --ink: var(--c-text);
+  --ink-2: var(--c-text-muted);
+  --ink-3: var(--c-text-muted);
+  --line: var(--c-border);
+  --line-2: var(--c-border-input);
+  --sage: var(--c-accent-soft);
+  --moss: var(--c-accent);
+  --moss-2: var(--c-accent);
+  --brass: var(--c-highlight);
+  --brass-2: var(--c-highlight);
+  --danger: var(--c-danger);
+  --danger-bg: var(--c-danger-soft);
+  --ok: var(--c-success);
+  --ok-bg: var(--c-success-soft);
+  --card: var(--c-surface);
+  --on-accent: var(--c-on-accent);
+  --accent-tint: color-mix(in srgb, var(--c-accent) 10%, transparent);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--c-focus) 28%, transparent);
+  --shadow-1: var(--shadow-card);
+  --shadow-2: var(--shadow-raised);
+  --shadow-3: var(--shadow-overlay);
+  --radius-s: var(--r-sm);
+  --radius-m: var(--r-md);
+  --radius-l: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --font-body: var(--font-sans);
+  --ease: var(--m-ease);
+  --t-fast: var(--m-fast);
+  --t-med: var(--m-base);
 }
 
 *,
@@ -202,41 +154,14 @@ button {
 }
 
 .btn-primary {
-  background: var(--moss);
-  border-color: var(--moss);
-  color: #f7f5ef;
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
 }
 
 .btn-primary:hover {
-  background: var(--moss-2);
-  border-color: var(--moss-2);
-}
-
-:root[data-theme="dark"] .btn-primary,
-:root:not([data-theme="light"]) .btn-primary {
-  color: #f7f5ef;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .btn-primary {
-    background: #5f6f5e;
-    border-color: #5f6f5e;
-  }
-
-  :root:not([data-theme="light"]) .btn-primary:hover {
-    background: #6e7f6d;
-    border-color: #6e7f6d;
-  }
-}
-
-:root[data-theme="dark"] .btn-primary {
-  background: #5f6f5e;
-  border-color: #5f6f5e;
-}
-
-:root[data-theme="dark"] .btn-primary:hover {
-  background: #6e7f6d;
-  border-color: #6e7f6d;
+  background: color-mix(in srgb, var(--c-accent) 88%, var(--c-text));
+  border-color: color-mix(in srgb, var(--c-accent) 88%, var(--c-text));
 }
 
 .btn-quiet {
@@ -332,8 +257,8 @@ button {
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--moss);
-  box-shadow: 0 0 0 3px rgba(95, 111, 94, 0.18);
+  border-color: var(--c-focus);
+  box-shadow: var(--focus-ring);
 }
 
 .input::placeholder,
@@ -460,8 +385,8 @@ button {
 }
 
 .pill-warn {
-  color: var(--brass-2);
-  background: rgba(185, 146, 79, 0.14);
+  color: var(--c-warning);
+  background: var(--c-warning-soft);
 }
 
 .pill-danger {
@@ -489,7 +414,7 @@ button {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--c-surface) 55%, transparent), transparent);
   transform: translateX(-100%);
   animation: shimmer 1.4s infinite;
 }
@@ -559,8 +484,8 @@ button {
 }
 
 .notice-warn {
-  background: rgba(185, 146, 79, 0.14);
-  color: var(--brass-2);
+  background: var(--c-warning-soft);
+  color: var(--c-warning);
 }
 
 .notice-danger {
@@ -578,9 +503,28 @@ button {
   height: 22px;
   border-radius: 7px;
   background: var(--moss);
+  color: var(--on-accent);
   display: grid;
   place-items: center;
   flex: none;
+}
+
+/* Minimalist: the bookmark alone, drawn as a line in the text colour, with no tile. */
+:root[data-style="minimal"] .mark {
+  background: transparent;
+  color: var(--c-text);
+}
+
+:root[data-style="minimal"] .mark svg {
+  width: 20px;
+  height: 20px;
+}
+
+:root[data-style="minimal"] .mark path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
 }
 
 .mark svg {

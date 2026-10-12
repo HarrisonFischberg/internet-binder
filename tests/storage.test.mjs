@@ -375,6 +375,31 @@ test('migration runs once; later edits are not overwritten by a second init', as
   assert.equal((await again.getItem('itm001')).title, 'Edited after migration');
 });
 
+test('an older Keepsake saving after the upgrade (rollback or stale worker): its saves are caught up, nothing newer is overwritten', async () => {
+  const { store, be, db } = await fresh(v2Library());
+  await store.updateItem('itm001', { title: 'Edited in 1.4' });
+  await store.deleteForever(['itm002']);
+  // A 1.3.1 worker writes a new save into the v2 keys and resets the schema number, as its init does.
+  const raw = await be.get(null);
+  const later = new Date(Date.now() + 1000).toISOString();
+  await be.set({
+    [KEYS.items]: { ...raw[KEYS.items], hoodie1: { id: 'hoodie1', title: 'The Shevlin Double-Layer Hoodie', url: 'https://bruntworkwear.example/hoodie', collectionId: 'gone99', createdAt: later } },
+    [KEYS.meta]: { ...raw[KEYS.meta], schemaVersion: 2 },
+  });
+  const again = createStore(be, db);
+  const r = await again.init();
+  assert.deepEqual(r.caughtUp, { items: 1, collections: 0 });
+  const hoodie = await again.getItem('hoodie1');
+  assert.equal(hoodie.title, 'The Shevlin Double-Layer Hoodie');
+  assert.equal(hoodie.collectionId, null, 'a collection that no longer exists sends it to Review');
+  assert.equal(hoodie.needsReview, true);
+  assert.equal((await again.getItem('itm001')).title, 'Edited in 1.4', 'the v2 copy did not overwrite a newer edit');
+  assert.equal(await again.getItem('itm002'), null, 'deleted for good stays deleted');
+  assert.equal((await be.get(KEYS.meta))[KEYS.meta].schemaVersion, 3);
+  const third = await createStore(be, db).init();
+  assert.equal(third.caughtUp, null, 'catching up happens once');
+});
+
 test('a v1 library (rules) migrates straight to v3', async () => {
   const { store } = await fresh({
     [KEYS.meta]: { schemaVersion: 1 },

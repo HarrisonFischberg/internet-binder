@@ -2,7 +2,7 @@
 // through the shared store and to the background worker only for a couple of
 // helpers (opening tabs, refreshing floating buttons). No network access.
 
-import { createStore, chromeBackend, idbBackend, TRASH_DAYS } from '../shared/storage.js';
+import { createStore, chromeBackend, idbBackend, TRASH_DAYS, applyLook } from '../shared/storage.js';
 import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
@@ -126,8 +126,7 @@ function sortCollections(list) {
 
 function applyTheme() {
   const theme = state.settings?.theme || 'system';
-  if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
-  else delete document.documentElement.dataset.theme;
+  applyLook(document.documentElement, state.settings);
   const btn = $('themeToggle');
   if (btn) btn.title = `Theme: ${theme}`;
 }
@@ -1674,7 +1673,7 @@ function renderCollections(view) {
 function renderReview(view) {
   const items = state.items.filter((i) => !i.collectionId && isActive(i));
   const page = el('div', { class: 'page page-wide' });
-  page.append(el('p', { class: 'page-intro' }, ['Keepsake wasn’t confident enough to file these automatically. Pick a collection for each and it learns for next time.']));
+  page.append(el('p', { class: 'page-intro' }, ['Keepsake wasn’t sure where these belong. Pick one of the suggestions, or select a row and press 1, 2 or 3, and Keepsake learns from your choice.']));
   if (items.length && state.settings?.ai?.on) {
     page.append(el('div', { class: 'actions-row review-ai' }, [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: () => runAiCleanup(ctx, { scope: 'review' }) }, [`Fix all ${items.length} with AI`]),
@@ -1686,7 +1685,7 @@ function renderReview(view) {
     view.append(page);
     return;
   }
-  const list = el('div', { class: 'review-list' });
+  const list = el('div', { class: 'review-list', role: 'list' });
   const regular = ctx.regularCollections();
   const counts = new Map();
   for (const i of state.items) if (i.collectionId) counts.set(i.collectionId, (counts.get(i.collectionId) || 0) + 1);
@@ -1714,13 +1713,25 @@ function renderReview(view) {
       },
       label: `Collection for ${item.title}`,
     });
-    const row = el('div', { class: 'review-row' }, [
+    const fileTo = (s) => {
+      row.classList.add('is-filed');
+      return fileItem(item, s.isNew ? `new:${s.taxonomyKey}` : s.collectionId);
+    };
+    const row = el('div', { class: 'review-row', tabindex: '0', role: 'listitem', 'aria-label': `${item.title}. Press 1 to ${suggestions.length} to file.`, onKeydown: (e) => {
+      if (e.target !== row) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= suggestions.length) {
+        e.preventDefault();
+        const next = row.nextElementSibling;
+        fileTo(suggestions[n - 1]).then(() => next && next.focus && next.focus());
+      }
+    } }, [
       UI.pictureNode({ src: item.image, title: item.title, className: 'review-pic' }),
       el('div', {}, [
         el('div', { class: 'review-title' }, [item.title]),
         el('div', { class: 'review-reason' }, [[item.retailer || item.host, item.categorizationReason || cls.reason].filter(Boolean).join(' · ')]),
         el('div', { class: 'review-actions' }, [
-          ...suggestions.map((s) => el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => fileItem(item, s.isNew ? `new:${s.taxonomyKey}` : s.collectionId) }, [`Move to ${s.collectionName}`])),
+          ...suggestions.map((s, i) => el('button', { type: 'button', class: 'suggest-chip', 'aria-keyshortcuts': String(i + 1), onClick: () => fileTo(s) }, [el('kbd', {}, [String(i + 1)]), s.collectionName])),
           select,
           el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => openQuickView(item.id) }, ['Details']),
           el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => deleteItems([item]) }, ['Delete']),

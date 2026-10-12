@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Keepsake</title>
+  <link rel="stylesheet" href="../shared/tokens.css" />
   <link rel="stylesheet" href="../shared/base.css" />
   <link rel="stylesheet" href="popup.css" />
 </head>
@@ -10,7 +11,7 @@
   <header class="topbar">
     <a class="brand" href="#" id="openDashboardBrand" title="Open your Keepsake dashboard">
       <span class="mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.2a.8.8 0 0 1-1.28.64L12 16.9l-5.22 3.94A.8.8 0 0 1 5.5 20.2V5A1.5 1.5 0 0 1 7 3.5Z" fill="#F5F1EA"/></svg>
+        <svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h10a1.5 1.5 0 0 1 1.5 1.5v15.2a.8.8 0 0 1-1.28.64L12 16.9l-5.22 3.94A.8.8 0 0 1 5.5 20.2V5A1.5 1.5 0 0 1 7 3.5Z" fill="currentColor"/></svg>
       </span>
       <span class="brand-name">Keepsake</span>
     </a>
@@ -169,28 +170,37 @@
       <p class="notice notice-danger hidden" id="saveError" role="alert"></p>
     </section>
 
-    <!-- Saved confirmation -->
+    <!-- Saved: the capture card (same anatomy as the card shown on pages) -->
     <section class="state hidden" id="state-saved" aria-live="polite">
-      <div class="saved">
-        <div class="saved-check" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+      <div class="capture">
+        <div class="capture-head">
+          <span class="capture-icon" id="savedIcon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          </span>
+          <h2 class="capture-heading" id="savedTitle">Saved</h2>
+          <span class="chip-select hidden" id="savedMoveRow">
+            <label class="sr-only" for="savedMove">Move to collection</label>
+            <select id="savedMove"></select>
+            <svg class="chip-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+          </span>
         </div>
-        <h2 id="savedTitle">Saved</h2>
-        <p class="muted" id="savedSubtitle"></p>
-        <div class="saved-thumb" id="savedThumb"></div>
-        <div class="saved-move hidden" id="savedMoveRow">
-          <label class="small muted" for="savedMove">Move to</label>
-          <select class="select" id="savedMove"></select>
+        <div class="capture-row">
+          <div class="capture-thumb" id="savedThumb"></div>
+          <div class="capture-text">
+            <p class="capture-title" id="savedSubtitle"></p>
+            <p class="capture-meta" id="savedMeta"></p>
+          </div>
         </div>
+        <div class="capture-suggest hidden" id="savedSuggest" role="group" aria-label="Suggested collections"></div>
         <label class="check hidden" id="learnRow">
           <input type="checkbox" id="learnCheck" />
           <span>Use this choice for similar items in the future</span>
         </label>
-        <div class="saved-actions">
-          <button class="btn" id="savedUndo" type="button">Undo</button>
-          <button class="btn btn-primary" id="savedOpen" type="button">Open in dashboard</button>
+        <div class="capture-actions">
+          <button class="btn btn-sm" id="savedUndo" type="button">Undo</button>
+          <button class="btn btn-sm btn-primary" id="savedOpen" type="button">Open in dashboard</button>
         </div>
-        <p class="help" id="savedInboxHint"></p>
+        <p class="capture-status" id="savedInboxHint"></p>
       </div>
     </section>
   </main>

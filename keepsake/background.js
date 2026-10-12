@@ -269,15 +269,38 @@ async function enrichItem(id) {
   }
 }
 
+// What the capture card on the page needs to look like the person's chosen style and theme.
+async function pageLook() {
+  const st = await store.getSettings().catch(() => ({}));
+  return { style: st.style || 'modern', theme: st.theme || 'system' };
+}
+
+// Up to three likely collections for a save that went to Review. A default collection that doesn't
+// exist yet is offered as "new:<key>"; UPDATE_ITEM creates it when picked.
+function suggestionsOf(classification) {
+  const seen = new Set();
+  return (classification?.alternatives || []).filter((a) => a.collectionName && !seen.has(a.collectionName) && seen.add(a.collectionName))
+    .slice(0, 3).map((a) => ({ id: a.isNew && a.taxonomyKey ? `new:${a.taxonomyKey}` : a.collectionId, name: a.collectionName }));
+}
+
 async function showPageToast(tabId, res, product) {
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/content/toast.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/content/tokens-content.js', 'src/content/toast.js'] });
     const collections = res.ok && !res.duplicate ? (await store.getCollections()).map((c) => ({ id: c.id, name: c.name })) : [];
+    const look = await pageLook();
+    const fmt = (n, c) => (Number.isFinite(n) ? new Intl.NumberFormat(undefined, { style: c ? 'currency' : 'decimal', currency: c || undefined }).format(n) : '');
     const payload = res.ok
       ? res.duplicate
-        ? { kind: 'duplicate', existing: res.existing, title: (product && product.title) || '' }
-        : { kind: 'saved', itemId: res.item.id, title: res.item.title, collectionId: res.item.collectionId || '', collectionName: res.collection ? res.collection.name : 'Keepsake', isInbox: !!res.classification?.isInbox, collections }
-      : { kind: 'error', error: res.error || 'Something went wrong.' };
+        ? { kind: 'duplicate', existing: res.existing, title: (product && product.title) || '', look }
+        : {
+          kind: 'saved', itemId: res.item.id, title: res.item.title, collectionId: res.item.collectionId || '',
+          collectionName: res.collection ? res.collection.name : '', isInbox: !!res.classification?.isInbox, collections, look,
+          thumb: /^https:\/\//.test(res.item.image || '') ? res.item.image : '',
+          meta: [(() => { try { return fmt(res.item.price, res.item.currency); } catch { return ''; } })(), res.item.retailer || res.item.host].filter(Boolean).join(' · '),
+          pending: res.item.captureState === 'pending',
+          suggestions: res.classification?.isInbox ? suggestionsOf(res.classification) : [],
+        }
+      : { kind: 'error', error: res.error || 'Something went wrong.', look };
     await chrome.scripting.executeScript({
       target: { tabId },
       args: [payload, MSG],
@@ -286,24 +309,34 @@ async function showPageToast(tabId, res, product) {
         if (!t) return;
         const send = (m) => chrome.runtime.sendMessage(m, () => void chrome.runtime.lastError);
         const cut = (s, n) => (String(s || '').length > n ? String(s).slice(0, n - 1) + '…' : String(s || ''));
-        if (p.kind === 'error') t.show({ title: 'Couldn’t save', message: p.error });
-        else if (p.kind === 'duplicate') t.show({ title: 'Already in Keepsake', message: `“${cut(p.existing.title || p.title, 60)}” is ${p.existing.collectionName ? 'in ' + p.existing.collectionName : 'already saved'}.`, actions: [{ label: 'Open', primary: true, onClick: () => send({ type: M.OPEN_DASHBOARD, hash: `#item/${p.existing.id}` }) }] });
-        else {
-          // Say where it went, with a one-step move in case that's the wrong collection.
-          const nameOf = (id) => (p.collections.find((c) => c.id === id) || {}).name || 'collection';
+        if (p.kind === 'error') t.show({ tone: 'error', look: p.look, title: 'Not saved', message: p.error });
+        else if (p.kind === 'duplicate') {
           t.show({
-            title: p.isInbox ? 'Not sure — saved for review' : `Saved to ${p.collectionName}`,
-            message: p.isInbox ? `Not sure where “${cut(p.title, 50)}” belongs. Pick a collection or sort it later.` : cut(p.title, 70),
-            picker: p.collections.length ? { options: p.collections, selectedId: p.collectionId, label: 'Move to collection' } : null,
-            duration: 10000,
+            tone: 'info', look: p.look, title: 'Already in Keepsake',
+            message: `“${cut(p.existing.title || p.title, 70)}” is ${p.existing.collectionName ? 'in ' + p.existing.collectionName : 'already saved'}.`,
+            actions: [{ label: 'Open', primary: true, onClick: () => send({ type: M.OPEN_DASHBOARD, hash: `#item/${p.existing.id}` }) }],
+          });
+        } else {
+          // Say where it went, with a one-step change in case that's the wrong collection.
+          const nameOf = (id) => (p.collections.find((c) => c.id === id) || p.suggestions.find((c) => c.id === id) || {}).name || 'collection';
+          const move = (id) => {
+            if (!id || id === p.collectionId) return;
+            chrome.runtime.sendMessage({ type: M.UPDATE_ITEM, itemId: p.itemId, patch: { collectionId: id }, learn: 'light' }, (up) => {
+              void chrome.runtime.lastError;
+              t.show(up && up.ok
+                ? { tone: 'ok', look: p.look, title: `Moved to ${nameOf(id)}`, message: 'Keepsake will remember this for similar items.', duration: 4000 }
+                : { tone: 'error', look: p.look, title: 'Couldn’t move', message: (up && up.error) || '' });
+            });
+          };
+          const status = [p.pending ? 'Finishing details…' : '', 'Saved on this device'].filter(Boolean).join(' · ');
+          t.show({
+            tone: p.isInbox ? 'review' : 'ok', look: p.look,
+            title: p.isInbox ? 'Saved. Pick a collection now or later' : 'Saved to',
+            picker: !p.isInbox && p.collections.length ? { options: p.collections, selectedId: p.collectionId, label: 'Move to collection', onChange: (id) => move(id) } : null,
+            thumb: p.thumb, message: cut(p.title, 90), meta: p.meta, status,
+            suggestions: p.isInbox && p.suggestions.length ? { items: p.suggestions, onPick: (id) => move(id) } : null,
+            duration: p.isInbox ? 14000 : 10000,
             actions: [
-              { label: 'Move', onClick: ({ pickedId }) => {
-                if (!pickedId || pickedId === p.collectionId) return;
-                chrome.runtime.sendMessage({ type: M.UPDATE_ITEM, itemId: p.itemId, patch: { collectionId: pickedId }, learn: 'light' }, (up) => {
-                  void chrome.runtime.lastError;
-                  t.show({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Keepsake will remember this for similar items.' : (up && up.error) || '' });
-                });
-              } },
               { label: 'Undo', quiet: true, onClick: () => send({ type: M.UNDO_SAVE, itemId: p.itemId }) },
               { label: 'Edit', quiet: true, onClick: () => send({ type: M.OPEN_DASHBOARD, hash: `#item/${p.itemId}` }) },
             ],
@@ -339,7 +372,7 @@ export async function syncContentScripts() {
     if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] }).catch(() => {});
     return { registered: false, matches: [] };
   }
-  const script = { id: CONTENT_SCRIPT_ID, js: ['src/content/toast.js', 'src/content/detector.js', 'src/content/floating.js'], matches, runAt: 'document_idle', persistAcrossSessions: true, allFrames: false };
+  const script = { id: CONTENT_SCRIPT_ID, js: ['src/content/tokens-content.js', 'src/content/toast.js', 'src/content/detector.js', 'src/content/floating.js'], matches, runAt: 'document_idle', persistAcrossSessions: true, allFrames: false };
   try {
     if (existing.length) await chrome.scripting.updateContentScripts([script]);
     else await chrome.scripting.registerContentScripts([script]);
@@ -382,7 +415,7 @@ async function floatingConfig(host) {
   const collections = (await store.getCollections()).map((c) => ({ id: c.id, name: c.name }));
   const prefs = await store.getPrefs();
   const instantSave = !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
-  return { ok: true, enabled, settings: f, collections, threshold: prefs.confidenceThreshold, instantSave };
+  return { ok: true, enabled, settings: f, collections, threshold: prefs.confidenceThreshold, instantSave, look: { style: settings.style || 'modern', theme: settings.theme || 'system' } };
 }
 
 // --- Instagram scan state ------------------------------------------------------------------------------
@@ -504,6 +537,11 @@ async function handleMessage(msg, sender) {
       const item = await store.getItem(msg.itemId);
       if (!item) throw new Error('That item no longer exists.');
       const patch = { ...(msg.patch || {}) };
+      if (typeof patch.collectionId === 'string' && patch.collectionId.startsWith('new:')) {
+        const col = await store.ensureCollectionForTaxonomy(patch.collectionId.slice(4));
+        if (!col) throw new Error('That collection no longer exists.');
+        patch.collectionId = col.id;
+      }
       if (patch.collectionId && patch.collectionId !== item.collectionId) {
         await store.moveItems([item.id], patch.collectionId, { learn: msg.learn === false ? false : msg.learn === 'strong' ? 'strong' : 'light' });
         delete patch.collectionId;
