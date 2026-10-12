@@ -184,30 +184,28 @@ No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The backg
 - **Instagram** markup changes often; the importer and post reader may need adapter updates. "Read post details" opens one post page at a time with a pause between them to stay polite; it is roughly 2–3 seconds per post (about four minutes for 90 posts) and Instagram can still rate-limit or show a login page, in which case Keepsake falls back to reading the post in a short-lived background tab and reports the ones it couldn't get. Posts where the creator tagged nothing and linked nothing simply have no product data to find.
 - **AI suggestions are guesses.** They are labelled as such, and cost money on your own account.
 - **No sync.** Data lives in one browser profile. Use export/import to move it.
-- Tested with Node + jsdom and reviewed by hand; the automated suite does not drive a real Chrome, so pixel-level behaviour on real sites should be spot-checked after install.
+- Tested with Node + jsdom (`npm test` at the repository root) and reviewed by hand; the automated suite does not drive a real Chrome, so pixel-level behaviour on real sites should be spot-checked after install.
 
 ## Development and tests
 
-No build step. Requirements for the test suite: Node 20+.
+No build step for the extension. The test tooling lives at the **repository root** (`package.json`, `tests/`), outside `keepsake/`, so it never ends up in the Chrome Web Store package. Requirements: Node 20+.
 
 ```bash
 npm install          # jsdom (dev only)
-npm test             # static checks + behavioural suites
-npm run check        # manifest/syntax/CSP/dead-link checks only
-npm run zip          # builds dist/keepsake.zip for upload or sharing
+npm test             # every suite
+npm run check        # static checks on keepsake/ only
 ```
 
 What the suite covers (`tests/`):
 
-- `check-manifest.js` — valid MV3 manifest, every referenced file exists, all JS parses, no `innerHTML`/`eval`/inline scripts/styles, no remote resources in extension pages, no leftover markers or dead links.
-- `storage.test.js` — CRUD, duplicate detection with tracking parameters, collection dedupe/merge/delete, reorder, export excludes secrets, import merge/replace/validation of hostile input, sample data, migrations, Instagram import history.
-- `extract.test.js` — JSON-LD, Open Graph, sparse and hint-driven extraction against HTML fixtures; product-card detection on a listing page (logos/ads/banners ignored) and main-image detection on a product page.
-- `categorizer.test.js` — camping, lamps, shoes, electronics, kitchen, personal care, van, books, tools, travel; ambiguous → uncategorized; threshold; keywords; corrections learn (light/strong, capped) and forget; name similarity.
-- `instagram.test.js` — Saved-URL parsing, post/reel URL parsing, alt-text parsing, fixture scan with dedup, categorization from collection names.
-- `post-details.test.js` — post-page parsing from meta tags and embedded JSON (caption, creator, likes, date, full image, location, tagged products), login-wall detection, caption link/hashtag extraction with `javascript:` and Instagram links rejected, title generation, merge semantics, tab fallback, and the enrichment loop (progress, stop, retry-only-failures).
-- `ai.test.js` — provider boundary with a fake `fetch`: exact payload, key handling, link stripping, error handling.
-- `dashboard.test.js` — boots the real dashboard in jsdom against a fake `chrome`: every route, empty states, search/sort/filter, item modal, the link field (copy, open, edit, host/retailer follow-up, duplicate refusal), card menu, bulk actions, collections CRUD/reorder/merge, settings permissions flow, export/import, typed delete-all.
-- `e2e.test.js` — the real background worker + popup + page scripts wired through a fake browser: install, restricted/product/sparse/Instagram popups, save/undo/duplicate/update, learning, context-menu card save, floating-button registration and hover-save, Instagram scan → review → import, and an enriched import that ends with real titles, captions, links and tagged products.
+- `check-extension.test.mjs`: valid MV3 manifest, every referenced file exists, least-privilege permissions, strict CSP, all JS parses, no HTML-string/eval APIs (one reviewed constant SVG allowed), no inline or remote scripts and styles in extension pages, dev tooling kept out of `keepsake/`.
+- `shared.test.mjs`: URL normalization and duplicate keys, price parsing, sanitizers, the categorizer's golden set (camping, tech, kitchen, clothing, home, tools), Review on low confidence, user keywords, Instagram collection matches, learning from corrections and forgetting deleted collections.
+- `storage.test.mjs`: init and migrations (v1 rules → v2 keywords, old AI switches), CRUD, duplicates, collections (dedupe, merge, delete, reorder), export without the API key or AI log, import merge/replace, hostile-import sanitizing and limits, Instagram import history, AI log cap, erase, sample data.
+- `extract-instagram-ai.test.mjs`: JSON-LD, Open Graph, sparse pages and hints in jsdom; Instagram post parsing (caption, links, hashtags, login wall, titles); the optional-AI boundary with a fake `fetch` (invented prices, collections and links are dropped; remote thumbnails never forwarded; errors surfaced).
+- `background.test.mjs`: the real service worker with a fake `chrome.*`: install, save, duplicate and copy, Review for unsure saves, manual choice and learning, undo, patch allow-list, privileged messages refused from pages, context-menu save, and today's AI-on save path.
+- `dashboard.test.mjs`: boots the real dashboard in jsdom and renders every route, empty state, sample data and Review.
+
+Tests marked `KNOWN ISSUE` / `KNOWN RISK` describe current behaviour that is scheduled to change (see `replica/keepsake-audit.md`); `todo` tests are known bugs. None of this drives a real Chrome: check behaviour on real sites after installing the unpacked extension.
 
 ## Releasing to the Chrome Web Store
 
@@ -238,7 +236,6 @@ src/instagram/               adapter.js (all Instagram selectors), scan.js (scro
 src/ai/provider.js           optional BYOK provider boundary
 src/popup/                   toolbar popup
 src/dashboard/               dashboard page, ui primitives, settings/AI/privacy pages, Instagram importer
-tests/                       node:test suites, jsdom helpers, HTML fixtures, static checks, packaging script
 ```
 
 License: MIT.

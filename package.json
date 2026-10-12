@@ -1,0 +1,16 @@
+{
+  "name": "keepsake-dev",
+  "private": true,
+  "description": "Development tooling for the Keepsake extension. Nothing here ships: the release workflow packages only keepsake/.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "check": "node --test tests/check-extension.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "25.0.1"
+  }
+}
