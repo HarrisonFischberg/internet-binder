@@ -110,6 +110,45 @@ test('the capture card on the page loads the design tokens first and follows the
   F.state.executeScript = async () => [{ result: null }];
 });
 
+const recipePage = {
+  title: 'Brown butter pasta', url: 'https://cook.example/pasta', price: '$29.99', images: [], image: '',
+  schemaTypes: ['webpage', 'recipe'],
+  recipe: { recipeIngredient: ['200 g pasta', '50 g butter', 'sage'], recipeInstructions: ['Boil.', 'Brown the butter.', 'Toss.'], totalTime: 'PT25M', recipeYield: '2 servings' },
+};
+
+test('a recipe page is saved as a recipe, filed in Recipes, with no price', async () => {
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: recipePage, instant: true }, popup);
+  assert.equal(res.item.kind, 'recipe');
+  assert.deepEqual(res.item.details.ingredients, ['200 g pasta', '50 g butter', 'sage']);
+  assert.equal(res.item.details.totalMinutes, 25);
+  assert.equal(res.item.price, null, 'a price on a recipe page is not the save’s price');
+  assert.equal(res.collection.name, 'Recipes');
+  assert.match(res.item.categorizationReason, /3 ingredients/);
+});
+
+test('a recipe matching one of your own collection keywords goes there instead', async () => {
+  const weeknight = await S.createCollection({ name: 'Weeknight dinners', keywords: ['pasta'] });
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: recipePage, instant: true }, popup);
+  assert.equal(res.item.collectionId, weeknight.collection.id);
+});
+
+test('with AI on, recipes are not sent for the product tidy', async () => {
+  await aiOn();
+  let called = false;
+  globalThis.fetch = async () => { called = true; throw new Error('no'); };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: recipePage, instant: true }, popup);
+  await finish();
+  assert.equal(res.item.captureState, 'complete');
+  assert.equal(called, false);
+});
+
+test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
+  const link = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'Reading list', url: 'https://notes.example/x', sparse: true }, instant: true }, popup);
+  assert.equal(link.item.kind, 'link');
+  const prod = await F.send({ type: MSG.SAVE_ITEM, product: tent, instant: true }, popup);
+  assert.equal(prod.item.kind, 'product');
+});
+
 test('privileged messages are refused from web-page contexts', async () => {
   const r = await F.send({ type: MSG.IG_START_SCAN, tabId: 7 }, pageTab);
   assert.equal(r.ok, false);

@@ -6,6 +6,7 @@ Save products from any site with one click, let your collections sort themselves
 
 - Works on any shop, without per-site integrations: reads JSON-LD / Open Graph / visible page data.
 - Files each save into a collection automatically (Home Decor, Clothing, Technology, Kitchen, Camping & Outdoors, Weddings, Pets, …) and learns from your corrections. Unsure saves are left uncategorized and wait in **Review** instead of being guessed.
+- Knows what a save is: products, plus **recipes** (ingredients, steps, servings and time read from the recipe page's structured data or from "Ingredients / Method" in a caption, all on your device), articles, videos and places. Recipes get their own view and a recipe panel with a checklist, steps, "Cooked", your own edits and, only if you ask with Optional AI on, a labelled AI draft for a dish with no written recipe.
 - Optional on-page save buttons for product grids — off until you turn them on, and only on sites you grant.
 - Import your own **Instagram Saved collections**, then **read each post's page** for the real caption, creator, links and creator-tagged products (name, price, shop URL) — no login, no credentials, just your existing session.
 - Calm dashboard: a Home page with search, your latest saves and your top collections; a masonry grid with search, sort, filters, favorites, purchased, archive, bulk actions; collection tiles that scale to hundreds of collections; light/dark.

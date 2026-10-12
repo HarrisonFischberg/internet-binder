@@ -120,6 +120,16 @@ One card at a time on iPhone, a list on desktop. Each row has the top-3 suggesti
 
 Type → results ranked by title > note > collection > source > text. Scope chips appear after typing (kinds that have matches, plus "In: {collection}" when searching from a collection). States: no results ("No saves match 'linen lamp'. Check the spelling or search all kinds"), typo corrected ("Showing results for 'linen'"), offline (no difference: search is local).
 
+### Recipes open as recipes (all platforms; owner decision 2026-10-11)
+
+Opening a recipe from anywhere (a card, the Recipes view, Review, Home, search) goes straight to the **recipe view**, not to a preview or the editor. It's a full-size view: the photo; the title; the source and author; time, servings and cuisine; a checkable **ingredient** list with "3 of 9"; and numbered **method** steps you can tick off while cooking. The actions are Mark cooked, Visit page or Open post, and Edit details. Checking things off is for cooking along and isn't saved. Editing ingredients and steps, and the optional AI draft, live in Edit details.
+
+| platform | recipe view |
+| --- | --- |
+| Chrome dashboard | full-size dialog (`modal-full`), photo and facts on top, ingredients and method side by side; single column under 820 px |
+| iPhone | full-screen push: photo header, facts row, segmented **Ingredients / Method**, screen kept awake while it's open |
+| iPad / Mac | the detail pane becomes the recipe view, with ingredients and method side by side |
+
 ### F05 Act on a save (S08)
 
 The done verb button sits next to Open. Places: "Open in Maps" chooser (Apple Maps / Google Maps). Recipe: checkable ingredients, step list. Workout: Goals panel.

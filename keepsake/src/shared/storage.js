@@ -1,7 +1,7 @@
 // Keepsake storage (schema 3).
 //
 // chrome.storage.local (the `kv` backend):
-//   keepsake_meta          { schemaVersion, installedAt, updatedAt, migratedToRecordsAt? }
+//   keepsake_meta          { schemaVersion, installedAt, updatedAt, migratedToRecordsAt?, textRepairedAt? }
 //   keepsake_settings      UI + feature settings (per device)
 //   keepsake_secrets       { aiApiKey }: never exported
 // IndexedDB "keepsake" (the `db` backend, see db.js):
@@ -15,11 +15,12 @@
 // keepsake_prefs, keepsake_importHistory and keepsake_aiLog. init() copies those into IndexedDB once,
 // checks the copy, and leaves the old keys untouched so a rollback to 1.3.x still finds its data.
 
-import { uid, nowIso, sanitizeText, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer } from './util.js';
+import { uid, nowIso, sanitizeText, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer, decodeEntities, hasEntities } from './util.js';
 import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
 import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, forgetCollection } from './categorizer.js';
 import { memoryRecordBackend, STORES } from './db.js';
+import { isKind, kindOf, sanitizeDetails, recipeFromText, STATUSES } from './kinds.js';
 
 export { idbBackend, memoryRecordBackend, StorageFullError } from './db.js';
 
@@ -219,16 +220,24 @@ export function makeItem(input = {}) {
   const host = hostnameOf(canonicalUrl || url);
   const price = input.price === '' || input.price === null || input.price === undefined ? null : Number(input.price);
   const type = ['product', 'inspiration', 'instagram'].includes(input.type) ? input.type : /instagram\.com/.test(host) ? 'instagram' : 'product';
+  // What the save is. Records from before kinds existed get one derived from their type; an
+  // Instagram caption with an ingredient list makes the save a recipe.
+  const captionRecipe = !isKind(input.kind) && input.instagram && typeof input.instagram === 'object' ? recipeFromText(input.instagram.caption) : null;
+  const kind = isKind(input.kind) ? input.kind : captionRecipe ? 'recipe' : kindOf({ ...input, type });
+  const details = sanitizeDetails(kind, input.details && typeof input.details === 'object' && Object.keys(input.details).length ? input.details : captionRecipe || {});
   return {
     id: input.id || uid(),
     collectionId: input.collectionId || null,
     type,
-    title: sanitizeText(input.title, 200) || (type === 'instagram' ? 'Instagram post' : 'Untitled item'),
-    description: sanitizeText(input.description, 1000),
+    kind,
+    details,
+    status: STATUSES.includes(input.status) ? input.status : 'saved',
+    title: sanitizeText(decodeEntities(input.title), 200) || (type === 'instagram' ? 'Instagram post' : 'Untitled item'),
+    description: sanitizeText(decodeEntities(input.description), 1000),
     note: sanitizeText(input.note, 1000),
     price: Number.isFinite(price) && price >= 0 ? price : null,
     currency: sanitizeText(input.currency, 8).toUpperCase(),
-    retailer: sanitizeText(input.retailer, 80) || (type === 'instagram' ? 'Instagram' : prettyRetailer(host)),
+    retailer: sanitizeText(decodeEntities(input.retailer), 80) || (type === 'instagram' ? 'Instagram' : prettyRetailer(host)),
     host,
     url: canonicalUrl || url,
     canonicalUrl,
@@ -252,7 +261,7 @@ export function makeItem(input = {}) {
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,
     relatedItemId: typeof input.relatedItemId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(input.relatedItemId) ? input.relatedItemId : null,
     // Schema 3: what was captured, which fields the person edited, how far the save got, and the Trash.
-    originalTitle: sanitizeText(input.originalTitle, 200) || sanitizeText(input.title, 200),
+    originalTitle: sanitizeText(decodeEntities(input.originalTitle), 200) || sanitizeText(decodeEntities(input.title), 200),
     userFields: uniqStrings(input.userFields, 20).filter((f) => USER_FIELDS.includes(f) || f === 'collectionId'),
     captureState: CAPTURE_STATES.includes(input.captureState) ? input.captureState : 'complete',
     captureError: sanitizeText(input.captureError, 200),
@@ -421,6 +430,22 @@ export function createStore(kv, db = memoryRecordBackend()) {
     return { items: items.length, collections: collections.length };
   }
 
+  // Saves made before Keepsake decoded HTML entities ("14&#215;8-inch"): decode them once. Only records
+  // that contain an entity are rewritten, and only their text changes (same id, dates, collection).
+  const encodedText = (i) => [i.title, i.description, i.retailer, i.originalTitle, ...Object.values(i.details || {}).flat()].some(hasEntities);
+  async function repairEncodedText() {
+    const ids = (await db.all('items')).filter((i) => i && encodedText(i)).map((i) => i.id);
+    let repaired = 0;
+    if (ids.length) {
+      await db.update('items', ids, (item) => {
+        if (!item || !encodedText(item)) return undefined;
+        repaired++;
+        return { ...item, ...makeItem(item), id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt };
+      });
+    }
+    return repaired;
+  }
+
   const api = {
     backend: be,
     db,
@@ -445,7 +470,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
         if (!(await db.count('collections'))) await db.put('collections', Object.values(defaultCollections()));
         if (!(await db.get('kv', 'prefs'))) await kvSet('prefs', emptyPrefs());
         if (!(await db.get('kv', 'importHistory'))) await kvSet('importHistory', { instagram: {} });
-        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}) } };
+        const textRepaired = raw[KEYS.meta]?.textRepairedAt ? null : await repairEncodedText();
+        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}), ...(textRepaired !== null ? { textRepairedAt: now, textRepairedCount: textRepaired } : {}) } };
         if (!raw[KEYS.settings]) write[KEYS.settings] = structuredClone(DEFAULT_SETTINGS);
         else if (raw[KEYS.settings].ai && raw[KEYS.settings].ai.on === undefined) {
           // Before the single switch, each AI feature had its own. Carry over only the

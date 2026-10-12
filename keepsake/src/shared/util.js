@@ -27,6 +27,52 @@ export function sanitizeText(value, max = 2000) {
   return s;
 }
 
+// Pages often put HTML-encoded text in their structured data ("14&#215;8-inch", "Ben &amp;amp; Jerry's").
+// Turns entities back into the characters they stand for, a few passes deep for double encoding.
+// Pure (no DOM), so iOS/macOS can run the same rule. Unknown names are left as written.
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ensp: ' ', emsp: ' ', thinsp: ' ',
+  times: '×', divide: '÷', deg: '°', plusmn: '±', minus: '−', frac12: '½', frac14: '¼', frac34: '¾',
+  frac13: '⅓', frac23: '⅔', frac15: '⅕', frac18: '⅛', sup1: '¹', sup2: '²', sup3: '³', micro: 'µ',
+  ndash: '–', mdash: '—', hellip: '…', lsquo: '‘', rsquo: '’', sbquo: '‚', ldquo: '“', rdquo: '”', bdquo: '„',
+  laquo: '«', raquo: '»', prime: '′', Prime: '″', middot: '·', bull: '•', copy: '©', reg: '®', trade: '™',
+  euro: '€', pound: '£', yen: '¥', cent: '¢', sect: '§', para: '¶', iexcl: '¡', iquest: '¿',
+  agrave: 'à', aacute: 'á', acirc: 'â', atilde: 'ã', auml: 'ä', aring: 'å', aelig: 'æ', ccedil: 'ç',
+  egrave: 'è', eacute: 'é', ecirc: 'ê', euml: 'ë', igrave: 'ì', iacute: 'í', icirc: 'î', iuml: 'ï',
+  ntilde: 'ñ', ograve: 'ò', oacute: 'ó', ocirc: 'ô', otilde: 'õ', ouml: 'ö', oslash: 'ø', oelig: 'œ',
+  ugrave: 'ù', uacute: 'ú', ucirc: 'û', uuml: 'ü', yacute: 'ý', yuml: 'ÿ', szlig: 'ß',
+  Agrave: 'À', Aacute: 'Á', Acirc: 'Â', Auml: 'Ä', Aring: 'Å', AElig: 'Æ', Ccedil: 'Ç', Egrave: 'È', Eacute: 'É',
+  Ecirc: 'Ê', Iacute: 'Í', Ntilde: 'Ñ', Oacute: 'Ó', Ouml: 'Ö', Oslash: 'Ø', OElig: 'Œ', Uacute: 'Ú', Uuml: 'Ü',
+};
+const ENTITY_RE = /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([a-zA-Z][a-zA-Z0-9]{1,8}));/g;
+export const hasEntities = (value) => typeof value === 'string' && /&(?:#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z][a-zA-Z0-9]{1,8});/.test(value);
+export function decodeEntities(value) {
+  if (typeof value !== 'string' || !value.includes('&')) return value;
+  let s = value;
+  for (let pass = 0; pass < 3 && hasEntities(s); pass++) {
+    const next = s.replace(ENTITY_RE, (m, dec, hex, name) => {
+      if (name) return Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, name) ? NAMED_ENTITIES[name] : m;
+      const code = dec ? Number(dec) : parseInt(hex, 16);
+      // Control characters, surrogates and out-of-range code points stay as written.
+      if (!code || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff) || code < 32 && code !== 9 && code !== 10 && code !== 13) return m;
+      return String.fromCodePoint(code);
+    });
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
+// Text imported from a page, made readable: entities decoded, tags dropped, stray spaces before
+// punctuation removed ("salt , pepper"). Never rewrites words.
+export function tidyImportedText(value, max = 2000) {
+  if (value === null || value === undefined) return '';
+  let s = decodeEntities(String(value));
+  s = s.replace(/<[^>]*>/g, ' ');
+  s = s.replace(/[\u00a0\u2007\u202f]/g, ' ').replace(/\s+([,.;:!?)])(?=\s|$)/g, '$1').replace(/\(\s+/g, '(');
+  return sanitizeText(s, max);
+}
+
 // Only allow http(s) URLs (and data: images for locally captured thumbnails).
 export function sanitizeUrl(value, { allowData = false, max = 4000 } = {}) {
   if (!value) return '';

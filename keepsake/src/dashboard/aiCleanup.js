@@ -373,7 +373,7 @@ function logRow(ctx, e) {
       const from = c.fromId ? ctx.collectionById(c.fromId)?.name || 'a deleted collection' : 'Review';
       return el('span', { class: 'ai-change' }, [el('strong', {}, ['Moved: ']), `${from} → ${c.to}`]);
     }
-    const label = { title: 'Title', price: 'Price', image: 'Image' }[c.field] || c.field;
+    const label = { title: 'Title', price: 'Price', image: 'Image', recipe: 'Recipe' }[c.field] || c.field;
     return el('span', { class: 'ai-change' }, [el('strong', {}, [`${label}: `]), c.field === 'title' ? el('span', { class: 'ai-change-from' }, [cut(c.from, 80)]) : c.from, ' → ', c.field === 'title' ? cut(c.to, 80) : c.to]);
   });
   const action = e.undone

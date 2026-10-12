@@ -7,6 +7,8 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails } from '../shared/kinds.js';
+import { draftRecipe } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { renderSettings, renderAI, renderPrivacy, analyzeItems } from './settings.js';
 import { renderImport } from './importer.js';
@@ -206,7 +208,7 @@ function toggleNav(force) {
 
 // --- rendering -------------------------------------------------------------------------
 
-const GRID_ROUTES = new Set(['all', 'favorites', 'purchased', 'archive', 'c', 'item']);
+const GRID_ROUTES = new Set(['all', 'favorites', 'purchased', 'archive', 'c', 'item', 'kind']);
 
 // Archived and purchased items leave All, Favorites, Review and their collection; they
 // keep their collectionId, so un-marking puts them straight back where they were.
@@ -239,8 +241,50 @@ function renderNav() {
   $('navReview').classList.toggle('hidden', !toReview && state.route.name !== 'review');
   setCount('countArchive', state.items.filter((i) => i.archived).length);
   setCount('countTrash', (state.trash || []).length);
+  renderKindNav(live);
   setCount('countCollections', state.collections.length);
   setCount('countImport', state.scan && state.scan.posts && state.scan.status === 'done' ? state.scan.posts.length : 0);
+}
+
+// One menu entry per kind you've saved (recipes, places…), so each has its own view. Products and
+// plain links live in All saves.
+function renderKindNav(live) {
+  const box = $('navKinds');
+  if (!box) return;
+  clear(box);
+  for (const k of KINDS) {
+    if (k.value === 'product' || k.value === 'link') continue;
+    const n = live.filter((i) => kindOf(i) === k.value).length;
+    if (!n) continue;
+    const active = state.route.name === 'kind' && state.route.id === k.value;
+    box.append(el('a', { class: `nav-item ${active ? 'active' : ''}`, href: `#kind/${k.value}`, 'aria-current': active ? 'page' : null }, [
+      kindIcon(k.value), el('span', {}, [k.plural]), el('span', { class: 'count' }, [String(n)]),
+    ]));
+  }
+}
+
+function kindIcon(kind) {
+  const paths = {
+    recipe: 'M7 3v7M5 3v5a2 2 0 0 0 4 0V3M7 10v11M17 21V3c-2.2 1.2-3.5 4-3.5 7.5H17',
+    place: 'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11zM12 12.3a2.3 2.3 0 1 0 0-4.6 2.3 2.3 0 0 0 0 4.6',
+    video: 'M3 8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3zM10.5 9.5l4 2.5-4 2.5z',
+    article: 'M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 8h8M8 12h8M8 16h5',
+    workout: 'M6.5 8v8M3.5 10v4M17.5 8v8M20.5 10v4M6.5 12h11',
+    media: 'M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7.5 6l2 4M12.5 6l2 4M17.5 6l2 4',
+    book: 'M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5A1.5 1.5 0 0 0 6.5 21H19',
+  };
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.7');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', paths[kind] || '');
+  svg.append(p);
+  return svg;
 }
 
 function setCount(id, n) {
@@ -447,6 +491,7 @@ function renderToolbar() {
   else if (r.name === 'purchased') title = 'Purchased';
   else if (r.name === 'archive') title = 'Archive';
   else if (r.name === 'trash') title = 'Trash';
+  else if (r.name === 'kind') title = kindInfo(r.id).plural;
   else if (r.name === 'review') title = 'Review queue';
   else if (r.name === 'import') title = 'Instagram import';
   else if (r.name === 'tabsimport') title = 'Import from tabs';
@@ -570,6 +615,7 @@ function baseItems() {
   if (r.name === 'purchased') return state.items.filter((i) => i.purchased);
   if (r.name === 'archive') return state.items.filter((i) => i.archived);
   if (r.name === 'c') return live.filter((i) => i.collectionId === r.id);
+  if (r.name === 'kind') return live.filter((i) => kindOf(i) === r.id);
   return live;
 }
 
@@ -684,13 +730,15 @@ function cardNode(item) {
       }
       return;
     }
-    openQuickView(item.id);
+    openSave(item.id);
   } }, [
     UI.pictureNode({ src: item.image, aspect: item.imageAspect, title: item.title }),
     el('div', { class: 'card-body' }, [
       el('div', { class: 'card-title' }, [item.title]),
       el('div', { class: 'card-meta' }, [
-        price ? el('span', { class: 'card-price' }, [price]) : el('span', { class: 'card-price muted' }, [item.type === 'instagram' ? '' : 'No price']),
+        kindOf(item) === 'product'
+          ? (price ? el('span', { class: 'card-price' }, [price]) : el('span', { class: 'card-price muted' }, [item.type === 'instagram' ? '' : 'No price']))
+          : el('span', { class: 'card-price muted' }, [keyFact(item)]),
         el('span', { class: 'card-retailer', title: item.url || '' }, [item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '']),
       ]),
       item.note ? el('div', { class: 'card-note' }, [item.note]) : null,
@@ -702,6 +750,8 @@ function cardNode(item) {
     item.purchased ? el('span', { class: 'badge' }, ['Purchased']) : null,
     item.type === 'instagram' || item.instagram ? el('span', { class: 'badge badge-sage' }, [UI.instagramIcon(), 'Instagram']) : null,
     item.type === 'inspiration' && !item.instagram ? el('span', { class: 'badge badge-sage' }, ['Inspiration']) : null,
+    !['product', 'link'].includes(kindOf(item)) ? el('span', { class: `badge kind-badge kind-${kindOf(item)}` }, [kindIcon(kindOf(item)), kindInfo(kindOf(item)).label]) : null,
+    item.status === 'done' ? el('span', { class: 'badge' }, [kindInfo(kindOf(item)).done]) : null,
     !item.collectionId && isActive(item) ? el('span', { class: 'badge' }, ['Needs sorting']) : null,
   ]);
   const favBtn = el('button', { type: 'button', class: `btn btn-icon ${item.favorite ? 'is-on' : ''}`, 'aria-label': item.favorite ? 'Remove from favorites' : 'Add to favorites', 'aria-pressed': item.favorite ? 'true' : 'false', onClick: async (e) => {
@@ -988,6 +1038,86 @@ function cut(s, n) {
 // A lightweight look at an item — image, title, price, and a link out. The
 // full editor (title/price/note/collection/etc.) is one click away via
 // "Edit details", both here and in each card's overflow menu.
+// Opening a save shows it the way its kind is used: a recipe opens straight into the recipe.
+async function openSave(id) {
+  const item = state.items.find((i) => i.id === id) || (await store.getItem(id));
+  if (item && kindOf(item) === 'recipe') return openRecipe(id);
+  return openQuickView(id);
+}
+
+// The recipe view: a large dialog with the photo, what you need and what to do. Checking off
+// ingredients and steps is just for cooking along (not saved). Editing lives in Edit details.
+async function openRecipe(id) {
+  const item = await store.getItem(id);
+  if (!item) {
+    UI.toast('That item no longer exists.', { kind: 'danger' });
+    return;
+  }
+  const d = item.details || {};
+  const ingredients = d.ingredients || [];
+  const steps = d.steps || [];
+  const sourceLabel = { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', 'ai-draft': 'Drafted by AI: check it before you cook' }[d.source] || '';
+  const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
+  const facts = [
+    d.totalMinutes ? ['Time', formatMinutes(d.totalMinutes)] : null,
+    d.prepMinutes && d.cookMinutes ? ['Prep · cook', `${formatMinutes(d.prepMinutes)} · ${formatMinutes(d.cookMinutes)}`] : null,
+    d.yield ? (/^(makes|serves)\s+/i.test(d.yield) ? [d.yield.split(/\s+/)[0].replace(/^./, (c) => c.toUpperCase()), d.yield.replace(/^(makes|serves)\s+/i, '')] : ['Makes', d.yield]) : null,
+    d.cuisine ? ['Cuisine', d.cuisine] : null,
+    ingredients.length ? ['Ingredients', String(ingredients.length)] : null,
+  ].filter(Boolean);
+
+  const counter = el('span', { class: 'recipe-count' }, [ingredients.length ? `0 of ${ingredients.length}` : '']);
+  const updateCount = (list) => { counter.textContent = `${list.querySelectorAll('input:checked').length} of ${ingredients.length}`; };
+  const ingList = el('ul', { class: 'recipe-ingredients' });
+  ingredients.forEach((x, i) => ingList.append(el('li', {}, [el('label', { class: 'check' }, [
+    el('input', { type: 'checkbox', id: `rv-ing-${i}`, onChange: () => updateCount(ingList) }), el('span', {}, [x]),
+  ])])));
+  const stepList = el('ol', { class: 'recipe-steps recipe-steps-big' }, steps.map((x, i) => {
+    const li = el('li', { tabindex: '0', 'aria-label': `Step ${i + 1}: ${x}`, onClick: () => li.classList.toggle('is-done'), onKeydown: (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.classList.toggle('is-done'); }
+    } }, [el('span', { class: 'step-n', 'aria-hidden': 'true' }, [String(i + 1)]), el('span', {}, [x])]);
+    return li;
+  }));
+  const empty = !ingredients.length && !steps.length;
+  const body = el('div', { class: 'recipe-view' }, [
+    el('div', { class: 'recipe-hero' }, [
+      UI.pictureNode({ src: item.image, aspect: item.imageAspect, title: item.title, className: 'recipe-hero-pic' }),
+      el('div', { class: 'recipe-hero-text' }, [
+        el('span', { class: 'badge kind-badge kind-recipe' }, [kindIcon('recipe'), 'Recipe']),
+        el('h2', { class: 'recipe-title' }, [item.title]),
+        el('p', { class: 'recipe-from' }, [[from, d.author && d.author !== from ? `by ${d.author}` : '', sourceLabel].filter(Boolean).join(' · ')]),
+        facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
+        item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
+        item.status === 'done' ? el('span', { class: 'badge' }, ['Cooked']) : null,
+      ]),
+    ]),
+    empty
+      ? el('div', { class: 'recipe-empty' }, [
+        el('p', {}, ['No ingredients or steps were found on the page or in the caption.']),
+        el('p', { class: 'help' }, ['Add them yourself in Edit details, or, with Optional AI on, ask for a draft there.']),
+      ])
+      : el('div', { class: 'recipe-columns' }, [
+        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Ingredients']), counter]), ingList]),
+        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Method']), el('span', { class: 'recipe-count' }, [steps.length ? `${steps.length} steps · tap a step when it’s done` : ''])]), stepList]),
+      ]),
+  ]);
+  const cooked = item.status === 'done';
+  await UI.openModal({
+    title: item.title,
+    body,
+    full: true,
+    className: 'modal-recipe',
+    actions: [
+      { label: 'Edit details', quiet: true, autofocus: true, closes: false, onClick: async (close) => { close(false); await openItem(item.id); } },
+      item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), icon: UI.externalIcon() } : null,
+      { label: cooked ? 'Cooked ✓' : 'Mark cooked', primary: !cooked, onClick: async () => {
+        await store.updateItem(item.id, { status: cooked ? 'saved' : 'done' });
+        UI.toast(cooked ? 'Marked as not cooked yet.' : 'Marked as cooked.', { duration: 2200 });
+      } },
+    ].filter(Boolean),
+  });
+}
+
 async function openQuickView(id) {
   const item = await store.getItem(id);
   if (!item) {
@@ -1085,7 +1215,16 @@ async function openItem(id) {
   const learnCheck = el('input', { type: 'checkbox' });
   const learnRow = el('label', { class: 'check hidden' }, [learnCheck, el('span', {}, ['Use this choice for similar items in the future'])]);
 
-  const flags = { favorite: !!item.favorite, purchased: !!item.purchased, archived: !!item.archived };
+  // Kind and its details (a recipe's ingredients and steps). Edits stay in this dialog until Save.
+  const startKind = kindOf(item);
+  let recipe = startKind === 'recipe' ? { ...(item.details || {}) } : {};
+  let recipeEditing = false;
+  let drafted = false;
+  const aiReady = !!state.settings?.ai?.on && !!(await store.getSecret('aiApiKey').catch(() => ''));
+  const kindPanel = el('div', {});
+  const kindSelect = UI.selectInput({ value: startKind, options: KINDS.map((k) => ({ value: k.value, label: k.label })), onChange: () => renderKindPanel(), label: 'Kind' });
+
+  const flags = { favorite: !!item.favorite, purchased: !!item.purchased, archived: !!item.archived, done: item.status === 'done' };
   const toggle = (key, label, icon) => {
     const b = el('button', { type: 'button', class: `toggle-chip ${flags[key] ? 'on' : ''}`, 'aria-pressed': flags[key] ? 'true' : 'false', onClick: () => {
       flags[key] = !flags[key];
@@ -1172,21 +1311,101 @@ async function openItem(id) {
   const aiBox = el('div', {});
   renderAiBox(aiBox, item);
 
+  const priceField = el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Price']), el('div', { class: 'price-inline' }, [priceInput, currencyInput])]);
+  const doneToggle = toggle('done', kindInfo(startKind).done, UI.checkIcon());
+
+  function renderKindPanel() {
+    const kind = kindSelect.value;
+    priceField.classList.toggle('hidden', kind !== 'product');
+    doneToggle.lastChild.textContent = kindInfo(kind).done;
+    clear(kindPanel);
+    if (kind === 'recipe') kindPanel.append(recipePanel());
+  }
+
+  function recipePanel() {
+    const box = el('div', { class: 'recipe-panel' });
+    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you', 'ai-draft': 'Drafted by AI: check it before you cook' }[recipe.source] || '';
+    const facts = [recipe.yield, formatMinutes(recipe.totalMinutes), sourceLabel].filter(Boolean);
+    box.append(el('div', { class: 'recipe-head' }, [el('h3', {}, ['Recipe']), facts.length ? el('span', { class: 'recipe-facts' }, [facts.join(' · ')]) : null]));
+    if (drafted) box.append(el('p', { class: 'notice notice-warn' }, ['Your AI provider drafted this from the title and caption. It’s a suggestion, not the creator’s recipe. Edit it, then Save changes to keep it (you can undo it from the AI change log).']));
+    if (recipeEditing) {
+      const ing = el('textarea', { class: 'textarea', rows: '6', 'aria-label': 'Ingredients, one per line', placeholder: '200 g udon noodles\n2 tbsp white miso' });
+      ing.value = (recipe.ingredients || []).join('\n');
+      const steps = el('textarea', { class: 'textarea', rows: '6', 'aria-label': 'Steps, one per line', placeholder: 'Boil the noodles…' });
+      steps.value = (recipe.steps || []).join('\n');
+      const yieldInput = el('input', { class: 'input', placeholder: 'e.g. 2 servings', 'aria-label': 'Servings', maxlength: '60' });
+      yieldInput.value = recipe.yield || '';
+      const minutes = el('input', { class: 'input', inputmode: 'numeric', placeholder: 'Minutes', 'aria-label': 'Total minutes' });
+      minutes.value = recipe.totalMinutes || '';
+      box.append(
+        el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Ingredients (one per line)']), ing]),
+        el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Steps (one per line)']), steps]),
+        el('div', { class: 'price-inline' }, [yieldInput, minutes]),
+        el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => {
+          const lines = (t) => t.value.split('\n').map((x) => x.trim()).filter(Boolean);
+          recipe = { ...recipe, ingredients: lines(ing), steps: lines(steps), yield: yieldInput.value.trim(), totalMinutes: Number(minutes.value) || null, source: drafted ? 'ai-draft' : (recipe.source === 'page' || recipe.source === 'caption') && !recipeChanged(ing, steps) ? recipe.source : 'you' };
+          recipeEditing = false;
+          renderKindPanel();
+        } }, ['Done editing'])]),
+      );
+      return box;
+    }
+    if (recipe.ingredients?.length) {
+      box.append(el('h4', { class: 'recipe-sub' }, ['Ingredients']), el('ul', { class: 'recipe-ingredients' }, recipe.ingredients.map((x, i) => el('li', {}, [
+        el('label', { class: 'check' }, [el('input', { type: 'checkbox', id: `ing-${item.id}-${i}` }), el('span', {}, [x])]),
+      ]))));
+    }
+    if (recipe.steps?.length) box.append(el('h4', { class: 'recipe-sub' }, ['Steps']), el('ol', { class: 'recipe-steps' }, recipe.steps.map((x) => el('li', {}, [x]))));
+    if (!recipe.ingredients?.length && !recipe.steps?.length) {
+      box.append(el('p', { class: 'help' }, ['No ingredients or steps were found on the page or in the caption.']));
+    }
+    const actions = [el('button', { type: 'button', class: 'btn btn-sm', onClick: () => { recipeEditing = true; renderKindPanel(); } }, [recipe.ingredients?.length ? 'Edit recipe' : 'Add it yourself'])];
+    if (!recipe.ingredients?.length && aiReady) {
+      const draftBtn = el('button', { type: 'button', class: 'btn btn-sm', onClick: async () => {
+        draftBtn.disabled = true;
+        draftBtn.textContent = 'Drafting…';
+        try {
+          const key = await store.getSecret('aiApiKey');
+          const d = await draftRecipe(item, state.settings, key);
+          recipe = { ...recipe, ...d };
+          drafted = true;
+          recipeEditing = true;
+          renderKindPanel();
+        } catch (e) {
+          UI.toast(`No draft: ${(e && e.message) || e}`, { kind: 'danger' });
+          draftBtn.disabled = false;
+          draftBtn.textContent = 'Draft a recipe with AI';
+        }
+      } }, ['Draft a recipe with AI']);
+      actions.push(draftBtn);
+    }
+    box.append(el('div', { class: 'review-actions' }, actions));
+    return box;
+  }
+
+  function recipeChanged(ing, steps) {
+    const was = item.details || {};
+    return ing.value.trim() !== (was.ingredients || []).join('\n').trim() || steps.value.trim() !== (was.steps || []).join('\n').trim();
+  }
+
   const side = el('div', { class: 'item-detail-side' }, [
     source,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Title']), titleInput]),
     urlField,
-    el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Price']), el('div', { class: 'price-inline' }, [priceInput, currencyInput])]),
+    priceField,
+    el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Kind']), kindSelect]),
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Collection']), colSelect, learnRow]),
     el('div', { class: 'category-box' }, [catText]),
+    kindPanel,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Note']), noteInput]),
-    el('div', { class: 'toggles' }, [toggle('favorite', 'Favorite', UI.starIcon(true)), toggle('purchased', 'Purchased', UI.checkIcon()), toggle('archived', 'Archived', UI.folderIcon())]),
+    el('div', { class: 'toggles' }, [toggle('favorite', 'Favorite', UI.starIcon(true)), doneToggle, toggle('purchased', 'Purchased', UI.checkIcon()), toggle('archived', 'Archived', UI.folderIcon())]),
     igInfo,
     aiBox,
     relatedNode(item),
   ]);
 
   const body = el('div', { class: 'item-detail' }, [el('div', {}, [picWrap, thumbRow]), side]);
+  renderKindPanel();
 
   await UI.openModal({
     title: 'Item details',
@@ -1206,7 +1425,11 @@ async function openItem(id) {
           favorite: flags.favorite,
           purchased: flags.purchased,
           archived: flags.archived,
+          kind: kindSelect.value,
+          status: flags.done ? 'done' : item.status === 'done' ? 'saved' : item.status || 'saved',
         };
+        if (kindSelect.value === 'recipe') patch.details = sanitizeDetails('recipe', recipe);
+        else if (kindSelect.value !== startKind) patch.details = {};
         const priceText = priceInput.value.trim();
         if (!priceText) {
           patch.price = null;
@@ -1233,6 +1456,12 @@ async function openItem(id) {
           patch.images = [chosenImage, ...(item.images || []).filter((u) => u !== chosenImage)];
         }
         await store.updateItem(item.id, patch);
+        if (drafted && patch.details?.source === 'ai-draft') {
+          // A kept AI draft is logged like any AI change, so it can be undone later.
+          await store.appendAiLog([{ id: crypto.randomUUID(), runId: `draft-${item.id}`, at: new Date().toISOString(), itemId: item.id, itemTitle: patch.title,
+            changes: [{ field: 'recipe', from: 'no recipe', to: `${patch.details.ingredients.length} ingredients, ${patch.details.steps.length} steps` }],
+            before: { details: item.details || {} }, after: { details: patch.details }, reason: 'Recipe drafted on request', undone: false }]);
+        }
         if (colSelect.value && colSelect.value !== item.collectionId) {
           await store.moveItems([item.id], colSelect.value, { learn: learnCheck.checked ? 'strong' : 'light' });
         }
@@ -1733,7 +1962,7 @@ function renderReview(view) {
         el('div', { class: 'review-actions' }, [
           ...suggestions.map((s, i) => el('button', { type: 'button', class: 'suggest-chip', 'aria-keyshortcuts': String(i + 1), onClick: () => fileTo(s) }, [el('kbd', {}, [String(i + 1)]), s.collectionName])),
           select,
-          el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => openQuickView(item.id) }, ['Details']),
+          el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => openSave(item.id) }, ['Details']),
           el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => deleteItems([item]) }, ['Delete']),
         ]),
       ]),

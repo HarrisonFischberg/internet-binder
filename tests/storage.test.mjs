@@ -56,6 +56,36 @@ test('items: add, update keeps createdAt, sanitizes input', async () => {
   await assert.rejects(store.updateItem('nope', {}), /not found/);
 });
 
+test('saves stored with HTML entities are decoded once on init; nothing else changes', async () => {
+  const { store, be, db } = await fresh();
+  const clean = await store.addItem({ title: 'Lamp', url: 'https://a.example/lamp' });
+  const raw = { ...makeItem({ url: 'https://a.example/rolls', title: 'Rolls', kind: 'recipe', details: { ingredients: ['flour'], steps: ['x'] } }),
+    createdAt: '2026-01-02T00:00:00.000Z', updatedAt: '2026-01-03T00:00:00.000Z', collectionId: clean.collectionId, extraField: 'kept' };
+  raw.title = 'Mac &amp;amp; cheese';
+  raw.details = { ...raw.details, steps: ['Roll out a 14&#215;8-inch (36&#215;20-cm) rectangle'] };
+  await db.put('items', [raw]);
+  await be.set({ [KEYS.meta]: { ...(await be.get([KEYS.meta]))[KEYS.meta], textRepairedAt: undefined } });
+
+  const again = createStore(be, db);
+  await again.init();
+  const got = await again.getItem(raw.id);
+  assert.equal(got.title, 'Mac & cheese');
+  assert.deepEqual(got.details.steps, ['Roll out a 14×8-inch (36×20-cm) rectangle']);
+  assert.equal(got.createdAt, raw.createdAt);
+  assert.equal(got.updatedAt, raw.updatedAt);
+  assert.equal(got.collectionId, raw.collectionId);
+  assert.equal(got.extraField, 'kept');
+  assert.deepEqual(await again.getItem(clean.id), clean, 'saves without entities are not rewritten');
+  const meta = (await be.get([KEYS.meta]))[KEYS.meta];
+  assert.ok(meta.textRepairedAt);
+  assert.equal(meta.textRepairedCount, 1);
+
+  // Runs once: text the user types later with an entity in it stays as typed until they edit it.
+  await db.put('items', [{ ...got, title: 'Fish &amp; chips' }]);
+  await createStore(be, db).init();
+  assert.equal((await again.getItem(raw.id)).title, 'Fish &amp; chips');
+});
+
 test('makeItem: types and defaults', () => {
   assert.equal(makeItem({ url: 'https://www.instagram.com/p/AbCdE1/' }).type, 'instagram');
   assert.equal(makeItem({ url: 'https://www.instagram.com/p/AbCdE1/' }).title, 'Instagram post');

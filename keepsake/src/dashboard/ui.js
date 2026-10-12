@@ -13,7 +13,7 @@ let lastFocus = null;
 // { label, primary, danger, quiet, onClick(close), autofocus } definitions,
 // or { label, href, icon, target, rel } to render a real link (e.g. "Visit page").
 // Resolves when the modal closes with whatever value close() was given.
-export function openModal({ title, body, actions = [], wide = false, onClose = null, closeOnScrim = true, describedBy = '' }) {
+export function openModal({ title, body, actions = [], wide = false, full = false, className = '', onClose = null, closeOnScrim = true, describedBy = '' }) {
   return new Promise((resolve) => {
     const root = modalRoot();
     if (openModals === 0) lastFocus = document.activeElement;
@@ -79,7 +79,7 @@ export function openModal({ title, body, actions = [], wide = false, onClose = n
           } else close(a.value);
         },
       }, [a.label])));
-    const dialog = el('div', { class: `modal ${wide ? 'modal-wide' : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': `${id}-title`, 'aria-describedby': describedBy || null }, [
+    const dialog = el('div', { class: `modal ${wide ? 'modal-wide' : ''} ${full ? 'modal-full' : ''} ${className}`.trim(), role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': `${id}-title`, 'aria-describedby': describedBy || null }, [
       el('div', { class: 'modal-head' }, [
         el('h2', { id: `${id}-title`, class: 'modal-title' }, [title]),
         el('button', { type: 'button', class: 'btn btn-icon btn-quiet modal-close', 'aria-label': 'Close', onClick: () => close(undefined) }, [closeIcon()]),

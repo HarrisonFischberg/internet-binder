@@ -39,7 +39,7 @@
 
   // ---- 1. JSON-LD ------------------------------------------------------------
   function readJsonLd() {
-    const out = { product: null, breadcrumbs: [] };
+    const out = { product: null, breadcrumbs: [], recipe: null, types: [] };
     const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).slice(0, 25);
     const nodes = [];
     for (const s of scripts) {
@@ -59,6 +59,9 @@
       scored.sort((a, b) => b.s - a.s);
       out.product = scored[0].p;
     }
+    // Everything the page says it is (Recipe, Article, Restaurant, VideoObject…), for its kind.
+    out.types = [...new Set(nodes.flatMap(types))].filter(Boolean).slice(0, 30);
+    out.recipe = nodes.find((n) => types(n).includes('recipe')) || null;
     const crumbs = nodes.find((n) => types(n).includes('breadcrumblist'));
     if (crumbs && Array.isArray(crumbs.itemListElement)) {
       out.breadcrumbs = crumbs.itemListElement
@@ -76,6 +79,31 @@
       if (node['@graph']) collect(node['@graph'], acc, depth + 1);
       for (const key of ['mainEntity', 'mainEntityOfPage', 'hasVariant', 'itemListElement', 'offers', 'item']) if (node[key]) collect(node[key], acc, depth + 1);
     }
+  }
+
+  // schema.org Recipe written as microdata (itemprop attributes) instead of JSON-LD.
+  function readMicrodataRecipe() {
+    const root = document.querySelector('[itemtype*="schema.org/Recipe" i]');
+    if (!root) return null;
+    const all = (prop) => Array.from(root.querySelectorAll(`[itemprop="${prop}"]`));
+    const val = (el) => (el ? text(el.getAttribute('content') || el.textContent) : '');
+    const steps = all('recipeInstructions').flatMap((el) => {
+      const inner = Array.from(el.querySelectorAll('li, [itemprop="text"], p'));
+      return inner.length ? inner.map(val) : [val(el)];
+    }).filter(Boolean);
+    const img = root.querySelector('[itemprop="image"]');
+    return {
+      __microdata: true,
+      name: val(root.querySelector('[itemprop="name"]')),
+      description: val(root.querySelector('[itemprop="description"]')),
+      image: img ? img.getAttribute('src') || img.getAttribute('content') || '' : '',
+      recipeIngredient: [...all('recipeIngredient'), ...all('ingredients')].map(val).filter(Boolean),
+      recipeInstructions: steps,
+      recipeYield: val(root.querySelector('[itemprop="recipeYield"]')),
+      totalTime: (root.querySelector('[itemprop="totalTime"]') || {}).getAttribute?.('content') || '',
+      prepTime: (root.querySelector('[itemprop="prepTime"]') || {}).getAttribute?.('content') || '',
+      cookTime: (root.querySelector('[itemprop="cookTime"]') || {}).getAttribute?.('content') || '',
+    };
   }
 
   function offerFrom(product) {
@@ -282,7 +310,8 @@
     };
     const images = [];
 
-    const ld = safe(readJsonLd, { product: null, breadcrumbs: [] });
+    const ld = safe(readJsonLd, { product: null, breadcrumbs: [], recipe: null, types: [] });
+    result.schemaTypes = ld?.types || [];
     if (ld?.product) {
       const p = ld.product;
       result.title = text(p.name);
@@ -302,6 +331,25 @@
       }
     }
     if (ld?.breadcrumbs?.length) result.breadcrumbs = ld.breadcrumbs;
+    // A recipe page: its fields travel raw (bounded); the background worker normalizes them (kinds.js).
+    const recipe = ld?.recipe || safe(readMicrodataRecipe, null);
+    if (recipe && !ld?.product) {
+      result.title = text(recipe.name) || result.title;
+      result.description = text(typeof recipe.description === 'string' ? recipe.description : '').slice(0, 1000) || result.description;
+      imagesFrom(recipe.image, images);
+      if (result.title) result.source = recipe.__microdata ? 'microdata' : 'jsonld';
+      result.signals.push('recipe');
+    }
+    if (recipe) {
+      const arr = (v) => (Array.isArray(v) ? v : v == null ? [] : [v]);
+      // A plain copy (no functions, no DOM nodes) so it survives the trip back to the extension.
+      result.recipe = safe(() => JSON.parse(JSON.stringify({
+        recipeIngredient: arr(recipe.recipeIngredient || recipe.ingredients).slice(0, 80),
+        recipeInstructions: arr(recipe.recipeInstructions).slice(0, 60),
+        recipeYield: recipe.recipeYield, totalTime: recipe.totalTime, prepTime: recipe.prepTime, cookTime: recipe.cookTime,
+        recipeCuisine: recipe.recipeCuisine, recipeCategory: recipe.recipeCategory, author: recipe.author,
+      })), null);
+    }
 
     const ogTitle = meta('meta[property="og:title"]');
     const ogDesc = meta('meta[property="og:description"]') || meta('meta[name="description"]');

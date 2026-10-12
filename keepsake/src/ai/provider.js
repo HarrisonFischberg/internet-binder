@@ -334,6 +334,33 @@ export async function cleanupWithAI(entries, collections, settings, apiKey) {
   return out;
 }
 
+// --- Draft a recipe (only when the person asks, from a saved dish with no written recipe) -------
+// The result is a labelled suggestion: the person reviews it in the editor before anything is kept.
+const RECIPE_SYSTEM = `Someone saved a dish they liked and asked you to draft a recipe for it.
+Return ONLY JSON: {"ingredients":["quantity + ingredient", …],"steps":["one step", …],"yield":"e.g. 2 servings","totalMinutes":number|null,"note":"one short caveat"}
+Rules: base it on the title, caption and description given; keep it to a home-cook version (6-15 ingredients, 3-10 steps); use metric and US quantities only if the input does; never claim it is the creator's exact recipe.`;
+
+export async function draftRecipe(item, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  const text = [
+    `Title: ${String(item.title || '').slice(0, 200)}`,
+    item.instagram?.caption ? `Caption: ${String(item.instagram.caption).slice(0, 1500)}` : '',
+    item.description ? `Description: ${String(item.description).slice(0, 800)}` : '',
+    item.retailer || item.host ? `From: ${item.retailer || item.host}` : '',
+  ].filter(Boolean).join('\n');
+  const raw = await callProvider(cfg, apiKey, { system: RECIPE_SYSTEM, userText: text, maxTokens: 900 });
+  const parsed = parseJsonBlock(raw);
+  if (!parsed || !Array.isArray(parsed.ingredients) || !parsed.ingredients.length) throw new Error('The provider didn’t return a usable recipe.');
+  return {
+    ingredients: parsed.ingredients.map((x) => String(x).slice(0, 200)).slice(0, 40),
+    steps: (Array.isArray(parsed.steps) ? parsed.steps : []).map((x) => String(x).slice(0, 600)).slice(0, 30),
+    yield: String(parsed.yield || '').slice(0, 60),
+    totalMinutes: Number.isFinite(Number(parsed.totalMinutes)) && Number(parsed.totalMinutes) > 0 ? Math.round(Number(parsed.totalMinutes)) : null,
+    note: String(parsed.note || '').slice(0, 200),
+    source: 'ai-draft',
+  };
+}
+
 export async function testConnection(settings, apiKey) {
   const cfg = providerConfig(settings);
   const raw = await callProvider(cfg, apiKey, { system: 'Reply with the single word OK.', userText: 'Connection test.', maxTokens: 5 });

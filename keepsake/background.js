@@ -10,6 +10,7 @@ import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI } from './src/ai/provider.js';
+import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText } from './src/shared/kinds.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 const CONTENT_SCRIPT_ID = 'keepsake-floating';
@@ -143,6 +144,17 @@ function normalizeProduct(raw) {
   return p;
 }
 
+// What a capture is: what the page says about itself first (structured data), then what we can tell.
+function kindOfCapture(product) {
+  if (isKind(product.kind)) return product.kind;
+  const fromTypes = kindFromSchemaTypes(product.schemaTypes);
+  if (fromTypes && fromTypes !== 'product') return fromTypes;
+  if (product.recipe) return 'recipe';
+  if (product.isInstagram) return recipeFromText(product.description) ? 'recipe' : 'link';
+  if (fromTypes === 'product' || product.price !== null || product.priceText) return 'product';
+  return product.sparse ? 'link' : 'product';
+}
+
 // instant: saved with no preview (on-page button, right-click). Then a local pick below
 // AUTO_FILE_CONFIDENCE goes to Review with that pick as the suggestion, like the toolbar.
 async function saveProduct(rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false } = {}) {
@@ -155,11 +167,24 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
     }
   }
   const [collections, prefs, settings] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings()]);
+  const kind = kindOfCapture(product);
+  const details = kind === 'recipe' ? recipeFromSchema(product.recipe) || recipeFromText(product.description) || {} : {};
+  if (kind !== 'product') {
+    // A price on a recipe or article page is an ad or a cookbook, not this save's price.
+    product.price = null;
+    product.priceText = '';
+  }
   let classification = given || classify(product, { collections, prefs, settings });
+  if (kind === 'recipe' && !given && !collectionId && !(classification.confidence >= 0.85 && !classification.taxonomyKey && !classification.isInbox)) {
+    // Recipes go to Recipes, unless one of the person's own collections claimed it by keyword.
+    classification = { collectionId: null, collectionName: 'Recipes', taxonomyKey: 'recipes', isNew: true, isInbox: false, confidence: 0.9, alternatives: classification.alternatives || [],
+      reason: details.ingredients?.length ? `Recipe: ${details.ingredients.length} ingredients found` : 'Recipe page' };
+  }
 
   // With AI on, the save is stored first with the local result and marked "finishing details";
   // the AI tidies the title and may re-file it afterwards (enrichItem). Nothing waits on the network.
-  const aiWanted = !collectionId && !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
+  // The tidy is written for products, so other kinds are left as captured.
+  const aiWanted = kind === 'product' && !collectionId && !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
 
   if (instant && !collectionId && !classification.isInbox && classification.confidence < AUTO_FILE_CONFIDENCE) {
     const pick = { collectionId: classification.collectionId, collectionName: classification.collectionName, taxonomyKey: classification.taxonomyKey, isNew: classification.isNew };
@@ -186,6 +211,8 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
     note,
     collectionId: targetId,
     originalTitle: product.originalTitle || product.title,
+    kind,
+    details,
     captureState: aiWanted ? 'pending' : 'complete',
     confidence: userChose ? 1 : classification.confidence,
     categorizationSource: userChose ? 'manual' : 'local',

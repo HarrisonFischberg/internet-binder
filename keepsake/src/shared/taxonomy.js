@@ -11,6 +11,17 @@
 
 export const DEFAULT_TAXONOMY = [
   {
+    // Saves of kind "recipe" are filed here (see background.js) unless one of your own collection
+    // keywords matches first. No product keywords, so it never pulls in kitchen gear or cookbooks.
+    key: 'recipes',
+    name: 'Recipes',
+    description: 'Dishes and recipes you want to cook.',
+    color: '#7A8A3C',
+    aliases: ['recipes'],
+    strong: [],
+    keywords: [],
+  },
+  {
     key: 'camping',
     name: 'Camping & Outdoors',
     description: 'Tents, sleeping bags, stoves, packs, hiking and campsite gear.',

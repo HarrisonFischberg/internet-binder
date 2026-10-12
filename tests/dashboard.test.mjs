@@ -135,6 +135,44 @@ test('Review rows offer numbered suggestions and file with a number key', async 
   assert.equal(filed.needsReview, false);
 });
 
+test('recipes get their own view, a kind badge, and a recipe panel', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'Miso butter noodles', url: 'https://cook.example/noodles', kind: 'recipe', details: { ingredients: ['200 g udon', '2 tbsp miso'], steps: ['Boil.', 'Toss.'], totalMinutes: 15, source: 'page' } });
+  await afterChange();
+  assert.match(window.document.getElementById('navKinds').textContent, /Recipes/);
+  const text = await go('#kind/recipe');
+  assert.match(text, /Miso butter noodles/);
+  assert.match(text, /2 ingredients · 15 min/);
+  // Clicking the card opens the recipe itself, not Quick view or Edit details.
+  const card = [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('Miso butter noodles'));
+  card.querySelector('.card-hit').click();
+  await afterChange();
+  const rv = window.document.querySelector('.modal-recipe .recipe-view');
+  assert.ok(rv, 'the recipe view opened');
+  assert.match(rv.textContent, /Ingredients/);
+  assert.match(rv.textContent, /200 g udon/);
+  assert.match(rv.textContent, /Method/);
+  assert.match(rv.textContent, /Toss\./);
+  assert.match(rv.textContent, /15 min/);
+  const box = rv.querySelector('.recipe-ingredients input');
+  box.click();
+  assert.match(rv.textContent, /1 of 2/);
+  [...window.document.querySelectorAll('.modal-recipe button')].find((b) => b.textContent === 'Mark cooked').click();
+  await afterChange();
+  assert.equal((await store.getItem(it.id)).status, 'done');
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+  await go(`#item/${it.id}`);
+  await afterChange();
+  const panel = window.document.querySelector('.recipe-panel');
+  assert.ok(panel, 'the recipe panel is shown');
+  assert.match(panel.textContent, /200 g udon/);
+  assert.match(panel.textContent, /From the page/);
+  window.document.querySelectorAll('.modal button').forEach((b) => { if (b.textContent === 'Cancel') b.click(); });
+  await afterChange();
+});
+
 test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);
