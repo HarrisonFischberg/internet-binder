@@ -9,28 +9,17 @@ import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
 import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom } from '../shared/kinds.js';
 import { cleanTopics, guessTopics } from '../shared/topics.js';
+import { searchItems } from '../shared/search.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { renderSettings, renderAI, renderPrivacy, analyzeItems } from './settings.js';
 import { renderImport } from './importer.js';
 import { renderTabsImport } from './tabsImport.js';
-import { runAiCleanup, renderAiLog } from './aiCleanup.js';
+import { runAiCleanup, renderAiLog, undoEntries } from './aiCleanup.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 const $ = (id) => document.getElementById(id);
-
-// Sort and filter controls sit at the top of the grid. The view is cleared on every
-// render, so they're built once here and re-attached rather than looked up by id.
-const sortSelect = el('select', { class: 'select select-sm', 'aria-label': 'Sort' }, [
-  el('option', { value: 'newest', text: 'Newest' }),
-  el('option', { value: 'oldest', text: 'Oldest' }),
-  el('option', { value: 'price-asc', text: 'Price: low to high' }),
-  el('option', { value: 'price-desc', text: 'Price: high to low' }),
-]);
-const retailerSelect = el('select', { class: 'select select-sm', 'aria-label': 'Filter by retailer' });
-const sourceTypeSelect = el('select', { class: 'select select-sm', 'aria-label': 'Filter by source' });
-const gridFilters = el('div', { class: 'grid-filters' }, [sortSelect, retailerSelect, sourceTypeSelect]);
 
 // Labels for the "import method" filter — keys match item.type in shared/storage.js.
 const SOURCE_TYPE_LABELS = { instagram: 'Instagram', inspiration: 'Inspiration', product: 'Saved from a page' };
@@ -49,6 +38,9 @@ const state = {
   colSearch: '',
   colSort: 'recent',
   topic: '',
+  kinds: new Set(),
+  status: '',
+  layout: (() => { try { return localStorage.getItem('keepsake.layout') === 'list' ? 'list' : 'grid'; } catch { return 'grid'; } })(),
   focusSearch: false,
   selecting: false,
   selected: new Set(),
@@ -165,17 +157,20 @@ function bindChrome() {
     state.shown = 120;
     renderView();
   }, 120));
-  sortSelect.addEventListener('change', () => {
-    state.sort = sortSelect.value;
-    renderView();
+  // Alt+Z (⌥Z): undo the newest toast's action, e.g. "Moved to Trash · Undo".
+  document.addEventListener('keydown', (e) => {
+    if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== 'KeyZ') return;
+    if (UI.undoLast()) e.preventDefault();
   });
-  retailerSelect.addEventListener('change', () => {
-    state.retailer = retailerSelect.value;
-    renderView();
-  });
-  sourceTypeSelect.addEventListener('change', () => {
-    state.sourceType = sourceTypeSelect.value;
-    renderView();
+  // "/" jumps to search from anywhere that isn't a text field.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))) return;
+    if (document.querySelector('.modal-overlay')) return;
+    e.preventDefault();
+    if (!isGridRoute()) navigate('#all');
+    $('searchInput').focus();
   });
   $('selectToggle').addEventListener('click', () => (state.selecting ? exitSelection(true) : enterSelection()));
   $('themeToggle').addEventListener('click', async () => {
@@ -217,7 +212,7 @@ function toggleNav(force) {
 
 // --- rendering -------------------------------------------------------------------------
 
-const GRID_ROUTES = new Set(['all', 'favorites', 'purchased', 'archive', 'c', 'item', 'kind']);
+const GRID_ROUTES = new Set(['all', 'wishlist', 'favorites', 'purchased', 'archive', 'c', 'item', 'kind']);
 
 // Archived and purchased items leave All, Favorites, Review and their collection; they
 // keep their collectionId, so un-marking puts them straight back where they were.
@@ -236,7 +231,7 @@ function render({ keepScroll = false } = {}) {
 
 // The Shelves group in the menu: open or closed as you left it, and always open while you're on one of its views.
 const SHELVES_KEY = 'keepsake.nav.shelves';
-const SHELF_ROUTES = new Set(['kind', 'purchased', 'archive']);
+const SHELF_ROUTES = new Set(['kind', 'wishlist', 'purchased', 'archive']);
 function setShelvesOpen(open) {
   $('navShelvesToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
   $('navShelvesList').hidden = !open;
@@ -258,6 +253,9 @@ function renderNav() {
   setCount('countAll', live.length);
   setCount('countFav', live.filter((i) => i.favorite).length);
   setCount('countPurchased', state.items.filter((i) => i.purchased).length);
+  const wishlist = live.filter((i) => kindOf(i) === 'product' && !i.purchased).length;
+  setCount('countWishlist', wishlist);
+  $('navWishlist').classList.toggle('hidden', !wishlist && r.name !== 'wishlist');
   const toReview = live.filter((i) => !i.collectionId).length;
   setCount('countReview', toReview);
   // Review is only in the menu while something is waiting (or while it's open).
@@ -299,6 +297,8 @@ function kindIcon(kind) {
     workout: 'M6.5 8v8M3.5 10v4M17.5 8v8M20.5 10v4M6.5 12h11',
     media: 'M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 10h18M7.5 6l2 4M12.5 6l2 4M17.5 6l2 4',
     book: 'M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5zM5 19.5A1.5 1.5 0 0 0 6.5 21H19',
+    product: 'M6 8h12l1 12H5L6 8ZM9 8V6a3 3 0 0 1 6 0v2',
+    link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
   };
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
@@ -515,6 +515,7 @@ function renderToolbar() {
   if (r.name === 'home') title = 'Home';
   else if (r.name === 'collections') title = 'Collections';
   else if (r.name === 'favorites') title = 'Favorites';
+  else if (r.name === 'wishlist') title = 'Wishlist';
   else if (r.name === 'purchased') title = 'Purchased';
   else if (r.name === 'archive') title = 'Archive';
   else if (r.name === 'trash') title = 'Trash';
@@ -531,27 +532,6 @@ function renderToolbar() {
   $('viewTitle').textContent = title;
   document.title = `${title} · Keepsake`;
   if (isGrid) {
-    const base = baseItems();
-    const retailers = [...new Set(base.map((i) => i.retailer).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-    const sel = retailerSelect;
-    const cur = state.retailer;
-    clear(sel);
-    sel.append(el('option', { value: '', text: 'All retailers' }));
-    for (const rname of retailers) sel.append(el('option', { value: rname, text: rname }));
-    sel.value = retailers.includes(cur) ? cur : '';
-    if (!retailers.includes(cur)) state.retailer = '';
-    // A filter with a single choice filters nothing, so it's hidden.
-    sel.hidden = retailers.length < 2;
-    const sourceTypes = [...new Set(base.map((i) => i.type).filter(Boolean))].sort((a, b) => (SOURCE_TYPE_LABELS[a] || a).localeCompare(SOURCE_TYPE_LABELS[b] || b));
-    const sourceSel = sourceTypeSelect;
-    const curSource = state.sourceType;
-    clear(sourceSel);
-    sourceSel.append(el('option', { value: '', text: 'All sources' }));
-    for (const t of sourceTypes) sourceSel.append(el('option', { value: t, text: SOURCE_TYPE_LABELS[t] || t }));
-    sourceSel.value = sourceTypes.includes(curSource) ? curSource : '';
-    if (!sourceTypes.includes(curSource)) state.sourceType = '';
-    sourceSel.hidden = sourceTypes.length < 2;
-    sortSelect.value = state.sort;
     $('searchInput').value = state.search;
     // Typing in Home's search box lands here; keep the caret in the toolbar's box.
     if (state.focusSearch) {
@@ -638,6 +618,8 @@ function baseItems() {
   const r = state.route;
   const live = state.items.filter(isActive);
   if (r.name === 'favorites') return live.filter((i) => i.favorite);
+  // Products you haven't bought yet.
+  if (r.name === 'wishlist') return live.filter((i) => kindOf(i) === 'product' && !i.purchased);
   // Everything marked bought, archived or not: a record of what was purchased.
   if (r.name === 'purchased') return state.items.filter((i) => i.purchased);
   if (r.name === 'archive') return state.items.filter((i) => i.archived);
@@ -646,20 +628,27 @@ function baseItems() {
   return live;
 }
 
+// Saves matching the search box, best first. Remembers whether the query was corrected, for the
+// "Showing results for…" line.
+function searched(list) {
+  const r = searchItems(list, state.search, (i) => ctx.collectionById(i.collectionId)?.name || '');
+  state.searchUsed = r.corrected ? r.query : '';
+  return r.results.map((x) => x.item);
+}
+
 function currentGridItems() {
   let list = baseItems();
+  if (state.kinds.size && state.route.name !== 'kind') list = list.filter((i) => state.kinds.has(kindOf(i)));
+  if (state.status === 'todo') list = list.filter((i) => i.status !== 'done' && !i.purchased);
+  else if (state.status === 'done') list = list.filter((i) => i.status === 'done');
+  else if (state.status === 'purchased') list = list.filter((i) => i.purchased);
   if (state.retailer) list = list.filter((i) => i.retailer === state.retailer);
   if (state.topic) list = list.filter((i) => (i.topics || []).includes(state.topic));
   if (state.sourceType) list = list.filter((i) => i.type === state.sourceType);
-  const q = state.search.toLowerCase();
-  if (q) {
-    list = list.filter((i) => {
-      const col = ctx.collectionById(i.collectionId);
-      const hay = [i.title, ...(i.topics || []), i.retailer, i.host, i.note, i.description, i.price !== null ? String(i.price) : '', formatPrice(i.price, i.currency), col?.name, i.instagram?.creator, i.instagram?.caption, i.instagram?.collectionName]
-        .filter(Boolean).join(' \n ').toLowerCase();
-      return hay.includes(q);
-    });
-  }
+  // Search ranks (title > tags > note > collection > source > text) and forgives one typo; the
+  // ranking is the order unless you picked another sort.
+  const ranked = state.search ? searched(list) : null;
+  if (ranked) list = ranked;
   const byPrice = (dir) => (a, b) => {
     const ap = a.price === null || a.price === undefined ? null : a.price;
     const bp = b.price === null || b.price === undefined ? null : b.price;
@@ -668,7 +657,9 @@ function currentGridItems() {
     if (bp === null) return -1;
     return dir * (ap - bp);
   };
+  if (ranked && state.sort === 'newest') return list;
   if (state.sort === 'oldest') list = [...list].sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
+  else if (state.sort === 'az') list = [...list].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }));
   else if (state.sort === 'price-asc') list = [...list].sort(byPrice(1));
   else if (state.sort === 'price-desc') list = [...list].sort(byPrice(-1));
   return list;
@@ -685,10 +676,17 @@ function renderGrid(view) {
     view.append(collectionHero(col));
   }
   // The places list sorts itself (by city, then name), so the sort and retailer filters don't apply.
-  if (baseItems().length && !(r.name === 'kind' && ['place', 'media', 'book'].includes(r.id))) view.append(gridFilters);
+  const listView = r.name === 'kind' && ['place', 'media', 'book'].includes(r.id);
+  if (baseItems().length && !listView) view.append(filterBar());
   const chips = topicChips();
   if (chips) view.append(chips);
   const items = currentGridItems();
+  if (state.search && state.searchUsed) {
+    view.append(el('p', { class: 'search-corrected', role: 'status' }, [
+      'Showing results for ', el('strong', {}, [`‘${state.searchUsed}’`]), '. ',
+      el('button', { type: 'button', class: 'link-btn', onClick: () => { $('searchInput').value = state.searchUsed; state.search = state.searchUsed; renderView(); } }, ['Search for that']),
+    ]));
+  }
   if (!items.length) {
     view.append(gridEmptyState());
     return;
@@ -701,9 +699,10 @@ function renderGrid(view) {
     renderShelfList(view, items, r.id);
     return;
   }
-  const grid = el('div', { class: 'grid', role: 'list' });
+  const asList = state.layout === 'list';
+  const grid = el('div', { class: asList ? 'save-list' : 'grid', role: 'list' });
   const slice = items.slice(0, state.shown);
-  for (const item of slice) grid.append(cardNode(item));
+  for (const item of slice) grid.append(cardNode(item, { list: asList }));
   view.append(grid);
   if (items.length > state.shown) {
     view.append(el('div', { class: 'load-more' }, [
@@ -712,10 +711,101 @@ function renderGrid(view) {
   }
 }
 
+function clearFilters() {
+  state.search = '';
+  state.retailer = '';
+  state.sourceType = '';
+  state.topic = '';
+  state.kinds = new Set();
+  state.status = '';
+}
+
+// The filter bar over a grid: Kind (several at once), Status, Source, Site, Sort, and Grid or List.
+// Filters that would offer only one choice are left out. Active ones repeat below as removable chips.
+function filterBar() {
+  const r = state.route;
+  // While searching, the kind chips count matches: they scope the search.
+  const base = state.search ? searched(baseItems()) : baseItems();
+  const bar = el('div', { class: 'filter-bar', role: 'toolbar', 'aria-label': 'Filter and sort' });
+  const rerender = () => { state.shown = 120; renderView(); };
+  const select = (label, value, options, onChange) => {
+    const sel = el('select', { class: 'select select-sm', 'aria-label': label }, options.map(([v, t]) => el('option', { value: v, text: t })));
+    sel.value = options.some(([v]) => v === value) ? value : options[0][0];
+    sel.addEventListener('change', () => { onChange(sel.value); rerender(); });
+    return sel;
+  };
+
+  // Kind: toggle chips, only on mixed views.
+  if (r.name !== 'kind') {
+    const present = KINDS.map((k) => [k, base.filter((i) => kindOf(i) === k.value).length]).filter(([, n]) => n);
+    for (const k of [...state.kinds]) if (!present.some(([p]) => p.value === k)) state.kinds.delete(k);
+    if (present.length > 1) {
+      bar.append(el('div', { class: 'kind-filters', role: 'group', 'aria-label': 'Kind' }, present.map(([k, n]) => {
+        const on = state.kinds.has(k.value);
+        return el('button', { type: 'button', class: `kind-filter kind-${k.value} ${on ? 'on' : ''}`, 'aria-pressed': on ? 'true' : 'false', onClick: () => {
+          on ? state.kinds.delete(k.value) : state.kinds.add(k.value);
+          rerender();
+        } }, [kindIcon(k.value), k.plural, el('span', { class: 'count' }, [String(n)])]);
+      })));
+    }
+  }
+  const controls = el('div', { class: 'filter-controls' });
+  // Status: to do, done (each kind's own word), purchased.
+  const kindsHere = new Set(base.map(kindOf));
+  const doneWord = kindsHere.size === 1 ? kindInfo([...kindsHere][0]).done : 'Done';
+  const statusOptions = [['', 'Any status'], ['todo', 'To do'], ['done', doneWord]];
+  if (base.some((i) => i.purchased) && r.name !== 'purchased') statusOptions.push(['purchased', 'Purchased']);
+  if (r.name !== 'purchased') controls.append(select('Status', state.status, statusOptions, (v) => { state.status = v; }));
+  const sources = [...new Set(base.map((i) => i.type).filter(Boolean))];
+  if (!sources.includes(state.sourceType)) state.sourceType = '';
+  if (sources.length > 1) controls.append(select('Source', state.sourceType, [['', 'Any source'], ...sources.map((t) => [t, SOURCE_TYPE_LABELS[t] || t])], (v) => { state.sourceType = v; }));
+  const sites = [...new Set(base.map((i) => i.retailer).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (!sites.includes(state.retailer)) state.retailer = '';
+  if (sites.length > 1) controls.append(select('Site or shop', state.retailer, [['', 'Any site or shop'], ...sites.map((x) => [x, x])], (v) => { state.retailer = v; }));
+  const sorts = [['newest', 'Newest'], ['oldest', 'Oldest'], ['az', 'A–Z']];
+  if (base.some((i) => i.price !== null && i.price !== undefined)) sorts.push(['price-asc', 'Price: low to high'], ['price-desc', 'Price: high to low']);
+  if (!sorts.some(([v]) => v === state.sort)) state.sort = 'newest';
+  controls.append(select('Sort', state.sort, sorts, (v) => { state.sort = v; }));
+  const layoutBtn = (value, label, path) => el('button', { type: 'button', class: `seg ${state.layout === value ? 'on' : ''}`, 'aria-pressed': state.layout === value ? 'true' : 'false', 'aria-label': label, title: label, onClick: () => {
+    state.layout = value;
+    try { localStorage.setItem('keepsake.layout', value); } catch { /* this page only */ }
+    renderView({ keepScroll: true });
+  } }, [svgIcon(path)]);
+  controls.append(el('div', { class: 'segmented', role: 'group', 'aria-label': 'Layout' }, [
+    layoutBtn('grid', 'Grid', 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z'),
+    layoutBtn('list', 'List', 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01'),
+  ]));
+  bar.append(controls);
+
+  // What's on, as chips you can remove one by one.
+  const active = [];
+  for (const k of state.kinds) active.push([kindInfo(k).plural, () => state.kinds.delete(k)]);
+  if (state.status) active.push([statusOptions.find(([v]) => v === state.status)?.[1] || state.status, () => { state.status = ''; }]);
+  if (state.sourceType) active.push([SOURCE_TYPE_LABELS[state.sourceType] || state.sourceType, () => { state.sourceType = ''; }]);
+  if (state.retailer) active.push([state.retailer, () => { state.retailer = ''; }]);
+  if (state.topic) active.push([`Tag: ${state.topic}`, () => { state.topic = ''; }]);
+  if (active.length) {
+    bar.append(el('div', { class: 'active-filters', 'aria-label': 'Active filters' }, [
+      ...active.map(([label, off]) => el('button', { type: 'button', class: 'active-filter', 'aria-label': `Remove filter: ${label}`, onClick: () => { off(); rerender(); } }, [label, el('span', { 'aria-hidden': 'true' }, ['×'])])),
+      el('button', { type: 'button', class: 'btn btn-quiet btn-sm', onClick: () => { const q = state.search; clearFilters(); state.search = q; rerender(); } }, ['Clear all']),
+    ]));
+  }
+  return bar;
+}
+
+function svgIcon(d) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.7', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  svg.append(p);
+  return svg;
+}
+
 // Tags in this view, most used first, as filter chips ("All", "AI 4", "Video games 3"…).
 function topicChips() {
   const counts = new Map();
-  for (const i of baseItems()) for (const t of i.topics || []) counts.set(t, (counts.get(t) || 0) + 1);
+  for (const i of state.search ? searched(baseItems()) : baseItems()) for (const t of i.topics || []) counts.set(t, (counts.get(t) || 0) + 1);
   if (!counts.size) {
     state.topic = '';
     return null;
@@ -731,12 +821,29 @@ function topicChips() {
 
 function gridEmptyState() {
   const r = state.route;
-  if (state.search || state.retailer || state.sourceType || state.topic) {
+  if (state.search || state.retailer || state.sourceType || state.topic || state.kinds.size || state.status) {
+    const filtered = state.retailer || state.sourceType || state.topic || state.kinds.size || state.status;
     return UI.emptyState({
-      title: 'No matches', message: 'Nothing here matches your search or filter.',
-      actions: [el('button', { type: 'button', class: 'btn', onClick: () => { state.search = ''; state.retailer = ''; state.sourceType = ''; state.topic = ''; $('searchInput').value = ''; renderToolbar(); renderView(); } }, ['Clear search'])],
+      title: 'No matches',
+      message: state.search
+        ? `No saves match ‘${state.search}’. ${filtered ? 'Some filters are on: clear them to search everything.' : 'Check the spelling or search all kinds.'}`
+        : 'Nothing here matches these filters.',
+      actions: [el('button', { type: 'button', class: 'btn', onClick: () => { clearFilters(); $('searchInput').value = ''; renderToolbar(); renderView(); } }, ['Clear search and filters'])],
       icon: UI.folderIcon(),
     });
+  }
+  if (r.name === 'wishlist') return UI.emptyState({ title: 'Wishlist', message: 'Products you save land here until you buy them.', icon: kindIcon('product') });
+  if (r.name === 'kind') {
+    const copy = {
+      place: 'Save a restaurant or place and it shows up here with its address.',
+      recipe: 'Save a recipe or a dish you’d like to cook. Keepsake pulls out the ingredients.',
+      workout: 'Save a workout and turn it into a goal.',
+      media: 'Save a film, show or book you want to get to.',
+      book: 'Save a film, show or book you want to get to.',
+      video: 'Save a video to watch later. Anything from YouTube lands here.',
+      article: 'Save an article to read later, with its reading time.',
+    }[r.id];
+    if (copy) return UI.emptyState({ title: kindInfo(r.id).plural, message: copy, icon: kindIcon(r.id) });
   }
   if (r.name === 'favorites') return UI.emptyState({ title: 'No favorites yet', message: 'Tap the star on any card to keep it close.', icon: UI.starIcon(true) });
   if (r.name === 'purchased') return UI.emptyState({ title: 'Nothing purchased yet', message: 'Mark something as purchased from its ⋯ menu or its details, and it’s kept here.', icon: UI.bagIcon() });
@@ -748,7 +855,7 @@ function gridEmptyState() {
 function nothingSavedState() {
   return UI.emptyState({
     title: 'Nothing saved yet',
-    message: 'Open a product page, click the Keepsake icon in your toolbar (or press Alt+Shift+K) and save. Everything you keep lives only in this browser.',
+    message: 'Nothing saved yet. Save a page with the Keepsake button or Alt+Shift+K, or try the sample library. Everything you keep stays in this browser.',
     icon: UI.bagIcon(),
     actions: [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: () => loadSample() }, ['Load sample data']),
@@ -762,11 +869,20 @@ async function loadSample() {
   UI.toast(`Added ${pluralize(n, 'sample item', 'sample items')}. Delete them any time.`);
 }
 
-function cardNode(item) {
+// A save card: picture (or a tile tinted for its kind), then kind · source, title, the kind's key fact,
+// note, tags and state. One button opens it; the star and the menu are separate buttons.
+function cardNode(item, { list = false } = {}) {
   const col = ctx.collectionById(item.collectionId);
   const selected = state.selected.has(item.id);
+  const kind = kindOf(item);
+  const info = kindInfo(kind);
   const price = formatPrice(item.price, item.currency);
-  const card = el('article', { class: `card ${selected ? 'selected' : ''} ${item.archived ? 'archived' : ''} ${state.selecting ? 'selecting' : ''}`, role: 'listitem', 'aria-label': item.title });
+  const fact = kind === 'product' ? price || '' : keyFact(item);
+  const creator = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : '';
+  const source = creator || item.retailer || item.host || '';
+  const done = item.status === 'done';
+  const muted = done || item.purchased || item.archived;
+  const card = el('article', { class: `card ${list ? 'card-row' : ''} ${selected ? 'selected' : ''} ${muted ? 'is-done' : ''} ${state.selecting ? 'selecting' : ''}`, role: 'listitem', 'aria-label': item.title });
   if (state.selecting) {
     const cb = el('input', { type: 'checkbox', class: 'card-check', 'aria-label': `Select ${item.title}` });
     cb.checked = selected;
@@ -777,7 +893,15 @@ function cardNode(item) {
     });
     card.append(cb);
   }
-  const hit = el('button', { type: 'button', class: 'card-hit', onClick: () => {
+  const states = [
+    !item.collectionId && isActive(item) ? el('span', { class: 'state-pill' }, ['Needs a collection']) : null,
+    item.captureState === 'pending' ? el('span', { class: 'state-pill state-quiet' }, ['Finishing details…']) : null,
+    item.captureState === 'failed' ? el('span', { class: 'state-pill state-warn' }, ['Couldn’t read details']) : null,
+    done ? el('span', { class: 'state-pill state-done' }, [UI.checkIcon(), info.done]) : null,
+    item.purchased && kind === 'product' ? el('span', { class: 'state-pill state-done' }, [UI.checkIcon(), 'Purchased']) : null,
+    item.archived ? el('span', { class: 'state-pill state-quiet' }, ['Archived']) : null,
+  ].filter(Boolean);
+  const hit = el('button', { type: 'button', class: 'card-hit', 'aria-label': [item.title, info.label, fact, source].filter(Boolean).join(', '), onClick: () => {
     if (state.selecting) {
       const cb = card.querySelector('.card-check');
       if (cb) {
@@ -788,28 +912,21 @@ function cardNode(item) {
     }
     openSave(item.id);
   } }, [
-    UI.pictureNode({ src: item.image, aspect: item.imageAspect, title: item.title }),
+    UI.pictureNode({ src: item.image, aspect: list ? 1 : item.imageAspect, title: item.title, tint: kind, icon: kindIcon(kind) }),
     el('div', { class: 'card-body' }, [
-      el('div', { class: 'card-title' }, [item.title]),
-      el('div', { class: 'card-meta' }, [
-        kindOf(item) === 'product'
-          ? (price ? el('span', { class: 'card-price' }, [price]) : el('span', { class: 'card-price muted' }, [item.type === 'instagram' ? '' : 'No price']))
-          : el('span', { class: 'card-price muted' }, [keyFact(item)]),
-        el('span', { class: 'card-retailer', title: item.url || '' }, [item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '']),
+      el('div', { class: 'card-kindrow' }, [
+        kind !== 'product' ? el('span', { class: `kind-chip kind-${kind}` }, [kindIcon(kind), info.label]) : null,
+        creator ? el('span', { class: 'card-source' }, [UI.instagramIcon(), creator]) : source ? el('span', { class: 'card-source', title: item.url || '' }, [source]) : null,
       ]),
-      item.note ? el('div', { class: 'card-note' }, [item.note]) : null,
+      el('div', { class: 'card-title' }, [item.title]),
+      fact ? el('div', { class: `card-fact ${kind === 'product' ? 'card-price' : ''}` }, [fact]) : null,
+      item.note ? el('div', { class: 'card-note' }, [`“${item.note}”`]) : null,
       item.topics?.length ? el('div', { class: 'card-topics' }, item.topics.slice(0, 3).map((t) => el('span', { class: 'topic-pill' }, [t]))) : null,
-      state.route.name !== 'c' && col ? el('div', { class: 'card-meta' }, [el('span', { class: 'muted small' }, [col.name])]) : null,
+      states.length || (state.route.name !== 'c' && col) ? el('div', { class: 'card-states' }, [
+        ...states,
+        state.route.name !== 'c' && col ? el('span', { class: 'card-col' }, [col.name]) : null,
+      ]) : null,
     ]),
-  ]);
-  const badges = el('div', { class: 'card-badges' }, [
-    item.favorite ? el('span', { class: 'badge badge-brass', title: 'Favorite' }, [UI.starIcon(true)]) : null,
-    item.purchased ? el('span', { class: 'badge' }, ['Purchased']) : null,
-    item.type === 'instagram' || item.instagram ? el('span', { class: 'badge badge-sage' }, [UI.instagramIcon(), 'Instagram']) : null,
-    item.type === 'inspiration' && !item.instagram ? el('span', { class: 'badge badge-sage' }, ['Inspiration']) : null,
-    !['product', 'link'].includes(kindOf(item)) ? el('span', { class: `badge kind-badge kind-${kindOf(item)}` }, [kindIcon(kindOf(item)), kindInfo(kindOf(item)).label]) : null,
-    item.status === 'done' ? el('span', { class: 'badge' }, [kindInfo(kindOf(item)).done]) : null,
-    !item.collectionId && isActive(item) ? el('span', { class: 'badge' }, ['Needs sorting']) : null,
   ]);
   const favBtn = el('button', { type: 'button', class: `btn btn-icon ${item.favorite ? 'is-on' : ''}`, 'aria-label': item.favorite ? 'Remove from favorites' : 'Add to favorites', 'aria-pressed': item.favorite ? 'true' : 'false', onClick: async (e) => {
     e.stopPropagation();
@@ -820,7 +937,7 @@ function cardNode(item) {
     openMenu(moreBtn, itemMenu(item));
   } }, [UI.moreIcon()]);
   const actions = el('div', { class: 'card-actions' }, state.selecting ? [] : [favBtn, moreBtn]);
-  card.append(hit, badges, actions);
+  card.append(hit, actions);
   return el('div', { class: 'grid-item' }, [card]);
 }
 
@@ -1098,6 +1215,7 @@ function cut(s, n) {
 // Opening a save shows it the way its kind is used: a recipe opens straight into the recipe.
 async function openSave(id) {
   const item = state.items.find((i) => i.id === id) || (await store.getItem(id));
+  if (item) store.markOpened(id).catch(() => {});
   if (item && kindOf(item) === 'recipe') return openRecipe(id);
   if (item && kindOf(item) === 'workout') return openWorkout(id);
   if (item && kindOf(item) === 'place') return openPlace(id);
@@ -2137,6 +2255,7 @@ async function openItem(id) {
     igInfo,
     aiBox,
     relatedNode(item),
+    historyNode(item),
   ]);
 
   const body = el('div', { class: 'item-detail' }, [el('div', {}, [picWrap, thumbRow]), side]);
@@ -2249,6 +2368,33 @@ async function openItem(id) {
       } },
     ],
   });
+}
+
+// What happened to a save: when and where it was saved, its first title, the last edit and open, and
+// every AI change still in the log, each with Undo.
+function historyNode(item) {
+  const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+  const from = item.type === 'instagram' ? 'Instagram' : item.retailer || item.host || 'a page';
+  const list = el('ul', { class: 'history-list' }, [
+    el('li', {}, [el('span', { class: 'history-when' }, [when(item.createdAt)]), `Saved from ${from}`]),
+    item.originalTitle && item.originalTitle !== item.title ? el('li', {}, [el('span', { class: 'history-when' }, ['First title']), `“${item.originalTitle}”`]) : null,
+    item.updatedAt && Date.parse(item.updatedAt) - Date.parse(item.createdAt) > 60000 ? el('li', {}, [el('span', { class: 'history-when' }, [when(item.updatedAt)]), item.userFields?.length ? `Edited (${item.userFields.filter((f) => f !== 'collectionId').join(', ') || 'collection'})` : 'Changed']) : null,
+    item.openedAt ? el('li', {}, [el('span', { class: 'history-when' }, [when(item.openedAt)]), 'Last opened']) : null,
+  ]);
+  const box = el('details', { class: 'history' }, [el('summary', {}, ['History']), list]);
+  // AI changes come from the change log (kept on this device, never exported).
+  store.getAiLog().then((log) => {
+    for (const e of log.filter((x) => x.itemId === item.id && !x.undone).slice(-10).reverse()) {
+      const what = (e.changes || []).map((c) => `${c.field}: ${cut(String(c.from ?? ''), 40) || '—'} → ${cut(String(c.to ?? ''), 40) || '—'}`).join('; ');
+      const undo = el('button', { type: 'button', class: 'link-btn', onClick: async () => {
+        await undoEntries(ctx, [e]);
+        undo.replaceWith(el('span', { class: 'muted' }, ['Undone']));
+        UI.toast('AI change undone. Reopen the details to see it.', { duration: 2500 });
+      } }, ['Undo']);
+      list.append(el('li', {}, [el('span', { class: 'history-when' }, [when(e.at)]), `AI changed ${what}`, ' ', undo]));
+    }
+  }).catch(() => {});
+  return box;
 }
 
 // One "where to buy" row: name, retailer, price, open link, and an action that
@@ -2525,6 +2671,8 @@ async function deleteCollection(col) {
 
 // A calm starting point: search, anything waiting on the user, the latest saves, and
 // a handful of collections. Everything else is one click away.
+const COME_BACK_DAYS = 42;
+
 function renderHome(view) {
   const live = state.items.filter(isActive);
   if (!live.length) {
@@ -2557,6 +2705,18 @@ function renderHome(view) {
   const recent = live.slice(0, 8);
   page.append(homeSection('Recently saved', { href: '#all', label: 'All saves →' },
     el('div', { class: 'home-recent', role: 'list' }, recent.map((item) => cardNode(item)))));
+
+  // Come back to: saves you haven't finished and haven't opened for six weeks or more. Local, and it can
+  // be turned off in Settings → Appearance.
+  if (state.settings?.home?.comeBack !== false) {
+    const cutoff = new Date(Date.now() - COME_BACK_DAYS * 864e5).toISOString();
+    const back = live.filter((i) => i.status !== 'done' && !i.purchased && i.createdAt < cutoff && (!i.openedAt || i.openedAt < cutoff))
+      .sort((a, b) => ((a.openedAt || a.createdAt) < (b.openedAt || b.createdAt) ? -1 : 1)).slice(0, 6);
+    if (back.length) {
+      page.append(homeSection('Come back to', null,
+        el('div', { class: 'home-recent home-comeback', role: 'list' }, back.map((item) => cardNode(item)))));
+    }
+  }
 
   const stats = collectionStats();
   const tiles = homeCollections(stats);

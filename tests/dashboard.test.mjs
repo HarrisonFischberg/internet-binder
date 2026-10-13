@@ -383,6 +383,154 @@ test('films and books: a list to scroll, to-watch first; tick to move; the view 
   await afterChange();
 });
 
+test('redesign: card anatomy, kind and status filters with removable chips, list layout, Wishlist', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const lamp = await store.addItem({ title: 'Brass desk lamp', url: 'https://shop.example/lamp-r', price: 89, currency: 'USD', retailer: 'Lamp Shop', kind: 'product' });
+  await store.addItem({ title: 'Linen sheets', url: 'https://shop.example/sheets-r', price: 120, currency: 'USD', retailer: 'Bed Shop', kind: 'product', purchased: true });
+  await store.addItem({ title: 'Lemon tart', url: 'https://cook.example/tart-r', kind: 'recipe', status: 'done', details: { ingredients: ['lemons', 'butter'], steps: ['Bake.'], source: 'page' } });
+  await afterChange();
+  await go('#all');
+  const card = [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('Lemon tart'));
+  assert.equal(card.querySelector('.card-hit').getAttribute('aria-label'), 'Lemon tart, Recipe, 2 ingredients, Example');
+  assert.ok(card.querySelector('.kind-chip.kind-recipe'));
+  assert.ok(card.querySelector('.pic-kind.kind-recipe'), 'no picture: a recipe-tinted tile');
+  assert.match(card.querySelector('.card-states').textContent, /Cooked/);
+  assert.ok(card.classList.contains('is-done'));
+  const lampCard = [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('Brass desk lamp'));
+  assert.match(lampCard.querySelector('.card-fact').textContent, /\$89/);
+
+  // Kind filter: Recipes only, shown as a removable chip.
+  [...view().querySelectorAll('.kind-filter')].find((b) => b.textContent.startsWith('Recipes')).click();
+  await settle();
+  const recipesOnly = [...view().querySelectorAll('.card-title')].map((t) => t.textContent);
+  assert.ok(recipesOnly.includes('Lemon tart') && !recipesOnly.includes('Brass desk lamp') && !recipesOnly.includes('Linen sheets'));
+  const chip = view().querySelector('.active-filter');
+  assert.match(chip.textContent, /Recipes/);
+  chip.click();
+  await settle();
+  assert.ok([...view().querySelectorAll('.card-title')].length >= 3);
+
+  // Status: done. (Purchased saves have their own view, so All saves doesn't offer that status.)
+  const status = view().querySelector('select[aria-label="Status"]');
+  assert.ok(![...status.options].some((o) => o.value === 'purchased'));
+  status.value = 'done';
+  status.dispatchEvent(new window.Event('change'));
+  await settle();
+  const done = [...view().querySelectorAll('.card-title')].map((t) => t.textContent);
+  assert.ok(done.includes('Lemon tart') && !done.includes('Brass desk lamp'));
+  [...view().querySelectorAll('.active-filters button')].find((b) => b.textContent === 'Clear all').click();
+  await settle();
+
+  // A–Z sort and list layout.
+  const sort = view().querySelector('select[aria-label="Sort"]');
+  sort.value = 'az';
+  sort.dispatchEvent(new window.Event('change'));
+  await settle();
+  const titles = [...view().querySelectorAll('.card-title')].map((t) => t.textContent);
+  assert.deepEqual(titles, [...titles].sort((a, b) => a.localeCompare(b)));
+  view().querySelector('.segmented button[aria-label="List"]').click();
+  await settle();
+  assert.ok(view().querySelector('.save-list .card-row'));
+  view().querySelector('.segmented button[aria-label="Grid"]').click();
+  await settle();
+  sort.value = 'newest';
+
+  // Wishlist: products not yet bought.
+  await go('#wishlist');
+  const wl = [...view().querySelectorAll('.card-title')].map((t) => t.textContent);
+  assert.ok(wl.includes('Brass desk lamp'));
+  assert.ok(!wl.includes('Linen sheets'));
+  assert.ok(!wl.includes('Lemon tart'));
+  assert.ok(lamp);
+});
+
+test('search: ranked results, a corrected query offered, and "/" focuses the box', async () => {
+  await go('#all');
+  const box = window.document.getElementById('searchInput');
+  window.document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: '/', bubbles: true }));
+  assert.equal(window.document.activeElement, box);
+  box.value = 'brass desk lmap';
+  box.dispatchEvent(new window.Event('input'));
+  await afterChange();
+  assert.match(view().querySelector('.search-corrected').textContent, /Showing results for ‘brass desk lamp’/);
+  assert.equal(view().querySelector('.card-title').textContent, 'Brass desk lamp');
+  box.value = 'qqqqzz';
+  box.dispatchEvent(new window.Event('input'));
+  await afterChange();
+  assert.match(view().textContent, /No saves match ‘qqqqzz’/);
+  box.value = '';
+  box.dispatchEvent(new window.Event('input'));
+  await afterChange();
+});
+
+test('Home: Come back to shows old saves you haven’t opened; opening one clears it; it can be turned off', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const old = await store.addItem({ title: 'Old forgotten tent', url: 'https://shop.example/old-tent', price: 199, currency: 'USD' });
+  const long = new Date(Date.now() - 60 * 864e5).toISOString();
+  await store.db.put('items', [{ ...(await store.getItem(old.id)), createdAt: long, updatedAt: long }]);
+  await afterChange();
+  await go('#home');
+  const section = () => [...view().querySelectorAll('.home-section')].find((x) => x.querySelector('.home-section-title')?.textContent === 'Come back to');
+  assert.ok(section(), 'shown');
+  assert.match(section().textContent, /Old forgotten tent/);
+  const before = (await store.getItem(old.id)).updatedAt;
+  section().querySelector('.card-hit').click();
+  await afterChange();
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+  const after = await store.getItem(old.id);
+  assert.ok(after.openedAt, 'opening is remembered');
+  assert.equal(after.updatedAt, before, 'opening is not an edit');
+  await go('#home');
+  assert.ok(!section() || !/Old forgotten tent/.test(section().textContent), 'gone once opened');
+
+  await store.db.put('items', [{ ...after, openedAt: null }]);
+  await store.updateSettings({ home: { comeBack: false } });
+  await afterChange();
+  await go('#home');
+  assert.ok(!section(), 'turned off');
+  await store.updateSettings({ home: { comeBack: true } });
+  await afterChange();
+});
+
+test('save detail: History lists the save, the first title, and AI changes with Undo', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'Tidy title', originalTitle: 'TIDY title!!! | Shop', url: 'https://shop.example/hist', retailer: 'Hist Shop' });
+  await store.appendAiLog([{ id: 'log-hist-1', runId: 'r', at: new Date().toISOString(), itemId: it.id, itemTitle: 'Tidy title', changes: [{ field: 'title', from: 'TIDY title!!! | Shop', to: 'Tidy title' }], before: { title: 'TIDY title!!! | Shop' }, after: { title: 'Tidy title' }, undone: false }]);
+  await afterChange();
+  await go(`#item/${it.id}`);
+  await afterChange();
+  const h = window.document.querySelector('.history');
+  assert.match(h.textContent, /Saved from Hist Shop/);
+  assert.match(h.textContent, /First title“TIDY title!!! \| Shop”/);
+  assert.match(h.textContent, /AI changed title: TIDY title!!! \| Shop → Tidy title/);
+  [...h.querySelectorAll('button')].find((b) => b.textContent === 'Undo').click();
+  await afterChange();
+  assert.equal((await store.getItem(it.id)).title, 'TIDY title!!! | Shop');
+  window.document.querySelectorAll('.modal button').forEach((b) => { if (b.textContent === 'Cancel') b.click(); });
+  await afterChange();
+});
+
+test('toasts: Alt+Z presses the newest Undo; an Undo toast pauses while pointed at', async () => {
+  const UI = await import('../keepsake/src/dashboard/ui.js');
+  let undone = 0;
+  UI.toast('Moved to Trash.', { action: { label: 'Undo', onClick: () => { undone++; } } });
+  window.document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', altKey: true, bubbles: true }));
+  await settle();
+  assert.equal(undone, 1);
+  window.document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'z', code: 'KeyZ', altKey: true, bubbles: true }));
+  await settle();
+  assert.equal(undone, 1, 'nothing left to undo');
+  UI.toast('Saved.', { action: { label: 'Undo', onClick: () => {} } });
+  const node = [...window.document.querySelectorAll('.toast')].pop();
+  node.dispatchEvent(new window.Event('mouseenter'));
+  assert.ok(node.isConnected);
+  node.querySelector('.toast-close').click();
+});
+
 test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);

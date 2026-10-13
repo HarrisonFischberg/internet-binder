@@ -51,6 +51,10 @@
             <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
           </button>
           <div class="nav-group-list" id="navShelvesList" hidden>
+            <a class="nav-item" href="#wishlist" data-route="wishlist" id="navWishlist">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>
+              <span>Wishlist</span><span class="count" id="countWishlist"></span>
+            </a>
             <div class="nav-kinds" id="navKinds"></div>
             <a class="nav-item" href="#purchased" data-route="purchased">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="m9.5 14 1.8 1.8 3.2-3.3"/></svg>
@@ -109,7 +113,7 @@
         <div class="toolbar-right" id="toolbarControls">
           <label class="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4-4"/></svg>
-            <input class="input" id="searchInput" type="search" placeholder="Search titles, notes, retailers, prices" aria-label="Search" />
+            <input class="input" id="searchInput" type="search" placeholder="Search your saves  ( / )" aria-label="Search" />
           </label>
           <button class="btn control" id="selectToggle" type="button" aria-pressed="false">Select</button>
           <button class="btn btn-icon" id="themeToggle" type="button" aria-label="Toggle theme" title="Theme">

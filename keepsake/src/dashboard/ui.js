@@ -181,10 +181,14 @@ export function promptDialog({ title, label, value = '', placeholder = '', confi
 // Every toast stays up this much longer than the duration it asks for.
 const TOAST_TIME_SCALE = 1.25;
 
-export function toast(message, { action = null, duration = 5000, kind = '' } = {}) {
+// A toast with an action (Undo) stays 8 s and pauses while you point at it or tab into it; plain ones
+// 5 s. ⌥Z (Alt+Z) in the dashboard presses the newest toast's Undo (see undoLast).
+export function toast(message, { action = null, duration = action ? 8000 : 5000, kind = '' } = {}) {
   const root = toastRoot();
   if (!root) return;
   let timer = null;
+  let deadline = 0;
+  let left = duration * TOAST_TIME_SCALE;
   const node = el('div', { class: `toast ${kind ? 'toast-' + kind : ''}`, role: 'status' }, [
     el('span', { class: 'toast-text' }, [message]),
     action ? el('button', { type: 'button', class: 'btn btn-sm toast-action', onClick: async () => {
@@ -203,8 +207,31 @@ export function toast(message, { action = null, duration = 5000, kind = '' } = {
   };
   root.append(node);
   while (root.children.length > 3) root.firstChild.remove();
-  timer = setTimeout(dismiss, duration * TOAST_TIME_SCALE);
+  const start = () => {
+    clearTimeout(timer);
+    deadline = Date.now() + left;
+    timer = setTimeout(dismiss, left);
+  };
+  const pause = () => {
+    clearTimeout(timer);
+    left = Math.max(1500, deadline - Date.now());
+  };
+  node.addEventListener('mouseenter', pause);
+  node.addEventListener('mouseleave', start);
+  node.addEventListener('focusin', pause);
+  node.addEventListener('focusout', start);
+  // Errors stay until dismissed.
+  if (kind !== 'danger') start();
   return dismiss;
+}
+
+// Presses Undo on the newest toast that has one. Returns whether there was one.
+export function undoLast() {
+  const root = toastRoot();
+  const btn = root ? [...root.querySelectorAll('.toast:not(.toast-out) .toast-action')].reverse().find((b) => /^undo$/i.test(b.textContent.trim())) : null;
+  if (!btn) return false;
+  btn.click();
+  return true;
 }
 
 // Icons ----------------------------------------------------------------------------
@@ -302,13 +329,16 @@ export function initialFor(text) {
 }
 
 // Image with graceful fallback to a text placeholder.
-export function pictureNode({ src, alt = '', aspect = null, title = '', className = '' }) {
+// `tint` + `icon`: with no picture, a tile in the kind's colour with its icon (save cards).
+export function pictureNode({ src, alt = '', aspect = null, title = '', className = '', tint = '', icon = null }) {
   const box = el('div', { class: `pic ${className}`.trim() });
   if (aspect) box.style.aspectRatio = String(Math.max(0.5, Math.min(2.2, aspect)));
-  const placeholder = el('div', { class: 'pic-placeholder', 'aria-hidden': 'true' }, [
-    el('span', { class: 'pic-initial' }, [initialFor(title)]),
-    el('span', { class: 'pic-title' }, [String(title || '').slice(0, 90)]),
-  ]);
+  const placeholder = tint && icon
+    ? el('div', { class: `pic-placeholder pic-kind kind-${tint}`, 'aria-hidden': 'true' }, [icon])
+    : el('div', { class: 'pic-placeholder', 'aria-hidden': 'true' }, [
+      el('span', { class: 'pic-initial' }, [initialFor(title)]),
+      el('span', { class: 'pic-title' }, [String(title || '').slice(0, 90)]),
+    ]);
   if (!src) {
     box.classList.add('pic-empty');
     box.append(placeholder);

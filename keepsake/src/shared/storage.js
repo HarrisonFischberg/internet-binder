@@ -68,6 +68,7 @@ export function applyLook(node, settings) {
 export const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
   style: 'modern', // modern | moss | minimal: the look, per device (see src/shared/tokens.css)
+  home: { comeBack: true }, // Home's "Come back to": saves not opened in 6+ weeks (worked out on this device)
   floating: {
     mode: 'off', // off | all | selected
     sites: [], // origin patterns like *://www.example.com/*
@@ -254,6 +255,8 @@ export function makeItem(input = {}) {
     productType: sanitizeText(input.productType, 80),
     tags: uniqStrings(input.tags, 12).map((t) => sanitizeText(t, 40)).filter(Boolean),
     // What it's about ("AI", "Video games"): guessed on save (topics.js) or set by you.
+    // When you last opened it in Keepsake (for Home's "Come back to"). Only ever set on this device.
+    openedAt: typeof input.openedAt === 'string' && !Number.isNaN(Date.parse(input.openedAt)) ? input.openedAt : null,
     topics: cleanTopics(input.topics).map((t) => sanitizeText(t, 30)).filter(Boolean),
     topicsBy: input.topicsBy === 'guess' || input.topicsBy === 'you' ? input.topicsBy : '',
     imageAspect: Number.isFinite(input.imageAspect) && input.imageAspect > 0.2 && input.imageAspect < 5 ? input.imageAspect : null,
@@ -653,6 +656,11 @@ export function createStore(kv, db = memoryRecordBackend()) {
         const gone = item.collectionId && !cols[item.collectionId];
         return { ...item, deletedAt: null, updatedAt: now, ...(gone ? { collectionId: null, needsReview: true } : {}) };
       });
+    },
+
+    // Opening a save: remembered for "Come back to". Not an edit, so updatedAt stays as it was.
+    async markOpened(id) {
+      await db.update('items', [id], (i) => (i && !i.deletedAt ? { ...i, openedAt: nowIso() } : undefined));
     },
 
     async getTrash() {

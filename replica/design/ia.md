@@ -182,6 +182,18 @@ Read from schema.org Movie / TVSeries / Book (Letterboxd, IMDb, Goodreads, Open 
 - **List (owner decision: scroll-only):** "To watch" / "To read" first, then "Watched" / "Read"; each row has a 2:3 poster or cover, title, year · Film or Series (or author · year), genres, and a Watched / Read checkbox that moves it. No ratings, no progress, nothing else.
 - **View:** poster or cover, facts (format, year, director or creator, runtime or seasons, genre; author, year, pages, ISBN), description, note; Edit details, Open on (site), Mark watched / Mark read.
 
+### Dashboard redesign (Chrome, built in M2f)
+
+- **Save card:** kind chip + source, title (2 lines), the kind's key fact (price for products), note (1 line), tags, then state pills: Needs a collection, Finishing details…, Couldn't read details, the done verb ✓, Purchased, Archived, and the collection name outside a collection. No picture: a 16:10 tile in the kind's tint with its icon. Done, bought or archived saves are muted. The favourite star stays visible; the other card buttons show on hover or focus. One button per card, named "{title}, {kind}, {key fact}, {source}".
+- **Grid or List** (remembered on this device); list rows have a 56 px thumb.
+- **Filter bar:** Kind chips (several at once; only on mixed views), Status (Any / To do / the done verb / Purchased where it applies), Source, Site or shop, Sort (Newest, Oldest, A–Z, and Price when prices exist). Filters with one choice are hidden. Active filters repeat as removable chips with Clear all.
+- **Wishlist** (in Shelves): products not yet bought.
+- **Search** (`shared/search.js`): every word must match; rank title > tags > note > collection > source > text (ingredients, exercises, address, author…), word starts beat word middles, accents ignored, prices searchable. No match: one typo per word corrected from the library's own words ("Showing results for ‘linen lamp’"). While searching, the kind and tag chips count matches. "/" focuses the search box.
+- **Home:** Review banner, Recently saved, **Come back to** (not done, not bought, saved and not opened for 6+ weeks; `openedAt` is local; Settings → Appearance turns it off), Collections.
+- **Save detail:** a History section: saved from where and when, the first title, last edit, last opened, and AI changes from the change log with Undo each.
+- **Toasts:** with an action, 8 s and paused on hover or focus; errors stay until dismissed; Alt+Z (⌥Z) presses the newest Undo.
+- **Narrow windows:** the sidebar stays a slide-out drawer under 900 px (kept from 1.x rather than an icon rail: it already works with the keyboard and screen readers).
+
 ### Tags (all platforms)
 
 A save can carry up to 8 **tags** saying what it's about ("AI", "Video games", "Shoes"). Videos, articles and links get up to 3 **guessed** on save, locally, from the title (counts most), the channel or site, the description and hashtags (`shared/topics.js`: about 30 topics, whole-word phrases; no AI, no network). No tag beats a wrong one: a guess needs a title hit or several hits elsewhere.

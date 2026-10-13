@@ -338,3 +338,27 @@ test('films, shows and books from schema.org; numbers and ISBNs checked', async 
   assert.equal(keyFact({ kind: 'book', details: b }), 'A. Author, B. Author · 1969');
   assert.equal(sanitizeDetails('book', { year: 12, pages: -4, isbn: 'x' }).year, null);
 });
+
+test('search: every word must match; title beats note beats text; one typo forgiven', async () => {
+  const { searchItems, editDistance, correctQuery, searchFields } = await import('../keepsake/src/shared/search.js');
+  const items = [
+    { id: 'a', title: 'Ceramic bedside lamp with linen shade', retailer: 'Studio Fenne', createdAt: '2026-01-01' },
+    { id: 'b', title: 'Lemon tart', note: 'for the linen party', createdAt: '2026-01-02' },
+    { id: 'c', title: 'Brass desk lamp', price: 89, createdAt: '2026-01-03' },
+    { id: 'd', title: 'Leg day', details: { exercises: [{ name: 'Goblet squats' }] }, createdAt: '2026-01-04' },
+    { id: 'e', title: 'Café crème', topics: ['Coffee'], createdAt: '2026-01-05' },
+  ];
+  const ids = (q) => searchItems(items, q).results.map((r) => r.item.id);
+  assert.deepEqual(ids('linen'), ['a', 'b'], 'title before note');
+  assert.deepEqual(ids('lamp linen'), ['a'], 'every word must match');
+  assert.deepEqual(ids('squats'), ['d'], 'exercise names are searched');
+  assert.deepEqual(ids('cafe creme'), ['e'], 'accents ignored');
+  assert.deepEqual(ids('coffee'), ['e'], 'tags');
+  assert.deepEqual(ids('89'), ['c'], 'prices');
+  const fixed = searchItems(items, 'linnen lamp');
+  assert.deepEqual([fixed.query, fixed.corrected, fixed.results.map((r) => r.item.id)], ['linen lamp', true, ['a']]);
+  assert.equal(searchItems(items, 'zzzz').results.length, 0);
+  assert.equal(editDistance('linnen', 'linen'), 1);
+  assert.equal(editDistance('lmap', 'lamp'), 1, 'a swap is one edit');
+  assert.equal(correctQuery('cat', [searchFields({ title: 'car' })]), null, 'short words are never "corrected"');
+});
