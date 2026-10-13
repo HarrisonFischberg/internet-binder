@@ -32,7 +32,7 @@
         </a>
         <a class="nav-item" href="#all" data-route="all">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
-          <span>All saves</span><span class="count" id="countAll"></span>
+          <span>Library</span><span class="count" id="countAll"></span>
         </a>
         <a class="nav-item" href="#favorites" data-route="favorites">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.8 2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.8l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7L12 3.8Z"/></svg>
@@ -42,15 +42,15 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5l2.5 1.5"/></svg>
           <span>Review</span><span class="count" id="countReview"></span>
         </a>
-        <!-- Shelves: one view per kind of save (Recipes, Workouts, Videos…), plus Purchased and Archive, folded
+        <!-- Kinds: one view per kind of save (Recipes, Workouts, Videos…), plus Purchased and Archive, folded
              into one group so the menu stays short. Open or closed is remembered in this browser. -->
-        <div class="nav-group" id="navShelves">
-          <button class="nav-item nav-group-toggle" type="button" id="navShelvesToggle" aria-expanded="false" aria-controls="navShelvesList">
+        <div class="nav-group" id="navKindsGroup">
+          <button class="nav-item nav-group-toggle" type="button" id="navKindsToggle" aria-expanded="false" aria-controls="navKindsList">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16M4 12h16M4 18.5h16M7 5.5v-2M15 12v-2M10 18.5v-2"/></svg>
-            <span>Shelves</span><span class="count" id="countShelves"></span>
+            <span>Kinds</span><span class="count" id="countKindsGroup"></span>
             <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
           </button>
-          <div class="nav-group-list" id="navShelvesList" hidden>
+          <div class="nav-group-list" id="navKindsList" hidden>
             <a class="nav-item" href="#wishlist" data-route="wishlist" id="navWishlist">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>
               <span>Wishlist</span><span class="count" id="countWishlist"></span>

@@ -20,7 +20,7 @@ import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
 import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, forgetCollection } from './categorizer.js';
 import { memoryRecordBackend, STORES } from './db.js';
-import { isKind, kindOf, sanitizeDetails, recipeFromText, workoutFromText, looksLikeWorkout, STATUSES } from './kinds.js';
+import { isKind, kindOf, sanitizeDetails, recipeFromText, workoutFromText, looksLikeWorkout, needsCollection, STATUSES } from './kinds.js';
 import { makeGoal, makeCheckin } from './goals.js';
 import { cleanTopics } from './topics.js';
 
@@ -458,6 +458,27 @@ export function createStore(kv, db = memoryRecordBackend()) {
     return repaired;
   }
 
+  // Before M2 shipped, recipes, videos, places… each got an automatic collection of the same name as
+  // their view. They now live in their views only, so those collections are removed once, but only
+  // ones that still have the default name and hold nothing except that kind; their saves just leave
+  // the collection (they stay in their view). Anything renamed or used for other saves is left alone.
+  const KIND_COLLECTIONS = { recipes: ['recipe', 'Recipes'], workouts: ['workout', 'Workouts'], places: ['place', 'Places'], videos: ['video', 'Videos'], 'watch-later': ['video', 'Watch later'],
+    articles: ['article', 'Articles'], 'read-later': ['article', 'Read later'], watchlist: ['media', 'Watchlist'], 'reading-list': ['book', 'Reading list'] };
+  async function removeKindCollections() {
+    const cols = (await db.all('collections')).filter((c) => KIND_COLLECTIONS[c.taxonomyKey] && normalizeName(c.name) === normalizeName(KIND_COLLECTIONS[c.taxonomyKey][1]));
+    if (!cols.length) return 0;
+    const items = await db.all('items');
+    const removed = [];
+    for (const c of cols) {
+      const inside = items.filter((i) => i.collectionId === c.id);
+      if (inside.some((i) => kindOf(i) !== KIND_COLLECTIONS[c.taxonomyKey][0])) continue;
+      if (inside.length) await db.update('items', inside.map((i) => i.id), (i) => (i ? { ...i, collectionId: null, needsReview: false, previousCollections: [...(i.previousCollections || []), c.id].slice(-20) } : undefined));
+      removed.push(c.id);
+    }
+    if (removed.length) await db.remove('collections', removed);
+    return removed.length;
+  }
+
   // Goals and every check-in they have, for good.
   async function removeGoals(goalIds) {
     const checkins = (await Promise.all(goalIds.map((id) => db.byIndex('checkins', 'goalId', id)))).flat();
@@ -490,7 +511,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
         if (!(await db.get('kv', 'prefs'))) await kvSet('prefs', emptyPrefs());
         if (!(await db.get('kv', 'importHistory'))) await kvSet('importHistory', { instagram: {} });
         const textRepaired = raw[KEYS.meta]?.textRepairedAt ? null : await repairEncodedText();
-        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}), ...(textRepaired !== null ? { textRepairedAt: now, textRepairedCount: textRepaired } : {}) } };
+        const kindCollections = raw[KEYS.meta]?.kindCollectionsRemovedAt ? null : await removeKindCollections();
+        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}), ...(textRepaired !== null ? { textRepairedAt: now, textRepairedCount: textRepaired } : {}), ...(kindCollections !== null ? { kindCollectionsRemovedAt: now, kindCollectionsRemoved: kindCollections } : {}) } };
         if (!raw[KEYS.settings]) write[KEYS.settings] = structuredClone(DEFAULT_SETTINGS);
         else if (raw[KEYS.settings].ai && raw[KEYS.settings].ai.on === undefined) {
           // Before the single switch, each AI feature had its own. Carry over only the
@@ -912,7 +934,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
           itemIdMap.set(item.id, item.id);
           const resolvedId = idMap.get(item.collectionId) || (collections[item.collectionId] ? item.collectionId : null);
           item.collectionId = resolvedId;
-          if (!resolvedId) item.needsReview = true;
+          if (!resolvedId && needsCollection(item)) item.needsReview = true;
           newItems.push(item);
           ids.add(item.id);
           if (item.urlKey && !item.deletedAt) keys.add(item.urlKey);

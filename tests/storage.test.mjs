@@ -161,6 +161,30 @@ test('export and import carry goals and check-ins; a goal follows its workout to
   assert.equal((await b.store.getGoals({ includeDeleted: true })).length, 0);
 });
 
+test('the automatic kind collections (Videos, Recipes…) are removed once; their saves stay, in their views', async () => {
+  const { store, be, db } = await fresh();
+  const mk = (id, name, taxonomyKey) => ({ id, name, taxonomyKey, keywords: [], aliases: [], createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' });
+  await db.put('collections', [mk('colVideos', 'Videos', 'videos'), mk('colRecipes', 'Recipes', 'recipes'), mk('colMine', 'Recipes to try', 'recipes'), mk('colMixed', 'Places', 'places')]);
+  const v = await store.addItem({ title: 'A video', url: 'https://www.youtube.com/watch?v=k1', kind: 'video', collectionId: 'colVideos' });
+  const r = await store.addItem({ title: 'A recipe', url: 'https://cook.example/k1', kind: 'recipe', collectionId: 'colMine' });
+  const p = await store.addItem({ title: 'A place', url: 'https://eat.example/k1', kind: 'place', collectionId: 'colMixed' });
+  const shop = await store.addItem({ title: 'A lamp', url: 'https://shop.example/k1', kind: 'product', collectionId: 'colMixed' });
+  await be.set({ [KEYS.meta]: { ...(await be.get([KEYS.meta]))[KEYS.meta], kindCollectionsRemovedAt: undefined } });
+  await createStore(be, db).init();
+  const ids = (await db.all('collections')).map((c) => c.id);
+  assert.ok(!ids.includes('colVideos'), 'default name, only videos inside: removed');
+  assert.ok(!ids.includes('colRecipes'), 'empty and default: removed');
+  assert.ok(ids.includes('colMine'), 'renamed: kept');
+  assert.ok(ids.includes('colMixed'), 'holds a product too: kept');
+  const moved = await store.getItem(v.id);
+  assert.deepEqual([moved.collectionId, moved.needsReview, moved.kind], [null, false, 'video']);
+  assert.equal((await store.getItem(r.id)).collectionId, 'colMine');
+  assert.equal((await store.getItem(p.id)).collectionId, 'colMixed');
+  assert.equal((await store.getItem(shop.id)).collectionId, 'colMixed');
+  const meta = (await be.get([KEYS.meta]))[KEYS.meta];
+  assert.equal(meta.kindCollectionsRemoved, 2);
+});
+
 test('makeItem: types and defaults', () => {
   assert.equal(makeItem({ url: 'https://www.instagram.com/p/AbCdE1/' }).type, 'instagram');
   assert.equal(makeItem({ url: 'https://www.instagram.com/p/AbCdE1/' }).title, 'Instagram post');

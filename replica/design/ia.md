@@ -34,7 +34,7 @@ Keepsake
 │   ├── Wishlist              preset filter: products, not purchased
 │   ├── Places                list grouped by city (Chrome) · Map (Apple)
 │   ├── Favourites · Review
-│   ├── Shelves (collapsible; open while you're on one of its views, otherwise as you left it)
+│   ├── Kinds (collapsible; open while you're on one of its views, otherwise as you left it)
 │   │   ├── Recipes · Videos · Articles · Workouts · Places · Films & shows · Books   (shown only when they have saves)
 │   │   └── Purchased · Archive
 │   └── Trash
@@ -162,7 +162,7 @@ Rules the apps share (`shared/goals.js`, mirrored in Swift):
 
 ### Places (Chrome, built in M2c)
 
-Saving a restaurant or place page reads its schema.org place data (address, pin, phone, cuisine, price range, opening hours). A Google Maps or Apple Maps link is read from the URL itself: the name and the place's own pin (`!3d…!4d…`, not the map's centre). Places file to a **Places** collection unless one of your keywords matches first.
+Saving a restaurant or place page reads its schema.org place data (address, pin, phone, cuisine, price range, opening hours). A Google Maps or Apple Maps link is read from the URL itself: the name and the place's own pin (`!3d…!4d…`, not the map's centre).
 
 - **Places view:** a list grouped by city (A–Z, "Somewhere else" last), each row with thumb, name, cuisine or category · price · street, a **Been** badge, and **Open in Maps** (menu: Apple Maps / Google Maps). Been places sink to the bottom of their city.
 - **Place view:** photo, name, source, address with Copy, cuisine, price, phone, opening hours ("As published on the page when you saved it. Check before you go."), actions Edit details, Visit page, Apple Maps, Google Maps, Mark been.
@@ -177,17 +177,21 @@ Saving a restaurant or place page reads its schema.org place data (address, pin,
 
 ### Films & shows and books (Chrome, built in M2e)
 
-Read from schema.org Movie / TVSeries / Book (Letterboxd, IMDb, Goodreads, Open Library…; CDATA-wrapped JSON-LD included) or the open graph stand-ins (`og:type` video.movie, video.tv_show, book). A trailing "(1999)" moves from the title into the year. A book on a shop page with a price stays a product. They file to **Watchlist** and **Reading list**.
+Read from schema.org Movie / TVSeries / Book (Letterboxd, IMDb, Goodreads, Open Library…; CDATA-wrapped JSON-LD included) or the open graph stand-ins (`og:type` video.movie, video.tv_show, book). A trailing "(1999)" moves from the title into the year. A book on a shop page with a price stays a product.
 
 - **List (owner decision: scroll-only):** "To watch" / "To read" first, then "Watched" / "Read"; each row has a 2:3 poster or cover, title, year · Film or Series (or author · year), genres, and a Watched / Read checkbox that moves it. No ratings, no progress, nothing else.
 - **View:** poster or cover, facts (format, year, director or creator, runtime or seasons, genre; author, year, pages, ISBN), description, note; Edit details, Open on (site), Mark watched / Mark read.
+
+### Kinds are views, not collections (owner decision 2026-10-12)
+
+Recipes, workouts, places, videos, articles, films & shows and books live in their **view** (under Kinds) and need no collection: they never go to Review and never show "Needs a collection". Collections are your own groupings (a "Japan trip" can hold places, videos and products) plus product categories. One of your own collections can still claim a save by keyword, and you can add any save to a collection. Products and plain links are sorted into collections as before. The popup and the page card say "Saved to Videos". The automatic kind collections made before this (Videos, Recipes…) are removed once, only where they still have the default name and hold nothing but that kind; their saves stay in the view. Menu names (owner decision 2026-10-12): **Library** (every save; was "All saves"), **Kinds** (the views by kind, Wishlist, Purchased, Archive; was "Shelves"), **Collections**.
 
 ### Dashboard redesign (Chrome, built in M2f)
 
 - **Save card:** kind chip + source, title (2 lines), the kind's key fact (price for products), note (1 line), tags, then state pills: Needs a collection, Finishing details…, Couldn't read details, the done verb ✓, Purchased, Archived, and the collection name outside a collection. No picture: a 16:10 tile in the kind's tint with its icon. Done, bought or archived saves are muted. The favourite star stays visible; the other card buttons show on hover or focus. One button per card, named "{title}, {kind}, {key fact}, {source}".
 - **Grid or List** (remembered on this device); list rows have a 56 px thumb.
 - **Filter bar:** Kind chips (several at once; only on mixed views), Status (Any / To do / the done verb / Purchased where it applies), Source, Site or shop, Sort (Newest, Oldest, A–Z, and Price when prices exist). Filters with one choice are hidden. Active filters repeat as removable chips with Clear all.
-- **Wishlist** (in Shelves): products not yet bought.
+- **Wishlist** (under Kinds): products not yet bought.
 - **Search** (`shared/search.js`): every word must match; rank title > tags > note > collection > source > text (ingredients, exercises, address, author…), word starts beat word middles, accents ignored, prices searchable. No match: one typo per word corrected from the library's own words ("Showing results for ‘linen lamp’"). While searching, the kind and tag chips count matches. "/" focuses the search box.
 - **Home:** Review banner, Recently saved, **Come back to** (not done, not bought, saved and not opened for 6+ weeks; `openedAt` is local; Settings → Appearance turns it off), Collections.
 - **Save detail:** a History section: saved from where and when, the first title, last edit, last opened, and AI changes from the change log with Undo each.
@@ -202,7 +206,7 @@ A save can carry up to 8 **tags** saying what it's about ("AI", "Video games", "
 - The video/article view shows the tags with "Guessed from the title" until you change them.
 - Edit details: a Tags field (comma-separated) plus "+ AI"-style suggestions. Editing makes them yours (`topicsBy: 'you'`, in `userFields`), so nothing re-guesses over them.
 
-**YouTube rule (owner decision 2026-10-12):** anything on youtube.com or youtu.be (videos, Shorts, channels, playlists) is saved as a Video and files to **Videos**, workouts included. Articles file to **Articles**.
+**YouTube rule (owner decision 2026-10-12):** anything on youtube.com or youtu.be (videos, Shorts, channels, playlists) is saved as a Video, workouts included.
 
 ### F07 Delete and undo
 

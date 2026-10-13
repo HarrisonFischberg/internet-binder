@@ -7,7 +7,7 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
-import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom } from '../shared/kinds.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection } from '../shared/kinds.js';
 import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { searchItems } from '../shared/search.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
@@ -146,11 +146,11 @@ function bindChrome() {
   $('menuToggle').addEventListener('click', () => toggleNav());
   $('scrim').addEventListener('click', () => toggleNav(false));
   $('newCollectionBtn').addEventListener('click', () => newCollection());
-  $('navShelvesToggle').addEventListener('click', () => {
-    const open = $('navShelvesToggle').getAttribute('aria-expanded') !== 'true';
-    shelvesChoice = open;
-    try { localStorage.setItem(SHELVES_KEY, open ? 'open' : 'closed'); } catch { /* remembered for this page only */ }
-    setShelvesOpen(open);
+  $('navKindsToggle').addEventListener('click', () => {
+    const open = $('navKindsToggle').getAttribute('aria-expanded') !== 'true';
+    kindsChoice = open;
+    try { localStorage.setItem(KINDS_NAV_KEY, open ? 'open' : 'closed'); } catch { /* remembered for this page only */ }
+    setKindsOpen(open);
   });
   $('searchInput').addEventListener('input', debounce(() => {
     state.search = $('searchInput').value.trim();
@@ -229,18 +229,18 @@ function render({ keepScroll = false } = {}) {
   toggleNav(false);
 }
 
-// The Shelves group in the menu: open or closed as you left it, and always open while you're on one of its views.
-const SHELVES_KEY = 'keepsake.nav.shelves';
-const SHELF_ROUTES = new Set(['kind', 'wishlist', 'purchased', 'archive']);
-function setShelvesOpen(open) {
-  $('navShelvesToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
-  $('navShelvesList').hidden = !open;
-  $('navShelves').classList.toggle('is-open', open);
+// The Kinds group in the menu: open or closed as you left it, and always open while you're on one of its views.
+const KINDS_NAV_KEY = 'keepsake.nav.kinds';
+const KIND_ROUTES = new Set(['kind', 'wishlist', 'purchased', 'archive']);
+function setKindsOpen(open) {
+  $('navKindsToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  $('navKindsList').hidden = !open;
+  $('navKindsGroup').classList.toggle('is-open', open);
 }
-let shelvesChoice = null;
-function shelvesRemembered() {
-  if (shelvesChoice !== null) return shelvesChoice;
-  try { return localStorage.getItem(SHELVES_KEY) === 'open'; } catch { return false; }
+let kindsChoice = null;
+function kindsRemembered() {
+  if (kindsChoice !== null) return kindsChoice;
+  try { return localStorage.getItem(KINDS_NAV_KEY) === 'open'; } catch { return false; }
 }
 
 function renderNav() {
@@ -256,23 +256,23 @@ function renderNav() {
   const wishlist = live.filter((i) => kindOf(i) === 'product' && !i.purchased).length;
   setCount('countWishlist', wishlist);
   $('navWishlist').classList.toggle('hidden', !wishlist && r.name !== 'wishlist');
-  const toReview = live.filter((i) => !i.collectionId).length;
+  const toReview = live.filter(needsCollection).length;
   setCount('countReview', toReview);
   // Review is only in the menu while something is waiting (or while it's open).
   $('navReview').classList.toggle('hidden', !toReview && state.route.name !== 'review');
   setCount('countArchive', state.items.filter((i) => i.archived).length);
   setCount('countTrash', (state.trash || []).length);
   renderKindNav(live);
-  const inShelf = SHELF_ROUTES.has(r.name);
-  setShelvesOpen(inShelf || shelvesRemembered());
+  const inKinds = KIND_ROUTES.has(r.name);
+  setKindsOpen(inKinds || kindsRemembered());
   // Closed, the group says it holds the view you're on.
-  $('navShelvesToggle').classList.toggle('has-active', inShelf);
+  $('navKindsToggle').classList.toggle('has-active', inKinds);
   setCount('countCollections', state.collections.length);
   setCount('countImport', state.scan && state.scan.posts && state.scan.status === 'done' ? state.scan.posts.length : 0);
 }
 
 // One menu entry per kind you've saved (recipes, places…), so each has its own view. Products and
-// plain links live in All saves.
+// plain links live in the Library.
 function renderKindNav(live) {
   const box = $('navKinds');
   if (!box) return;
@@ -511,7 +511,7 @@ function renderToolbar() {
   const isGrid = GRID_ROUTES.has(r.name);
   controls.classList.toggle('hidden-controls', !isGrid);
   $('bulkbar').classList.toggle('hidden', !(isGrid && state.selecting));
-  let title = 'All saves';
+  let title = 'Library';
   if (r.name === 'home') title = 'Home';
   else if (r.name === 'collections') title = 'Collections';
   else if (r.name === 'favorites') title = 'Favorites';
@@ -670,7 +670,7 @@ function renderGrid(view) {
   if (r.name === 'c') {
     const col = ctx.collectionById(r.id);
     if (!col) {
-      view.append(UI.emptyState({ title: 'Collection not found', message: 'It may have been deleted or merged.', actions: [el('button', { type: 'button', class: 'btn', onClick: () => navigate('#all') }, ['Back to all saves'])] }));
+      view.append(UI.emptyState({ title: 'Collection not found', message: 'It may have been deleted or merged.', actions: [el('button', { type: 'button', class: 'btn', onClick: () => navigate('#all') }, ['Back to the Library'])] }));
       return;
     }
     view.append(collectionHero(col));
@@ -894,7 +894,7 @@ function cardNode(item, { list = false } = {}) {
     card.append(cb);
   }
   const states = [
-    !item.collectionId && isActive(item) ? el('span', { class: 'state-pill' }, ['Needs a collection']) : null,
+    needsCollection(item) && isActive(item) ? el('span', { class: 'state-pill' }, ['Needs a collection']) : null,
     item.captureState === 'pending' ? el('span', { class: 'state-pill state-quiet' }, ['Finishing details…']) : null,
     item.captureState === 'failed' ? el('span', { class: 'state-pill state-warn' }, ['Couldn’t read details']) : null,
     done ? el('span', { class: 'state-pill state-done' }, [UI.checkIcon(), info.done]) : null,
@@ -2681,7 +2681,7 @@ function renderHome(view) {
   }
   const page = el('div', { class: 'home' });
   const search = el('input', { class: 'input', id: 'homeSearch', type: 'search', placeholder: 'Search your saves', 'aria-label': 'Search your saves', autocomplete: 'off' });
-  // Typing starts a search of the whole library in All saves.
+  // Typing starts a search of the whole Library.
   search.addEventListener('input', () => {
     const q = search.value.trim();
     if (!q) return;
@@ -2693,7 +2693,7 @@ function renderHome(view) {
   page.append(searchField(search, 'search home-search'));
 
   // Only shown when something is waiting, so a caught-up Home stays quiet.
-  const toReview = live.filter((i) => !i.collectionId).length;
+  const toReview = live.filter(needsCollection).length;
   if (toReview) {
     page.append(el('a', { class: 'home-attention', href: '#review' }, [
       el('span', { class: 'home-attention-dot', 'aria-hidden': 'true' }),
@@ -2703,7 +2703,7 @@ function renderHome(view) {
   }
 
   const recent = live.slice(0, 8);
-  page.append(homeSection('Recently saved', { href: '#all', label: 'All saves →' },
+  page.append(homeSection('Recently saved', { href: '#all', label: 'Library →' },
     el('div', { class: 'home-recent', role: 'list' }, recent.map((item) => cardNode(item)))));
 
   // Come back to: saves you haven't finished and haven't opened for six weeks or more. Local, and it can
@@ -2838,7 +2838,7 @@ function renderCollections(view) {
 // --- review queue --------------------------------------------------------------------------------
 
 function renderReview(view) {
-  const items = state.items.filter((i) => !i.collectionId && isActive(i));
+  const items = state.items.filter((i) => needsCollection(i) && isActive(i));
   const page = el('div', { class: 'page page-wide' });
   page.append(el('p', { class: 'page-intro' }, ['Keepsake wasn’t sure where these belong. Pick one of the suggestions, or select a row and press 1, 2 or 3, and Keepsake learns from your choice.']));
   if (items.length && state.settings?.ai?.on) {

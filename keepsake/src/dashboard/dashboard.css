@@ -3281,7 +3281,7 @@ body.modal-open {
   max-width: 62ch;
 }
 
-/* Shelves: a collapsible group in the menu */
+/* Kinds: a collapsible group in the menu */
 .nav-group-toggle {
   width: 100%;
   border: 0;
@@ -3866,4 +3866,26 @@ body.modal-open {
   display: inline-block;
   vertical-align: -2px;
   margin-right: 3px;
+}
+
+/* With Kinds open there can be more menu than window. Then the sidebar scrolls as a whole, so
+   Collections and the tools below never get squeezed out of sight; a long collection list still
+   scrolls inside itself (up to half the window) so the tools stay close. */
+.sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sidebar-section {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.collection-list {
+  flex: 0 0 auto;
+  max-height: 50vh;
+}
+
+.nav-bottom {
+  margin-top: auto;
 }

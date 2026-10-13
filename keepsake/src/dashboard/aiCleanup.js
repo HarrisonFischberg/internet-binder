@@ -10,6 +10,7 @@
 import { el, clear, formatPrice, parsePrice, pluralize, uid, nowIso } from '../shared/util.js';
 import { providerConfig, originFor, cleanupWithAI, CLEANUP_BATCH } from '../ai/provider.js';
 import * as UI from './ui.js';
+import { needsCollection } from '../shared/kinds.js';
 
 const ALL_SITES = '*://*/*';
 // Moving an item that is already in a collection needs more certainty than
@@ -35,7 +36,7 @@ async function requestOrigins(origins) {
 
 function scopeItems(ctx, scope) {
   const live = ctx.state.items.filter((i) => !i.archived && !i.purchased);
-  if (scope === 'review') return live.filter((i) => !i.collectionId);
+  if (scope === 'review') return live.filter(needsCollection);
   if (scope === 'all') return live;
   return live.filter((i) => i.collectionId === scope);
 }
@@ -233,7 +234,7 @@ function planFixes(item, ai, prepared, { scope, threshold }) {
   if (ai.collectionId && ai.collectionId !== item.collectionId) {
     const filedByUser = item.collectionId && (item.categorizationSource === 'manual' || mine.has('collectionId'));
     const needed = item.collectionId ? Math.max(threshold, REFILE_CONFIDENCE) : threshold;
-    const allowed = scope === 'review' ? !item.collectionId : !filedByUser;
+    const allowed = scope === 'review' ? needsCollection(item) : !filedByUser;
     if (allowed && ai.confidence >= needed) {
       patch.collectionId = ai.collectionId;
       patch.needsReview = false;

@@ -7,6 +7,7 @@ import { createStore, chromeBackend, idbBackend, applyLook } from '../shared/sto
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
+import { kindOf, kindInfo, hasOwnView } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -492,7 +493,9 @@ async function updateExisting() {
 }
 
 function showSaved(item, collection, classification = null) {
-  const isInbox = !collection;
+  // A recipe, video, place… with no collection is saved to its own view ("Saved to Videos").
+  const view = !collection && hasOwnView(kindOf(item)) ? kindInfo(kindOf(item)).plural : '';
+  const isInbox = !collection && !view;
   const updated = state.savedMode === 'updated';
   $('savedTitle').textContent = updated ? 'Updated' : isInbox ? 'Saved. Pick a collection now or later' : 'Saved to';
   document.querySelector('.capture').classList.toggle('is-review', isInbox && !updated);
@@ -548,7 +551,8 @@ function renderSavedMove(item) {
   if (state.savedMode !== 'saved') return;
   const sel = $('savedMove');
   clear(sel);
-  if (!item.collectionId) sel.append(el('option', { value: '', text: 'Review (not sorted)' }));
+  const view = hasOwnView(kindOf(item)) ? kindInfo(kindOf(item)).plural : '';
+  if (!item.collectionId) sel.append(el('option', { value: '', text: view || 'Review (not sorted)' }));
   for (const c of state.collections) sel.append(el('option', { value: c.id, text: c.name }));
   sel.value = item.collectionId || '';
   row.classList.toggle('is-user', item.categorizationSource === 'manual');

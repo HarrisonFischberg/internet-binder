@@ -67,7 +67,7 @@ test('an empty library shows the first-run empty state', async () => {
   assert.match(text, /Nothing saved yet/);
 });
 
-test('sample data appears in All saves and Review', async () => {
+test('sample data appears in the Library and Review', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
   await store.loadSampleData();
@@ -314,7 +314,7 @@ test('videos open into a view with their length and a Watch link; editing the le
   assert.equal((await store.getItem(it.id)).details.source, 'you');
 });
 
-test('tags: filter chips in a view, pills on cards, edited in Edit details; Shelves folds the kind views', async () => {
+test('tags: filter chips in a view, pills on cards, edited in Edit details; the Kinds group folds the kind views', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
   const a = await store.addItem({ title: 'GTA mod with one prompt', url: 'https://www.youtube.com/watch?v=t1', kind: 'video', topics: ['Video games', 'AI'], topicsBy: 'guess' });
@@ -331,16 +331,16 @@ test('tags: filter chips in a view, pills on cards, edited in Edit details; Shel
   await settle();
   assert.match(view().querySelector('.card-topics').textContent + view().textContent, /Video games/);
 
-  // Shelves: open while on one of its views, and the kind views live inside it.
-  const toggle = window.document.getElementById('navShelvesToggle');
+  // Kinds: open while on one of its views, and the kind views live inside it.
+  const toggle = window.document.getElementById('navKindsToggle');
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.ok(window.document.getElementById('navShelvesList').querySelector('a[href="#kind/video"]'));
-  assert.ok(window.document.getElementById('navShelvesList').querySelector('a[href="#purchased"]'));
+  assert.ok(window.document.getElementById('navKindsList').querySelector('a[href="#kind/video"]'));
+  assert.ok(window.document.getElementById('navKindsList').querySelector('a[href="#purchased"]'));
   await go('#home');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'closed elsewhere unless you opened it');
   toggle.click();
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.equal(window.document.getElementById('navShelvesList').hidden, false);
+  assert.equal(window.document.getElementById('navKindsList').hidden, false);
   await go('#all');
   assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'remembered');
   toggle.click();
@@ -392,10 +392,13 @@ test('redesign: card anatomy, kind and status filters with removable chips, list
   await afterChange();
   await go('#all');
   const card = [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('Lemon tart'));
+  const lampCard0 = () => [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('Brass desk lamp'));
   assert.equal(card.querySelector('.card-hit').getAttribute('aria-label'), 'Lemon tart, Recipe, 2 ingredients, Example');
   assert.ok(card.querySelector('.kind-chip.kind-recipe'));
   assert.ok(card.querySelector('.pic-kind.kind-recipe'), 'no picture: a recipe-tinted tile');
   assert.match(card.querySelector('.card-states').textContent, /Cooked/);
+  assert.doesNotMatch(card.textContent, /Needs a collection/, 'a recipe lives in its view, it needs no collection');
+  assert.match(lampCard0().textContent, /Needs a collection/, 'an unsorted product does');
   assert.ok(card.classList.contains('is-done'));
   const lampCard = [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('Brass desk lamp'));
   assert.match(lampCard.querySelector('.card-fact').textContent, /\$89/);
@@ -411,7 +414,7 @@ test('redesign: card anatomy, kind and status filters with removable chips, list
   await settle();
   assert.ok([...view().querySelectorAll('.card-title')].length >= 3);
 
-  // Status: done. (Purchased saves have their own view, so All saves doesn't offer that status.)
+  // Status: done. (Purchased saves have their own view, so the Library doesn't offer that status.)
   const status = view().querySelector('select[aria-label="Status"]');
   assert.ok(![...status.options].some((o) => o.value === 'purchased'));
   status.value = 'done';

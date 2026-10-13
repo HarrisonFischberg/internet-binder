@@ -10,7 +10,7 @@ import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI } from './src/ai/provider.js';
-import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
+import { isKind, kindInfo, hasOwnView, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -152,15 +152,15 @@ function topicsFor(kind, product, details) {
   return topics.length ? { topics, topicsBy: 'guess' } : {};
 }
 
-// The default collection for kinds that have one.
-const KIND_HOME = {
-  recipe: { key: 'recipes', name: 'Recipes', reason: (d) => (d.ingredients?.length ? `Recipe: ${d.ingredients.length} ingredients found` : 'Recipe page') },
-  media: { key: 'watchlist', name: 'Watchlist', reason: (d) => (d.format === 'series' ? 'TV series' : 'Film') },
-  book: { key: 'reading-list', name: 'Reading list', reason: (d) => (d.author ? `Book by ${d.author}` : 'Book') },
-  video: { key: 'videos', name: 'Videos', reason: (d) => (d.platform ? `Video on ${d.platform}` : 'Video page') },
-  article: { key: 'articles', name: 'Articles', reason: (d) => (d.readingMinutes ? `Article, ${d.readingMinutes} min read` : 'Article') },
-  place: { key: 'places', name: 'Places', reason: (d) => (d.locality ? `Place in ${d.locality}` : 'Place page') },
-  workout: { key: 'workouts', name: 'Workouts', reason: (d) => (d.exercises?.length ? `Workout: ${d.exercises.length} exercises found` : 'Workout page') },
+// Why a save of this kind went where it did (shown as the categorization reason).
+const KIND_REASON = {
+  recipe: (d) => (d.ingredients?.length ? `Recipe: ${d.ingredients.length} ingredients found` : 'Recipe page'),
+  media: (d) => (d.format === 'series' ? 'TV series' : 'Film'),
+  book: (d) => (d.author ? `Book by ${d.author}` : 'Book'),
+  video: (d) => (d.platform ? `Video on ${d.platform}` : 'Video page'),
+  article: (d) => (d.readingMinutes ? `Article, ${d.readingMinutes} min read` : 'Article'),
+  place: (d) => (d.locality ? `Place in ${d.locality}` : 'Place page'),
+  workout: (d) => (d.exercises?.length ? `Workout: ${d.exercises.length} exercises found` : 'Workout page'),
 };
 
 // Exercises from a caption, or from a workout page's list lines. Only when the text talks about
@@ -208,26 +208,18 @@ function kindOfCapture(product) {
   return product.sparse ? 'link' : 'product';
 }
 
-// instant: saved with no preview (on-page button, right-click). Then a local pick below
-// AUTO_FILE_CONFIDENCE goes to Review with that pick as the suggestion, like the toolbar.
-async function saveProduct(rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false } = {}) {
-  const product = normalizeProduct(rawProduct);
-  if (!force) {
-    const existing = await store.findByUrl(product.canonicalUrl || product.url);
-    if (existing) {
-      const col = existing.collectionId ? await store.getCollection(existing.collectionId) : null;
-      return { ok: true, duplicate: true, existing: { id: existing.id, title: existing.title, collectionId: existing.collectionId, collectionName: col ? col.name : '' } };
-    }
-  }
-  const [collections, prefs, settings] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings()]);
+// What a capture is and its kind's details. Also tidies the product for that kind (a film's year out of
+// its title, a maps link's name, no price on anything but a product). Used by the save and by the
+// popup's "where would this go?" question, so both agree.
+function captureFacts(product) {
   const kind = kindOfCapture(product);
   const details = kind === 'recipe' ? recipeFromSchema(product.recipe) || recipeFromText(product.description) || {}
     : kind === 'workout' ? workoutOf(product) || {}
       : kind === 'place' ? placeOf(product)
         : kind === 'video' ? videoFromCapture(product.media || {}, product.url)
           : kind === 'media' ? mediaFromSchema(product.screen) || {}
-          : kind === 'book' ? bookFromSchema(product.book) || {}
-          : kind === 'article' ? articleFromCapture({ ...(product.media || {}), siteName: product.media?.siteName || product.siteName }) : {};
+            : kind === 'book' ? bookFromSchema(product.book) || {}
+              : kind === 'article' ? articleFromCapture({ ...(product.media || {}), siteName: product.media?.siteName || product.siteName }) : {};
   // "The Matrix (1999)": the year belongs in the details, not the title.
   if (kind === 'media') {
     const y = String(product.title || '').match(/^(.*\S)\s*\((\d{4})(?:[–-]\s*(?:\d{4})?)?\)\s*$/);
@@ -241,18 +233,42 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
     if (!product.title || /\bmaps\b/i.test(product.title)) product.title = details.name;
     delete details.name;
   }
+  // A video's site by its own name ("YouTube", not "Youtube" from the address).
+  if (kind === 'video' && details.platform) product.retailer = details.platform;
   if (kind !== 'product') {
     // A price on a recipe or article page is an ad or a cookbook, not this save's price.
     product.price = null;
     product.priceText = '';
   }
-  let classification = given || classify(product, { collections, prefs, settings });
-  const home = KIND_HOME[kind];
-  if (home && !given && !collectionId && !(classification.confidence >= 0.85 && !classification.taxonomyKey && !classification.isInbox)) {
-    // Recipes go to Recipes and workouts to Workouts, unless one of the person's own collections claimed it by keyword.
-    classification = { collectionId: null, collectionName: home.name, taxonomyKey: home.key, isNew: true, isInbox: false, confidence: 0.9, alternatives: classification.alternatives || [],
-      reason: home.reason(details) };
+  return { kind, details };
+}
+
+// Where a capture goes: the local categorizer for products and links. Other kinds live in their own
+// view (Recipes, Videos, Places…) and need no collection, unless one of your own collections claims
+// it by keyword; then it's filed there too.
+function classifyCapture(product, kind, details, ctx) {
+  const classification = classify(product, ctx);
+  if (hasOwnView(kind) && !(classification.confidence >= 0.85 && !classification.taxonomyKey && !classification.isInbox)) {
+    return { collectionId: null, collectionName: kindInfo(kind).plural, isNew: false, isInbox: false, shelf: kind, confidence: 0.9, alternatives: classification.alternatives || [],
+      reason: (KIND_REASON[kind] || (() => kindInfo(kind).label))(details), kind };
   }
+  return { ...classification, kind };
+}
+
+// instant: saved with no preview (on-page button, right-click). Then a local pick below
+// AUTO_FILE_CONFIDENCE goes to Review with that pick as the suggestion, like the toolbar.
+async function saveProduct(rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false } = {}) {
+  const product = normalizeProduct(rawProduct);
+  if (!force) {
+    const existing = await store.findByUrl(product.canonicalUrl || product.url);
+    if (existing) {
+      const col = existing.collectionId ? await store.getCollection(existing.collectionId) : null;
+      return { ok: true, duplicate: true, existing: { id: existing.id, title: existing.title, collectionId: existing.collectionId, collectionName: col ? col.name : '' } };
+    }
+  }
+  const [collections, prefs, settings] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings()]);
+  const { kind, details } = captureFacts(product);
+  let classification = given || classifyCapture(product, kind, details, { collections, prefs, settings });
 
   // With AI on, the save is stored first with the local result and marked "finishing details";
   // the AI tidies the title and may re-file it afterwards (enrichItem). Nothing waits on the network.
@@ -395,7 +411,9 @@ async function showPageToast(tabId, res, product) {
         ? { kind: 'duplicate', existing: res.existing, title: (product && product.title) || '', look }
         : {
           kind: 'saved', itemId: res.item.id, title: res.item.title, collectionId: res.item.collectionId || '',
-          collectionName: res.collection ? res.collection.name : '', isInbox: !!res.classification?.isInbox, collections, look,
+          // A recipe, video, place… with no collection is saved to its own view ("Saved to Videos").
+          collectionName: res.collection ? res.collection.name : hasOwnView(res.item.kind) ? kindInfo(res.item.kind).plural : '', isInbox: !!res.classification?.isInbox, look,
+          collections: !res.collection && hasOwnView(res.item.kind) ? [{ id: '', name: kindInfo(res.item.kind).plural }, ...collections] : collections,
           thumb: /^https:\/\//.test(res.item.image || '') ? res.item.image : '',
           meta: [(() => { try { return fmt(res.item.price, res.item.currency); } catch { return ''; } })(), res.item.retailer || res.item.host].filter(Boolean).join(' · '),
           pending: res.item.captureState === 'pending',
@@ -628,7 +646,9 @@ async function handleMessage(msg, sender) {
     }
     case MSG.CLASSIFY: {
       const [collections, prefs, settings] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings()]);
-      return { ok: true, classification: classify(normalizeProduct(msg.product), { collections, prefs, settings }) };
+      const product = normalizeProduct(msg.product);
+      const { kind, details } = captureFacts(product);
+      return { ok: true, classification: classifyCapture(product, kind, details, { collections, prefs, settings }) };
     }
     case MSG.SAVE_ITEM: {
       if (!msg.product || typeof msg.product !== 'object') throw new Error('Nothing to save.');

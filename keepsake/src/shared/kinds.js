@@ -30,6 +30,11 @@ export const KINDS = [
 const KIND_SET = new Set(KINDS.map((k) => k.value));
 export const STATUSES = ['saved', 'todo', 'done'];
 
+// Kinds with their own view (Recipes, Videos, Places…) are found there; they never need a collection.
+// Products and plain links are sorted into collections, and wait in Review until they are.
+export const hasOwnView = (kind) => kind !== 'product' && kind !== 'link';
+export const needsCollection = (item) => !item.collectionId && !hasOwnView(kindOf(item));
+
 export const kindInfo = (kind) => KINDS.find((k) => k.value === kind) || KINDS[KINDS.length - 1];
 export const isKind = (k) => KIND_SET.has(k);
 

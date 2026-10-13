@@ -116,13 +116,13 @@ const recipePage = {
   recipe: { recipeIngredient: ['200 g pasta', '50 g butter', 'sage'], recipeInstructions: ['Boil.', 'Brown the butter.', 'Toss.'], totalTime: 'PT25M', recipeYield: '2 servings' },
 };
 
-test('a recipe page is saved as a recipe, filed in Recipes, with no price', async () => {
+test('a recipe page is saved as a recipe in its own view (no collection, not Review), with no price', async () => {
   const res = await F.send({ type: MSG.SAVE_ITEM, product: recipePage, instant: true }, popup);
   assert.equal(res.item.kind, 'recipe');
   assert.deepEqual(res.item.details.ingredients, ['200 g pasta', '50 g butter', 'sage']);
   assert.equal(res.item.details.totalMinutes, 25);
   assert.equal(res.item.price, null, 'a price on a recipe page is not the save’s price');
-  assert.equal(res.collection.name, 'Recipes');
+  assert.deepEqual([res.collection, res.item.collectionId, res.item.needsReview], [null, null, false], 'in its own view: no collection, not in Review');
   assert.match(res.item.categorizationReason, /3 ingredients/);
 });
 
@@ -142,7 +142,7 @@ test('with AI on, recipes are not sent for the product tidy', async () => {
   assert.equal(called, false);
 });
 
-test('a workout page with an exercise list is saved as a workout, filed in Workouts', async () => {
+test('a workout page with an exercise list is saved as a workout in its own view', async () => {
   const page = {
     title: '20-minute full body workout', url: 'https://fit.example/full-body', description: 'A quick routine you can do at home.', images: [], image: '', price: null,
     schemaTypes: ['webpage', 'article'],
@@ -153,7 +153,7 @@ test('a workout page with an exercise list is saved as a workout, filed in Worko
   assert.deepEqual(res.item.details.exercises.map((e) => e.name), ['Squats', 'Push-ups', 'Plank']);
   assert.equal(res.item.details.exercises[2].restSeconds, 60);
   assert.equal(res.item.details.source, 'page');
-  assert.equal(res.collection.name, 'Workouts');
+  assert.deepEqual([res.collection, res.item.collectionId, res.item.needsReview], [null, null, false], 'in its own view: no collection, not in Review');
   assert.match(res.item.categorizationReason, /3 exercises/);
 });
 
@@ -167,7 +167,7 @@ test('workout gear with a price stays a product; a caption that lists exercises 
   assert.equal(res.item.details.source, 'caption');
 });
 
-test('a restaurant page is saved as a place with its address and hours, filed in Places, with no price', async () => {
+test('a restaurant page is saved as a place with its address and hours, with no price', async () => {
   const page = {
     title: 'Little Kitchen', url: 'https://eat.example/little-kitchen', price: '$25', images: [], image: '', schemaTypes: ['restaurant'],
     place: { '@type': 'Restaurant', address: { streetAddress: '12 Mill Lane', addressLocality: 'Bristol' }, geo: { latitude: 51.45, longitude: -2.59 }, servesCuisine: 'Georgian', openingHours: 'Tu-Sa 17:00-22:00' },
@@ -177,7 +177,7 @@ test('a restaurant page is saved as a place with its address and hours, filed in
   assert.equal(res.item.details.locality, 'Bristol');
   assert.deepEqual(res.item.details.hours, ['Tue–Sat 17:00–22:00']);
   assert.equal(res.item.price, null);
-  assert.equal(res.collection.name, 'Places');
+  assert.deepEqual([res.collection, res.item.collectionId, res.item.needsReview], [null, null, false], 'in its own view: no collection, not in Review');
 });
 
 test('a Google Maps link is saved as a place named from the link', async () => {
@@ -194,14 +194,14 @@ test('videos and articles: a YouTube link is a video with its length; an og:type
   const v = await F.send({ type: MSG.SAVE_ITEM, product: yt, instant: true }, popup);
   assert.equal(v.item.kind, 'video');
   assert.deepEqual([v.item.details.durationSeconds, v.item.details.channel, v.item.details.platform], [723, 'Example Channel', 'YouTube']);
-  assert.equal(v.collection.name, 'Videos');
+  assert.deepEqual([v.collection, v.item.collectionId, v.item.needsReview], [null, null, false], 'in its own view: no collection, not in Review');
   const post = { title: 'Why bread goes stale', url: 'https://read.example/stale', images: [], image: '', price: null, priceText: '$4.99', siteName: 'Read Example', schemaTypes: [],
     media: { ogType: 'article', author: 'A. Writer', wordCount: 1150 } };
   const a = await F.send({ type: MSG.SAVE_ITEM, product: post, instant: true }, popup);
   assert.equal(a.item.kind, 'article', 'a price in the text does not make an article a product');
   assert.equal(a.item.details.readingMinutes, 5);
   assert.equal(a.item.details.siteName, 'Read Example');
-  assert.equal(a.collection.name, 'Articles');
+  assert.deepEqual([a.collection, a.item.collectionId, a.item.needsReview], [null, null, false], 'in its own view: no collection, not in Review');
   assert.equal(a.item.price, null);
   const gym = { title: '15 min full body workout', url: 'https://www.youtube.com/watch?v=def456', images: [], image: '', price: null, schemaTypes: [],
     description: 'No equipment workout\n3x12 squats\n3x10 push-ups\n3x30s plank', media: { ogType: 'video.other' } };
@@ -213,11 +213,11 @@ test('videos and articles: a YouTube link is a video with its length; an og:type
   assert.deepEqual([g.item.topics, g.item.topicsBy], [['Video games', 'AI'], 'guess'], 'tags guessed from the title');
 });
 
-test('films and books: a Movie page goes to Watchlist, a Book page to Reading list; a book for sale stays a product', async () => {
+test('films and books: a Movie page and a Book page are saved to their views; a book for sale stays a product', async () => {
   const film = { title: 'A Film', url: 'https://films.example/title/1', images: [], image: '', price: null, schemaTypes: ['movie'],
     screen: { '@type': 'Movie', datePublished: '1999-03-31', director: { name: 'A. Director' }, duration: 'PT2H16M', genre: 'Sci-Fi' } };
   const f = await F.send({ type: MSG.SAVE_ITEM, product: film, instant: true }, popup);
-  assert.deepEqual([f.item.kind, f.item.details.year, f.item.details.runtimeMinutes, f.collection.name], ['media', 1999, 136, 'Watchlist']);
+  assert.deepEqual([f.item.kind, f.item.details.year, f.item.details.runtimeMinutes, f.collection, f.item.needsReview], ['media', 1999, 136, null, false]);
   const titled = { title: 'Another Film (2019)', url: 'https://films.example/title/3', images: [], image: '', price: null, schemaTypes: [], screen: { '@type': 'Movie' } };
   const t = await F.send({ type: MSG.SAVE_ITEM, product: titled, instant: true }, popup);
   assert.deepEqual([t.item.title, t.item.details.year], ['Another Film', 2019], 'the year moves from the title to the details');
@@ -225,9 +225,24 @@ test('films and books: a Movie page goes to Watchlist, a Book page to Reading li
   assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: show, instant: true }, popup)).item.details.format, 'series', 'og:type video.tv_show stand-in');
   const book = { title: 'A Book', url: 'https://books.example/book/1', images: [], image: '', price: null, schemaTypes: ['book'], book: { '@type': 'Book', author: { name: 'A. Author' }, numberOfPages: 300 } };
   const bk = await F.send({ type: MSG.SAVE_ITEM, product: book, instant: true }, popup);
-  assert.deepEqual([bk.item.kind, bk.item.details.author, bk.collection.name], ['book', 'A. Author', 'Reading list']);
+  assert.deepEqual([bk.item.kind, bk.item.details.author, bk.collection, bk.item.needsReview], ['book', 'A. Author', null, false]);
   const forSale = { title: 'A Book (Paperback)', url: 'https://shop.example/book', price: '$12.99', images: [], image: '', schemaTypes: ['product', 'book'] };
   assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: forSale, instant: true }, popup)).item.kind, 'product');
+});
+
+test('the popup’s “where would this go?” knows kinds: a YouTube video is saved to Videos (its view), not Review (popup without AI)', async () => {
+  // What the popup does without AI: ask first, then save with that answer.
+  const page = { title: 'Polygraph test debate', url: 'https://www.youtube.com/watch?v=u751e3_PZq8', images: [], image: '', price: null, schemaTypes: [],
+    description: 'Seven guests, one chair, one machine.', media: { ogType: 'video.other', channel: 'Example Talk' } };
+  const cls = await F.send({ type: MSG.CLASSIFY, product: page }, popup);
+  assert.equal(cls.classification.collectionName, 'Videos');
+  assert.equal(cls.classification.isInbox, false);
+  assert.ok(cls.classification.confidence >= 0.75, 'sure enough for the popup to save straight away');
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: page, classification: cls.classification }, popup);
+  assert.deepEqual([res.item.kind, res.collection, res.item.needsReview, res.item.retailer], ['video', null, false, 'YouTube']);
+  // Same for a recipe page.
+  const rc = await F.send({ type: MSG.CLASSIFY, product: { title: 'Soup', url: 'https://cook.example/soup-cls', images: [], image: '', schemaTypes: ['recipe'], recipe: { recipeIngredient: ['a', 'b'] } } }, popup);
+  assert.equal(rc.classification.collectionName, 'Recipes');
 });
 
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
