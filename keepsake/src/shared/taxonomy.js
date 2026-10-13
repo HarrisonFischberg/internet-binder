@@ -61,6 +61,26 @@ export const DEFAULT_TAXONOMY = [
     keywords: [],
   },
   {
+    // Saves of kind "media" (films and shows) and "book" are filed here. Books you buy as products
+    // still go to Books & Media.
+    key: 'watchlist',
+    name: 'Watchlist',
+    description: 'Films and shows you want to watch.',
+    color: '#8A3C5E',
+    aliases: ['watchlist', 'films', 'movies', 'shows', 'tv'],
+    strong: [],
+    keywords: [],
+  },
+  {
+    key: 'reading-list',
+    name: 'Reading list',
+    description: 'Books you want to read.',
+    color: '#5E6B3C',
+    aliases: ['reading list', 'to read', 'tbr'],
+    strong: [],
+    keywords: [],
+  },
+  {
     key: 'camping',
     name: 'Camping & Outdoors',
     description: 'Tents, sleeping bags, stoves, packs, hiking and campsite gear.',
@@ -128,7 +148,7 @@ export const DEFAULT_TAXONOMY = [
     name: 'Books & Media',
     description: 'Books, vinyl, magazines, games and films worth remembering.',
     color: '#8A7B66',
-    aliases: ['books', 'book', 'reading', 'library', 'media', 'to read', 'reading list', 'vinyl', 'records', 'music', 'movies', 'films', 'games', 'board games'],
+    aliases: ['books', 'book', 'reading', 'library', 'media', 'vinyl', 'records', 'music', 'games', 'board games'],
     strong: ['book', 'books', 'novel', 'paperback', 'hardcover', 'hardback', 'audiobook', 'e-book', 'ebook', 'cookbook', 'memoir', 'biography', 'anthology', 'graphic novel', 'manga', 'comic', 'vinyl', 'vinyl record', 'lp', 'record', 'album', 'cd', 'cassette', 'blu-ray', 'bluray', 'dvd', 'box set', 'boxset', 'board game', 'card game', 'puzzle', 'jigsaw', 'magazine', 'zine'],
     keywords: ['author', 'edition', 'isbn', 'pages', 'chapter*', 'read', 'reading', 'publisher', 'penguin', 'fiction', 'nonfiction', 'non-fiction', 'poetry', 'essays', 'literature', 'bestseller', 'kindle edition', 'press', 'illustrated', 'volume', 'series', 'soundtrack', 'ost', 'reissue', 'remaster*', 'pressing', '180g', 'players', 'expansion', 'tabletop', 'rpg', 'dice'],
   },

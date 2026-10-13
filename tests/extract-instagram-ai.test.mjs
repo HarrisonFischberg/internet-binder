@@ -183,3 +183,15 @@ test('extract: a page reached without a reload ignores the previous page’s tag
   const home = extractFrom(`<html><head><title>A recipe – Cook</title><meta property="og:url" content="https://cook.example/"><meta property="og:title" content="Cook"><meta property="og:image" content="https://cook.example/logo.png"></head><body><h1>A recipe</h1></body></html>`, 'https://cook.example/recipes/a-recipe');
   assert.notEqual(home.image, 'https://cook.example/logo.png');
 });
+
+test('extract: structured data wrapped in CDATA comments is still read (a film page)', () => {
+  const p = extractFrom(`<html><head><title>A Film (1999) • Films Example</title><meta property="og:type" content="video.movie">
+    <script type="application/ld+json">
+/* <![CDATA[ */
+{"@context":"http://schema.org","@type":"Movie","name":"A Film","director":[{"@type":"Person","name":"A. Director"}],"dateCreated":"1999-03-31","genre":["Science Fiction"],"image":"https://films.example/poster.jpg"}
+/* ]]> */
+</script></head><body><h1>A Film</h1></body></html>`, 'https://films.example/film/a-film/');
+  assert.ok(p.schemaTypes.includes('movie'));
+  assert.equal(p.screen.director[0].name, 'A. Director');
+  assert.equal(p.image, 'https://films.example/poster.jpg');
+});

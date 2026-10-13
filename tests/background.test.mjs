@@ -213,6 +213,23 @@ test('videos and articles: a YouTube link is a video with its length; an og:type
   assert.deepEqual([g.item.topics, g.item.topicsBy], [['Video games', 'AI'], 'guess'], 'tags guessed from the title');
 });
 
+test('films and books: a Movie page goes to Watchlist, a Book page to Reading list; a book for sale stays a product', async () => {
+  const film = { title: 'A Film', url: 'https://films.example/title/1', images: [], image: '', price: null, schemaTypes: ['movie'],
+    screen: { '@type': 'Movie', datePublished: '1999-03-31', director: { name: 'A. Director' }, duration: 'PT2H16M', genre: 'Sci-Fi' } };
+  const f = await F.send({ type: MSG.SAVE_ITEM, product: film, instant: true }, popup);
+  assert.deepEqual([f.item.kind, f.item.details.year, f.item.details.runtimeMinutes, f.collection.name], ['media', 1999, 136, 'Watchlist']);
+  const titled = { title: 'Another Film (2019)', url: 'https://films.example/title/3', images: [], image: '', price: null, schemaTypes: [], screen: { '@type': 'Movie' } };
+  const t = await F.send({ type: MSG.SAVE_ITEM, product: titled, instant: true }, popup);
+  assert.deepEqual([t.item.title, t.item.details.year], ['Another Film', 2019], 'the year moves from the title to the details');
+  const show = { title: 'A Show', url: 'https://films.example/title/2', images: [], image: '', price: null, schemaTypes: [], screen: { '@type': 'TVSeries', datePublished: '2019-01-01' } };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: show, instant: true }, popup)).item.details.format, 'series', 'og:type video.tv_show stand-in');
+  const book = { title: 'A Book', url: 'https://books.example/book/1', images: [], image: '', price: null, schemaTypes: ['book'], book: { '@type': 'Book', author: { name: 'A. Author' }, numberOfPages: 300 } };
+  const bk = await F.send({ type: MSG.SAVE_ITEM, product: book, instant: true }, popup);
+  assert.deepEqual([bk.item.kind, bk.item.details.author, bk.collection.name], ['book', 'A. Author', 'Reading list']);
+  const forSale = { title: 'A Book (Paperback)', url: 'https://shop.example/book', price: '$12.99', images: [], image: '', schemaTypes: ['product', 'book'] };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: forSale, instant: true }, popup)).item.kind, 'product');
+});
+
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
   const link = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'Reading list', url: 'https://notes.example/x', sparse: true }, instant: true }, popup);
   assert.equal(link.item.kind, 'link');

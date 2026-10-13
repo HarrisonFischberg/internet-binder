@@ -357,6 +357,32 @@ test('tags: filter chips in a view, pills on cards, edited in Edit details; Shel
   assert.ok(saved.userFields.includes('topics'));
 });
 
+test('films and books: a list to scroll, to-watch first; tick to move; the view shows the facts', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const a = await store.addItem({ title: 'A Film', url: 'https://films.example/1', retailer: 'Films Example', kind: 'media', details: { format: 'film', year: 1999, director: 'A. Director', runtimeMinutes: 136, genres: ['Sci-Fi'], source: 'page' } });
+  await store.addItem({ title: 'A Show', url: 'https://films.example/2', kind: 'media', status: 'done', details: { format: 'series', year: 2019, seasons: 3, source: 'page' } });
+  await afterChange();
+  await go('#kind/media');
+  const heads = [...view().querySelectorAll('.place-city')].map((h) => h.firstChild.textContent);
+  assert.deepEqual(heads, ['To watch', 'Watched']);
+  assert.match(view().textContent, /1999 · Film/);
+  assert.ok(!view().querySelector('.grid'));
+  const row = [...view().querySelectorAll('.shelf-row')].find((r) => r.textContent.includes('A Film'));
+  row.querySelector('input[type=checkbox]').click();
+  await afterChange();
+  assert.equal((await store.getItem(a.id)).status, 'done');
+  assert.deepEqual([...view().querySelectorAll('.place-city')].map((h) => h.firstChild.textContent), ['Watched']);
+  [...view().querySelectorAll('.shelf-row-hit')].find((b) => b.textContent.includes('A Film')).click();
+  await afterChange();
+  const sv = window.document.querySelector('.modal-shelf .shelf-view');
+  assert.match(sv.textContent, /Directed by\s*A\. Director/);
+  assert.match(sv.textContent, /2 hr 16 min/);
+  assert.ok([...window.document.querySelectorAll('.modal-shelf a')].some((x) => x.textContent.includes('Open on Films Example')));
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+});
+
 test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);

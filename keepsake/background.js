@@ -10,7 +10,7 @@ import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI } from './src/ai/provider.js';
-import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube } from './src/shared/kinds.js';
+import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -155,6 +155,8 @@ function topicsFor(kind, product, details) {
 // The default collection for kinds that have one.
 const KIND_HOME = {
   recipe: { key: 'recipes', name: 'Recipes', reason: (d) => (d.ingredients?.length ? `Recipe: ${d.ingredients.length} ingredients found` : 'Recipe page') },
+  media: { key: 'watchlist', name: 'Watchlist', reason: (d) => (d.format === 'series' ? 'TV series' : 'Film') },
+  book: { key: 'reading-list', name: 'Reading list', reason: (d) => (d.author ? `Book by ${d.author}` : 'Book') },
   video: { key: 'videos', name: 'Videos', reason: (d) => (d.platform ? `Video on ${d.platform}` : 'Video page') },
   article: { key: 'articles', name: 'Articles', reason: (d) => (d.readingMinutes ? `Article, ${d.readingMinutes} min read` : 'Article') },
   place: { key: 'places', name: 'Places', reason: (d) => (d.locality ? `Place in ${d.locality}` : 'Place page') },
@@ -197,6 +199,8 @@ function kindOfCapture(product) {
   if (product.isInstagram) return recipeFromText(product.description) ? 'recipe' : workoutOf(product) ? 'workout' : 'link';
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
   // A video site's watch page, or a page that calls itself a video or an article (og:type).
+  if (!fromTypes && product.screen) return 'media';
+  if (!fromTypes && product.book) return 'book';
   const og = String(product.media?.ogType || '').toLowerCase();
   if (!fromTypes && (videoPlatform(product.url) || /^video\./.test(og))) return 'video';
   if (!fromTypes && og === 'article') return 'article';
@@ -221,7 +225,17 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
     : kind === 'workout' ? workoutOf(product) || {}
       : kind === 'place' ? placeOf(product)
         : kind === 'video' ? videoFromCapture(product.media || {}, product.url)
+          : kind === 'media' ? mediaFromSchema(product.screen) || {}
+          : kind === 'book' ? bookFromSchema(product.book) || {}
           : kind === 'article' ? articleFromCapture({ ...(product.media || {}), siteName: product.media?.siteName || product.siteName }) : {};
+  // "The Matrix (1999)": the year belongs in the details, not the title.
+  if (kind === 'media') {
+    const y = String(product.title || '').match(/^(.*\S)\s*\((\d{4})(?:[–-]\s*(?:\d{4})?)?\)\s*$/);
+    if (y) {
+      product.title = y[1];
+      if (!details.year) details.year = Number(y[2]);
+    }
+  }
   // A maps link's page title is the app's ("Google Maps"); the place's name is in the link.
   if (kind === 'place' && details.name) {
     if (!product.title || /\bmaps\b/i.test(product.title)) product.title = details.name;

@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { recipeFromSchema, recipeFromText, kindFromSchemaTypes, workoutFromText, looksLikeWorkout, formatExercise, placeFromSchema, placeFromMapsUrl, addressLine, videoPlatform, videoFromCapture, articleFromCapture, formatDuration } from '../../keepsake/src/shared/kinds.js';
+import { recipeFromSchema, recipeFromText, kindFromSchemaTypes, workoutFromText, looksLikeWorkout, formatExercise, placeFromSchema, placeFromMapsUrl, addressLine, videoPlatform, videoFromCapture, articleFromCapture, formatDuration, mediaFromSchema, bookFromSchema } from '../../keepsake/src/shared/kinds.js';
 
 const args = process.argv.slice(2);
 const bi = args.indexOf('--browser');
@@ -39,10 +39,12 @@ try {
     const wk = looksLikeWorkout(`${p.title} ${p.description}`) ? (p.isInstagram ? [p.title, p.description].filter(Boolean).sort((a, b) => b.length - a.length).map((t) => workoutFromText(t)).find(Boolean) : workoutFromText(p.description, { source: 'page' })) || workoutFromText((p.workoutLines || []).join('\n'), { source: 'page' }) : null;
     const kind = placeFromMapsUrl(url) ? 'place' : p.isInstagram ? (recipeFromText(p.description) ? 'recipe' : wk ? 'workout' : 'link') : (types === 'video' || types === 'article') && wk ? 'workout' : types && types !== 'product' ? types : p.recipe ? 'recipe'
       : !types && p.price == null && !p.priceText && wk ? 'workout'
+        : !types && p.screen ? 'media' : !types && p.book ? 'book'
         : !types && (videoPlatform(url) || /^video\./i.test(p.media?.ogType || '')) ? 'video'
           : !types && /^article$/i.test(p.media?.ogType || '') ? 'article' : types === 'product' || p.price != null || p.priceText ? 'product' : p.sparse ? 'link' : 'product';
     const rec = kind === 'recipe' ? recipeFromSchema(p.recipe) || recipeFromText(p.description) : null;
     console.log(JSON.stringify({ url, kind, title: p.title, priceText: p.priceText || p.price, source: p.source, image: !!p.image, types: (p.schemaTypes || []).slice(0, 8),
+      shelf: kind === 'media' ? mediaFromSchema(p.screen) : kind === 'book' ? bookFromSchema(p.book) : null,
       video: kind === 'video' ? (() => { const d = videoFromCapture(p.media || {}, url); return { ...d, length: formatDuration(d.durationSeconds) }; })() : null,
       article: kind === 'article' ? articleFromCapture({ ...(p.media || {}), siteName: p.media?.siteName || p.siteName }) : null,
       place: kind === 'place' ? (() => { const d = placeFromSchema(p.place) || placeFromMapsUrl(url) || {}; return { address: addressLine(d), pin: d.lat != null, hours: d.hours, cuisine: d.cuisine, price: d.priceRange, name: d.name }; })() : null,

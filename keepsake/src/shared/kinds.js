@@ -11,6 +11,8 @@
 //             category, source: 'page' | 'maps-link' | 'you' }
 //   video   { durationSeconds, channel, platform, publishedOn: 'YYYY-MM-DD', source: 'page' | 'you' }
 //   article { author, siteName, publishedOn: 'YYYY-MM-DD', wordCount, readingMinutes, source: 'page' | 'you' }
+//   media   { format: 'film' | 'series', year, director, runtimeMinutes, seasons, genres: [string], source: 'page' | 'you' }
+//   book    { author, year, pages, isbn, genres: [string], source: 'page' | 'you' }
 
 import { sanitizeText, tidyImportedText } from './util.js';
 
@@ -561,6 +563,47 @@ export function articleFromCapture(media = {}) {
   };
 }
 
+// --- films, shows and books ---------------------------------------------------------------------
+
+const yearOf = (v) => {
+  const m = String(v || '').match(/\b(1[89]\d{2}|20\d{2}|21\d{2})\b/);
+  return m ? Number(m[1]) : null;
+};
+const names = (v, n) => list((Array.isArray(v) ? v : v ? [v] : []).map(nameOf), n, 80);
+
+// schema.org Movie / TVSeries (IMDb, Letterboxd, Rotten Tomatoes…) -> film or show details.
+export function mediaFromSchema(node) {
+  if (!node || typeof node !== 'object') return null;
+  const types = (Array.isArray(node['@type']) ? node['@type'] : [node['@type']]).map((t) => String(t || '').toLowerCase());
+  const series = types.some((t) => t === 'tvseries' || t === 'tvseason');
+  const seasons = Number(node.numberOfSeasons);
+  return {
+    format: series ? 'series' : 'film',
+    year: yearOf(node.datePublished || node.startDate || node.dateCreated),
+    director: names(node.director, 2).join(', ') || (series ? names(node.creator, 2).join(', ') : ''),
+    runtimeMinutes: series ? null : minutesFrom(node.duration),
+    seasons: series && Number.isFinite(seasons) && seasons > 0 && seasons < 200 ? seasons : null,
+    genres: list(node.genre, 4, 30),
+    source: 'page',
+  };
+}
+
+// schema.org Book (Goodreads, Open Library, publishers' pages…) -> book details.
+export function bookFromSchema(node) {
+  if (!node || typeof node !== 'object') return null;
+  const ed = Array.isArray(node.workExample) ? node.workExample[0] : node.workExample;
+  const pages = Number(node.numberOfPages || ed?.numberOfPages);
+  const isbn = String(node.isbn || ed?.isbn || '').replace(/[^\dXx]/g, '');
+  return {
+    author: names(node.author, 3).join(', '),
+    year: yearOf(node.datePublished || ed?.datePublished || node.copyrightYear),
+    pages: Number.isFinite(pages) && pages > 0 && pages < 20000 ? Math.round(pages) : null,
+    isbn: /^(?:\d{9}[\dXx]|\d{13})$/.test(isbn) ? isbn.toUpperCase() : '',
+    genres: list(node.genre, 4, 30),
+    source: 'page',
+  };
+}
+
 // --- details ------------------------------------------------------------------------------------
 
 const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai-draft'];
@@ -633,6 +676,16 @@ export function sanitizeDetails(kind, details) {
       source: details.source === 'page' ? 'page' : 'you',
     };
   }
+  if (kind === 'media' || kind === 'book') {
+    const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) <= max && v !== '' && v !== null ? Math.round(Number(v)) : null);
+    const year = num(details.year, 2200);
+    const base = { year: year && year >= 1800 ? year : null, genres: list(details.genres, 4, 30), source: details.source === 'page' ? 'page' : 'you' };
+    if (kind === 'media') {
+      return { format: details.format === 'series' ? 'series' : 'film', ...base, director: clean(details.director, 160), runtimeMinutes: num(details.runtimeMinutes, 2000), seasons: num(details.seasons, 200) };
+    }
+    const isbn = String(details.isbn || '').replace(/[^\dXx]/g, '');
+    return { author: clean(details.author, 240), ...base, pages: num(details.pages, 20000), isbn: /^(?:\d{9}[\dXx]|\d{13})$/.test(isbn) ? isbn.toUpperCase() : '' };
+  }
   // Other kinds keep a small, flat set of strings and numbers until their own fields land.
   const out = {};
   for (const [k, v] of Object.entries(details).slice(0, 20)) {
@@ -659,6 +712,8 @@ export function keyFact(item, { formatPrice } = {}) {
     if (d.focus) parts.push(d.focus);
     return parts.join(' · ');
   }
+  if (kind === 'media') return [d.year, d.format === 'series' ? (d.seasons ? `Series · ${d.seasons} season${d.seasons === 1 ? '' : 's'}` : 'Series') : 'Film'].filter(Boolean).join(' · ');
+  if (kind === 'book') return [d.author, d.year].filter(Boolean).join(' · ');
   if (kind === 'video') return [d.channel || d.platform, formatDuration(d.durationSeconds)].filter(Boolean).join(' · ');
   if (kind === 'article') return [d.siteName || d.author, d.readingMinutes ? `${d.readingMinutes} min read` : ''].filter(Boolean).join(' · ');
   if (kind === 'place') return [d.locality, d.cuisine || d.category, d.priceRange].filter(Boolean).join(' · ');

@@ -78,14 +78,16 @@
 
   // ---- 1. JSON-LD ------------------------------------------------------------
   function readJsonLd() {
-    const out = { product: null, breadcrumbs: [], recipe: null, place: null, video: null, article: null, types: [] };
+    const out = { product: null, breadcrumbs: [], recipe: null, place: null, video: null, article: null, screen: null, book: null, types: [] };
     const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).slice(0, 25);
     const nodes = [];
     for (const s of scripts) {
       const raw = s.textContent || '';
       if (!raw.trim() || raw.length > 400000) continue;
-      let parsed = safe(() => JSON.parse(raw));
-      if (parsed === null) parsed = safe(() => JSON.parse(raw.replace(/[\u0000-\u001f]+/g, ' ')));
+      // Some sites wrap it for old browsers: /* <![CDATA[ */ {…} /* ]]> */
+      const unwrapped = raw.replace(/^\s*(?:\/\*\s*)?<!\[CDATA\[\s*(?:\*\/)?/, '').replace(/(?:\/\*\s*)?\]\]>\s*(?:\*\/)?\s*$/, '');
+      let parsed = safe(() => JSON.parse(unwrapped));
+      if (parsed === null) parsed = safe(() => JSON.parse(unwrapped.replace(/[\u0000-\u001f]+/g, ' ')));
       if (parsed === null) continue;
       collect(parsed, nodes, 0);
     }
@@ -107,6 +109,8 @@
     places.sort((a, b) => (b.geo ? 2 : 0) + (b.openingHoursSpecification || b.openingHours ? 1 : 0) - ((a.geo ? 2 : 0) + (a.openingHoursSpecification || a.openingHours ? 1 : 0)));
     out.place = places[0] || null;
     out.video = nodes.find((n) => types(n).includes('videoobject')) || null;
+    out.screen = nodes.find((n) => types(n).some((t) => t === 'movie' || t === 'tvseries')) || null;
+    out.book = nodes.find((n) => types(n).includes('book')) || null;
     out.article = nodes.find((n) => types(n).some((t) => /^(?:article|newsarticle|blogposting|reportagenewsarticle|techarticle|analysisnewsarticle|opinionnewsarticle|reviewnewsarticle|scholarlyarticle)$/.test(t))) || null;
     const crumbs = nodes.find((n) => types(n).includes('breadcrumblist'));
     if (crumbs && Array.isArray(crumbs.itemListElement)) {
@@ -539,6 +543,25 @@
     if (h.linkUrl) result.linkUrl = abs(h.linkUrl);
     result.pageTitle = pageTitle();
     if (!ld?.product && !recipe) result.media = safe(() => mediaFacts(ld, meta('meta[property="og:type"]')), null);
+    // A film, show or book: its fields travel raw (bounded); kinds.js normalizes them. The open graph tags
+    // stand in when there's no structured data (og:type video.movie / video.tv_show / book).
+    const pick = (n, keys) => safe(() => JSON.parse(JSON.stringify(Object.fromEntries(keys.map((k) => [k, n[k]])))), null);
+    if (!ld?.product && ld?.screen) result.screen = pick(ld.screen, ['@type', 'name', 'datePublished', 'startDate', 'dateCreated', 'director', 'creator', 'duration', 'numberOfSeasons', 'genre']);
+    if (!ld?.product && ld?.book) result.book = pick(ld.book, ['@type', 'name', 'author', 'datePublished', 'copyrightYear', 'numberOfPages', 'isbn', 'genre', 'workExample']);
+    if (!ld?.product && ld?.screen) { imagesFrom(ld.screen.image, images); result.title = text(ld.screen.name) || result.title; }
+    if (!ld?.product && ld?.book) { imagesFrom(ld.book.image, images); result.title = text(ld.book.name) || result.title; }
+    const og = meta('meta[property="og:type"]').toLowerCase();
+    if (!result.screen && /^video\.(?:movie|tv_show)$/.test(og)) {
+      result.screen = { '@type': og === 'video.tv_show' ? 'TVSeries' : 'Movie', datePublished: meta('meta[property="video:release_date"]'), director: metaAll('meta[property="video:director"]').map((d) => (/^https?:/.test(d) ? '' : d)).filter(Boolean) };
+    }
+    if (!result.book && og === 'book') {
+      result.book = { '@type': 'Book', author: metaAll('meta[property="book:author"]').filter((a) => !/^https?:/.test(a)), isbn: meta('meta[property="book:isbn"]'), datePublished: meta('meta[property="book:release_date"]') };
+    }
+    if ((result.screen || result.book) && images.length && !result.images.length) {
+      result.images = images.slice(0, 6);
+      result.image = result.images[0];
+    }
+
     // YouTube: what's on screen wins over the head, which may describe the previous video.
     const yt = safe(youtubeWatch, null);
     if (yt) {

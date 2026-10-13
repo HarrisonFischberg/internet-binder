@@ -323,3 +323,18 @@ test('topics: guessed from title, channel and description; whole words only; tag
   assert.equal(cleanTopics(Array.from({ length: 20 }, (_, i) => `t${i}`)).length, 8);
   assert.deepEqual(makeItem({ url: 'https://a.example', topics: ['AI', 'ai', 'Tech'], topicsBy: 'nonsense' }).topics, ['AI', 'Tech']);
 });
+
+test('films, shows and books from schema.org; numbers and ISBNs checked', async () => {
+  const { mediaFromSchema, bookFromSchema } = await import('../keepsake/src/shared/kinds.js');
+  assert.deepEqual(mediaFromSchema({ '@type': 'Movie', datePublished: '2023-07-21', director: [{ '@type': 'Person', name: 'A. Director' }], duration: 'PT3H', genre: ['Drama', 'History'] }),
+    { format: 'film', year: 2023, director: 'A. Director', runtimeMinutes: 180, seasons: null, genres: ['Drama', 'History'], source: 'page' });
+  const s = mediaFromSchema({ '@type': 'TVSeries', startDate: '2008-01-20', creator: [{ name: 'A. Creator' }], numberOfSeasons: '5', duration: 'PT47M' });
+  assert.deepEqual([s.format, s.year, s.director, s.seasons, s.runtimeMinutes], ['series', 2008, 'A. Creator', 5, null]);
+  const b = bookFromSchema({ '@type': 'Book', author: [{ name: 'A. Author' }, { name: 'B. Author' }], numberOfPages: '387', isbn: '978-0-441-47812-5', datePublished: 'March 1969' });
+  assert.deepEqual([b.author, b.year, b.pages, b.isbn], ['A. Author, B. Author', 1969, 387, '9780441478125']);
+  assert.equal(bookFromSchema({ '@type': 'Book', isbn: '12345' }).isbn, '', 'not an ISBN');
+  assert.equal(bookFromSchema({ '@type': 'Book', workExample: [{ numberOfPages: 212, isbn: '0441478123' }] }).pages, 212, 'from the edition');
+  assert.equal(keyFact({ kind: 'media', details: s }), '2008 · Series · 5 seasons');
+  assert.equal(keyFact({ kind: 'book', details: b }), 'A. Author, B. Author · 1969');
+  assert.equal(sanitizeDetails('book', { year: 12, pages: -4, isbn: 'x' }).year, null);
+});

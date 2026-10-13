@@ -175,6 +175,13 @@ Saving a restaurant or place page reads its schema.org place data (address, pin,
 - **Article:** schema.org Article types or `og:type` article. Details: author, site, date, word count, reading time (230 words a minute, never under 1 min). Files to **Read later**. An article with a video in it stays an article; a recipe or workout page stays a recipe or workout.
 - **View:** a wide dialog: thumbnail (with the length on videos), title, facts, the page's summary, note; actions Edit details, Mark watched / Mark read, and **Watch on YouTube** / **Read** (primary, opens the page). Nothing is embedded or played inside Keepsake.
 
+### Films & shows and books (Chrome, built in M2e)
+
+Read from schema.org Movie / TVSeries / Book (Letterboxd, IMDb, Goodreads, Open Library…; CDATA-wrapped JSON-LD included) or the open graph stand-ins (`og:type` video.movie, video.tv_show, book). A trailing "(1999)" moves from the title into the year. A book on a shop page with a price stays a product. They file to **Watchlist** and **Reading list**.
+
+- **List (owner decision: scroll-only):** "To watch" / "To read" first, then "Watched" / "Read"; each row has a 2:3 poster or cover, title, year · Film or Series (or author · year), genres, and a Watched / Read checkbox that moves it. No ratings, no progress, nothing else.
+- **View:** poster or cover, facts (format, year, director or creator, runtime or seasons, genre; author, year, pages, ISBN), description, note; Edit details, Open on (site), Mark watched / Mark read.
+
 ### Tags (all platforms)
 
 A save can carry up to 8 **tags** saying what it's about ("AI", "Video games", "Shoes"). Videos, articles and links get up to 3 **guessed** on save, locally, from the title (counts most), the channel or site, the description and hashtags (`shared/topics.js`: about 30 topics, whole-word phrases; no AI, no network). No tag beats a wrong one: a guess needs a title hit or several hits elsewhere.

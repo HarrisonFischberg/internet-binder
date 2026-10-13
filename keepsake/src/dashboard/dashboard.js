@@ -685,7 +685,7 @@ function renderGrid(view) {
     view.append(collectionHero(col));
   }
   // The places list sorts itself (by city, then name), so the sort and retailer filters don't apply.
-  if (baseItems().length && !(r.name === 'kind' && r.id === 'place')) view.append(gridFilters);
+  if (baseItems().length && !(r.name === 'kind' && ['place', 'media', 'book'].includes(r.id))) view.append(gridFilters);
   const chips = topicChips();
   if (chips) view.append(chips);
   const items = currentGridItems();
@@ -695,6 +695,10 @@ function renderGrid(view) {
   }
   if (r.name === 'kind' && r.id === 'place') {
     renderPlaceList(view, items);
+    return;
+  }
+  if (r.name === 'kind' && (r.id === 'media' || r.id === 'book')) {
+    renderShelfList(view, items, r.id);
     return;
   }
   const grid = el('div', { class: 'grid', role: 'list' });
@@ -1098,6 +1102,7 @@ async function openSave(id) {
   if (item && kindOf(item) === 'workout') return openWorkout(id);
   if (item && kindOf(item) === 'place') return openPlace(id);
   if (item && ['video', 'article'].includes(kindOf(item))) return openMedia(id);
+  if (item && ['media', 'book'].includes(kindOf(item))) return openShelfItem(id);
   return openQuickView(id);
 }
 
@@ -1153,6 +1158,94 @@ async function openMedia(id) {
       item.url ? { label: isVideo ? `Watch${d.platform ? ` on ${d.platform}` : ''}` : item.type === 'instagram' ? 'Open post' : 'Read', href: openableUrl(item.url), primary: true, autofocus: true, icon: UI.externalIcon() } : null,
     ].filter(Boolean),
   });
+}
+
+// A film, show or book: the poster or cover, the few facts, and a way to it.
+function shelfFacts(item) {
+  const d = item.details || {};
+  if (kindOf(item) === 'book') {
+    return [d.author ? ['By', d.author] : null, d.year ? ['Published', String(d.year)] : null, d.pages ? ['Pages', String(d.pages)] : null, d.genres?.length ? ['Genre', d.genres.join(', ')] : null, d.isbn ? ['ISBN', d.isbn] : null];
+  }
+  const series = d.format === 'series';
+  return [
+    ['Format', series ? 'TV series' : 'Film'],
+    d.year ? [series ? 'First aired' : 'Year', String(d.year)] : null,
+    d.director ? [series ? 'Created by' : 'Directed by', d.director] : null,
+    !series && d.runtimeMinutes ? ['Runtime', formatMinutes(d.runtimeMinutes)] : null,
+    series && d.seasons ? ['Seasons', String(d.seasons)] : null,
+    d.genres?.length ? ['Genre', d.genres.join(', ')] : null,
+  ];
+}
+
+async function openShelfItem(id) {
+  const item = await store.getItem(id);
+  if (!item) {
+    UI.toast('That item no longer exists.', { kind: 'danger' });
+    return;
+  }
+  const kind = kindOf(item);
+  const verb = kindInfo(kind).done;
+  const done = item.status === 'done';
+  const facts = shelfFacts(item).filter(Boolean);
+  const site = item.retailer || item.host || '';
+  const body = el('div', { class: `shelf-view ${item.image ? '' : 'no-pic'}` }, [
+    item.image ? UI.pictureNode({ src: item.image, aspect: 2 / 3, title: item.title, className: 'shelf-cover' }) : null,
+    el('div', { class: 'recipe-hero-text' }, [
+      el('span', { class: `badge kind-badge kind-${kind}` }, [kindIcon(kind), kindInfo(kind).label]),
+      el('h2', { class: 'recipe-title' }, [item.title]),
+      facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
+      item.description ? el('p', { class: 'media-summary' }, [cut(item.description, 600)]) : null,
+      item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
+      done ? el('span', { class: 'badge' }, [verb]) : null,
+    ]),
+  ]);
+  await UI.openModal({
+    title: item.title,
+    body,
+    wide: true,
+    className: 'modal-recipe modal-shelf',
+    actions: [
+      { label: 'Edit details', quiet: true, closes: false, onClick: async (close) => { close(false); await openItem(item.id); } },
+      item.url ? { label: site ? `Open on ${site}` : 'Open', href: openableUrl(item.url), icon: UI.externalIcon() } : null,
+      { label: done ? `${verb} ✓` : `Mark ${verb.toLowerCase()}`, primary: !done, autofocus: true, onClick: async () => {
+        await store.updateItem(item.id, { status: done ? 'saved' : 'done' });
+        UI.toast(done ? `Marked as not ${verb.toLowerCase()} yet.` : `Marked as ${verb.toLowerCase()}.`, { duration: 2200 });
+      } },
+    ].filter(Boolean),
+  });
+}
+
+// Films & shows and Books: a plain list to scroll. What's still to watch or read comes first; the
+// rest sits under "Watched" or "Read". Ticking the box moves it.
+function renderShelfList(view, items, kind) {
+  const verb = kindInfo(kind).done;
+  const row = (item) => {
+    const d = item.details || {};
+    const done = item.status === 'done';
+    const box = el('input', { type: 'checkbox', 'aria-label': `${verb}: ${item.title}`, onChange: async () => { await store.updateItem(item.id, { status: box.checked ? 'done' : 'saved' }); } });
+    box.checked = done;
+    return el('li', { class: `shelf-row ${done ? 'is-done' : ''}` }, [
+      el('button', { type: 'button', class: 'shelf-row-hit', onClick: () => openSave(item.id) }, [
+        UI.pictureNode({ src: item.image, aspect: 2 / 3, title: item.title, className: 'shelf-thumb' }),
+        el('span', { class: 'place-row-text' }, [
+          el('span', { class: 'place-row-title' }, [item.title]),
+          el('span', { class: 'place-row-meta' }, [keyFact(item) || item.retailer || item.host || '']),
+          d.genres?.length ? el('span', { class: 'place-row-meta' }, [d.genres.join(', ')]) : null,
+        ]),
+      ]),
+      el('label', { class: 'check shelf-check' }, [box, el('span', {}, [verb])]),
+    ]);
+  };
+  const todo = items.filter((i) => i.status !== 'done');
+  const finished = items.filter((i) => i.status === 'done');
+  const box = el('div', { class: 'place-list shelf-list' });
+  const section = (title, list) => el('section', { class: 'place-group', 'aria-label': title }, [
+    el('h2', { class: 'place-city' }, [title, el('span', { class: 'count' }, [String(list.length)])]),
+    el('ul', { class: 'place-rows', role: 'list' }, list.map(row)),
+  ]);
+  if (todo.length) box.append(section(kind === 'book' ? 'To read' : 'To watch', todo));
+  if (finished.length) box.append(section(verb, finished));
+  view.append(box);
 }
 
 // "Open in Maps": Apple Maps or Google Maps, in a new tab. The links are built from what's saved; Keepsake
@@ -1735,6 +1828,22 @@ async function openItem(id) {
     i.value = value || '';
     return i;
   };
+  // Films, shows and books.
+  const startShelf = ['media', 'book'].includes(startKind) ? item.details || {} : {};
+  const shelfInput = (label, value, attrs = {}) => {
+    const i = el('input', { class: 'input', 'aria-label': label, placeholder: label, ...attrs });
+    i.value = value ?? '';
+    return i;
+  };
+  const shelfFields = {
+    format: UI.selectInput({ value: startShelf.format === 'series' ? 'series' : 'film', options: [{ value: 'film', label: 'Film' }, { value: 'series', label: 'TV series' }], onChange: () => {}, label: 'Film or series' }),
+    year: shelfInput('Year', startShelf.year, { inputmode: 'numeric', maxlength: '4' }),
+    director: shelfInput('Director or creator', startShelf.director, { maxlength: '160' }),
+    runtime: shelfInput('Runtime (minutes)', startShelf.runtimeMinutes, { inputmode: 'numeric' }),
+    seasons: shelfInput('Seasons', startShelf.seasons, { inputmode: 'numeric' }),
+    author: shelfInput('Author', startShelf.author, { maxlength: '240' }),
+    pages: shelfInput('Pages', startShelf.pages, { inputmode: 'numeric' }),
+  };
   const mediaFields = {
     channel: mediaInput('Channel', startMedia.channel, { maxlength: '80' }),
     length: mediaInput('Length, e.g. 12:30', startMedia.durationSeconds ? formatDuration(startMedia.durationSeconds) : ''),
@@ -1848,6 +1957,15 @@ async function openItem(id) {
     clear(kindPanel);
     if (kind === 'recipe') kindPanel.append(recipePanel());
     if (kind === 'place') kindPanel.append(placePanel());
+    if (kind === 'media' || kind === 'book') {
+      const f = shelfFields;
+      kindPanel.append(el('div', { class: 'recipe-panel' }, [
+        el('div', { class: 'recipe-head' }, [el('h3', {}, [kindInfo(kind).label])]),
+        ...(kind === 'media'
+          ? [el('div', { class: 'price-inline' }, [f.format, f.year]), f.director, el('div', { class: 'price-inline' }, [f.runtime, f.seasons])]
+          : [f.author, el('div', { class: 'price-inline' }, [f.year, f.pages])]),
+      ]));
+    }
     if (kind === 'video' || kind === 'article') {
       const f = mediaFields;
       kindPanel.append(el('div', { class: 'recipe-panel' }, [
@@ -2067,6 +2185,17 @@ async function openItem(id) {
           // A moved address makes the page's pin wrong, so the pin goes with it (maps then search by address).
           const moved = ['address', 'locality', 'postalCode', 'country'].some((k) => next[k] !== (was[k] || ''));
           patch.details = sanitizeDetails('place', { ...was, ...next, lat: moved ? null : was.lat, lng: moved ? null : was.lng, source: changed || startKind !== 'place' ? 'you' : was.source });
+        } else if (kindSelect.value === 'media' || kindSelect.value === 'book') {
+          const k = kindSelect.value;
+          const f = shelfFields;
+          const year = f.year.value.trim();
+          if (year && !/^\d{4}$/.test(year)) throw new Error('Write the year as four digits, like 1999.');
+          const was = k === startKind ? sanitizeDetails(k, startShelf) : sanitizeDetails(k, {});
+          const next = k === 'media'
+            ? { ...was, format: f.format.value, year: Number(year) || null, director: f.director.value.trim(), runtimeMinutes: Number(f.runtime.value) || null, seasons: Number(f.seasons.value) || null }
+            : { ...was, author: f.author.value.trim(), year: Number(year) || null, pages: Number(f.pages.value) || null };
+          const changed = JSON.stringify(sanitizeDetails(k, { ...next, source: was.source })) !== JSON.stringify(was);
+          patch.details = sanitizeDetails(k, { ...next, source: changed || k !== startKind ? 'you' : was.source });
         } else if (kindSelect.value === 'video' || kindSelect.value === 'article') {
           const k = kindSelect.value;
           const f = mediaFields;
