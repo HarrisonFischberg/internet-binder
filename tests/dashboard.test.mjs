@@ -282,6 +282,81 @@ test('places: a list grouped by city, the place view with maps links, Been, and 
   assert.equal(saved.details.source, 'you');
 });
 
+test('videos open into a view with their length and a Watch link; editing the length is checked', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'How to sharpen a knife', url: 'https://www.youtube.com/watch?v=abc123', description: 'Whetstone basics in twelve minutes.', kind: 'video',
+    details: { durationSeconds: 723, channel: 'Example Channel', platform: 'YouTube', publishedOn: '2026-09-30', source: 'page' } });
+  await afterChange();
+  const text = await go('#kind/video');
+  assert.match(text, /Example Channel · 12:03/);
+  [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('sharpen')).querySelector('.card-hit').click();
+  await afterChange();
+  const mv = window.document.querySelector('.modal-media .media-view');
+  assert.ok(mv, 'the video view opened');
+  assert.match(mv.textContent, /Whetstone basics/);
+  const watch = [...window.document.querySelectorAll('.modal-media a')].find((x) => x.textContent.includes('Watch on YouTube'));
+  assert.equal(watch.getAttribute('href'), 'https://www.youtube.com/watch?v=abc123');
+  [...window.document.querySelectorAll('.modal-media button')].find((b) => b.textContent === 'Mark watched').click();
+  await afterChange();
+  assert.equal((await store.getItem(it.id)).status, 'done');
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+
+  await go(`#item/${it.id}`);
+  await afterChange();
+  const len = window.document.querySelector('input[aria-label="Length, e.g. 12:30"]');
+  assert.equal(len.value, '12:03');
+  len.value = '1:05:00';
+  [...window.document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Save changes').click();
+  await afterChange();
+  assert.equal((await store.getItem(it.id)).details.durationSeconds, 3900);
+  assert.equal((await store.getItem(it.id)).details.source, 'you');
+});
+
+test('tags: filter chips in a view, pills on cards, edited in Edit details; Shelves folds the kind views', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const a = await store.addItem({ title: 'GTA mod with one prompt', url: 'https://www.youtube.com/watch?v=t1', kind: 'video', topics: ['Video games', 'AI'], topicsBy: 'guess' });
+  await store.addItem({ title: 'Sneaker rotation', url: 'https://www.youtube.com/watch?v=t2', kind: 'video', topics: ['Shoes'], topicsBy: 'guess' });
+  await afterChange();
+  await go('#kind/video');
+  const chips = [...view().querySelectorAll('.topic-chip')].map((c) => c.firstChild.textContent);
+  assert.ok(chips.includes('AI') && chips.includes('Shoes') && chips[0] === 'All tags');
+  [...view().querySelectorAll('.topic-chip')].find((c) => c.firstChild.textContent === 'Shoes').click();
+  await settle();
+  assert.match(view().textContent, /Sneaker rotation/);
+  assert.doesNotMatch(view().textContent, /GTA mod/);
+  [...view().querySelectorAll('.topic-chip')].find((c) => c.firstChild.textContent === 'All tags').click();
+  await settle();
+  assert.match(view().querySelector('.card-topics').textContent + view().textContent, /Video games/);
+
+  // Shelves: open while on one of its views, and the kind views live inside it.
+  const toggle = window.document.getElementById('navShelvesToggle');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.ok(window.document.getElementById('navShelvesList').querySelector('a[href="#kind/video"]'));
+  assert.ok(window.document.getElementById('navShelvesList').querySelector('a[href="#purchased"]'));
+  await go('#home');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'closed elsewhere unless you opened it');
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(window.document.getElementById('navShelvesList').hidden, false);
+  await go('#all');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'remembered');
+  toggle.click();
+
+  await go(`#item/${a.id}`);
+  await afterChange();
+  const tags = window.document.querySelector('input[aria-label="Tags, separated by commas"]');
+  assert.equal(tags.value, 'Video games, AI');
+  tags.value = 'Video games, Modding';
+  [...window.document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Save changes').click();
+  await afterChange();
+  const saved = await store.getItem(a.id);
+  assert.deepEqual([saved.topics, saved.topicsBy], [['Video games', 'Modding'], 'you']);
+  assert.ok(saved.userFields.includes('topics'));
+});
+
 test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);

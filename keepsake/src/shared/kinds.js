@@ -9,6 +9,8 @@
 //             source: 'page' | 'caption' | 'you' }   (goals and check-ins are their own records: goals.js)
 //   place   { address, locality, region, postalCode, country, lat, lng, phone, cuisine, priceRange, hours: [string],
 //             category, source: 'page' | 'maps-link' | 'you' }
+//   video   { durationSeconds, channel, platform, publishedOn: 'YYYY-MM-DD', source: 'page' | 'you' }
+//   article { author, siteName, publishedOn: 'YYYY-MM-DD', wordCount, readingMinutes, source: 'page' | 'you' }
 
 import { sanitizeText, tidyImportedText } from './util.js';
 
@@ -473,11 +475,98 @@ export function mapsLinks(name, d = {}) {
   return { google: google.href, apple: apple.href };
 }
 
+// --- videos and articles -------------------------------------------------------------------------
+
+const VIDEO_HOSTS = [
+  [/(^|\.)youtube\.com$/, /^\/(?:watch|shorts\/|live\/)/, 'YouTube'],
+  [/^youtu\.be$/, /^\/[\w-]{6,}/, 'YouTube'],
+  [/(^|\.)vimeo\.com$/, /^\/\d+/, 'Vimeo'],
+  [/(^|\.)tiktok\.com$/, /\/video\/\d+/, 'TikTok'],
+  [/(^|\.)dailymotion\.com$/, /^\/video\//, 'Dailymotion'],
+  [/(^|\.)twitch\.tv$/, /^\/videos\/\d+/, 'Twitch'],
+];
+
+// Any YouTube link (a video, a channel, a playlist): saved as a video.
+export function isYouTube(url) {
+  try {
+    const h = new URL(url).hostname.replace(/^www\.|^m\.|^music\./, '');
+    return h === 'youtube.com' || h === 'youtu.be' || h === 'youtube-nocookie.com';
+  } catch {
+    return false;
+  }
+}
+
+// The video site a link is a video on ("YouTube"), or '' when it isn't one of them.
+export function videoPlatform(url) {
+  let u;
+  try { u = new URL(url); } catch { return ''; }
+  const host = u.hostname.replace(/^www\.|^m\./, '');
+  const hit = VIDEO_HOSTS.find(([h, path]) => h.test(host) && path.test(u.pathname));
+  return hit ? hit[2] : '';
+}
+
+// "PT1H2M3S", 3723 (seconds), "1:02:03" or "12:03" -> seconds.
+export function secondsFrom(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 && value < 864000 ? Math.round(value) : null;
+  const s = String(value).trim();
+  const iso = s.match(/^P(?:(\d+)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/i);
+  if (iso && (iso[1] || iso[2] || iso[3] || iso[4])) {
+    const n = Number(iso[1] || 0) * 86400 + Number(iso[2] || 0) * 3600 + Number(iso[3] || 0) * 60 + Number(iso[4] || 0);
+    return n > 0 && n < 864000 ? Math.round(n) : null;
+  }
+  const clock = s.match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})$/);
+  if (clock) return Number(clock[1] || 0) * 3600 + Number(clock[2]) * 60 + Number(clock[3]) || null;
+  if (/^\d+(?:\.\d+)?$/.test(s)) return secondsFrom(Number(s));
+  return null;
+}
+
+export function formatDuration(sec) {
+  if (!Number.isFinite(sec) || sec <= 0) return '';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const r = sec % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+}
+
+const dayOf = (v) => {
+  const m = String(v || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : '';
+};
+
+// What the page says about a video (extract.js `media`) -> video details.
+export function videoFromCapture(media = {}, url = '') {
+  return {
+    durationSeconds: secondsFrom(media.duration),
+    channel: clean(media.channel, 80),
+    platform: videoPlatform(url) || clean(media.siteName, 40),
+    publishedOn: dayOf(media.published),
+    source: 'page',
+  };
+}
+
+// Words a minute for reading time; a common middle-of-the-road figure.
+export const READING_WPM = 230;
+
+export function articleFromCapture(media = {}) {
+  const words = Number(media.wordCount);
+  const wordCount = Number.isFinite(words) && words > 0 && words < 500000 ? Math.round(words) : null;
+  return {
+    author: clean(media.author, 80),
+    siteName: clean(media.siteName, 80),
+    publishedOn: dayOf(media.published),
+    wordCount,
+    readingMinutes: wordCount ? Math.max(1, Math.round(wordCount / READING_WPM)) : null,
+    source: 'page',
+  };
+}
+
 // --- details ------------------------------------------------------------------------------------
 
 const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai-draft'];
 const WORKOUT_SOURCES = ['page', 'caption', 'you'];
 const PLACE_SOURCES = ['page', 'maps-link', 'you'];
+const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 export function sanitizeDetails(kind, details) {
   if (!details || typeof details !== 'object') return {};
@@ -523,6 +612,27 @@ export function sanitizeDetails(kind, details) {
       source: PLACE_SOURCES.includes(details.source) ? details.source : 'you',
     };
   }
+  if (kind === 'video') {
+    return {
+      durationSeconds: secondsFrom(details.durationSeconds),
+      channel: clean(details.channel, 80),
+      platform: clean(details.platform, 40),
+      publishedOn: DAY_ONLY.test(details.publishedOn || '') ? details.publishedOn : '',
+      source: details.source === 'page' ? 'page' : 'you',
+    };
+  }
+  if (kind === 'article') {
+    const words = Number(details.wordCount);
+    const mins = Number(details.readingMinutes);
+    return {
+      author: clean(details.author, 80),
+      siteName: clean(details.siteName, 80),
+      publishedOn: DAY_ONLY.test(details.publishedOn || '') ? details.publishedOn : '',
+      wordCount: Number.isFinite(words) && words > 0 && words < 500000 ? Math.round(words) : null,
+      readingMinutes: Number.isFinite(mins) && mins > 0 && mins < 2000 ? Math.round(mins) : null,
+      source: details.source === 'page' ? 'page' : 'you',
+    };
+  }
   // Other kinds keep a small, flat set of strings and numbers until their own fields land.
   const out = {};
   for (const [k, v] of Object.entries(details).slice(0, 20)) {
@@ -549,6 +659,8 @@ export function keyFact(item, { formatPrice } = {}) {
     if (d.focus) parts.push(d.focus);
     return parts.join(' · ');
   }
+  if (kind === 'video') return [d.channel || d.platform, formatDuration(d.durationSeconds)].filter(Boolean).join(' · ');
+  if (kind === 'article') return [d.siteName || d.author, d.readingMinutes ? `${d.readingMinutes} min read` : ''].filter(Boolean).join(' · ');
   if (kind === 'place') return [d.locality, d.cuisine || d.category, d.priceRange].filter(Boolean).join(' · ');
   if (kind === 'product' && formatPrice) return formatPrice(item.price, item.currency) || '';
   return '';
@@ -560,9 +672,11 @@ export function kindFromSchemaTypes(types) {
   if (t.some((x) => x === 'recipe')) return 'recipe';
   if (t.some((x) => ['product', 'productgroup', 'individualproduct', 'productmodel'].includes(x))) return 'product';
   if (t.some((x) => ['restaurant', 'foodestablishment', 'cafeorcoffeeshop', 'bakery', 'barorpub', 'localbusiness', 'touristattraction', 'museum', 'park', 'lodgingbusiness', 'hotel'].includes(x))) return 'place';
-  if (t.some((x) => ['videoobject', 'movie', 'tvseries', 'tvepisode'].includes(x))) return t.some((x) => ['movie', 'tvseries'].includes(x)) ? 'media' : 'video';
+  if (t.some((x) => ['movie', 'tvseries'].includes(x))) return 'media';
   if (t.some((x) => x === 'book')) return 'book';
   if (t.some((x) => ['exerciseplan', 'physicalactivity', 'exerciseaction'].includes(x))) return 'workout';
-  if (t.some((x) => ['article', 'newsarticle', 'blogposting', 'reportagenewsarticle', 'techarticle'].includes(x))) return 'article';
+  // An article with a video in it is still an article.
+  if (t.some((x) => ['article', 'newsarticle', 'blogposting', 'reportagenewsarticle', 'techarticle', 'analysisnewsarticle', 'opinionnewsarticle', 'reviewnewsarticle'].includes(x))) return 'article';
+  if (t.some((x) => ['videoobject', 'tvepisode'].includes(x))) return 'video';
   return null;
 }

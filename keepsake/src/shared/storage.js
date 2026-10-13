@@ -22,6 +22,7 @@ import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, 
 import { memoryRecordBackend, STORES } from './db.js';
 import { isKind, kindOf, sanitizeDetails, recipeFromText, workoutFromText, looksLikeWorkout, STATUSES } from './kinds.js';
 import { makeGoal, makeCheckin } from './goals.js';
+import { cleanTopics } from './topics.js';
 
 export { idbBackend, memoryRecordBackend, StorageFullError } from './db.js';
 
@@ -43,7 +44,7 @@ const LEGACY = { collections: KEYS.collections, items: KEYS.items, prefs: KEYS.p
 const LEGACY_KEYS = [...Object.values(LEGACY), AI_LOG_KEY];
 export const TRASH_DAYS = 30;
 // Fields a person edits by hand. Once edited, AI and enrichment leave them alone.
-const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'url', 'description'];
+const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'url', 'description', 'topics'];
 const CAPTURE_STATES = ['pending', 'complete', 'failed'];
 export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024, maxGoals: 2000, maxCheckins: 50000, maxCheckinsPerGoal: 2000 };
 
@@ -252,6 +253,9 @@ export function makeItem(input = {}) {
     // The store's own product type and tags, kept so the item can be re-sorted later (Review suggestions).
     productType: sanitizeText(input.productType, 80),
     tags: uniqStrings(input.tags, 12).map((t) => sanitizeText(t, 40)).filter(Boolean),
+    // What it's about ("AI", "Video games"): guessed on save (topics.js) or set by you.
+    topics: cleanTopics(input.topics).map((t) => sanitizeText(t, 30)).filter(Boolean),
+    topicsBy: input.topicsBy === 'guess' || input.topicsBy === 'you' ? input.topicsBy : '',
     imageAspect: Number.isFinite(input.imageAspect) && input.imageAspect > 0.2 && input.imageAspect < 5 ? input.imageAspect : null,
     favorite: !!input.favorite,
     archived: !!input.archived,

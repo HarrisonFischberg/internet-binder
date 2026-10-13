@@ -10,7 +10,8 @@ import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI } from './src/ai/provider.js';
-import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl } from './src/shared/kinds.js';
+import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube } from './src/shared/kinds.js';
+import { guessTopics } from './src/shared/topics.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 const CONTENT_SCRIPT_ID = 'keepsake-floating';
@@ -144,9 +145,18 @@ function normalizeProduct(raw) {
   return p;
 }
 
+// What a video, article or link is about, guessed locally from its title, channel or site and description.
+function topicsFor(kind, product, details) {
+  if (!['video', 'article', 'link'].includes(kind)) return {};
+  const topics = guessTopics({ title: product.title, channel: details.channel || details.siteName || product.siteName || '', description: product.description, hashtags: product.hashtags });
+  return topics.length ? { topics, topicsBy: 'guess' } : {};
+}
+
 // The default collection for kinds that have one.
 const KIND_HOME = {
   recipe: { key: 'recipes', name: 'Recipes', reason: (d) => (d.ingredients?.length ? `Recipe: ${d.ingredients.length} ingredients found` : 'Recipe page') },
+  video: { key: 'videos', name: 'Videos', reason: (d) => (d.platform ? `Video on ${d.platform}` : 'Video page') },
+  article: { key: 'articles', name: 'Articles', reason: (d) => (d.readingMinutes ? `Article, ${d.readingMinutes} min read` : 'Article') },
   place: { key: 'places', name: 'Places', reason: (d) => (d.locality ? `Place in ${d.locality}` : 'Place page') },
   workout: { key: 'workouts', name: 'Workouts', reason: (d) => (d.exercises?.length ? `Workout: ${d.exercises.length} exercises found` : 'Workout page') },
 };
@@ -176,6 +186,8 @@ function placeOf(product) {
 // What a capture is: what the page says about itself first (structured data), then what we can tell.
 function kindOfCapture(product) {
   if (isKind(product.kind)) return product.kind;
+  // Anything on YouTube is a video (your choice: one place for everything you save from there).
+  if (isYouTube(product.url)) return 'video';
   if (placeFromMapsUrl(product.url)) return 'place';
   const fromTypes = kindFromSchemaTypes(product.schemaTypes);
   // A video or article that lists exercises is a workout; other structured kinds are what they say.
@@ -184,6 +196,10 @@ function kindOfCapture(product) {
   if (product.recipe) return 'recipe';
   if (product.isInstagram) return recipeFromText(product.description) ? 'recipe' : workoutOf(product) ? 'workout' : 'link';
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
+  // A video site's watch page, or a page that calls itself a video or an article (og:type).
+  const og = String(product.media?.ogType || '').toLowerCase();
+  if (!fromTypes && (videoPlatform(product.url) || /^video\./.test(og))) return 'video';
+  if (!fromTypes && og === 'article') return 'article';
   if (fromTypes === 'product' || product.price !== null || product.priceText) return 'product';
   return product.sparse ? 'link' : 'product';
 }
@@ -203,7 +219,9 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
   const kind = kindOfCapture(product);
   const details = kind === 'recipe' ? recipeFromSchema(product.recipe) || recipeFromText(product.description) || {}
     : kind === 'workout' ? workoutOf(product) || {}
-      : kind === 'place' ? placeOf(product) : {};
+      : kind === 'place' ? placeOf(product)
+        : kind === 'video' ? videoFromCapture(product.media || {}, product.url)
+          : kind === 'article' ? articleFromCapture({ ...(product.media || {}), siteName: product.media?.siteName || product.siteName }) : {};
   // A maps link's page title is the app's ("Google Maps"); the place's name is in the link.
   if (kind === 'place' && details.name) {
     if (!product.title || /\bmaps\b/i.test(product.title)) product.title = details.name;
@@ -254,6 +272,7 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
     originalTitle: product.originalTitle || product.title,
     kind,
     details,
+    ...topicsFor(kind, product, details),
     captureState: aiWanted ? 'pending' : 'complete',
     confidence: userChose ? 1 : classification.confidence,
     categorizationSource: userChose ? 'manual' : 'local',

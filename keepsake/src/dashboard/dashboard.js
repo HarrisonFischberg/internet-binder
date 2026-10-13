@@ -7,7 +7,8 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
-import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks } from '../shared/kinds.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom } from '../shared/kinds.js';
+import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
@@ -47,6 +48,7 @@ const state = {
   sourceType: '',
   colSearch: '',
   colSort: 'recent',
+  topic: '',
   focusSearch: false,
   selecting: false,
   selected: new Set(),
@@ -152,6 +154,12 @@ function bindChrome() {
   $('menuToggle').addEventListener('click', () => toggleNav());
   $('scrim').addEventListener('click', () => toggleNav(false));
   $('newCollectionBtn').addEventListener('click', () => newCollection());
+  $('navShelvesToggle').addEventListener('click', () => {
+    const open = $('navShelvesToggle').getAttribute('aria-expanded') !== 'true';
+    shelvesChoice = open;
+    try { localStorage.setItem(SHELVES_KEY, open ? 'open' : 'closed'); } catch { /* remembered for this page only */ }
+    setShelvesOpen(open);
+  });
   $('searchInput').addEventListener('input', debounce(() => {
     state.search = $('searchInput').value.trim();
     state.shown = 120;
@@ -226,6 +234,20 @@ function render({ keepScroll = false } = {}) {
   toggleNav(false);
 }
 
+// The Shelves group in the menu: open or closed as you left it, and always open while you're on one of its views.
+const SHELVES_KEY = 'keepsake.nav.shelves';
+const SHELF_ROUTES = new Set(['kind', 'purchased', 'archive']);
+function setShelvesOpen(open) {
+  $('navShelvesToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  $('navShelvesList').hidden = !open;
+  $('navShelves').classList.toggle('is-open', open);
+}
+let shelvesChoice = null;
+function shelvesRemembered() {
+  if (shelvesChoice !== null) return shelvesChoice;
+  try { return localStorage.getItem(SHELVES_KEY) === 'open'; } catch { return false; }
+}
+
 function renderNav() {
   const r = state.route;
   document.querySelectorAll('.nav-item').forEach((a) => {
@@ -243,6 +265,10 @@ function renderNav() {
   setCount('countArchive', state.items.filter((i) => i.archived).length);
   setCount('countTrash', (state.trash || []).length);
   renderKindNav(live);
+  const inShelf = SHELF_ROUTES.has(r.name);
+  setShelvesOpen(inShelf || shelvesRemembered());
+  // Closed, the group says it holds the view you're on.
+  $('navShelvesToggle').classList.toggle('has-active', inShelf);
   setCount('countCollections', state.collections.length);
   setCount('countImport', state.scan && state.scan.posts && state.scan.status === 'done' ? state.scan.posts.length : 0);
 }
@@ -623,12 +649,13 @@ function baseItems() {
 function currentGridItems() {
   let list = baseItems();
   if (state.retailer) list = list.filter((i) => i.retailer === state.retailer);
+  if (state.topic) list = list.filter((i) => (i.topics || []).includes(state.topic));
   if (state.sourceType) list = list.filter((i) => i.type === state.sourceType);
   const q = state.search.toLowerCase();
   if (q) {
     list = list.filter((i) => {
       const col = ctx.collectionById(i.collectionId);
-      const hay = [i.title, i.retailer, i.host, i.note, i.description, i.price !== null ? String(i.price) : '', formatPrice(i.price, i.currency), col?.name, i.instagram?.creator, i.instagram?.caption, i.instagram?.collectionName]
+      const hay = [i.title, ...(i.topics || []), i.retailer, i.host, i.note, i.description, i.price !== null ? String(i.price) : '', formatPrice(i.price, i.currency), col?.name, i.instagram?.creator, i.instagram?.caption, i.instagram?.collectionName]
         .filter(Boolean).join(' \n ').toLowerCase();
       return hay.includes(q);
     });
@@ -659,6 +686,8 @@ function renderGrid(view) {
   }
   // The places list sorts itself (by city, then name), so the sort and retailer filters don't apply.
   if (baseItems().length && !(r.name === 'kind' && r.id === 'place')) view.append(gridFilters);
+  const chips = topicChips();
+  if (chips) view.append(chips);
   const items = currentGridItems();
   if (!items.length) {
     view.append(gridEmptyState());
@@ -679,12 +708,29 @@ function renderGrid(view) {
   }
 }
 
+// Tags in this view, most used first, as filter chips ("All", "AI 4", "Video games 3"…).
+function topicChips() {
+  const counts = new Map();
+  for (const i of baseItems()) for (const t of i.topics || []) counts.set(t, (counts.get(t) || 0) + 1);
+  if (!counts.size) {
+    state.topic = '';
+    return null;
+  }
+  if (state.topic && !counts.has(state.topic)) state.topic = '';
+  const sorted = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 16);
+  const chip = (value, label, n) => el('button', { type: 'button', class: `topic-chip ${state.topic === value ? 'on' : ''}`, 'aria-pressed': state.topic === value ? 'true' : 'false', onClick: () => {
+    state.topic = state.topic === value ? '' : value;
+    renderView();
+  } }, [label, n ? el('span', { class: 'count' }, [String(n)]) : null]);
+  return el('div', { class: 'topic-chips', role: 'group', 'aria-label': 'Filter by tag' }, [chip('', 'All tags'), ...sorted.map(([t, n]) => chip(t, t, n))]);
+}
+
 function gridEmptyState() {
   const r = state.route;
-  if (state.search || state.retailer || state.sourceType) {
+  if (state.search || state.retailer || state.sourceType || state.topic) {
     return UI.emptyState({
       title: 'No matches', message: 'Nothing here matches your search or filter.',
-      actions: [el('button', { type: 'button', class: 'btn', onClick: () => { state.search = ''; state.retailer = ''; state.sourceType = ''; $('searchInput').value = ''; renderToolbar(); renderView(); } }, ['Clear search'])],
+      actions: [el('button', { type: 'button', class: 'btn', onClick: () => { state.search = ''; state.retailer = ''; state.sourceType = ''; state.topic = ''; $('searchInput').value = ''; renderToolbar(); renderView(); } }, ['Clear search'])],
       icon: UI.folderIcon(),
     });
   }
@@ -748,6 +794,7 @@ function cardNode(item) {
         el('span', { class: 'card-retailer', title: item.url || '' }, [item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '']),
       ]),
       item.note ? el('div', { class: 'card-note' }, [item.note]) : null,
+      item.topics?.length ? el('div', { class: 'card-topics' }, item.topics.slice(0, 3).map((t) => el('span', { class: 'topic-pill' }, [t]))) : null,
       state.route.name !== 'c' && col ? el('div', { class: 'card-meta' }, [el('span', { class: 'muted small' }, [col.name])]) : null,
     ]),
   ]);
@@ -1050,7 +1097,62 @@ async function openSave(id) {
   if (item && kindOf(item) === 'recipe') return openRecipe(id);
   if (item && kindOf(item) === 'workout') return openWorkout(id);
   if (item && kindOf(item) === 'place') return openPlace(id);
+  if (item && ['video', 'article'].includes(kindOf(item))) return openMedia(id);
   return openQuickView(id);
+}
+
+// A video or article to get to later: what it is, how long it takes, and a way to it. Nothing is embedded
+// or played here, so nothing loads from the video site until you open it.
+async function openMedia(id) {
+  const item = await store.getItem(id);
+  if (!item) {
+    UI.toast('That item no longer exists.', { kind: 'danger' });
+    return;
+  }
+  const kind = kindOf(item);
+  const d = item.details || {};
+  const isVideo = kind === 'video';
+  const date = d.publishedOn ? new Date(`${d.publishedOn}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  const facts = isVideo
+    ? [d.channel ? ['Channel', d.channel] : null, d.platform ? ['On', d.platform] : null, d.durationSeconds ? ['Length', formatDuration(d.durationSeconds)] : null, date ? ['Published', date] : null]
+    : [d.author ? ['By', d.author] : null, d.siteName || item.retailer ? ['Site', d.siteName || item.retailer] : null, d.readingMinutes ? ['Reading time', `${d.readingMinutes} min${d.wordCount ? ` · ${d.wordCount.toLocaleString()} words` : ''}`] : null, date ? ['Published', date] : null];
+  const summary = item.description || (item.type === 'instagram' ? item.instagram?.caption : '') || '';
+  const done = item.status === 'done';
+  const verb = kindInfo(kind).done;
+  const body = el('div', { class: 'recipe-view media-view' }, [
+    el('div', { class: `recipe-hero ${item.image ? '' : 'no-pic'}` }, [
+      item.image ? el('div', { class: 'media-pic-wrap' }, [
+        UI.pictureNode({ src: item.image, aspect: item.imageAspect || (isVideo ? 16 / 9 : 1.5), title: item.title, className: 'recipe-hero-pic media-pic' }),
+        isVideo && d.durationSeconds ? el('span', { class: 'media-duration' }, [formatDuration(d.durationSeconds)]) : null,
+      ]) : null,
+      el('div', { class: 'recipe-hero-text' }, [
+        el('span', { class: `badge kind-badge kind-${kind}` }, [kindIcon(kind), kindInfo(kind).label]),
+        el('h2', { class: 'recipe-title' }, [item.title]),
+        facts.filter(Boolean).length ? el('dl', { class: 'recipe-facts-grid' }, facts.filter(Boolean).flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
+        item.topics?.length ? el('div', { class: 'card-topics media-topics' }, [
+          ...item.topics.map((t) => el('span', { class: 'topic-pill' }, [t])),
+          item.topicsBy === 'guess' ? el('span', { class: 'help' }, ['Guessed from the title. Change them in Edit details.']) : null,
+        ]) : null,
+        summary ? el('p', { class: 'media-summary' }, [cut(summary, 600)]) : null,
+        item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
+        done ? el('span', { class: 'badge' }, [verb]) : null,
+      ]),
+    ]),
+  ]);
+  await UI.openModal({
+    title: item.title,
+    body,
+    wide: true,
+    className: 'modal-recipe modal-media',
+    actions: [
+      { label: 'Edit details', quiet: true, closes: false, onClick: async (close) => { close(false); await openItem(item.id); } },
+      { label: done ? `${verb} ✓` : `Mark ${verb.toLowerCase()}`, onClick: async () => {
+        await store.updateItem(item.id, { status: done ? 'saved' : 'done' });
+        UI.toast(done ? `Marked as not ${verb.toLowerCase()} yet.` : `Marked as ${verb.toLowerCase()}.`, { duration: 2200 });
+      } },
+      item.url ? { label: isVideo ? `Watch${d.platform ? ` on ${d.platform}` : ''}` : item.type === 'instagram' ? 'Open post' : 'Read', href: openableUrl(item.url), primary: true, autofocus: true, icon: UI.externalIcon() } : null,
+    ].filter(Boolean),
+  });
 }
 
 // "Open in Maps": Apple Maps or Google Maps, in a new tab. The links are built from what's saved; Keepsake
@@ -1626,6 +1728,20 @@ async function openItem(id) {
   };
   const placeHours = el('textarea', { class: 'textarea', rows: '3', 'aria-label': 'Opening hours, one line per day or range', placeholder: 'Mon–Fri 12:00–22:00\nSat 10:00–23:00' });
   placeHours.value = (startPlace.hours || []).join('\n');
+  // Videos and articles: the few facts that say how long it takes and who made it.
+  const startMedia = ['video', 'article'].includes(startKind) ? item.details || {} : {};
+  const mediaInput = (label, value, attrs = {}) => {
+    const i = el('input', { class: 'input', 'aria-label': label, placeholder: label, ...attrs });
+    i.value = value || '';
+    return i;
+  };
+  const mediaFields = {
+    channel: mediaInput('Channel', startMedia.channel, { maxlength: '80' }),
+    length: mediaInput('Length, e.g. 12:30', startMedia.durationSeconds ? formatDuration(startMedia.durationSeconds) : ''),
+    author: mediaInput('Author', startMedia.author, { maxlength: '80' }),
+    minutes: mediaInput('Reading minutes', startMedia.readingMinutes, { inputmode: 'numeric' }),
+    published: mediaInput('Published', startMedia.publishedOn, { type: 'date' }),
+  };
   let prefilled = false;
   let prefilledText = '';
   let recipeEditing = false;
@@ -1727,10 +1843,19 @@ async function openItem(id) {
   function renderKindPanel() {
     const kind = kindSelect.value;
     priceField.classList.toggle('hidden', kind !== 'product');
+    topicsField.classList.toggle('hidden', kind === 'product' && !(item.topics || []).length);
     doneToggle.lastChild.textContent = kindInfo(kind).done;
     clear(kindPanel);
     if (kind === 'recipe') kindPanel.append(recipePanel());
     if (kind === 'place') kindPanel.append(placePanel());
+    if (kind === 'video' || kind === 'article') {
+      const f = mediaFields;
+      kindPanel.append(el('div', { class: 'recipe-panel' }, [
+        el('div', { class: 'recipe-head' }, [el('h3', {}, [kindInfo(kind).label])]),
+        kind === 'video' ? el('div', { class: 'price-inline' }, [f.channel, f.length]) : el('div', { class: 'price-inline' }, [f.author, f.minutes]),
+        el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Published']), f.published]),
+      ]));
+    }
     if (kind === 'workout') {
       // Switching a save to Workout: fill in what its caption or description lists, to check and keep.
       if (!workoutLines.value.trim() && !prefilled) {
@@ -1866,6 +1991,19 @@ async function openItem(id) {
     return ing.value.trim() !== (was.ingredients || []).join('\n').trim() || steps.value.trim() !== (was.steps || []).join('\n').trim();
   }
 
+  // Tags: what it's about. Shown for every kind except products (those have collections).
+  const topicsInput = el('input', { class: 'input', maxlength: '240', 'aria-label': 'Tags, separated by commas', placeholder: 'e.g. AI, Video games' });
+  topicsInput.value = (item.topics || []).join(', ');
+  const topicsHint = el('p', { class: 'help' }, [item.topicsBy === 'guess' ? 'Guessed from the title and description. Edit them and they’re yours.' : 'Separate tags with commas.']);
+  const suggest = guessTopics({ title: item.title, channel: item.details?.channel || item.details?.siteName || '', description: item.description }).filter((t) => !(item.topics || []).includes(t));
+  const topicsField = el('div', { class: 'field' }, [
+    el('label', { class: 'label' }, ['Tags']), topicsInput, topicsHint,
+    suggest.length ? el('div', { class: 'card-topics' }, suggest.map((t) => el('button', { type: 'button', class: 'topic-chip', onClick: (e) => {
+      topicsInput.value = cleanTopics([...cleanTopics(topicsInput.value), t]).join(', ');
+      e.currentTarget.remove();
+    } }, [`+ ${t}`]))) : null,
+  ]);
+
   const side = el('div', { class: 'item-detail-side' }, [
     source,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Title']), titleInput]),
@@ -1874,6 +2012,7 @@ async function openItem(id) {
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Kind']), kindSelect]),
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Collection']), colSelect, learnRow]),
     el('div', { class: 'category-box' }, [catText]),
+    topicsField,
     kindPanel,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Note']), noteInput]),
     el('div', { class: 'toggles' }, [toggle('favorite', 'Favorite', UI.starIcon(true)), doneToggle, toggle('purchased', 'Purchased', UI.checkIcon()), toggle('archived', 'Archived', UI.folderIcon())]),
@@ -1906,6 +2045,11 @@ async function openItem(id) {
           kind: kindSelect.value,
           status: flags.done ? 'done' : item.status === 'done' ? 'saved' : item.status || 'saved',
         };
+        const topics = cleanTopics(topicsInput.value);
+        if (topics.join('\n') !== (item.topics || []).join('\n')) {
+          patch.topics = topics;
+          patch.topicsBy = topics.length ? 'you' : '';
+        }
         if (kindSelect.value === 'recipe') patch.details = sanitizeDetails('recipe', recipe);
         else if (kindSelect.value === 'workout') {
           const { exercises, unread } = readWorkoutLines();
@@ -1923,6 +2067,17 @@ async function openItem(id) {
           // A moved address makes the page's pin wrong, so the pin goes with it (maps then search by address).
           const moved = ['address', 'locality', 'postalCode', 'country'].some((k) => next[k] !== (was[k] || ''));
           patch.details = sanitizeDetails('place', { ...was, ...next, lat: moved ? null : was.lat, lng: moved ? null : was.lng, source: changed || startKind !== 'place' ? 'you' : was.source });
+        } else if (kindSelect.value === 'video' || kindSelect.value === 'article') {
+          const k = kindSelect.value;
+          const f = mediaFields;
+          const len = f.length.value.trim();
+          if (k === 'video' && len && !secondsFrom(len)) throw new Error('Write the length like 12:30 or 1:05:00.');
+          const was = k === startKind ? sanitizeDetails(k, startMedia) : sanitizeDetails(k, {});
+          const next = k === 'video'
+            ? { ...was, channel: f.channel.value.trim(), durationSeconds: secondsFrom(len), publishedOn: f.published.value }
+            : { ...was, author: f.author.value.trim(), readingMinutes: Number(f.minutes.value) || null, publishedOn: f.published.value };
+          const changed = JSON.stringify(sanitizeDetails(k, { ...next, source: was.source })) !== JSON.stringify(was);
+          patch.details = sanitizeDetails(k, { ...next, source: changed || k !== startKind ? 'you' : was.source });
         } else if (kindSelect.value !== startKind) patch.details = {};
         const priceText = priceInput.value.trim();
         if (!priceText) {

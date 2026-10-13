@@ -42,6 +42,25 @@ export const DEFAULT_TAXONOMY = [
     keywords: [],
   },
   {
+    // Saves of kind "video" and "article" are filed here the same way.
+    key: 'videos',
+    name: 'Videos',
+    description: 'Videos you want to watch.',
+    color: '#6B4F8A',
+    aliases: ['videos', 'watch later'],
+    strong: [],
+    keywords: [],
+  },
+  {
+    key: 'articles',
+    name: 'Articles',
+    description: 'Articles you want to read.',
+    color: '#4F6B8A',
+    aliases: ['articles', 'read later', 'reading list'],
+    strong: [],
+    keywords: [],
+  },
+  {
     key: 'camping',
     name: 'Camping & Outdoors',
     description: 'Tents, sleeping bags, stoves, packs, hiking and campsite gear.',

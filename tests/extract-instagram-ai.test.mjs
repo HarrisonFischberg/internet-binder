@@ -151,3 +151,35 @@ test('AI: missing key and provider errors are reported, not swallowed', async ()
   globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => JSON.stringify({ error: { message: 'invalid x-api-key' } }) });
   await assert.rejects(cleanupWithAI([{ ref: 'a', item: { title: 't' } }], cols, anthropic, 'bad'), /Provider error \(401\): invalid x-api-key/);
 });
+
+test('extract: a page reached without a reload ignores the previous page’s tags (YouTube in-app navigation)', () => {
+  // Head still describes video A; the address, tab title and screen show video B.
+  const p = extractFrom(`<html><head><title>Second video title - YouTube</title>
+    <meta property="og:url" content="https://www.youtube.com/watch?v=AAAAAAAAAAA">
+    <meta property="og:title" content="First video title"><meta property="og:type" content="video.other">
+    <meta property="og:description" content="First video description"><meta property="og:image" content="https://i.ytimg.com/vi/AAAAAAAAAAA/hqdefault.jpg">
+    <meta property="og:site_name" content="YouTube"></head><body>
+    <span itemprop="author"><link itemprop="name" content="First Channel"></span><meta itemprop="duration" content="PT0M19S"><meta itemprop="uploadDate" content="2005-04-23">
+    <ytd-watch-metadata><h1>Second video title</h1><ytd-channel-name><a href="/@second">Second Channel</a></ytd-channel-name></ytd-watch-metadata>
+    <div class="html5-video-player"><span class="ytp-time-duration">6:50</span></div></body></html>`, 'https://www.youtube.com/watch?v=BBBBBBBBBBB');
+  assert.equal(p.title, 'Second video title');
+  assert.equal(p.image, 'https://i.ytimg.com/vi/BBBBBBBBBBB/hqdefault.jpg');
+  assert.equal(p.description, '', 'the first video’s description is not used');
+  assert.deepEqual([p.media.channel, p.media.duration, p.media.published], ['Second Channel', '6:50', '']);
+  assert.ok(p.signals.includes('stale-head'));
+
+  // While an ad plays, the player's clock is the ad's: no length rather than a wrong one.
+  const ad = extractFrom(`<html><head><title>Second video title - YouTube</title><meta property="og:url" content="https://www.youtube.com/watch?v=BBBBBBBBBBB"></head><body>
+    <ytd-watch-metadata><h1>Second video title</h1></ytd-watch-metadata><div class="html5-video-player ad-showing"><span class="ytp-time-duration">0:15</span></div></body></html>`, 'https://www.youtube.com/watch?v=BBBBBBBBBBB');
+  assert.equal(ad.media.duration, '');
+
+  // A shop whose og:url is the short product path is not stale: its tags are still read.
+  const shop = extractFrom(`<html><head><title>Linen shirt – Example Shop</title><meta property="og:url" content="https://shop.example/products/linen-shirt">
+    <meta property="og:title" content="Linen shirt"><meta property="og:image" content="https://shop.example/shirt.jpg"></head><body><h1>Linen shirt</h1></body></html>`, 'https://shop.example/collections/summer/products/linen-shirt');
+  assert.equal(shop.image, 'https://shop.example/shirt.jpg');
+  assert.ok(!shop.signals.includes('stale-head'));
+
+  // The home page's tags on an inner page are stale.
+  const home = extractFrom(`<html><head><title>A recipe – Cook</title><meta property="og:url" content="https://cook.example/"><meta property="og:title" content="Cook"><meta property="og:image" content="https://cook.example/logo.png"></head><body><h1>A recipe</h1></body></html>`, 'https://cook.example/recipes/a-recipe');
+  assert.notEqual(home.image, 'https://cook.example/logo.png');
+});

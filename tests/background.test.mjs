@@ -188,6 +188,31 @@ test('a Google Maps link is saved as a place named from the link', async () => {
   assert.deepEqual([res.item.details.lat, res.item.details.lng, res.item.details.source], [51.4551, -2.5911, 'maps-link']);
 });
 
+test('videos and articles: a YouTube link is a video with its length; an og:type article gets a reading time', async () => {
+  const yt = { title: 'How to sharpen a knife', url: 'https://www.youtube.com/watch?v=abc123', images: [], image: '', price: null, schemaTypes: [],
+    media: { ogType: 'video.other', duration: 'PT12M3S', channel: 'Example Channel', published: '2026-09-30' } };
+  const v = await F.send({ type: MSG.SAVE_ITEM, product: yt, instant: true }, popup);
+  assert.equal(v.item.kind, 'video');
+  assert.deepEqual([v.item.details.durationSeconds, v.item.details.channel, v.item.details.platform], [723, 'Example Channel', 'YouTube']);
+  assert.equal(v.collection.name, 'Videos');
+  const post = { title: 'Why bread goes stale', url: 'https://read.example/stale', images: [], image: '', price: null, priceText: '$4.99', siteName: 'Read Example', schemaTypes: [],
+    media: { ogType: 'article', author: 'A. Writer', wordCount: 1150 } };
+  const a = await F.send({ type: MSG.SAVE_ITEM, product: post, instant: true }, popup);
+  assert.equal(a.item.kind, 'article', 'a price in the text does not make an article a product');
+  assert.equal(a.item.details.readingMinutes, 5);
+  assert.equal(a.item.details.siteName, 'Read Example');
+  assert.equal(a.collection.name, 'Articles');
+  assert.equal(a.item.price, null);
+  const gym = { title: '15 min full body workout', url: 'https://www.youtube.com/watch?v=def456', images: [], image: '', price: null, schemaTypes: [],
+    description: 'No equipment workout\n3x12 squats\n3x10 push-ups\n3x30s plank', media: { ogType: 'video.other' } };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: gym, instant: true }, popup)).item.kind, 'video', 'anything on YouTube is a video, workouts too');
+  const channel = { title: 'Better Stack - YouTube', url: 'https://www.youtube.com/@BetterStack', images: [], image: '', price: null, schemaTypes: [] };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: channel, instant: true }, popup)).item.kind, 'video', 'a channel page too');
+  const game = { title: 'I Put Black Ops 3 Zombies in GTA 5 With One Prompt', url: 'https://www.youtube.com/watch?v=zzz999', images: [], image: '', price: null, schemaTypes: [], media: { channel: 'Better Stack' } };
+  const g = await F.send({ type: MSG.SAVE_ITEM, product: game, instant: true }, popup);
+  assert.deepEqual([g.item.topics, g.item.topicsBy], [['Video games', 'AI'], 'guess'], 'tags guessed from the title');
+});
+
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
   const link = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'Reading list', url: 'https://notes.example/x', sparse: true }, instant: true }, popup);
   assert.equal(link.item.kind, 'link');

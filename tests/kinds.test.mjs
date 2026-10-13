@@ -286,3 +286,40 @@ test('places: schema.org restaurant, opening hours, maps links read from the lin
   assert.equal(keyFact({ kind: 'place', details: p }), 'Bristol · Georgian · ££');
   assert.equal(kindFromSchemaTypes(['WebPage', 'Restaurant']), 'place');
 });
+
+test('videos and articles: platform from the link, lengths, reading time, and an article with a video stays an article', async () => {
+  const { videoPlatform, secondsFrom, formatDuration, videoFromCapture, articleFromCapture } = await import('../keepsake/src/shared/kinds.js');
+  assert.equal(videoPlatform('https://www.youtube.com/watch?v=abc123'), 'YouTube');
+  assert.equal(videoPlatform('https://m.youtube.com/shorts/abc123'), 'YouTube');
+  assert.equal(videoPlatform('https://youtu.be/abc123xyz'), 'YouTube');
+  assert.equal(videoPlatform('https://vimeo.com/76979871'), 'Vimeo');
+  assert.equal(videoPlatform('https://www.youtube.com/@somechannel'), '', 'a channel page is not a video');
+  assert.equal(videoPlatform('not a url'), '');
+  assert.deepEqual([secondsFrom('PT1H2M3S'), secondsFrom('12:03'), secondsFrom('1:02:03'), secondsFrom(754), secondsFrom('754'), secondsFrom('soon')], [3723, 723, 3723, 754, 754, null]);
+  assert.deepEqual([formatDuration(59), formatDuration(723), formatDuration(3723)], ['0:59', '12:03', '1:02:03']);
+  assert.deepEqual(videoFromCapture({ duration: 'PT12M3S', channel: 'Example Channel', published: '2026-09-30T10:00:00Z' }, 'https://www.youtube.com/watch?v=x'),
+    { durationSeconds: 723, channel: 'Example Channel', platform: 'YouTube', publishedOn: '2026-09-30', source: 'page' });
+  const a = articleFromCapture({ author: 'A. Writer', wordCount: 1840, published: '2026-10-01', siteName: 'The Example' });
+  assert.equal(a.readingMinutes, 8);
+  assert.equal(articleFromCapture({ wordCount: 40 }).readingMinutes, 1, 'never 0 minutes');
+  assert.equal(keyFact({ kind: 'article', details: a }), 'The Example · 8 min read');
+  assert.equal(keyFact({ kind: 'video', details: { channel: 'Example Channel', durationSeconds: 723 } }), 'Example Channel · 12:03');
+  assert.equal(kindFromSchemaTypes(['NewsArticle', 'VideoObject']), 'article');
+  assert.equal(kindFromSchemaTypes(['VideoObject']), 'video');
+  assert.equal(kindFromSchemaTypes(['Recipe', 'VideoObject']), 'recipe');
+  assert.equal(sanitizeDetails('video', { durationSeconds: '12:03', publishedOn: 'yesterday', source: 'x' }).publishedOn, '');
+  assert.equal(sanitizeDetails('video', { durationSeconds: '12:03' }).durationSeconds, 723);
+});
+
+test('topics: guessed from title, channel and description; whole words only; tags cleaned', async () => {
+  const { guessTopics, cleanTopics } = await import('../keepsake/src/shared/topics.js');
+  assert.deepEqual(guessTopics({ title: 'I Put Black Ops 3 Zombies in GTA 5 With One Prompt', channel: 'Better Stack' }), ['Video games', 'AI']);
+  assert.deepEqual(guessTopics({ title: 'Nike Air Max 1 on feet review' }), ['Shoes']);
+  assert.deepEqual(guessTopics({ title: 'Me at the zoo', channel: 'jawed' }), [], 'nothing to go on: no tags rather than a wrong one');
+  assert.deepEqual(guessTopics({ title: 'The said waiter explains the main dish' }), [], '"ai" inside words never counts as AI');
+  assert.deepEqual(guessTopics({ title: 'Weekend vlog', description: '', hashtags: ['#streetFood', 'ramen', '#sourdough'] }), ['Food & cooking'], 'hashtags count, camelCase split');
+  assert.equal(guessTopics({ title: 'x', description: 'gaming gameplay speedrun' }).length, 1, 'several description hits add up');
+  assert.deepEqual(cleanTopics(' AI, video games ,#Tech, ai, , Very long tag name that goes on and on and on'), ['AI', 'video games', 'Tech', 'Very long tag name that goes o']);
+  assert.equal(cleanTopics(Array.from({ length: 20 }, (_, i) => `t${i}`)).length, 8);
+  assert.deepEqual(makeItem({ url: 'https://a.example', topics: ['AI', 'ai', 'Tech'], topicsBy: 'nonsense' }).topics, ['AI', 'Tech']);
+});

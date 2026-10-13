@@ -33,8 +33,10 @@ Keepsake
 ├── Library                   every save; filter by Kind, Collection, Status, Source; sort; grid or list
 │   ├── Wishlist              preset filter: products, not purchased
 │   ├── Places                list grouped by city (Chrome) · Map (Apple)
-│   ├── Recipes · Videos · Articles · Workouts · Films & shows · Books   (preset filters, shown only when they have saves)
-│   ├── Favourites · Purchased · Archive
+│   ├── Favourites · Review
+│   ├── Shelves (collapsible; open while you're on one of its views, otherwise as you left it)
+│   │   ├── Recipes · Videos · Articles · Workouts · Places · Films & shows · Books   (shown only when they have saves)
+│   │   └── Purchased · Archive
 │   └── Trash
 ├── Review                    file uncertain saves; appears only when non-empty
 ├── Collections               all collections → one collection
@@ -166,6 +168,22 @@ Saving a restaurant or place page reads its schema.org place data (address, pin,
 - **Place view:** photo, name, source, address with Copy, cuisine, price, phone, opening hours ("As published on the page when you saved it. Check before you go."), actions Edit details, Visit page, Apple Maps, Google Maps, Mark been.
 - **Edit details:** address fields, cuisine, price, phone, hours (one line each). Changing the address drops the page's pin, so maps search the new address instead of pointing at the old spot. On an Instagram save, "Use the tagged location as the name".
 - No map in Chrome (no third-party tiles); the Apple apps add the map in M3.
+
+### Videos and articles (Chrome, built in M2d)
+
+- **Video:** a watch page on YouTube, Vimeo, TikTok, Dailymotion or Twitch, a page with `og:type` video, or schema.org VideoObject. Details: length, channel, platform, date. Files to **Watch later**.
+- **Article:** schema.org Article types or `og:type` article. Details: author, site, date, word count, reading time (230 words a minute, never under 1 min). Files to **Read later**. An article with a video in it stays an article; a recipe or workout page stays a recipe or workout.
+- **View:** a wide dialog: thumbnail (with the length on videos), title, facts, the page's summary, note; actions Edit details, Mark watched / Mark read, and **Watch on YouTube** / **Read** (primary, opens the page). Nothing is embedded or played inside Keepsake.
+
+### Tags (all platforms)
+
+A save can carry up to 8 **tags** saying what it's about ("AI", "Video games", "Shoes"). Videos, articles and links get up to 3 **guessed** on save, locally, from the title (counts most), the channel or site, the description and hashtags (`shared/topics.js`: about 30 topics, whole-word phrases; no AI, no network). No tag beats a wrong one: a guess needs a title hit or several hits elsewhere.
+
+- Cards show up to 3 tags; a view with tagged saves shows filter chips ("All tags", "AI 2", …); search matches tags.
+- The video/article view shows the tags with "Guessed from the title" until you change them.
+- Edit details: a Tags field (comma-separated) plus "+ AI"-style suggestions. Editing makes them yours (`topicsBy: 'you'`, in `userFields`), so nothing re-guesses over them.
+
+**YouTube rule (owner decision 2026-10-12):** anything on youtube.com or youtu.be (videos, Shorts, channels, playlists) is saved as a Video and files to **Videos**, workouts included. Articles file to **Articles**.
 
 ### F07 Delete and undo
 

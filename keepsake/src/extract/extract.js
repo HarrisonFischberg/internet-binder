@@ -34,12 +34,51 @@
       return '';
     }
   };
-  const meta = (selector) => safe(() => text(document.querySelector(selector)?.getAttribute('content')), '');
-  const metaAll = (selector) => safe(() => Array.from(document.querySelectorAll(selector)).map((m) => text(m.getAttribute('content'))).filter(Boolean), []);
+  // Sites that change pages without reloading (YouTube and other apps) can leave the <head> describing
+  // the page you came from. When it does (see staleHead), its tags and structured data are not read,
+  // except the site's own name, which is the same on every page.
+  let STALE = false;
+  const rawMeta = (selector) => safe(() => text(document.querySelector(selector)?.getAttribute('content')), '');
+  const meta = (selector) => (STALE && !/site_name|og:type|application-name/.test(selector) ? '' : rawMeta(selector));
+  const metaAll = (selector) => (STALE ? [] : safe(() => Array.from(document.querySelectorAll(selector)).map((m) => text(m.getAttribute('content'))).filter(Boolean), []));
+
+  // The head's tags belong to another page: og:url names a different page than the one open, and the
+  // tab's title no longer contains og:title (or they're the home page's tags on an inner page).
+  function staleHead() {
+    const ogUrl = rawMeta('meta[property="og:url"]');
+    if (!ogUrl) return false;
+    const o = new URL(ogUrl, location.href);
+    const here = new URL(location.href);
+    const id = (u) => `${u.hostname.replace(/^www\.|^m\./, '')}${u.pathname.replace(/\/+$/, '')}${u.searchParams.get('v') ? `?v=${u.searchParams.get('v')}` : ''}`;
+    if (id(o) === id(here)) return false;
+    if (!o.pathname.replace(/\/+$/, '') && here.pathname.replace(/\/+$/, '')) return true;
+    const t = rawMeta('meta[property="og:title"]').toLowerCase().slice(0, 30);
+    return !!t && !String(document.title || '').toLowerCase().includes(t);
+  }
+
+  // A YouTube watch page, read from what's on screen (its head and microdata can be a previous video's).
+  function youtubeWatch() {
+    if (!/(^|\.)youtube\.com$/.test(location.hostname)) return null;
+    const here = new URL(location.href);
+    const vid = here.searchParams.get('v') || (here.pathname.match(/^\/(?:shorts|live)\/([\w-]{6,})/) || [])[1];
+    if (!vid || !/^[\w-]{6,20}$/.test(vid)) return null;
+    const q = (sel) => safe(() => text(document.querySelector(sel)?.textContent), '');
+    const player = document.querySelector('.html5-video-player');
+    const ad = !!player && player.classList.contains('ad-showing');
+    return {
+      title: q('ytd-watch-metadata h1') || q('h1.title') || text(String(document.title || '').replace(/\s*-\s*YouTube\s*$/, '')),
+      channel: q('ytd-watch-metadata ytd-channel-name a') || q('#owner #channel-name a') || q('ytd-video-owner-renderer #channel-name'),
+      // The player's own clock, unless an ad is playing (then it's the ad's length).
+      duration: ad ? '' : q('.ytp-time-duration'),
+      // YouTube's own thumbnail address for this video id.
+      image: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+      description: q('ytd-watch-metadata #description-inline-expander yt-attributed-string') || q('#description-inline-expander') || '',
+    };
+  }
 
   // ---- 1. JSON-LD ------------------------------------------------------------
   function readJsonLd() {
-    const out = { product: null, breadcrumbs: [], recipe: null, place: null, types: [] };
+    const out = { product: null, breadcrumbs: [], recipe: null, place: null, video: null, article: null, types: [] };
     const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).slice(0, 25);
     const nodes = [];
     for (const s of scripts) {
@@ -67,6 +106,8 @@
     const places = nodes.filter((n) => types(n).some((t) => PLACE.test(t)) && (n.address || n.geo));
     places.sort((a, b) => (b.geo ? 2 : 0) + (b.openingHoursSpecification || b.openingHours ? 1 : 0) - ((a.geo ? 2 : 0) + (a.openingHoursSpecification || a.openingHours ? 1 : 0)));
     out.place = places[0] || null;
+    out.video = nodes.find((n) => types(n).includes('videoobject')) || null;
+    out.article = nodes.find((n) => types(n).some((t) => /^(?:article|newsarticle|blogposting|reportagenewsarticle|techarticle|analysisnewsarticle|opinionnewsarticle|reviewnewsarticle|scholarlyarticle)$/.test(t))) || null;
     const crumbs = nodes.find((n) => types(n).includes('breadcrumblist'));
     if (crumbs && Array.isArray(crumbs.itemListElement)) {
       out.breadcrumbs = crumbs.itemListElement
@@ -324,6 +365,31 @@
     return out;
   }
 
+  // ---- videos and articles -----------------------------------------------------
+  // The few facts that matter for watching or reading later: length, channel or author, date, word count.
+  const nameOf = (v) => text(Array.isArray(v) ? nameOf(v[0]) : typeof v === 'string' ? v : v && typeof v === 'object' ? v.name || '' : '');
+  function mediaFacts(ld, ogType) {
+    const v = ld?.video || null;
+    const a = ld?.article || null;
+    const micro = (prop) => (STALE ? '' : safe(() => text(document.querySelector(`[itemprop="${prop}"]`)?.getAttribute('content')), ''));
+    const out = {
+      ogType,
+      duration: text(v?.duration) || micro('duration') || meta('meta[property="video:duration"]') || meta('meta[property="og:video:duration"]'),
+      channel: nameOf(v?.author) || nameOf(v?.creator) || (STALE ? '' : safe(() => text(document.querySelector('[itemprop="author"] [itemprop="name"]')?.getAttribute('content')), '')),
+      author: nameOf(a?.author) || meta('meta[name="author"]') || meta('meta[property="article:author"]').replace(/^https?:\/\/\S+$/, ''),
+      published: text(v?.uploadDate || a?.datePublished) || meta('meta[property="article:published_time"]') || micro('uploadDate') || micro('datePublished'),
+      siteName: nameOf(a?.publisher),
+      wordCount: Number(a?.wordCount) || 0,
+    };
+    // Reading time needs a word count: from the page's own article text when it didn't publish one.
+    if (!out.wordCount && (a || /^article/i.test(ogType))) {
+      const body = document.querySelector('article') || document.querySelector('main, [role="main"]');
+      const t = body ? String(body.innerText || body.textContent || '').slice(0, 300000) : '';
+      out.wordCount = t ? t.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length : 0;
+    }
+    return out;
+  }
+
   // ---- assemble ----------------------------------------------------------------
   function extract(hints) {
     const h = hints || safe(() => globalThis.__keepsakeHints) || {};
@@ -335,7 +401,9 @@
     };
     const images = [];
 
-    const ld = safe(readJsonLd, { product: null, breadcrumbs: [], recipe: null, types: [] });
+    STALE = !!safe(staleHead, false);
+    const ld = STALE ? { product: null, breadcrumbs: [], recipe: null, place: null, video: null, article: null, types: [] } : safe(readJsonLd, { product: null, breadcrumbs: [], recipe: null, types: [] });
+    if (STALE) result.signals.push('stale-head');
     result.schemaTypes = ld?.types || [];
     if (ld?.product) {
       const p = ld.product;
@@ -470,6 +538,19 @@
     if (h.selectionText && !result.description) result.description = text(h.selectionText).slice(0, 500);
     if (h.linkUrl) result.linkUrl = abs(h.linkUrl);
     result.pageTitle = pageTitle();
+    if (!ld?.product && !recipe) result.media = safe(() => mediaFacts(ld, meta('meta[property="og:type"]')), null);
+    // YouTube: what's on screen wins over the head, which may describe the previous video.
+    const yt = safe(youtubeWatch, null);
+    if (yt) {
+      if (yt.title) result.title = yt.title;
+      if (yt.description) result.description = yt.description.slice(0, 1000);
+      else if (STALE) result.description = '';
+      result.images = [yt.image, ...result.images.filter((u) => u !== yt.image)].slice(0, 6);
+      result.image = yt.image;
+      result.imageAspect = 16 / 9;
+      result.media = { ...(result.media || {}), ogType: 'video.other', channel: yt.channel || (STALE ? '' : result.media?.channel || ''), duration: yt.duration || (STALE ? '' : result.media?.duration || '') };
+      if (STALE && result.media) result.media.published = '';
+    }
     if (!ld?.product && !recipe && !result.isInstagram) result.workoutLines = safe(() => workoutLines(result.title, result.description), []);
     return result;
   }
