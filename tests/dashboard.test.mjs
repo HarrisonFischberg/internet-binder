@@ -249,7 +249,7 @@ test('places: a list grouped by city, the place view with maps links, Been, and 
   assert.match(window.document.getElementById('navKinds').textContent, /Places/);
   await go('#kind/place');
   const cities = [...view().querySelectorAll('.place-city')].map((h) => h.firstChild.textContent);
-  assert.deepEqual(cities, ['Bath', 'Bristol', 'Somewhere else']);
+  assert.deepEqual(cities, ['Bath', 'Bristol', 'Seattle', 'Somewhere else'], 'Seattle: the sample places loaded earlier');
   assert.ok(!view().querySelector('.grid'), 'a list, not the grid');
   const row = [...view().querySelectorAll('.place-row')].find((r) => r.textContent.includes('Little Kitchen'));
   assert.match(row.textContent, /Georgian · 12 Mill Lane/);
@@ -375,7 +375,7 @@ test('films and books: a list to scroll, to-watch first; tick to move; the view 
   row.querySelector('input[type=checkbox]').click();
   await afterChange();
   assert.equal((await store.getItem(a.id)).status, 'done');
-  assert.deepEqual([...view().querySelectorAll('.place-city')].map((h) => h.firstChild.textContent), ['Watched']);
+  assert.deepEqual([...view().querySelectorAll('.place-city')].map((h) => h.firstChild.textContent), ['To watch', 'Watched'], 'only the sample film is left to watch');
   [...view().querySelectorAll('.shelf-row-hit')].find((b) => b.textContent.includes('A Film')).click();
   await afterChange();
   const sv = window.document.querySelector('.modal-shelf .shelf-view');

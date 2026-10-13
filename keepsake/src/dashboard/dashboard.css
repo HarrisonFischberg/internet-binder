@@ -2866,7 +2866,6 @@ body.modal-open {
   font-variant-numeric: tabular-nums;
 }
 
-.exercise-table th,
 .exercise-note {
   display: block;
   font: var(--t-caption);
@@ -2874,8 +2873,10 @@ body.modal-open {
   color: var(--c-text-muted);
 }
 
+.exercise-table th,
 .exercise-table td {
   text-align: left;
+  vertical-align: top;
   padding: 10px 8px;
   border-bottom: 1px solid var(--c-border);
 }

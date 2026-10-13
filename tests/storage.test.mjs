@@ -413,6 +413,13 @@ test('sample data loads into the right collections and leaves one item in Review
   const items = await store.getItems();
   assert.equal(items.length, n);
   assert.equal(items.filter((i) => i.needsReview).length, 1);
+  // Every Lifestyle view has something in it, outside the collections, and the places have pins for the map.
+  const lifestyle = items.filter((i) => i.kind !== 'product' && i.kind !== 'link');
+  assert.deepEqual([...new Set(lifestyle.map((i) => i.kind))].sort(), ['article', 'book', 'media', 'place', 'recipe', 'video', 'workout']);
+  assert.ok(lifestyle.every((i) => i.collectionId === null && !i.needsReview && i.categorizationSource === 'sample'));
+  assert.ok(items.filter((i) => i.kind === 'place').every((i) => Number.isFinite(i.details.lat) && Number.isFinite(i.details.lng) && i.details.locality === 'Seattle'));
+  assert.ok(items.find((i) => i.kind === 'recipe').details.ingredients.length > 0);
+  assert.ok(items.find((i) => i.kind === 'workout').details.exercises.length > 0);
 });
 
 test('item limit is enforced', async () => {

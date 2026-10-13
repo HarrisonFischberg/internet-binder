@@ -1165,5 +1165,46 @@ function sampleItems(byKey) {
     S('tools', { title: 'Cordless brushless drill driver kit, 18V', price: 159, currency: 'USD', retailer: 'Workbench Depot', url: 'https://example.com/tools/drill-18v', image: 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800', imageAspect: 1.4 }, 14),
     S('travel', { title: 'Carry-on suitcase with front laptop pocket', price: 275, currency: 'USD', retailer: 'Northline Luggage', url: 'https://example.com/travel/carry-on-front-pocket', image: 'https://images.unsplash.com/photo-1553531384-cc64ac80f931?w=800', imageAspect: 0.8 }, 20),
     S('home', { title: 'This title is intentionally very long to test how the dashboard wraps and truncates titles that run on and on without a natural break point in sight', price: null, retailer: 'Example Store', url: 'https://example.com/long-title', image: 'https://example.invalid/broken.jpg', imageAspect: 1 }, 25),
+    ...lifestyleSamples(S),
+  ];
+}
+
+// One or more of every Lifestyle kind, so each view (and the Places map) has something in it. The
+// places are made up: their names and pins are near real Seattle streets, not real businesses.
+function lifestyleSamples(S) {
+  const img = (id) => `https://images.unsplash.com/photo-${id}?w=800`;
+  // A place saved from a maps search, as you would from Google Maps.
+  const maps = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+  const place = (title, id, d, days, extra = {}) => S(null, { kind: 'place', title, url: maps(`${title}, Seattle, WA`), image: img(id), imageAspect: 1.33, retailer: 'Google Maps', details: { locality: 'Seattle', region: 'WA', country: 'United States', source: 'you', ...d }, ...extra }, days);
+  return [
+    place('Rye & Ember Bakery', '1509440159596-0249088772ff', { address: 'E Pike St & 11th Ave', lat: 47.6142, lng: -122.3178, category: 'bakery', hours: ['Tue–Sun 7am–3pm'] }, 1, { favorite: true, note: 'Get the seeded rye before 10.' }),
+    place('Lantern Coffee', '1501339847302-ac426a4a7cbb', { address: 'Fremont Ave N & N 35th St', lat: 47.6505, lng: -122.3497, category: 'cafe', hours: ['Daily 6:30am–5pm'] }, 2),
+    place('Shoyu House', '1569718212165-3a8278d5f624', { address: 'S Jackson St & 6th Ave S', lat: 47.5990, lng: -122.3266, category: 'restaurant', cuisine: 'Ramen', priceRange: '$$' }, 3),
+    place('Basecamp Bouldering', '1522163182402-834f871fd851', { address: 'NW Leary Way & 15th Ave NW', lat: 47.6633, lng: -122.3760, category: 'climbing gym' }, 4),
+    place('Sprinkle Donut Co.', '1551024601-bec78aea704b', { address: 'NW Market St & 22nd Ave NW', lat: 47.6687, lng: -122.3847, category: 'bakery', cuisine: 'Donuts', priceRange: '$' }, 6),
+    place('Two Scoops Creamery', '1501443762994-82bd5dace89a', { address: 'Stone Way N & N 45th St', lat: 47.6614, lng: -122.3420, category: 'ice cream' }, 7),
+    place('Slice of Belltown', '1513104890138-7c749659a591', { address: '2nd Ave & Bell St', lat: 47.6145, lng: -122.3460, category: 'restaurant', cuisine: 'Pizza', priceRange: '$$' }, 9),
+    S(null, { kind: 'recipe', title: 'Fluffy buttermilk pancakes', url: 'https://example.com/recipes/buttermilk-pancakes', image: img('1528207776546-365bb710ee93'), imageAspect: 1.33, retailer: 'Weeknight Kitchen', favorite: true,
+      details: { yield: '8 pancakes', prepMinutes: 10, cookMinutes: 15, totalMinutes: 25, category: 'Breakfast', source: 'page',
+        ingredients: ['2 cups all-purpose flour', '2 tbsp sugar', '2 tsp baking powder', '1/2 tsp baking soda', '1/2 tsp salt', '2 cups buttermilk', '2 eggs', '3 tbsp melted butter', 'Blueberries and maple syrup, to serve'],
+        steps: ['Whisk the flour, sugar, baking powder, baking soda and salt in a large bowl.', 'In another bowl, whisk the buttermilk, eggs and melted butter.', 'Pour the wet ingredients into the dry and stir until just combined; a few lumps are fine.', 'Heat a lightly buttered pan over medium heat. Pour 1/4 cup of batter per pancake.', 'Cook until bubbles form on top, about 2 minutes, then flip and cook 1 to 2 minutes more.', 'Serve warm with blueberries and maple syrup.'] } }, 2),
+    S(null, { kind: 'recipe', title: 'Rainbow chickpea bowl', url: 'https://example.com/recipes/rainbow-chickpea-bowl', image: img('1512621776951-a57141f2eefd'), imageAspect: 1.33, retailer: 'Weeknight Kitchen',
+      details: { yield: '2 bowls', totalMinutes: 20, category: 'Lunch', source: 'page',
+        ingredients: ['1 can chickpeas, drained', '1 cup cherry tomatoes, halved', '1 avocado, sliced', '1 cup shredded red cabbage', '1 roasted sweet potato, cubed', '2 handfuls salad greens', '2 tbsp tahini', '1 lemon', 'Salt and pepper'],
+        steps: ['Toss the chickpeas with a pinch of salt and pepper.', 'Whisk the tahini with the juice of the lemon and a splash of water.', 'Divide the greens between two bowls and arrange the vegetables and chickpeas on top.', 'Drizzle with the tahini dressing and serve.'] } }, 5),
+    S(null, { kind: 'workout', title: 'Full-body strength in 30 minutes', url: 'https://example.com/workouts/full-body-30', image: img('1517836357463-d25dfeac3438'), imageAspect: 1.33, retailer: 'Strong at Home',
+      details: { durationMinutes: 30, focus: 'Full body', source: 'page', exercises: [
+        { name: 'Goblet squat', sets: 3, reps: 10, restSeconds: 60 }, { name: 'Push-ups', sets: 3, reps: 12, restSeconds: 60 }, { name: 'Bent-over row', sets: 3, reps: 10, restSeconds: 60 },
+        { name: 'Romanian deadlift', sets: 3, reps: 8, restSeconds: 90 }, { name: 'Plank', sets: 3, durationSeconds: 45, restSeconds: 30 }] } }, 3),
+    S(null, { kind: 'workout', title: '10-minute core', url: 'https://example.com/workouts/core-10', image: img('1571019613454-1cb2f99b2d8b'), imageAspect: 1.33, retailer: 'Strong at Home',
+      details: { durationMinutes: 10, focus: 'Core', source: 'page', exercises: [{ name: 'Crunches', sets: 3, reps: 15, restSeconds: 30 }, { name: 'Dead bug', sets: 3, reps: 10, restSeconds: 30 }, { name: 'Side plank', sets: 2, durationSeconds: 30, restSeconds: 30 }] } }, 8),
+    S(null, { kind: 'video', title: 'A weekend in the North Cascades', url: 'https://example.com/videos/north-cascades', image: img('1464822759023-fed622ff2c3b'), imageAspect: 16 / 9, retailer: 'Trail Notes',
+      details: { durationSeconds: 754, channel: 'Trail Notes', source: 'page' }, topics: ['Travel', 'Outdoors'], topicsBy: 'guess' }, 4),
+    S(null, { kind: 'article', title: 'How to brew better coffee at home', url: 'https://example.com/articles/better-coffee-at-home', image: img('1495474472287-4d71bcdd2085'), imageAspect: 1.33, retailer: 'The Daily Grind',
+      details: { author: 'Sam Rivera', siteName: 'The Daily Grind', readingMinutes: 6, source: 'page' }, topics: ['Coffee'], topicsBy: 'guess' }, 5),
+    S(null, { kind: 'media', title: 'Metropolis', url: 'https://letterboxd.com/search/metropolis/', image: img('1489599849927-2ee91cede3ba'), imageAspect: 0.67, retailer: 'Letterboxd',
+      details: { format: 'film', year: 1927, director: 'Fritz Lang', genres: ['Science fiction', 'Drama'], source: 'you' } }, 6),
+    S(null, { kind: 'book', title: 'Walden', url: 'https://openlibrary.org/search?q=walden+thoreau', image: '', imageAspect: 0.67, retailer: 'Open Library',
+      details: { author: 'Henry David Thoreau', year: 1854, genres: ['Nonfiction', 'Nature'], source: 'you' } }, 11),
   ];
 }
