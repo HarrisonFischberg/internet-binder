@@ -1,6 +1,6 @@
 # Keepsake privacy policy
 
-_Last updated: October 2026 · applies to Keepsake 1.4.0 (in development)_
+_Last updated: October 2026 · applies to Keepsake 1.4.0_
 
 Keepsake is a browser extension that saves products and inspiration into collections **stored only in your browser**. It has no server, no account, no analytics and no advertising. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
 
@@ -52,7 +52,7 @@ Keepsake makes **no network requests of its own**, with these exceptions, each o
 
 **Lookups** — off by default, one switch each under Settings → Lookups. Turning one on asks Chrome for that one site; turning it off gives the permission back. Requests carry no cookies and no account.
 
-- **Places: OpenStreetMap.** For each place you save, Keepsake sends its **name and city** (and street, if known) to OpenStreetMap's Nominatim (`nominatim.openstreetmap.org`) to find its address and map pin, at most one request a second. The **map** in Places is drawn on your device by MapLibre (bundled inside Keepsake) with map tiles from OpenFreeMap (`tiles.openfreemap.org`), which therefore learns which **map area** you look at. A result is used only if its name matches the place you saved.
+- **Places: OpenStreetMap.** For each place you save, Keepsake sends its **name and city** (and street, if known) to OpenStreetMap's Nominatim (`nominatim.openstreetmap.org`) to find its address and map pin, at most one request a second. The **map** in Places is drawn on your device by MapLibre (bundled inside Keepsake) with map tiles from OpenFreeMap (`tiles.openfreemap.org`), which therefore learns which **map area** you look at. A result is used only if its name matches the place you saved and it is in the city or area you saved; when the name matches places in different spots, none is used.
 - **Films & shows: Wikidata.** Sends the **title** (and year, if known) of films and shows you save to `www.wikidata.org` for the year, director or creator, runtime, seasons, genres and poster. Posters load from Wikimedia Commons.
 - **Books: Open Library.** Sends the **title** (and author, if known) of books you save to `openlibrary.org` for the author, year, pages, ISBN and cover. Covers load from `covers.openlibrary.org`.
 - Only missing details are filled in; anything you or the page already gave is kept. Each save shows where its details came from ("Details from Wikidata ↗").

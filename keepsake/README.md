@@ -1,8 +1,8 @@
 # Keepsake
 
-**A privacy-first universal wishlist and visual inspiration board for Chrome.**
+**A privacy-first saver for Chrome: products, places, recipes, workouts, videos, articles, films and books.**
 
-Save products from any site with one click, let your collections sort themselves, keep everything on your own machine.
+Save from any site with one click. Shopping sorts itself into collections; everything else goes to its own Lifestyle view. Everything stays on your own machine.
 
 - Works on any shop, without per-site integrations: reads JSON-LD / Open Graph / visible page data.
 - Files each save into a collection automatically (Home Decor, Clothing, Technology, Kitchen, Camping & Outdoors, Weddings, Pets, …) and learns from your corrections. Unsure saves are left uncategorized and wait in **Review** instead of being guessed.
@@ -114,7 +114,7 @@ Open it from the popup or from the extension's Options; it opens on **Home**, an
 `#home` · `#all` · `#favorites` · `#purchased` · `#review` · `#collections` · `#c/<collection-id>` · `#item/<item-id>` (opens the item) · `#import` · `#settings` · `#ai` · `#ailog` · `#privacy` · `#welcome`
 
 - **Home**: a search box (typing jumps to the Library with the search filled in), a "N saves waiting to be filed" line that appears only when Review has something, one row of your most recent saves, and five collection tiles — pinned collections first (up to five), then the ones you saved into most recently.
-- **Menu**: Home, Library (every save), Favorites, Review (only while something is waiting to be filed) and Lifestyle; Purchased, then Collections (your collections; the chevron folds it, keeping pinned ones). The Library has two tabs: Saves and Collections (every collection). Trash is the last item, under Settings; Privacy is a section in Settings.
+- **Menu**: Home, Library (every save), Favorites, Review (only while something is waiting to be filed) and Lifestyle; Purchased (everything marked purchased, which leaves the Library, Favorites and its collection until un-marked), then Collections (your collections; the chevron folds it, keeping pinned ones). The Library has two tabs: Saves and Collections (every collection). Trash is the last item, under Settings; Privacy is a section in Settings.
 - **Masonry grid** of cards with image (or a text placeholder when there is none), title, price, retailer or Instagram creator, note, favorite star, source badge and "Needs sorting" label. Clicking a card opens a lightweight **Quick view** (image, title, price, a link to the original page); "Edit details" from there or from a card's **⋯** menu opens the full editor.
 - **Search** across titles, retailers, notes, descriptions, prices, captions and creators; **sort** newest/oldest/price and **filter** by retailer or source from the compact bar above the grid; empty states for every view.
 - **Item details**: the **exact link** the item was saved from, shown in full as a selectable field with **Copy** and **Visit page** (**Open post** for Instagram) — and editable, so you can point an item at the right product page if the extractor grabbed a listing or a redirect. Changing the link updates the host, refreshes an auto-derived retailer name, re-keys duplicate detection, and refuses a link another item already has. Alongside it: edit title/price/note, choose a cover from the candidates, move collection (optionally "use for similar"), favorite / purchased / archived, delete (moves to the **Trash**, with Undo).
@@ -177,8 +177,9 @@ See [PRIVACY.md](PRIVACY.md) and the in-extension **Privacy** page. In short:
 | Site access (`optional_host_permissions`: `*://*/*`) | **only if you enable on-page buttons, use *Import from tabs*, or start a *Fix with AI* run with live-page reading** | Run the hover-button script on the sites you granted (per site or all); read saved items' product pages during *Fix with AI*. Revocable in Settings or at `chrome://extensions`. |
 | `https://www.instagram.com/*` | **only if you use "Read post details"** | Read each imported post's own page (caption, creator, links, tagged products) with your existing session. Revocable under Settings → Instagram. |
 | Provider origin (e.g. `https://api.openai.com/*`) | **only if you turn AI on** | Let the dashboard and background worker call the API you configured. Given back when you turn AI off. |
+| `https://nominatim.openstreetmap.org/*` + `https://tiles.openfreemap.org/*`, `https://www.wikidata.org/*`, `https://openlibrary.org/*` | **only if you turn on that Lookup** (Settings → Lookups) | Find a place's address and pin and draw the Places map; a film's or a book's details. Given back when you turn the lookup off. |
 
-No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on.
+No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on, and the Lookups you turned on.
 
 ## Limitations
 

@@ -1,8 +1,8 @@
 # Keepsake
 
-**A privacy-first universal wishlist and visual inspiration board for Chrome.**
+**A privacy-first saver for Chrome: products, places, recipes, workouts, videos, articles, films and books.**
 
-Save products from any site with one click, let your collections sort themselves, keep everything on your own machine.
+Save from any site with one click. Shopping sorts itself into collections; everything else goes to its own Lifestyle view. Everything stays on your own machine.
 
 - Works on any shop, without per-site integrations: reads JSON-LD / Open Graph / visible page data.
 - Files each save into a collection automatically (Home Decor, Clothing, Technology, Kitchen, Camping & Outdoors, Weddings, Pets, …) and learns from your corrections. Unsure saves are left uncategorized and wait in **Review** instead of being guessed.
@@ -177,8 +177,9 @@ See [PRIVACY.md](PRIVACY.md) and the in-extension **Privacy** page. In short:
 | Site access (`optional_host_permissions`: `*://*/*`) | **only if you enable on-page buttons, use *Import from tabs*, or start a *Fix with AI* run with live-page reading** | Run the hover-button script on the sites you granted (per site or all); read saved items' product pages during *Fix with AI*. Revocable in Settings or at `chrome://extensions`. |
 | `https://www.instagram.com/*` | **only if you use "Read post details"** | Read each imported post's own page (caption, creator, links, tagged products) with your existing session. Revocable under Settings → Instagram. |
 | Provider origin (e.g. `https://api.openai.com/*`) | **only if you turn AI on** | Let the dashboard and background worker call the API you configured. Given back when you turn AI off. |
+| `https://nominatim.openstreetmap.org/*` + `https://tiles.openfreemap.org/*`, `https://www.wikidata.org/*`, `https://openlibrary.org/*` | **only if you turn on that Lookup** (Settings → Lookups) | Find a place's address and pin and draw the Places map; a film's or a book's details. Given back when you turn the lookup off. |
 
-No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on.
+No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on, and the Lookups you turned on.
 
 ## Limitations
 
