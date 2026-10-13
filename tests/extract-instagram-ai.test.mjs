@@ -228,3 +228,47 @@ Wed-Sunday: 7:00 AM - 6:00 PM
   assert.deepEqual([p.pagePlace.address, p.pagePlace.locality, p.pagePlace.region, p.pagePlace.postalCode, p.pagePlace.phone, p.pagePlace.hours.length, p.pagePlace.visit],
     ['560 Larkin St', 'San Francisco', 'CA', '94102', '(415) 555-0123', 2, true]);
 });
+
+test('extract: a listing’s Address block (city and postcode on their own lines) and time-only hours', () => {
+  const p = extractFrom(`<html><head><title>Example Shoppe | Listings</title></head><body><main><h1>Example Shoppe</h1><p>Lovely ice cream.</p>
+
+Details
+Address
+5337 W Devon Ave
+Chicago
+60646
+Opening hours:
+10am–11pm
+Directions
+</main></body></html>`, 'https://listings.example/chicago/example-shoppe');
+  assert.deepEqual([p.pagePlace.address, p.pagePlace.locality, p.pagePlace.postalCode, [...p.pagePlace.hours], p.pagePlace.labeled], ['5337 W Devon Ave', 'Chicago', '60646', ['10am–11pm'], true]);
+});
+
+test('extract: an Instagram profile’s name and bio (only from its own head tags), and a Facebook page’s Intro', () => {
+  const ig = extractFrom(`<html><head><title>GO DONUTS (@godonuts_harlem) • Instagram photos and videos</title><meta property="og:url" content="https://www.instagram.com/godonuts_harlem/">
+<meta property="og:title" content="GO DONUTS (@godonuts_harlem) • Instagram photos and videos"><meta name="description" content="32K Followers, 2 Following, 125 Posts - GO DONUTS (@godonuts_harlem) on Instagram: &quot;The Best Mini Donuts&#10;2309 2nd avenue New York, NY 10035&quot;"></head><body><header><div>godonuts_harlem</div><div>31.9K</div><div>followers</div></header></body></html>`, 'https://www.instagram.com/godonuts_harlem/');
+  assert.deepEqual([ig.profile.platform, ig.profile.handle, ig.profile.name, ig.profile.bio], ['instagram', 'godonuts_harlem', 'GO DONUTS', 'The Best Mini Donuts\n2309 2nd avenue New York, NY 10035']);
+  const stale = extractFrom(`<html><head><meta property="og:url" content="https://www.instagram.com/someoneelse/"><meta property="og:title" content="Other (@someoneelse)"></head><body></body></html>`, 'https://www.instagram.com/godonuts_harlem/');
+  assert.equal(stale.profile.name, '', 'another page’s tags are not read');
+  assert.equal(extractFrom('<html><body></body></html>', 'https://www.instagram.com/p/ABCDE12345/').profile, null, 'a post is not a profile');
+  const fb = extractFrom(`<html><head><meta property="og:url" content="https://www.facebook.com/riseokc/"><meta property="og:title" content="Rise Bakery"><meta property="og:description" content="Rise Bakery, Oklahoma City. 294 followers."></head>
+<body><div role="main">
+Rise Bakery
+Intro
+Sourdough cinnamon rolls every Friday!
+Page · Entrepreneur
+Oklahoma City, OK, United States, Oklahoma
+(405) 201-3982
+Photos
+See all photos
+</div></body></html>`, 'https://www.facebook.com/riseokc');
+  assert.deepEqual([fb.profile.platform, fb.profile.name, [...fb.profile.intro]], ['facebook', 'Rise Bakery', ['Sourdough cinnamon rolls every Friday!', 'Page · Entrepreneur', 'Oklahoma City, OK, United States, Oklahoma', '(405) 201-3982']]);
+});
+
+test('extract: a home page with no address: the business’s name, about, phone and a locations link', () => {
+  const p = extractFrom(`<html><head><title>Mighty Example Donuts | Organic Donuts</title><meta property="og:site_name" content="Mighty Example Donuts">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebSite","name":"Site"},{"@type":"Organization","name":"Mighty Example Donuts","description":"Donuts for everyone","telephone":"+12065550335"}]}</script></head>
+<body><main><h1>Best donut shop</h1></main><footer><a href="/locations/">Our Locations</a></footer></body></html>`, 'https://donuts.example/');
+  assert.deepEqual([p.home.name, p.home.siteName, p.home.phone, p.home.visitLink], ['Mighty Example Donuts', 'Mighty Example Donuts', '+12065550335', true]);
+  assert.ok(!extractFrom('<html><body><p>x</p></body></html>', 'https://donuts.example/menu/').home, 'only a home page');
+});

@@ -459,3 +459,39 @@ test('with AI off, saves are complete straight away and nothing is sent', async 
   assert.equal(res.item.captureState, 'complete');
   assert.equal(called, false);
 });
+
+test('business profiles: an Instagram profile or Facebook page for a business is a place; a person’s is a link', async () => {
+  const ig = { title: 'GO DONUTS (@godonuts_harlem) • Instagram photos and videos', url: 'https://www.instagram.com/godonuts_harlem/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
+    profile: { platform: 'instagram', handle: 'godonuts_harlem', name: 'GO DONUTS', bio: 'The Best Mini Donuts In NYC 🍩\n2309 2nd avenue New York, NY 10035\nClosed on Sunday', header: '' } };
+  const a = (await F.send({ type: MSG.SAVE_ITEM, product: ig, instant: true }, popup)).item;
+  assert.deepEqual([a.kind, a.title, a.details.address, a.details.locality, a.details.region, a.details.postalCode], ['place', 'GO DONUTS', '2309 2nd avenue', 'New York', 'NY', '10035']);
+  const fb = { title: "Mrs. Powell's Cinnamon Rolls Rexburg 19 E Main | Rexburg ID", url: 'https://www.facebook.com/examplerolls/', images: [], image: '', price: null, schemaTypes: [], media: { ogType: 'video.other' },
+    profile: { platform: 'facebook', handle: 'examplerolls', name: "Mrs. Powell's Cinnamon Rolls Rexburg 19 E Main | Rexburg ID", about: '1,241 followers · 61 were here.', bio: '',
+      intro: ['Page · Bakery · Restaurant · Dessert Shop', '19 East Main Street, Rexburg, ID, United States, Idaho', '(208) 419-0273', 'Closed now'] } };
+  const b = (await F.send({ type: MSG.SAVE_ITEM, product: fb, instant: true }, popup)).item;
+  assert.deepEqual([b.kind, b.title, b.details.address, b.details.locality, b.details.phone, b.details.category], ['place', "Mrs. Powell's Cinnamon Rolls", '19 East Main Street', 'Rexburg', '(208) 419-0273', 'Bakery']);
+  const person = { title: 'Jane (@jane.eats) • Instagram photos and videos', url: 'https://www.instagram.com/jane.eats/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
+    profile: { platform: 'instagram', handle: 'jane.eats', name: 'Jane', bio: 'NYC food reviews 🍩 best donuts daily · DM for collabs', header: '' } };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: person, instant: true }, popup)).item.kind, 'link');
+});
+
+test('a business home page with no address: a place when it says what it is and where (a lookup finds the rest); a brand is not', async () => {
+  const bakery = { title: 'Example Artisan', siteName: 'Example Artisan', url: 'https://artisan.example/', images: [], image: '', price: null, schemaTypes: ['website'],
+    home: { name: 'Example Artisan', siteName: 'Example Artisan', title: 'Example Artisan', about: '<p>Example Artisan Bakery | Portland, Oregon</p>', phone: '', visitLink: false } };
+  const a = (await F.send({ type: MSG.SAVE_ITEM, product: bakery, instant: true }, popup)).item;
+  assert.deepEqual([a.kind, a.title, a.details.locality, a.details.region, a.details.address], ['place', 'Example Artisan', 'Portland', 'Oregon', '']);
+  const scoops = { title: 'Craft Ice Cream | Example Scoops', url: 'https://scoops.example/', images: [], image: '', price: 15, priceText: '$15', schemaTypes: ['organization'],
+    home: { name: 'Example Scoops', siteName: 'Example Scoops', title: 'Craft Ice Cream | Example Scoops', about: 'Small-batch ice cream. Shop pints online.', phone: '', visitLink: true } };
+  const b = (await F.send({ type: MSG.SAVE_ITEM, product: scoops, instant: true }, popup)).item;
+  assert.deepEqual([b.kind, b.title], ['place', 'Example Scoops'], 'pints for sale on the page don’t make it a product');
+  const brand = { title: 'Example Shoes', url: 'https://shoes.example/', images: [], image: '', price: 98, priceText: '$98', schemaTypes: ['organization'],
+    home: { name: 'Example Shoes', siteName: 'Example Shoes', title: 'Example Shoes', about: 'Comfortable shoes made from wool.', phone: '', visitLink: true } };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: brand, instant: true }, popup)).item.kind, 'product');
+});
+
+test('a venue listing’s labeled Address block with its city is a place, even with no phone or day names', async () => {
+  const listing = { title: 'Example Shoppe Ice Cream | Restaurants in Forest Glen, Chicago', url: 'https://listings.example/chicago/example-shoppe', images: [], image: '', price: null, schemaTypes: ['review'], media: { ogType: 'article' },
+    pagePlace: { address: '5337 W Devon Ave', locality: 'Chicago', region: '', postalCode: '60646', phone: '', hours: [], visit: true, labeled: true } };
+  const r = (await F.send({ type: MSG.SAVE_ITEM, product: listing, instant: true }, popup)).item;
+  assert.deepEqual([r.kind, r.details.address, r.details.locality], ['place', '5337 W Devon Ave', 'Chicago']);
+});

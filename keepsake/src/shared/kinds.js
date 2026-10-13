@@ -516,6 +516,105 @@ export function nameFromHandle(handle) {
   return clean(words.map((w) => (/^(?:nyc|la|sf|bk|uk|us|dc|ny|atl|chi|phx)$/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' '), 80);
 }
 
+// --- a business's own profile or home page -----------------------------------------------------------
+// Words that name somewhere you go (a bakery, a salon, a gym…), and words that say a profile is a person
+// talking about places rather than the place itself.
+const VISIT_WORDS = /\b(?:bak(?:ery|eries|eshop)|donuts?|doughnuts?|caf[eé]s?|coffee (?:shop|bar|house)|espresso bar|restaurants?|pizz(?:a|eria)|bagels?|deli|diner|bistro|brasserie|tavern|pub|brewery|taproom|winery|wine bar|cocktail bar|ice cream|gelato|creamery|scoop shops?|dessert shop|p[aâ]tisserie|taqueria|tacos|ramen|sushi|noodle (?:bar|shop)|bbq|burgers?|eatery|food truck|tea ?house|bubble tea|boba|cinnamon rolls?|salon|barber(?:shop)?|day spa|spa|massage|nail (?:salon|bar|studio)|lash (?:bar|studio)|tattoo|gym|fitness (?:studio|center|club)|yoga (?:studio|shala)|pilates|crossfit|climbing (?:gym|wall)|bouldering|skate(?:board)? ?shop|record (?:store|shop)|book(?:store|shop)|florist|flower shop)\b/i;
+const NOT_A_PLACE = /\b(?:blogger|influencer|creator|foodie|food (?:reviews?|critic|guide|lover)|reviews?|recipes|collabs?|ugc|podcast|magazine|newsletter)\b/i;
+const OPEN_WORDS = /\b(?:open(?:ing)?\b|closed (?:on )?(?:mon|tue|wed|thu|fri|sat|sun)|hours|daily|24\/7|walk-?ins?|book (?:now|online|an appointment)|reservations?|dine[- ]in|take-?out|pick-?up|curbside|since \d{4})|\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b/i;
+// Facebook page categories that aren't somewhere you go.
+const NOT_A_PLACE_PAGE = /\b(?:musician|band|artist|public figure|creator|blogger|personal blog|media|news|magazine|community|author|athlete|politician|tv show|movie|book|website|app|software|organi[sz]ation|non-?profit|cause|fan page|meme)\b/i;
+const COUNTRY = /^(?:united states|usa|canada|united kingdom|uk|ireland|australia|new zealand|mexico|france|germany|spain|italy|japan)$/i;
+const US_STATE = 'A[LKZR]|C[AOT]|D[EC]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY]|Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming';
+const STATE_POSTAL = new RegExp(`^(?:${US_STATE})(?:\\s+\\d{5}(?:-\\d{4})?)?$`);
+const CITY_STATE = new RegExp(`\\b((?:[A-Z][a-z]+\\.?\\s){0,2}[A-Z][a-z]+),\\s*(${US_STATE})\\b(?:\\s+(\\d{5}))?`);
+const PHONE = /(?:\+\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/;
+
+// One line of address: "2309 2nd avenue New York, NY 10035", "19 East Main Street, Rexburg, ID, United
+// States, Idaho", or just the area ("Oklahoma City, OK, United States"). Null when it's neither.
+export function addressFromLine(line) {
+  const s = String(line || '').replace(/\s+/g, ' ').trim().replace(/[.;]+$/, '');
+  if (!s || s.length > 140 || /[·|]/.test(s)) return null;
+  const parts = s.split(/\s*,\s*/).filter(Boolean);
+  let address = '';
+  if (looksLikeAddress(parts[0])) {
+    // The street ends at its last street word before any city ("2309 2nd avenue New York").
+    const words = parts[0].split(' ');
+    let at = -1;
+    words.forEach((w, i) => { if (i > 0 && i < 7 && STREET.test(w)) at = i; });
+    address = words.slice(0, at + 1).join(' ');
+    const city = words.slice(at + 1).join(' ');
+    parts.splice(0, 1, ...(city ? [city] : []));
+  } else if (!(parts.length >= 2 && (parts.some((p) => COUNTRY.test(p)) || STATE_POSTAL.test(parts[1])))) return null;
+  if (parts.some((p) => !/^[\p{L}\p{N} .'-]{2,40}$/u.test(p))) return address ? { address: clean(address, 200), locality: '', region: '', postalCode: '', country: '' } : null;
+  // "…, ID, United States, Idaho": the country, and the state's name after it, are dropped.
+  const c = parts.findIndex((p) => COUNTRY.test(p));
+  const country = c >= 0 ? parts.splice(c)[0] : '';
+  const [locality = '', regionPostal = ''] = parts;
+  const rp = regionPostal.match(/^(.*?)(?:\s+(\d{5}(?:-\d{4})?))?$/);
+  return { address: clean(address, 200), locality: clean(locality, 80), region: clean(rp[1] || '', 60), postalCode: rp[2] || '', country: clean(country, 60) };
+}
+
+// A business's Instagram profile or Facebook page (what extract.js read: its name, bio, and Facebook's
+// Intro lines) as a place, when it is one: an address or area, or words for somewhere you go along with
+// opening times, prices or ratings. A person's or a blogger's profile is not a place. Nothing is guessed:
+// what the profile doesn't say stays empty.
+export function placeFromProfile(p) {
+  if (!p || typeof p !== 'object') return null;
+  const bio = String(p.bio || '');
+  const intro = Array.isArray(p.intro) ? p.intro.map((l) => String(l || '').trim()).filter(Boolean).slice(0, 30) : [];
+  const lines = [...bio.split(/\n+/), ...String(p.header || '').split(/\n+/), ...intro]
+    .map((l) => l.replace(/[\p{Extended_Pictographic}️‍]/gu, ' ').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  let where = null;
+  for (const l of lines) {
+    const a = addressFromLine(l);
+    if (a && (a.address || a.locality) && (!where || (a.address && !where.address))) where = a;
+    if (where?.address) break;
+  }
+  const fromText = where?.address ? null : placeFromText(bio);
+  if (fromText?.address) where = { address: fromText.address, locality: fromText.locality, region: fromText.region, postalCode: '', country: '' };
+  const phone = (lines.find((l) => PHONE.test(l) && l.length < 40) || '').match(PHONE)?.[0] || '';
+  let category = '';
+  let isPlace;
+  if (p.platform === 'facebook') {
+    const cats = (intro.find((l) => /^Page\s*·/i.test(l)) || '').split(/\s*·\s*/).slice(1);
+    if (cats.length && cats.every((c) => NOT_A_PLACE_PAGE.test(c)) && !where?.address) return null;
+    category = cats.find((c) => VISIT_WORDS.test(c)) || '';
+    const local = intro.some((l) => /^(?:price range\b|open now$|closed now$|always open$|temporarily closed$)|\brecommend \(|\b(?:curbside|dine-in|takeout|delivery)\b/i.test(l)) || /\bwere here\b/i.test(p.about || '');
+    // The area from the page's summary: "Rise Bakery, Oklahoma City. 294 followers".
+    if (!where) {
+      const m = String(p.about || '').match(/^(.+?),\s*([\p{L} .'-]{2,40})\.\s*[\d,.]+K?\s+followers/u);
+      if (m) where = { address: '', locality: clean(m[2], 80), region: '', postalCode: '', country: '' };
+    }
+    isPlace = !!(where?.address || where?.locality || category || (local && VISIT_WORDS.test(`${cats.join(' ')} ${bio} ${intro.join(' ')}`)));
+  } else {
+    isPlace = !!where?.address || (VISIT_WORDS.test(bio) && OPEN_WORDS.test(bio) && !NOT_A_PLACE.test(bio));
+  }
+  if (!isPlace) return null;
+  // Its name: the profile's, less an address or area glued to it ("Mrs. Powell's Cinnamon Rolls Rexburg 19 E Main").
+  let name = clean(String(p.name || '').split(/\s+\|\s+/)[0], 120).replace(/\s+\d{1,6}\s+\S.*$/, '').trim();
+  if (where?.locality && name.toLowerCase().endsWith(` ${where.locality.toLowerCase()}`)) name = name.slice(0, -where.locality.length - 1).trim();
+  if (!name) name = nameFromHandle(p.handle);
+  if (!name) return null;
+  return { name, address: where?.address || '', locality: where?.locality || '', region: where?.region || '', postalCode: where?.postalCode || '', country: where?.country || '', phone, category: clean(category, 60), source: 'page' };
+}
+
+// A business's own home page with no address on it (extract.js homeFacts: its name, what it says about
+// itself, a phone, a link to its locations): a place when it says what kind of place it is and where to
+// find it. A brand or a shop that only sells online is not.
+export function placeFromHome(h) {
+  if (!h || typeof h !== 'object') return null;
+  const strip = (s) => tidyImportedText(String(s || '').replace(/<[^>]*>/g, ' '), 1000);
+  const about = [h.name, h.siteName, h.title, h.about].map(strip).filter(Boolean).join(' · ');
+  if (!VISIT_WORDS.test(about)) return null;
+  const area = about.match(CITY_STATE);
+  if (!h.visitLink && !h.phone && !area) return null;
+  const first = (s) => strip(s).split(/\s+[|–—-]\s+|\s+:\s+/)[0].trim();
+  const name = clean(strip(h.name) || first(h.siteName) || first(h.title), 120);
+  if (!name) return null;
+  return { name, address: '', locality: area ? clean(area[1], 80) : '', region: area ? clean(area[2], 60) : '', postalCode: area?.[3] || '', phone: clean(h.phone || '', 40), source: 'page' };
+}
+
 // What a page title says when it isn't the thing's name ("Instagram", "Name on Instagram: …", "Google Maps").
 export const genericTitle = (t) => !t || /^(?:instagram(?: (?:post|reel|photo|video))?|tiktok|youtube|google maps|facebook|untitled( item)?)$/i.test(String(t).trim())
   || /\son instagram:/i.test(String(t));

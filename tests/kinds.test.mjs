@@ -419,3 +419,36 @@ test('maps search links with the address in them: name, street, city and state',
   assert.deepEqual([q.name, q.address, q.locality, q.region], ["Ken's Bakery", '338 NW 21st Ave', 'Portland', 'OR']);
   assert.equal(placeFromMapsUrl('https://www.google.com/maps/search/?api=1&query=pizza+near+me').address, '', 'no address: just the search');
 });
+
+test('addressFromLine: a street with its city run on, an address with the country, or an area alone', async () => {
+  const { addressFromLine } = await import('../keepsake/src/shared/kinds.js');
+  assert.deepEqual(addressFromLine('2309 2nd avenue New York, NY 10035'), { address: '2309 2nd avenue', locality: 'New York', region: 'NY', postalCode: '10035', country: '' });
+  assert.deepEqual(addressFromLine('19 East Main Street, Rexburg, ID, United States, Idaho'), { address: '19 East Main Street', locality: 'Rexburg', region: 'ID', postalCode: '', country: 'United States' });
+  assert.deepEqual(addressFromLine('Oklahoma City, OK, United States, Oklahoma'), { address: '', locality: 'Oklahoma City', region: 'OK', postalCode: '', country: 'United States' });
+  assert.equal(addressFromLine('21 St Marks Pl, New York, NY').address, '21 St Marks Pl');
+  assert.equal(addressFromLine('Hand-Cut Donuts'), null);
+  assert.equal(addressFromLine('Peanut & Tree Nut-Free | Vegan Options'), null);
+});
+
+test('placeFromProfile: business profiles are places (name, address or area); bloggers and bands are not', async () => {
+  const { placeFromProfile } = await import('../keepsake/src/shared/kinds.js');
+  const pub = placeFromProfile({ platform: 'instagram', handle: 'thedonutpub', name: 'The Donut Pub NYC', bio: 'Hand-Cut Donuts\nOpen 24/7 Since 1964' });
+  assert.deepEqual([pub.name, pub.address, pub.locality], ['The Donut Pub NYC', '', ''], 'nothing guessed');
+  assert.equal(placeFromProfile({ platform: 'instagram', handle: 'imdonut.nyc', name: '', bio: 'Handmade daily in Times Square 🍩 donuts\nOpen: Sunday-Wednesday 10 am-10 pm' }).name, 'Imdonut NYC', 'named from its handle');
+  assert.equal(placeFromProfile({ platform: 'instagram', handle: 'nyceats', name: 'NYC Eats', bio: 'NYC food reviews 🍕 Open to collabs\nBest donuts daily' }), null);
+  assert.equal(placeFromProfile({ platform: 'instagram', handle: 'jane', name: 'Jane', bio: 'Mom of 2. Coffee lover.' }), null);
+  const rise = placeFromProfile({ platform: 'facebook', handle: 'riseokc', name: 'Rise Bakery', about: 'Rise Bakery, Oklahoma City. 294 followers.', intro: ['Page · Entrepreneur', 'Oklahoma City, OK, United States, Oklahoma', '(405) 201-3982'] });
+  assert.deepEqual([rise.name, rise.locality, rise.region, rise.phone], ['Rise Bakery', 'Oklahoma City', 'OK', '(405) 201-3982']);
+  const chain = placeFromProfile({ platform: 'facebook', handle: 'chain', name: 'Example Rolls', about: '40,713 followers', intro: ['100% plant-based bakery', 'Page · Brand', 'Price Range · $$', '96% recommend (47 reviews)'] });
+  assert.deepEqual([chain.name, chain.locality], ['Example Rolls', '']);
+  assert.equal(placeFromProfile({ platform: 'facebook', handle: 'band', name: 'A Band', about: '', intro: ['Page · Musician/band'] }), null);
+});
+
+test('placeFromHome: says what it is (a bakery, a skate shop) and where (a city, a phone, a locations link)', async () => {
+  const { placeFromHome } = await import('../keepsake/src/shared/kinds.js');
+  assert.deepEqual(placeFromHome({ name: "Ken's Example", about: "<p>Ken's Example Bakery | Portland, Oregon</p>", siteName: '', title: '', phone: '', visitLink: false }),
+    { name: "Ken's Example", address: '', locality: 'Portland', region: 'Oregon', postalCode: '', phone: '', source: 'page' });
+  assert.equal(placeFromHome({ name: '', about: 'Voted best skate shop', siteName: 'EXAMPLEWELL - Los Feliz', title: '', phone: '323.555.3028', visitLink: false }).name, 'EXAMPLEWELL');
+  assert.equal(placeFromHome({ name: 'Example Donuts', about: 'Organic donut shop', siteName: '', title: '', phone: '', visitLink: false }), null, 'no city, phone or locations link');
+  assert.equal(placeFromHome({ name: 'Example Shoes', about: 'Shoes made from wool', siteName: '', title: '', phone: '', visitLink: true }), null, 'a brand');
+});

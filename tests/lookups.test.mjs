@@ -92,3 +92,22 @@ test('places: a pin with no street address gets the address at that pin', async 
   assert.deepEqual([a.address, a.locality, a.region, a.postalCode], ['2124 5th Avenue', 'Belltown', 'Seattle', '98121']);
   assert.equal(await lookupAddressAt({ lat: NaN, lng: 1 }, async () => { throw new Error('no'); }), null);
 });
+
+test('places: a result in another city is never used, and a name that matches places far apart gets no pin', async () => {
+  const wrongCity = [{ lat: '42.733', lon: '-73.7012', type: 'house', osm_type: 'way', osm_id: 1, address: { house_number: '2309', road: '2nd Avenue', city: 'City of Watervliet', state: 'New York' } }];
+  const none = await lookupPlace({ name: 'Example Donuts', address: '2309 2nd avenue', locality: 'New York', region: 'NY' }, fake([[/nominatim/, () => wrongCity]]));
+  assert.equal(none, null, 'same street and number in Watervliet, NY is not New York');
+  const right = [{ lat: '40.799', lon: '-73.939', type: 'house', osm_type: 'way', osm_id: 2, address: { house_number: '2309', road: '2nd Avenue', suburb: 'Manhattan', city: 'City of New York', state: 'New York' } }];
+  assert.equal((await lookupPlace({ name: 'Example Donuts', address: '2309 2nd avenue', locality: 'New York', region: 'NY' }, fake([[/nominatim/, () => right]]))).lat, 40.799);
+  const two = [
+    { name: "Ken's Example Pizza", lat: '45.5206', lon: '-122.6372', type: 'restaurant', osm_type: 'node', osm_id: 3, address: { house_number: '304', road: 'SE 28th Ave', city: 'Portland' } },
+    { name: "Ken's Example Bakery", lat: '45.5260', lon: '-122.6950', type: 'bakery', osm_type: 'node', osm_id: 4, address: { house_number: '338', road: 'NW 21st Ave', city: 'Portland' } },
+  ];
+  assert.equal(await lookupPlace({ name: "Ken's Example", locality: 'Portland', region: 'Oregon' }, fake([[/nominatim/, () => two]])), null, 'which one? none');
+});
+
+test('places: a street written with its direction short ("S. Lumpkin St.") matches it spelled out', async () => {
+  const body = [{ lat: '33.94', lon: '-83.38', type: 'house', osm_type: 'way', osm_id: 5, address: { house_number: '1625', road: 'South Lumpkin Street', city: 'Athens', state: 'Georgia' } }];
+  const fetchFn = async (url) => ({ ok: true, json: async () => (/Example%20Baking/.test(url) ? [] : body) });
+  assert.equal((await lookupPlace({ name: 'Example Baking', address: '1625 S. Lumpkin St.', locality: 'Athens', region: 'GA' }, fetchFn)).address, '1625 South Lumpkin Street');
+});

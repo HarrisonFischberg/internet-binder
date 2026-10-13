@@ -108,6 +108,9 @@
     const places = nodes.filter((n) => types(n).some((t) => PLACE.test(t)) && (n.address || n.geo));
     places.sort((a, b) => (b.geo ? 2 : 0) + (b.openingHoursSpecification || b.openingHours ? 1 : 0) - ((a.geo ? 2 : 0) + (a.openingHoursSpecification || a.openingHours ? 1 : 0)));
     out.place = places[0] || null;
+    // The business behind the site (its name, phone, what it says it is), for a home page with no address.
+    const ORG = /^(?:organization|corporation|localbusiness|onlinestore|website)$/;
+    out.org = nodes.filter((n) => n.name && types(n).some((t) => ORG.test(t))).sort((a, b) => (types(a).includes('website') ? 1 : 0) - (types(b).includes('website') ? 1 : 0))[0] || null;
     out.video = nodes.find((n) => types(n).includes('videoobject')) || null;
     out.screen = nodes.find((n) => types(n).some((t) => t === 'movie' || t === 'tvseries')) || null;
     out.book = nodes.find((n) => types(n).includes('book')) || null;
@@ -401,6 +404,7 @@
   const STREET_RE = /\b(?:st|street|ave|avenue|av|rd|road|blvd|boulevard|ln|lane|dr|drive|way|pl|place|sq|square|ct|court|pkwy|parkway|hwy|highway|broadway|bowery)\b\.?/i;
   const PHONE_RE = /(?:\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]\d{3,4}[\s.-]\d{3,4}/;
   const DAY_RE = /\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b/i;
+  const TIME_RE = /\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b/i;
   function pagePlace() {
     const text = String(document.body?.innerText || document.body?.textContent || '').slice(0, 200000);
     const lines = text.split(/\n+/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
@@ -412,15 +416,68 @@
       let rest = parts.slice(1).join(', ');
       const next = lines[i + 1] || '';
       if (!rest && /^[\p{L} .'-]{2,40},\s*[\p{L}]{2,}/u.test(next) && next.length < 60) rest = next;
+      // A city alone on the next line and its postcode on the one after ("5337 W Devon Ave / Chicago / 60646").
+      else if (!rest && /^[\p{L} .'-]{2,40}$/u.test(next) && /^\d{4,6}(?:-\d{4})?$/.test(lines[i + 2] || '')) rest = `${next} ${lines[i + 2]}`;
       const m = rest.match(/^([^,]+?)(?:,\s*([A-Za-z .]{2,30}?))?(?:\s+(\d{4,6}(?:-\d{4})?|[A-Z]\d[A-Z] ?\d[A-Z]\d|[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}))?\s*$/);
       const near = lines.slice(Math.max(0, i - 6), i + 14);
       const phone = (near.find((x) => PHONE_RE.test(x) && x.length < 40) || '').match(PHONE_RE)?.[0] || '';
       const hoursAt = near.findIndex((x) => /^(?:opening )?hours\b|^open\b/i.test(x));
-      const hours = hoursAt >= 0 ? near.slice(hoursAt + 1, hoursAt + 9).filter((x) => DAY_RE.test(x) && x.length < 60).slice(0, 7) : [];
+      const hours = hoursAt >= 0 ? near.slice(hoursAt + 1, hoursAt + 9).filter((x) => (DAY_RE.test(x) || TIME_RE.test(x)) && x.length < 60).slice(0, 7) : [];
       const visit = /\b(?:menu|order online|reservations?|book a table|visit us|visit our|our shop|location|directions|opening hours|hours)\b/i.test(near.join(' '));
-      return { address: address.slice(0, 120), locality: m ? m[1].trim() : '', region: m && m[2] ? m[2].trim() : '', postalCode: m && m[3] ? m[3] : '', phone, hours, visit };
+      // Under its own "Address" label: a listing's details block, not an address in passing.
+      const labeled = /^(?:address|location|where)\s*:?$/i.test(lines[i - 1] || '');
+      return { address: address.slice(0, 120), locality: m ? m[1].trim() : '', region: m && m[2] ? m[2].trim() : '', postalCode: m && m[3] ? m[3] : '', phone, hours, visit, labeled };
     }
     return null;
+  }
+
+  // ---- a business's profile on Instagram or Facebook ------------------------------------
+  // Read like a visitor sees it: the name, the bio and (Facebook) the Intro lines. Whether it's a place is
+  // decided in the extension (kinds.js placeFromProfile). The head's tags count only when they're this
+  // page's (Instagram and Facebook change pages without reloading).
+  function socialProfile() {
+    const host = location.hostname.replace(/^(?:www|m|web)\./, '');
+    const seg = location.pathname.split('/').filter(Boolean);
+    const here = location.pathname.replace(/\/+$/, '').toLowerCase();
+    let fresh = false;
+    try { fresh = new URL(rawMeta('meta[property="og:url"]')).pathname.replace(/\/+$/, '').toLowerCase() === here; } catch { /* no og:url */ }
+    const raw = (sel) => (fresh ? String(document.querySelector(sel)?.getAttribute('content') || '') : '');
+    const linesOf = (el) => String(el?.innerText || el?.textContent || '').split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    if (host === 'instagram.com') {
+      if (seg.length !== 1 || /^(?:p|reel|reels|explore|stories|accounts|direct|tv|about|legal)$/i.test(seg[0])) return null;
+      const name = (raw('meta[property="og:title"]').match(/^(.*?)\s*\(@/) || [])[1]?.trim() || '';
+      const bio = (raw('meta[name="description"]').match(/on Instagram:\s*"([\s\S]*?)"?\s*$/) || [])[1] || '';
+      const header = linesOf(document.querySelector('header')).filter((l) => !/^(?:[\d.,]+[KM]?\s*)?(?:posts?|followers?|following)$|^[\d.,]+[KM]?$|^(?:follow|message|log in|sign up)$/i.test(l));
+      return { platform: 'instagram', handle: seg[0], name, bio: bio.slice(0, 1500), header: header.join('\n').slice(0, 1500) };
+    }
+    if (host === 'facebook.com') {
+      if (!seg.length || /^(?:groups|watch|events|marketplace|gaming|reel|reels|stories|photo|photos|videos|story\.php|permalink\.php|share|login|help|policies|privacy)$/i.test(seg[0])) return null;
+      if (seg.length > 1 && !/^(?:about|p|pages)$/i.test(seg[1]) && !/^(?:p|pages)$/i.test(seg[0])) return null;
+      const name = raw('meta[property="og:title"]') || text(document.querySelector('h1')?.innerText);
+      const lines = linesOf(document.querySelector('[role="main"]') || document.body).slice(0, 400);
+      const at = lines.findIndex((l) => /^intro$/i.test(l));
+      const intro = at >= 0 ? lines.slice(at + 1, at + 25) : [];
+      const end = intro.findIndex((l) => /^(?:photos|see all photos|featured|privacy|posts)$/i.test(l));
+      return { platform: 'facebook', handle: seg[0], name: name.slice(0, 200), about: raw('meta[property="og:description"]').slice(0, 1000), bio: '', intro: (end >= 0 ? intro.slice(0, end) : intro).map((l) => l.slice(0, 200)) };
+    }
+    return null;
+  }
+
+  // ---- a business's own home page ------------------------------------------------------
+  // When it shows no address: who it is, what it says about itself, a phone, and whether it links to
+  // its locations or hours. kinds.js placeFromHome decides whether that's somewhere you go.
+  function homeFacts(ld) {
+    if (location.pathname.replace(/\/+$/, '').replace(/^\/(?:home|index(?:\.html?)?)$/i, '') !== '') return null;
+    const org = ld?.org || {};
+    const foot = String(document.querySelector('footer, [role="contentinfo"]')?.innerText || '').slice(0, 4000);
+    const VISIT = /\b(?:locations?|find us|visit us|our (?:shops?|stores?|caf[eé]s?|bakeries|studios?)|scoop shops|store locator|hours(?: (?:&|and) locations?)?|directions)\b/i;
+    const visitLink = Array.from(document.querySelectorAll('a[href]')).slice(0, 800).some((a) => VISIT.test(text(a.textContent).slice(0, 60)) || /\/(?:locations?|stores?|find-us|visit(?:-us)?|hours)\/?$/i.test(a.pathname || ''));
+    const phone = text(typeof org.telephone === 'string' ? org.telephone : '') || (foot.match(PHONE_RE) || [])[0] || '';
+    return {
+      name: text(org.name).slice(0, 200), siteName: meta('meta[property="og:site_name"]').slice(0, 200), title: text(document.title).slice(0, 300),
+      about: [text(org.description), meta('meta[name="description"]'), meta('meta[property="og:description"]')].filter(Boolean).join(' · ').slice(0, 1500),
+      phone: phone.slice(0, 40), visitLink,
+    };
   }
 
   // ---- assemble ----------------------------------------------------------------
@@ -652,6 +709,8 @@
       if (STALE && result.media) result.media.published = '';
     }
     if (!ld?.product && !recipe && !ld?.place && !result.isInstagram) result.pagePlace = safe(pagePlace, null);
+    if (!ld?.product && !recipe && !ld?.place) result.profile = safe(socialProfile, null);
+    if (!ld?.product && !recipe && !ld?.place && !result.profile && !result.pagePlace?.address) result.home = safe(() => homeFacts(ld), null);
     if (!ld?.product && !recipe && !result.isInstagram) result.workoutLines = safe(() => workoutLines(result.title, result.description), []);
     return result;
   }

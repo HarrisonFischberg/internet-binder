@@ -12,7 +12,7 @@ import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI, identifyForKind, draftRecipe } from './src/ai/provider.js';
 import { parsePostBundle } from './src/instagram/post.js';
 import { LOOKUP_SOURCES, lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './src/shared/lookups.js';
-import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
+import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -196,6 +196,9 @@ function placeOf(product) {
   const fromLink = placeFromMapsUrl(product.url);
   if (fromPage) return fromPage;
   if (fromLink) return fromLink;
+  // A business's Instagram profile or Facebook page: what its bio and intro say.
+  const fromProfile = placeFromProfile(product.profile);
+  if (fromProfile) return fromProfile;
   // The page's own address block; its name is the site's ("Saigon Sandwich", not "Home | Saigon Sandwich").
   const pp = product.pagePlace;
   if (pp?.address) {
@@ -207,6 +210,9 @@ function placeOf(product) {
     const name = (home && site) || parts[0] || site;
     return { address: pp.address, locality: pp.locality, region: pp.region, postalCode: pp.postalCode, phone: pp.phone, hours: pp.hours, source: 'page', ...(name ? { name } : {}) };
   }
+  // A business's home page with no address: its name and area; a lookup finds the rest.
+  const fromHome = placeFromHome(product.home);
+  if (fromHome) return fromHome;
   // A post or page that names the place in its caption or location tag.
   const { details, title } = detailsForKind('place', { title: product.title, description: product.description, url: product.url, instagram: { caption: product.description, location: product.igLocation?.name || '' } });
   return title ? { ...details, name: title } : details;
@@ -232,6 +238,8 @@ function kindOfCapture(product) {
     if (recipeFromText(product.description)) return 'recipe';
     if (workoutOf(product)) return 'workout';
     if (product.igLocation?.name || placeFromText(product.description) || placeFromText(product.title)) return 'place';
+    // A business's profile (an address, or "Donuts · Open 24/7" in its bio).
+    if (placeFromProfile(product.profile)) return 'place';
     return 'link';
   }
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
@@ -241,7 +249,12 @@ function kindOfCapture(product) {
   // The Infatuation). It has the address, and opening hours or a phone and "menu", "visit us"…
   // (Prices on the page are its menu, not a product's price.)
   const pp = product.pagePlace;
-  if (!fromTypes && pp?.address && (pp.hours?.length || (pp.phone && pp.visit))) return 'place';
+  // A listing's own "Address" block with its city counts too (a venue review's details).
+  if (!fromTypes && pp?.address && (pp.hours?.length || (pp.phone && pp.visit) || (pp.labeled && pp.locality))) return 'place';
+  // A Facebook page for a business (its intro has an address, area, category or opening status).
+  if (placeFromProfile(product.profile)) return 'place';
+  // A business's home page that says what it is (a bakery, a skate shop) and where to find it.
+  if (!fromTypes && placeFromHome(product.home)) return 'place';
   // A video site's watch page, or a page that calls itself a video or an article (og:type). Facebook and
   // Instagram call every page a video; only their video addresses are videos.
   const og = String(product.media?.ogType || '').toLowerCase();
@@ -278,7 +291,7 @@ function captureFacts(product) {
   }
   // A maps link's page title is the app's ("Google Maps"); the place's name is in the link.
   if (kind === 'place' && details.name) {
-    if (!product.title || /\bmaps\b/i.test(product.title) || genericTitle(product.title) || /^(?:home|welcome)\b|\|\s*home$/i.test(product.title) || product.pagePlace) product.title = details.name;
+    if (!product.title || /\bmaps\b/i.test(product.title) || genericTitle(product.title) || /^(?:home|welcome)\b|\|\s*home$/i.test(product.title) || product.pagePlace || product.profile || product.home) product.title = details.name;
     delete details.name;
   }
   // A video's site by its own name ("YouTube", not "Youtube" from the address).

@@ -43,14 +43,30 @@ const search = (q) => `https://nominatim.openstreetmap.org/search?format=jsonv2&
 
 // The street address you gave ("186 Bleecker St") matches a result's: the same street, and the same house
 // number when one is given.
+// Directions count either way ("S. Lumpkin St" is "South Lumpkin Street").
+const DIRS = { north: 'n', south: 's', east: 'e', west: 'w', northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw' };
+const dirs = (s) => s.replace(/\b(north|south|east|west|northeast|northwest|southeast|southwest)\b/g, (d) => DIRS[d]);
 function sameStreet(address, a = {}) {
   const m = String(address).match(/^(\d+[a-z]?)\s+(.+)$/i);
   const num = m ? m[1].toLowerCase() : '';
-  const street = norm((m ? m[2] : address).replace(/\b(st|ave|rd|blvd|ln|dr|pl|sq|ct|pkwy)\b\.?/gi, ''));
-  const road = norm(String(a.road || '').replace(/\b(street|avenue|road|boulevard|lane|drive|place|square|court|parkway)\b/gi, ''));
+  const street = dirs(norm((m ? m[2] : address).replace(/\b(st|ave|rd|blvd|ln|dr|pl|sq|ct|pkwy)\b\.?/gi, '')));
+  const road = dirs(norm(String(a.road || '').replace(/\b(street|avenue|road|boulevard|lane|drive|place|square|court|parkway)\b/gi, '')));
   if (!street || !road || !(road.includes(street) || street.includes(road))) return false;
   return !num || !a.house_number || String(a.house_number).toLowerCase() === num;
 }
+
+// The result is in the city or area you saved ("New York" is the City of New York, not Watervliet, NY,
+// which has a 2309 2nd Avenue too). With no city, the state or region has to match.
+const AREA_ALIAS = { nyc: 'new york', ny: 'new york', la: 'los angeles', sf: 'san francisco', dc: 'washington', philly: 'philadelphia' };
+function inArea(locality, region, a = {}) {
+  const loc = AREA_ALIAS[norm(locality)] || locality;
+  if (loc) return [a.city, a.town, a.village, a.hamlet, a.municipality, a.suburb, a.borough, a.city_district, a.neighbourhood, a.quarter].some((f) => f && sameName(loc, f));
+  if (region) return [a.state, a.province, a.region].some((f) => f && sameName(region, f)) || String(a['ISO3166-2-lvl4'] || '').toLowerCase().endsWith(`-${norm(region)}`);
+  return true;
+}
+// Two matches more than a few hundred metres apart ("Ken's Artisan" is a bakery and a pizzeria) mean the
+// name alone can't tell which one you saved.
+const apart = (x, y) => Math.hypot(Number(x.lat) - Number(y.lat), (Number(x.lon) - Number(y.lon)) * Math.cos((Number(x.lat) * Math.PI) / 180)) > 0.003;
 
 // waitTurn: called before each request, so the caller can keep to OpenStreetMap's one request a second.
 export async function lookupPlace({ name, locality = '', address = '', region = '' }, fetchFn, waitTurn = async () => {}) {
@@ -63,13 +79,15 @@ export async function lookupPlace({ name, locality = '', address = '', region = 
   if (name) {
     await waitTurn();
     const list = await getJson(fetchFn, search([name, address, locality, region].filter(Boolean).join(', ')));
-    hit = (Array.isArray(list) ? list : []).find((r) => sameName(name, r.name || r.namedetails?.name || String(r.display_name || '').split(',')[0]));
+    const found = (Array.isArray(list) ? list : []).filter((r) => sameName(name, r.name || r.namedetails?.name || String(r.display_name || '').split(',')[0]) && inArea(locality, region, r.address));
+    hit = found[0] || null;
+    if (hit && !address && found.some((r) => apart(r, hit))) hit = null;
   }
   // Not found by name (a new place OpenStreetMap doesn't know yet): the address the post gave.
   if (!hit && address) {
     await waitTurn();
     const list = await getJson(fetchFn, search([address, locality, region].filter(Boolean).join(', ')));
-    hit = (Array.isArray(list) ? list : []).find((r) => sameStreet(address, r.address));
+    hit = (Array.isArray(list) ? list : []).find((r) => sameStreet(address, r.address) && inArea(locality, region, r.address));
     byAddress = !!hit;
   }
   if (!hit) return null;

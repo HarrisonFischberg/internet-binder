@@ -18,19 +18,15 @@
       "source": "business site",
       "category": "bakery / cinnamon rolls",
       "expect": {
-        "kind": [
-          "place",
-          "product",
-          "article",
-          "link"
-        ]
+        "kind": "place",
+        "name": "Ken"
       },
       "ideal": {
         "kind": "place",
         "name": "Ken",
         "address": true
       },
-      "note": "home page with no address in its text: a place only with a lookup or AI"
+      "note": "two places share the name (bakery and pizzeria): no lookup pin until you pick one"
     },
     {
       "id": "site-finales",
@@ -44,24 +40,15 @@
       }
     },
     {
-      "id": "site-baker-spice",
-      "url": "https://bakerandspicebakery.com/",
+      "id": "site-independent-baking",
+      "url": "https://independentbaking.com/",
       "source": "business site",
       "category": "bakery / cinnamon rolls",
       "expect": {
-        "kind": [
-          "place",
-          "product",
-          "article",
-          "link"
-        ]
-      },
-      "ideal": {
         "kind": "place",
-        "name": "Baker",
+        "name": "Independent Baking",
         "address": true
-      },
-      "note": "home page with no address in its text: a place only with a lookup or AI"
+      }
     },
     {
       "id": "site-mighty-o",
@@ -69,18 +56,10 @@
       "source": "business site (chain)",
       "category": "donuts",
       "expect": {
-        "kind": [
-          "place",
-          "product",
-          "article",
-          "link"
-        ]
-      },
-      "note": "several locations: a name without one address is fine · home page with no address in its text: a place only with a lookup or AI",
-      "ideal": {
         "kind": "place",
         "name": "Mighty"
-      }
+      },
+      "note": "several locations: a name without one address is fine"
     },
     {
       "id": "site-kingswell",
@@ -88,18 +67,10 @@
       "source": "business site (shop)",
       "category": "skate shop",
       "expect": {
-        "kind": [
-          "place",
-          "product",
-          "article",
-          "link"
-        ]
-      },
-      "note": "a skate shop site that also sells online · home page with no address in its text: a place only with a lookup or AI",
-      "ideal": {
         "kind": "place",
         "name": "Kingswell"
-      }
+      },
+      "note": "a skate shop site that also sells online"
     },
     {
       "id": "site-salt-straw",
@@ -107,18 +78,10 @@
       "source": "business site (chain)",
       "category": "ice cream",
       "expect": {
-        "kind": [
-          "place",
-          "product",
-          "article",
-          "link"
-        ]
-      },
-      "note": "chain; sells pints online too · home page with no address in its text: a place only with a lookup or AI",
-      "ideal": {
         "kind": "place",
         "name": "Salt"
-      }
+      },
+      "note": "chain; sells pints online too"
     },
     {
       "id": "yelp-california-donuts",
@@ -445,12 +408,6 @@
       "source": "Instagram (business profile)",
       "category": "donuts",
       "expect": {
-        "kind": [
-          "link",
-          "place"
-        ]
-      },
-      "ideal": {
         "kind": "place",
         "name": "donut"
       }
@@ -461,12 +418,6 @@
       "source": "Instagram (business profile)",
       "category": "donuts",
       "expect": {
-        "kind": [
-          "link",
-          "place"
-        ]
-      },
-      "ideal": {
         "kind": "place",
         "name": "Donut Pub"
       }
@@ -477,12 +428,6 @@
       "source": "Instagram (business profile)",
       "category": "donuts",
       "expect": {
-        "kind": [
-          "link",
-          "place"
-        ]
-      },
-      "ideal": {
         "kind": "place",
         "name": "Go Donuts",
         "address": true
@@ -494,12 +439,6 @@
       "source": "Facebook (page)",
       "category": "cinnamon rolls",
       "expect": {
-        "kind": [
-          "link",
-          "place"
-        ]
-      },
-      "ideal": {
         "kind": "place",
         "name": "Cinnaholic"
       }
@@ -510,12 +449,6 @@
       "source": "Facebook (page)",
       "category": "cinnamon rolls",
       "expect": {
-        "kind": [
-          "link",
-          "place"
-        ]
-      },
-      "ideal": {
         "kind": "place",
         "name": "Rise"
       }
@@ -526,12 +459,6 @@
       "source": "Facebook (page)",
       "category": "cinnamon rolls",
       "expect": {
-        "kind": [
-          "link",
-          "place"
-        ]
-      },
-      "ideal": {
         "kind": "place",
         "name": "Powell",
         "address": true

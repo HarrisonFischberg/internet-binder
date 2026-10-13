@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-10-13T07:39:45.589Z",
+  "ranAt": "2026-10-13T08:08:13.367Z",
   "lookups": true,
   "results": [
     {
@@ -14,7 +14,7 @@
       "locality": "San Francisco, CA",
       "pin": "37.7831,-122.4174 (560 Larkin Street, Civic Center)",
       "notes": [],
-      "ms": 5019
+      "ms": 5078
     },
     {
       "id": "site-kens-artisan",
@@ -22,16 +22,15 @@
       "source": "business site",
       "category": "bakery / cinnamon rolls",
       "status": "gap",
-      "kind": "product",
+      "kind": "place",
       "title": "Ken's Artisan",
       "address": "",
-      "locality": "",
-      "pin": "",
+      "locality": "Portland, Oregon",
+      "pin": "none",
       "notes": [
-        "ideal: kind product, wanted place",
         "ideal: no street address"
       ],
-      "ms": 4588
+      "ms": 4615
     },
     {
       "id": "site-finales",
@@ -45,72 +44,63 @@
       "locality": "Portland, OR",
       "pin": "45.4794,-122.6733 (6141 South Macadam Avenue, South Portland)",
       "notes": [],
-      "ms": 5160
+      "ms": 5673
     },
     {
-      "id": "site-baker-spice",
-      "url": "https://bakerandspicebakery.com/",
+      "id": "site-independent-baking",
+      "url": "https://independentbaking.com/",
       "source": "business site",
       "category": "bakery / cinnamon rolls",
-      "status": "gap",
-      "kind": "article",
-      "title": "Bakery Items Around the World – Global Bakery Guide",
-      "address": "",
-      "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind article, wanted place",
-        "ideal: no street address"
-      ],
-      "ms": 4082
+      "status": "pass",
+      "kind": "place",
+      "title": "Independent Baking Co.",
+      "address": "1625 S. Lumpkin St.",
+      "locality": "Athens, GA",
+      "pin": "none",
+      "notes": [],
+      "ms": 5699
     },
     {
       "id": "site-mighty-o",
       "url": "https://mightyo.com/",
       "source": "business site (chain)",
       "category": "donuts",
-      "status": "gap",
-      "kind": "article",
-      "title": "Mighty-O Donuts | Best Organic Donuts in Seattle",
+      "status": "pass",
+      "kind": "place",
+      "title": "Mighty-O Donuts",
       "address": "",
       "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind article, wanted place"
-      ],
-      "ms": 4386
+      "pin": "none",
+      "notes": [],
+      "ms": 4876
     },
     {
       "id": "site-kingswell",
       "url": "https://www.kingswell.tv/",
       "source": "business site (shop)",
       "category": "skate shop",
-      "status": "gap",
-      "kind": "product",
-      "title": "KINGSWELL - Voted LA’s Best Skate Shoe, Clothing, and Skateboard Shop",
+      "status": "pass",
+      "kind": "place",
+      "title": "KINGSWELL",
       "address": "",
       "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind product, wanted place"
-      ],
-      "ms": 4566
+      "pin": "none",
+      "notes": [],
+      "ms": 4572
     },
     {
       "id": "site-salt-straw",
       "url": "https://saltandstraw.com/",
       "source": "business site (chain)",
       "category": "ice cream",
-      "status": "gap",
-      "kind": "product",
-      "title": "Craft Made, Curiously Delicious Ice Cream | Salt & Straw",
+      "status": "pass",
+      "kind": "place",
+      "title": "Salt & Straw",
       "address": "",
       "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind product, wanted place"
-      ],
-      "ms": 5067
+      "pin": "none",
+      "notes": [],
+      "ms": 5087
     },
     {
       "id": "yelp-california-donuts",
@@ -129,7 +119,7 @@
         "name \"yelp.com\" lacks \"California Donuts\"",
         "no street address"
       ],
-      "ms": 4579
+      "ms": 4584
     },
     {
       "id": "yelp-sk-donuts",
@@ -148,7 +138,7 @@
         "name \"yelp.com\" lacks \"SK Donuts\"",
         "no street address"
       ],
-      "ms": 4569
+      "ms": 4570
     },
     {
       "id": "yelp-crafted-donuts",
@@ -186,7 +176,7 @@
         "name \"yelp.com\" lacks \"Daily Donuts\"",
         "no street address"
       ],
-      "ms": 4576
+      "ms": 4574
     },
     {
       "id": "yelp-search-hair-brooklyn",
@@ -200,7 +190,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4577
+      "ms": 4576
     },
     {
       "id": "ta-family-doughnut",
@@ -219,7 +209,7 @@
         "name \"tripadvisor.com\" lacks \"Family Doughnut\"",
         "no street address"
       ],
-      "ms": 4573
+      "ms": 5076
     },
     {
       "id": "ta-top-pot-3rd",
@@ -238,7 +228,7 @@
         "name \"tripadvisor.com\" lacks \"Top Pot\"",
         "no street address"
       ],
-      "ms": 4573
+      "ms": 4575
     },
     {
       "id": "ta-mighty-o-55th",
@@ -257,7 +247,7 @@
         "name \"tripadvisor.com\" lacks \"Mighty\"",
         "no street address"
       ],
-      "ms": 4573
+      "ms": 4565
     },
     {
       "id": "ta-forum-donuts",
@@ -271,7 +261,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4582
+      "ms": 4578
     },
     {
       "id": "timeout-kens-artisan",
@@ -282,10 +272,10 @@
       "kind": "place",
       "title": "Ken’s Artisan Bakery",
       "address": "338 NW 21st Ave",
-      "locality": "",
+      "locality": "Portland",
       "pin": "45.5255,-122.6942 (338 Northwest 21st Avenue, Northwest District)",
       "notes": [],
-      "ms": 5206
+      "ms": 5713
     },
     {
       "id": "timeout-scoops",
@@ -296,10 +286,10 @@
       "kind": "place",
       "title": "Scoops Ice Cream",
       "address": "608 W 31st St",
-      "locality": "",
+      "locality": "Chicago",
       "pin": "none",
       "notes": [],
-      "ms": 5171
+      "ms": 5810
     },
     {
       "id": "timeout-cone",
@@ -313,24 +303,21 @@
       "locality": "",
       "pin": "41.8815,-87.6540 (1047 West Madison Street, Near West Side)",
       "notes": [],
-      "ms": 4141
+      "ms": 4150
     },
     {
       "id": "timeout-chocolate-shoppe",
       "url": "https://www.timeout.com/chicago/restaurants/chocolate-shoppe-ice-cream",
       "source": "Time Out",
       "category": "ice cream",
-      "status": "fail",
-      "kind": "article",
+      "status": "pass",
+      "kind": "place",
       "title": "Chocolate Shoppe Ice Cream",
-      "address": "",
-      "locality": "",
-      "pin": "",
-      "notes": [
-        "kind article, wanted place",
-        "no street address"
-      ],
-      "ms": 4046
+      "address": "5337 W Devon Ave",
+      "locality": "Chicago",
+      "pin": "41.9972,-87.7625 (5337 West Devon Avenue, Forest Glen)",
+      "notes": [],
+      "ms": 4121
     },
     {
       "id": "timeout-bird-house",
@@ -344,7 +331,7 @@
       "locality": "",
       "pin": "40.6716,-73.9935 (126 10th Street, Brooklyn)",
       "notes": [],
-      "ms": 4118
+      "ms": 4134
     },
     {
       "id": "timeout-ruth-phils",
@@ -355,10 +342,10 @@
       "kind": "place",
       "title": "Ruth & Phil's Gourmet Ice Cream",
       "address": "2636 W Chicago Ave",
-      "locality": "",
+      "locality": "Chicago",
       "pin": "none",
       "notes": [],
-      "ms": 5169
+      "ms": 6114
     },
     {
       "id": "opentable-quality-italian",
@@ -377,7 +364,7 @@
         "name \"This site can’t be reached\" lacks \"Quality Italian\"",
         "no street address"
       ],
-      "ms": 4092
+      "ms": 4099
     },
     {
       "id": "opentable-lattanzi",
@@ -396,7 +383,7 @@
         "name \"This site can’t be reached\" lacks \"Lattanzi\"",
         "no street address"
       ],
-      "ms": 4071
+      "ms": 4078
     },
     {
       "id": "fresha-rays-barber",
@@ -410,7 +397,7 @@
       "locality": "",
       "pin": "40.693466,-73.973617 (from the page)",
       "notes": [],
-      "ms": 4073
+      "ms": 4080
     },
     {
       "id": "fresha-johns-barber",
@@ -424,7 +411,7 @@
       "locality": "",
       "pin": "40.598901,-73.997606 (from the page)",
       "notes": [],
-      "ms": 4071
+      "ms": 4086
     },
     {
       "id": "booksy-barber",
@@ -438,7 +425,7 @@
       "locality": "New York Metropolis, NY",
       "pin": "40.65795,-73.95341 (from the page)",
       "notes": [],
-      "ms": 4058
+      "ms": 4087
     },
     {
       "id": "spa-luxe-austin",
@@ -457,7 +444,7 @@
         "name \"practicefinder.newpatientsinc.com\" lacks \"Spa Luxe\"",
         "no street address"
       ],
-      "ms": 4061
+      "ms": 4078
     },
     {
       "id": "massagebook-austin",
@@ -485,7 +472,7 @@
       "locality": "Los Angeles, CA",
       "pin": "34.004715,-118.331234 (from the page)",
       "notes": [],
-      "ms": 4080
+      "ms": 4067
     },
     {
       "id": "dla-non-factory",
@@ -499,7 +486,7 @@
       "locality": "Los Angeles, CA",
       "pin": "34.050013,-118.240999 (from the page)",
       "notes": [],
-      "ms": 4067
+      "ms": 4080
     },
     {
       "id": "infatuation-salt-straw-alberta",
@@ -513,7 +500,7 @@
       "locality": "PORTLAND, OR",
       "pin": "45.5592,-122.6441 (2035 Northeast Alberta Street, Vernon)",
       "notes": [],
-      "ms": 4131
+      "ms": 4117
     },
     {
       "id": "infatuation-salt-straw-se",
@@ -527,7 +514,7 @@
       "locality": "PORTLAND, OR",
       "pin": "45.5049,-122.6306 (3345 Southeast Division Street, Richmond)",
       "notes": [],
-      "ms": 4113
+      "ms": 4133
     },
     {
       "id": "ig-reel-randys",
@@ -541,7 +528,7 @@
       "locality": "New York, NY",
       "pin": "40.7290,-74.0012 (186 Bleecker Street, Manhattan)",
       "notes": [],
-      "ms": 6210
+      "ms": 6728
     },
     {
       "id": "ig-reel-homies",
@@ -555,105 +542,91 @@
       "locality": "New York, NY",
       "pin": "40.7218,-73.9971 (23 Cleveland Place, Manhattan)",
       "notes": [],
-      "ms": 5703
+      "ms": 6335
     },
     {
       "id": "ig-profile-imdonut",
       "url": "https://www.instagram.com/imdonut.nyc/",
       "source": "Instagram (business profile)",
       "category": "donuts",
-      "status": "gap",
-      "kind": "link",
-      "title": "(@imdonut.nyc) • Instagram photos and videos",
+      "status": "pass",
+      "kind": "place",
+      "title": "Imdonut NYC",
       "address": "",
       "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind link, wanted place"
-      ],
-      "ms": 4560
+      "pin": "none",
+      "notes": [],
+      "ms": 4566
     },
     {
       "id": "ig-profile-donut-pub",
       "url": "https://www.instagram.com/thedonutpub/",
       "source": "Instagram (business profile)",
       "category": "donuts",
-      "status": "gap",
-      "kind": "link",
-      "title": "The Donut Pub NYC (@thedonutpub) • Instagram photos and videos",
+      "status": "pass",
+      "kind": "place",
+      "title": "The Donut Pub NYC",
       "address": "",
       "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind link, wanted place"
-      ],
-      "ms": 4559
+      "pin": "none",
+      "notes": [],
+      "ms": 4080
     },
     {
       "id": "ig-profile-go-donuts",
       "url": "https://www.instagram.com/godonuts_harlem/",
       "source": "Instagram (business profile)",
       "category": "donuts",
-      "status": "gap",
-      "kind": "link",
-      "title": "GO DONUTS (@godonuts_harlem) • Instagram photos and videos",
-      "address": "",
-      "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind link, wanted place",
-        "ideal: no street address"
-      ],
-      "ms": 4556
+      "status": "pass",
+      "kind": "place",
+      "title": "GO DONUTS",
+      "address": "2309 2nd avenue",
+      "locality": "New York, NY",
+      "pin": "40.7997,-73.9356 (2nd Avenue, Manhattan)",
+      "notes": [],
+      "ms": 5692
     },
     {
       "id": "fb-cinnaholic",
       "url": "https://www.facebook.com/Cinnaholic/",
       "source": "Facebook (page)",
       "category": "cinnamon rolls",
-      "status": "gap",
-      "kind": "link",
+      "status": "pass",
+      "kind": "place",
       "title": "Cinnaholic",
       "address": "",
       "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind link, wanted place"
-      ],
-      "ms": 4054
+      "pin": "none",
+      "notes": [],
+      "ms": 4559
     },
     {
       "id": "fb-rise-bakery",
       "url": "https://www.facebook.com/riseokc",
       "source": "Facebook (page)",
       "category": "cinnamon rolls",
-      "status": "gap",
-      "kind": "link",
+      "status": "pass",
+      "kind": "place",
       "title": "Rise Bakery",
       "address": "",
-      "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind link, wanted place"
-      ],
-      "ms": 4517
+      "locality": "Oklahoma City, OK",
+      "pin": "none",
+      "notes": [],
+      "ms": 5645
     },
     {
       "id": "fb-mrs-powells",
       "url": "https://www.facebook.com/mrspowellsrexburg/",
       "source": "Facebook (page)",
       "category": "cinnamon rolls",
-      "status": "gap",
-      "kind": "link",
-      "title": "Mrs. Powell's Cinnamon Rolls Rexburg 19 E Main | Rexburg ID",
-      "address": "",
-      "locality": "",
-      "pin": "",
-      "notes": [
-        "ideal: kind link, wanted place",
-        "ideal: no street address"
-      ],
-      "ms": 4062
+      "status": "pass",
+      "kind": "place",
+      "title": "Mrs. Powell's Cinnamon Rolls",
+      "address": "19 East Main Street",
+      "locality": "Rexburg, ID",
+      "pin": "43.8264,-111.7831 (19 East Main Street, Rexburg)",
+      "notes": [],
+      "ms": 5701
     },
     {
       "id": "gmaps-top-pot",
@@ -663,11 +636,11 @@
       "status": "pass",
       "kind": "place",
       "title": "Top Pot Doughnuts",
-      "address": "2124 5th Avenue (looked up)",
-      "locality": "",
-      "pin": "47.615243,-122.341131 (from the page)",
+      "address": "2124 5th Ave",
+      "locality": "Seattle, WA",
+      "pin": "47.6151,-122.3412 (2124 5th Avenue, Belltown)",
       "notes": [],
-      "ms": 4615
+      "ms": 4329
     },
     {
       "id": "gmaps-kens",
@@ -677,11 +650,11 @@
       "status": "pass",
       "kind": "place",
       "title": "Ken's Artisan Bakery",
-      "address": "338 Northwest 21st Avenue (looked up)",
-      "locality": "",
-      "pin": "45.52547,-122.694245 (from the page)",
+      "address": "338 NW 21st Ave",
+      "locality": "Portland, OR",
+      "pin": "45.5255,-122.6942 (338 Northwest 21st Avenue, Northwest District)",
       "notes": [],
-      "ms": 4105
+      "ms": 4565
     },
     {
       "id": "gmaps-scoops",
@@ -690,12 +663,12 @@
       "category": "ice cream",
       "status": "pass",
       "kind": "place",
-      "title": "Scoops Ice Cream",
-      "address": "608 W 31st St",
-      "locality": "Chicago, IL",
-      "pin": "none",
+      "title": "Scoops",
+      "address": "600-608 West 31st Street (looked up)",
+      "locality": "",
+      "pin": "41.838238,-87.641853 (from the page)",
       "notes": [],
-      "ms": 5164
+      "ms": 4839
     },
     {
       "id": "gmaps-bird-house",
@@ -709,7 +682,7 @@
       "locality": "Brooklyn, NY",
       "pin": "40.6716,-73.9935 (126 10th Street, Brooklyn)",
       "notes": [],
-      "ms": 4735
+      "ms": 4122
     },
     {
       "id": "gmaps-spavia",
@@ -723,7 +696,7 @@
       "locality": "",
       "pin": "30.342776,-97.738329 (from the page)",
       "notes": [],
-      "ms": 4163
+      "ms": 4125
     },
     {
       "id": "reddit-search-ice-cream",
@@ -737,7 +710,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4588
+      "ms": 4601
     },
     {
       "id": "article-cinnaman",
@@ -751,7 +724,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 6590
+      "ms": 4056
     },
     {
       "id": "article-kinnamons",
@@ -765,7 +738,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4076
+      "ms": 4090
     },
     {
       "id": "article-bird-house",
@@ -779,7 +752,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4585
+      "ms": 4587
     },
     {
       "id": "article-kingswell-vans",
@@ -793,7 +766,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4093
+      "ms": 4091
     },
     {
       "id": "wiki-mighty-o",
@@ -807,7 +780,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4078
+      "ms": 4584
     },
     {
       "id": "recipe-bbc-pancakes",
@@ -821,7 +794,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4561
+      "ms": 4596
     },
     {
       "id": "workout-nhs-strength",
@@ -835,7 +808,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 5578
+      "ms": 5595
     },
     {
       "id": "video-youtube-zoo",
@@ -849,7 +822,7 @@
       "locality": "",
       "pin": "",
       "notes": [],
-      "ms": 4561
+      "ms": 5096
     },
     {
       "id": "film-letterboxd-matrix",
@@ -863,7 +836,7 @@
       "locality": "",
       "pin": "Wikidata match",
       "notes": [],
-      "ms": 4659
+      "ms": 5205
     },
     {
       "id": "book-goodreads-earthsea",
@@ -877,7 +850,7 @@
       "locality": "",
       "pin": "Open Library match",
       "notes": [],
-      "ms": 4452
+      "ms": 39651
     }
   ]
 }
