@@ -89,6 +89,23 @@ export async function lookupPlace({ name, locality = '', address = '', region = 
   };
 }
 
+// A place with a pin but no street address (a shared maps link): the address at that pin.
+export async function lookupAddressAt({ lat, lng }, fetchFn, waitTurn = async () => {}) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  await waitTurn();
+  const r = await getJson(fetchFn, `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=${lat}&lon=${lng}`);
+  const a = r?.address || {};
+  if (!a.road) return null;
+  return {
+    address: [a.house_number, a.road].filter(Boolean).join(' '),
+    locality: a.suburb || a.neighbourhood || a.city_district || a.city || a.town || a.village || '',
+    region: a.city && (a.suburb || a.neighbourhood) ? a.city : a.state || '',
+    postalCode: a.postcode || '',
+    country: a.country || '',
+    lookup: { source: 'OpenStreetMap', url: r.osm_type && r.osm_id ? `https://www.openstreetmap.org/${r.osm_type}/${r.osm_id}` : '' },
+  };
+}
+
 // --- films and shows (Wikidata) ----------------------------------------------------------------------
 
 const FILM = new Set(['Q11424', 'Q202866', 'Q93204', 'Q24869', 'Q506240', 'Q229390']); // film, animated, documentary, feature, TV film, 3D

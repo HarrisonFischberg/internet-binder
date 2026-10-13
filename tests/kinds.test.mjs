@@ -410,3 +410,12 @@ test('places: an "Address:" line is the address, never the name; the place’s @
   assert.deepEqual([d.title, d.details.address], ['23 Cleveland Place', '23 Cleveland Place'], 'no name: the address stands in as the title');
   assert.equal(nameFromHandle('joes.pizza'), 'Joes Pizza');
 });
+
+test('maps search links with the address in them: name, street, city and state', async () => {
+  const { placeFromMapsUrl } = await import('../keepsake/src/shared/kinds.js');
+  const p = placeFromMapsUrl('https://www.google.com/maps/search/?api=1&query=Example+Doughnuts+2124+5th+Ave+Seattle+WA');
+  assert.deepEqual([p.name, p.address, p.locality, p.region], ['Example Doughnuts', '2124 5th Ave', 'Seattle', 'WA']);
+  const q = placeFromMapsUrl("https://www.google.com/maps/search/?api=1&query=Ken%27s+Bakery%2C+338+NW+21st+Ave%2C+Portland%2C+OR+97209");
+  assert.deepEqual([q.name, q.address, q.locality, q.region], ["Ken's Bakery", '338 NW 21st Ave', 'Portland', 'OR']);
+  assert.equal(placeFromMapsUrl('https://www.google.com/maps/search/?api=1&query=pizza+near+me').address, '', 'no address: just the search');
+});

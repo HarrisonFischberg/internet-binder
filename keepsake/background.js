@@ -11,7 +11,7 @@ import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI, identifyForKind, draftRecipe } from './src/ai/provider.js';
 import { parsePostBundle } from './src/instagram/post.js';
-import { LOOKUP_SOURCES, lookupPlace, lookupFilm, lookupBook, fillMissing } from './src/shared/lookups.js';
+import { LOOKUP_SOURCES, lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './src/shared/lookups.js';
 import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 
@@ -199,8 +199,12 @@ function placeOf(product) {
   // The page's own address block; its name is the site's ("Saigon Sandwich", not "Home | Saigon Sandwich").
   const pp = product.pagePlace;
   if (pp?.address) {
+    // On a site's home page the site's name; elsewhere (a review of one venue) the page title's first part.
+    let home = false;
+    try { home = new URL(product.url).pathname.replace(/\/+$/, '') === ''; } catch { /* not a URL */ }
     const site = String(product.siteName || '').trim();
-    const name = site || String(product.title || '').split(/\s+[|–—-]\s+/).filter((x) => !/^(?:home|welcome|index)$/i.test(x.trim())).pop() || '';
+    const parts = String(product.title || '').split(/\s+[|–—-]\s+/).map((x) => x.trim()).filter((x) => x && !/^(?:home|welcome|index)$/i.test(x));
+    const name = (home && site) || parts[0] || site;
     return { address: pp.address, locality: pp.locality, region: pp.region, postalCode: pp.postalCode, phone: pp.phone, hours: pp.hours, source: 'page', ...(name ? { name } : {}) };
   }
   // A post or page that names the place in its caption or location tag.
@@ -231,15 +235,21 @@ function kindOfCapture(product) {
     return 'link';
   }
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
-  // A video site's watch page, or a page that calls itself a video or an article (og:type).
   if (!fromTypes && product.screen) return 'media';
   if (!fromTypes && product.book) return 'book';
+  // A page with a visitable address block: a business's own site, or a review of one venue (Time Out,
+  // The Infatuation). It has the address, and opening hours or a phone and "menu", "visit us"…
+  // (Prices on the page are its menu, not a product's price.)
+  const pp = product.pagePlace;
+  if (!fromTypes && pp?.address && (pp.hours?.length || (pp.phone && pp.visit))) return 'place';
+  // A video site's watch page, or a page that calls itself a video or an article (og:type). Facebook and
+  // Instagram call every page a video; only their video addresses are videos.
   const og = String(product.media?.ogType || '').toLowerCase();
+  let host = '';
+  try { host = new URL(product.url).hostname; } catch { /* not a URL */ }
+  if (/(^|\.)(?:facebook|instagram)\.com$/i.test(host) && !/\/(?:watch|videos?|reels?)\b/i.test(product.url)) return 'link';
   if (!fromTypes && (videoPlatform(product.url) || /^video\./.test(og))) return 'video';
   if (!fromTypes && og === 'article') return 'article';
-  // A business's own site with its address, and opening hours or a phone number and "menu", "visit us"…
-  const pp = product.pagePlace;
-  if (!fromTypes && product.price === null && pp?.address && (pp.hours?.length || (pp.phone && pp.visit))) return 'place';
   if (fromTypes === 'product' || product.price !== null || product.priceText) return 'product';
   return product.sparse ? 'link' : 'product';
 }
@@ -429,6 +439,12 @@ async function fillKind(id) {
         lastNominatim = Date.now();
       };
       found = await lookupPlace({ name: item.title, locality: d.locality, address: d.address, region: d.region }, fetch, waitTurn);
+    } else if (kind === 'place' && d.lat != null && !d.address && await lookupAllowed(settings, 'places')) {
+      // A pin but no street address (a shared maps link): the address at the pin.
+      const wait = 1100 - (Date.now() - lastNominatim);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      lastNominatim = Date.now();
+      found = await lookupAddressAt({ lat: d.lat, lng: d.lng }, fetch);
     } else if (kind === 'media' && (!d.year || !d.director) && await lookupAllowed(settings, 'media')) {
       found = await lookupFilm({ title: item.title, year: d.year, format: d.format === 'series' ? 'series' : '' }, fetch);
     } else if (kind === 'book' && (!d.author || !d.year) && await lookupAllowed(settings, 'books')) {

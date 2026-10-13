@@ -104,7 +104,7 @@
     out.types = [...new Set(nodes.flatMap(types))].filter(Boolean).slice(0, 30);
     out.recipe = nodes.find((n) => types(n).includes('recipe')) || null;
     // A restaurant, café, museum… with an address or a pin. The richest one wins.
-    const PLACE = /^(?:restaurant|foodestablishment|cafeorcoffeeshop|bakery|barorpub|winery|brewery|fastfoodrestaurant|icecreamshop|localbusiness|touristattraction|museum|park|lodgingbusiness|hotel|landmarksorhistoricalbuildings|place|nightclub|entertainmentbusiness|sportsactivitylocation|healthandbeautybusiness)$/;
+    const PLACE = /^(?:restaurant|foodestablishment|cafeorcoffeeshop|bakery|barorpub|winery|brewery|fastfoodrestaurant|icecreamshop|localbusiness|touristattraction|touristdestination|museum|park|lodgingbusiness|hotel|landmarksorhistoricalbuildings|place|nightclub|entertainmentbusiness|sportsactivitylocation|healthandbeautybusiness|hairsalon|beautysalon|nailsalon|dayspa|healthclub|exercisegym|store|clothingstore|sportinggoodsstore|bikestore|bookstore|shoestore|shoppingcenter|movietheater|zoo|aquarium|amusementpark|artgallery)$/;
     const places = nodes.filter((n) => types(n).some((t) => PLACE.test(t)) && (n.address || n.geo));
     places.sort((a, b) => (b.geo ? 2 : 0) + (b.openingHoursSpecification || b.openingHours ? 1 : 0) - ((a.geo ? 2 : 0) + (a.openingHoursSpecification || a.openingHours ? 1 : 0)));
     out.place = places[0] || null;

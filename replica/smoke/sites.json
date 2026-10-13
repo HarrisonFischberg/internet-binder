@@ -1,0 +1,720 @@
+{
+  "about": "Live smoke test fixtures (replica/tools/smoke_live.mjs). Real public pages found by web search on 2026-10-13. 'expect' is what Keepsake must produce (kind; a word that must appear in the name; whether an address must be found). 'ideal' is what it should produce but doesn't yet: reported as a gap, not a failure. Pages behind a login or bot check are reported as blocked, never worked around.",
+  "sites": [
+    {
+      "id": "site-saigon-sandwich",
+      "url": "https://www.saigonsandwich.com/",
+      "source": "business site",
+      "category": "sandwiches",
+      "expect": {
+        "kind": "place",
+        "name": "Saigon Sandwich",
+        "address": true
+      }
+    },
+    {
+      "id": "site-kens-artisan",
+      "url": "https://www.kensartisan.com/",
+      "source": "business site",
+      "category": "bakery / cinnamon rolls",
+      "expect": {
+        "kind": [
+          "place",
+          "product",
+          "article",
+          "link"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Ken",
+        "address": true
+      },
+      "note": "home page with no address in its text: a place only with a lookup or AI"
+    },
+    {
+      "id": "site-finales",
+      "url": "https://www.finalesdesserts.com/",
+      "source": "business site",
+      "category": "bakery / cinnamon rolls",
+      "expect": {
+        "kind": "place",
+        "name": "Finale",
+        "address": true
+      }
+    },
+    {
+      "id": "site-baker-spice",
+      "url": "https://bakerandspicebakery.com/",
+      "source": "business site",
+      "category": "bakery / cinnamon rolls",
+      "expect": {
+        "kind": [
+          "place",
+          "product",
+          "article",
+          "link"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Baker",
+        "address": true
+      },
+      "note": "home page with no address in its text: a place only with a lookup or AI"
+    },
+    {
+      "id": "site-mighty-o",
+      "url": "https://mightyo.com/",
+      "source": "business site (chain)",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "place",
+          "product",
+          "article",
+          "link"
+        ]
+      },
+      "note": "several locations: a name without one address is fine · home page with no address in its text: a place only with a lookup or AI",
+      "ideal": {
+        "kind": "place",
+        "name": "Mighty"
+      }
+    },
+    {
+      "id": "site-kingswell",
+      "url": "https://www.kingswell.tv/",
+      "source": "business site (shop)",
+      "category": "skate shop",
+      "expect": {
+        "kind": [
+          "place",
+          "product",
+          "article",
+          "link"
+        ]
+      },
+      "note": "a skate shop site that also sells online · home page with no address in its text: a place only with a lookup or AI",
+      "ideal": {
+        "kind": "place",
+        "name": "Kingswell"
+      }
+    },
+    {
+      "id": "site-salt-straw",
+      "url": "https://saltandstraw.com/",
+      "source": "business site (chain)",
+      "category": "ice cream",
+      "expect": {
+        "kind": [
+          "place",
+          "product",
+          "article",
+          "link"
+        ]
+      },
+      "note": "chain; sells pints online too · home page with no address in its text: a place only with a lookup or AI",
+      "ideal": {
+        "kind": "place",
+        "name": "Salt"
+      }
+    },
+    {
+      "id": "yelp-california-donuts",
+      "url": "https://www.yelp.com/biz/california-donuts-los-angeles-2",
+      "source": "Yelp",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "California Donuts",
+        "address": true
+      }
+    },
+    {
+      "id": "yelp-sk-donuts",
+      "url": "https://www.yelp.com/biz/sk-donuts-and-croissant-los-angeles",
+      "source": "Yelp",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "SK Donuts",
+        "address": true
+      }
+    },
+    {
+      "id": "yelp-crafted-donuts",
+      "url": "https://www.yelp.com/biz/crafted-donuts-los-angeles-2",
+      "source": "Yelp",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "Crafted Donuts",
+        "address": true
+      }
+    },
+    {
+      "id": "yelp-daily-donuts",
+      "url": "https://www.yelp.com/biz/daily-donuts-los-angeles-7",
+      "source": "Yelp",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "Daily Donuts",
+        "address": true
+      }
+    },
+    {
+      "id": "yelp-search-hair-brooklyn",
+      "url": "https://www.yelp.com/search?cflt=hair&find_loc=Brooklyn%2C+NY",
+      "source": "Yelp (search)",
+      "category": "hair salons",
+      "expect": {
+        "kind": "link"
+      },
+      "note": "a list of salons, not one place"
+    },
+    {
+      "id": "ta-family-doughnut",
+      "url": "https://www.tripadvisor.com/Restaurant_Review-g60878-d432835-Reviews-Family_Doughnut_Shop-Seattle_Washington.html",
+      "source": "Tripadvisor",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "Family Doughnut",
+        "address": true
+      }
+    },
+    {
+      "id": "ta-top-pot-3rd",
+      "url": "https://www.tripadvisor.com/Restaurant_Review-g60878-d5051144-Reviews-Top_Pot_Doughnuts-Seattle_Washington.html",
+      "source": "Tripadvisor",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "Top Pot",
+        "address": true
+      }
+    },
+    {
+      "id": "ta-mighty-o-55th",
+      "url": "https://www.tripadvisor.com/Restaurant_Review-g60878-d793176-Reviews-or30-Mighty_O_Donuts-Seattle_Washington.html",
+      "source": "Tripadvisor",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "Mighty",
+        "address": true
+      }
+    },
+    {
+      "id": "ta-forum-donuts",
+      "url": "https://www.tripadvisor.com/ShowTopic-g60878-i74-k12672811-Looking_for_Great_Donuts_Downtown-Seattle_Washington.html",
+      "source": "Tripadvisor (forum)",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "link",
+          "article"
+        ]
+      },
+      "note": "a discussion, not one place"
+    },
+    {
+      "id": "timeout-kens-artisan",
+      "url": "https://www.timeout.com/portland/restaurants/kens-artisan-bakery",
+      "source": "Time Out",
+      "category": "bakery / cinnamon rolls",
+      "expect": {
+        "kind": "place",
+        "name": "Ken",
+        "address": true
+      }
+    },
+    {
+      "id": "timeout-scoops",
+      "url": "https://www.timeout.com/chicago/restaurants/scoops-ice-cream",
+      "source": "Time Out",
+      "category": "ice cream",
+      "expect": {
+        "kind": "place",
+        "name": "Scoops",
+        "address": true
+      }
+    },
+    {
+      "id": "timeout-cone",
+      "url": "https://www.timeout.com/chicago/restaurants/cone",
+      "source": "Time Out",
+      "category": "ice cream",
+      "expect": {
+        "kind": "place",
+        "name": "Cone",
+        "address": true
+      }
+    },
+    {
+      "id": "timeout-chocolate-shoppe",
+      "url": "https://www.timeout.com/chicago/restaurants/chocolate-shoppe-ice-cream",
+      "source": "Time Out",
+      "category": "ice cream",
+      "expect": {
+        "kind": "place",
+        "name": "Chocolate Shoppe",
+        "address": true
+      }
+    },
+    {
+      "id": "timeout-bird-house",
+      "url": "https://www.timeout.com/newyork/health-and-beauty/the-bird-house",
+      "source": "Time Out",
+      "category": "hair salon",
+      "expect": {
+        "kind": "place",
+        "name": "Bird House",
+        "address": true
+      }
+    },
+    {
+      "id": "timeout-ruth-phils",
+      "url": "https://www.timeout.com/chicago/restaurants/ruth-phils-gourmet-ice-cream",
+      "source": "Time Out",
+      "category": "ice cream",
+      "expect": {
+        "kind": "place",
+        "name": "Ruth",
+        "address": true
+      }
+    },
+    {
+      "id": "opentable-quality-italian",
+      "url": "https://www.opentable.com/r/quality-italian-new-york",
+      "source": "OpenTable",
+      "category": "restaurant",
+      "expect": {
+        "kind": "place",
+        "name": "Quality Italian",
+        "address": true
+      }
+    },
+    {
+      "id": "opentable-lattanzi",
+      "url": "https://www.opentable.com/r/lattanzi-new-york",
+      "source": "OpenTable",
+      "category": "restaurant",
+      "expect": {
+        "kind": "place",
+        "name": "Lattanzi",
+        "address": true
+      }
+    },
+    {
+      "id": "fresha-rays-barber",
+      "url": "https://www.fresha.com/ro/lvp/rays-barber-shop-myrtle-avenue-PVVEr9",
+      "source": "Fresha",
+      "category": "barber",
+      "expect": {
+        "kind": "place",
+        "name": "Ray",
+        "address": true
+      }
+    },
+    {
+      "id": "fresha-johns-barber",
+      "url": "https://www.fresha.com/lvp/johns-barber-shop-bath-avenue-A884JR",
+      "source": "Fresha",
+      "category": "barber",
+      "expect": {
+        "kind": "place",
+        "name": "John",
+        "address": true
+      }
+    },
+    {
+      "id": "booksy-barber",
+      "url": "https://booksy.com/en-us/6236_ty-bowen_barber-shop_29902_brooklyn",
+      "source": "Booksy",
+      "category": "barber",
+      "expect": {
+        "kind": "place",
+        "address": true
+      }
+    },
+    {
+      "id": "spa-luxe-austin",
+      "url": "https://practicefinder.newpatientsinc.com/medspa/spa-luxe-austin-austin-tx/",
+      "source": "directory",
+      "category": "massage / spa",
+      "expect": {
+        "kind": "place",
+        "name": "Spa Luxe",
+        "address": true
+      }
+    },
+    {
+      "id": "massagebook-austin",
+      "url": "https://massagebook.com/search/TX/Austin/massage-therapy/jennifercarrwellness/reviews",
+      "source": "MassageBook",
+      "category": "massage",
+      "expect": {
+        "kind": "place"
+      }
+    },
+    {
+      "id": "dla-neighbors-skate",
+      "url": "https://www.discoverlosangeles.com/things-to-do/neighbors-skate-shop",
+      "source": "Discover LA",
+      "category": "skate shop",
+      "expect": {
+        "kind": "place",
+        "name": "Neighbors",
+        "address": true
+      }
+    },
+    {
+      "id": "dla-non-factory",
+      "url": "https://www.discoverlosangeles.com/things-to-do/non-factory-skate-shop",
+      "source": "Discover LA",
+      "category": "skate shop",
+      "expect": {
+        "kind": "place",
+        "name": "Non Factory",
+        "address": true
+      }
+    },
+    {
+      "id": "infatuation-salt-straw-alberta",
+      "url": "https://www.theinfatuation.com/portland/reviews/salt-and-straw-alberta",
+      "source": "The Infatuation",
+      "category": "ice cream",
+      "expect": {
+        "kind": "place",
+        "name": "Salt",
+        "address": true
+      }
+    },
+    {
+      "id": "infatuation-salt-straw-se",
+      "url": "https://www.theinfatuation.com/portland/reviews/salt-straw-se",
+      "source": "The Infatuation",
+      "category": "ice cream",
+      "expect": {
+        "kind": "place",
+        "name": "Salt",
+        "address": true
+      }
+    },
+    {
+      "id": "ig-reel-randys",
+      "url": "https://www.instagram.com/reel/DT3rh0FAVYC/",
+      "source": "Instagram (reel)",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "place",
+          "link"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Randy",
+        "address": true
+      },
+      "note": "logged out, Instagram shows little; signed in it's a place"
+    },
+    {
+      "id": "ig-reel-homies",
+      "url": "https://www.instagram.com/reel/DTIrsARDukt/",
+      "source": "Instagram (reel)",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "place",
+          "link"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Homies",
+        "address": true
+      }
+    },
+    {
+      "id": "ig-profile-imdonut",
+      "url": "https://www.instagram.com/imdonut.nyc/",
+      "source": "Instagram (business profile)",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "link",
+          "place"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "donut"
+      }
+    },
+    {
+      "id": "ig-profile-donut-pub",
+      "url": "https://www.instagram.com/thedonutpub/",
+      "source": "Instagram (business profile)",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "link",
+          "place"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Donut Pub"
+      }
+    },
+    {
+      "id": "ig-profile-go-donuts",
+      "url": "https://www.instagram.com/godonuts_harlem/",
+      "source": "Instagram (business profile)",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "link",
+          "place"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Go Donuts",
+        "address": true
+      }
+    },
+    {
+      "id": "fb-cinnaholic",
+      "url": "https://www.facebook.com/Cinnaholic/",
+      "source": "Facebook (page)",
+      "category": "cinnamon rolls",
+      "expect": {
+        "kind": [
+          "link",
+          "place"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Cinnaholic"
+      }
+    },
+    {
+      "id": "fb-rise-bakery",
+      "url": "https://www.facebook.com/riseokc",
+      "source": "Facebook (page)",
+      "category": "cinnamon rolls",
+      "expect": {
+        "kind": [
+          "link",
+          "place"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Rise"
+      }
+    },
+    {
+      "id": "fb-mrs-powells",
+      "url": "https://www.facebook.com/mrspowellsrexburg/",
+      "source": "Facebook (page)",
+      "category": "cinnamon rolls",
+      "expect": {
+        "kind": [
+          "link",
+          "place"
+        ]
+      },
+      "ideal": {
+        "kind": "place",
+        "name": "Powell",
+        "address": true
+      }
+    },
+    {
+      "id": "gmaps-top-pot",
+      "url": "https://www.google.com/maps/search/?api=1&query=Top+Pot+Doughnuts+2124+5th+Ave+Seattle+WA",
+      "source": "Google Maps link",
+      "category": "donuts",
+      "expect": {
+        "kind": "place",
+        "name": "Top Pot",
+        "address": true
+      }
+    },
+    {
+      "id": "gmaps-kens",
+      "url": "https://www.google.com/maps/search/?api=1&query=Ken%27s+Artisan+Bakery+338+NW+21st+Ave+Portland+OR",
+      "source": "Google Maps link",
+      "category": "bakery",
+      "expect": {
+        "kind": "place",
+        "name": "Ken",
+        "address": true
+      }
+    },
+    {
+      "id": "gmaps-scoops",
+      "url": "https://www.google.com/maps/search/?api=1&query=Scoops+Ice+Cream+608+W+31st+St+Chicago+IL",
+      "source": "Google Maps link",
+      "category": "ice cream",
+      "expect": {
+        "kind": "place",
+        "name": "Scoops",
+        "address": true
+      }
+    },
+    {
+      "id": "gmaps-bird-house",
+      "url": "https://www.google.com/maps/search/?api=1&query=The+Bird+House+Salon+126+10th+St+Brooklyn+NY",
+      "source": "Google Maps link",
+      "category": "hair salon",
+      "expect": {
+        "kind": "place",
+        "name": "Bird House",
+        "address": true
+      }
+    },
+    {
+      "id": "gmaps-spavia",
+      "url": "https://www.google.com/maps/search/?api=1&query=Spavia+Day+Spa+6701+Burnet+Rd+Austin+TX",
+      "source": "Google Maps link",
+      "category": "massage / spa",
+      "expect": {
+        "kind": "place",
+        "name": "Spavia",
+        "address": true
+      }
+    },
+    {
+      "id": "reddit-search-ice-cream",
+      "url": "https://www.reddit.com/r/chicago/search/?q=best+ice+cream",
+      "source": "Reddit (search)",
+      "category": "ice cream",
+      "expect": {
+        "kind": [
+          "link",
+          "article"
+        ]
+      },
+      "note": "a discussion list, not one place"
+    },
+    {
+      "id": "article-cinnaman",
+      "url": "https://www.wweek.com/portland/article-18294-cinnaman.html",
+      "source": "news article",
+      "category": "cinnamon rolls",
+      "expect": {
+        "kind": [
+          "article",
+          "link"
+        ]
+      }
+    },
+    {
+      "id": "article-kinnamons",
+      "url": "https://www.wweek.com/restaurants/2022/07/22/a-new-bakery-focusing-solely-on-elevating-the-cinnamon-roll-has-opened-in-the-pearl",
+      "source": "news article",
+      "category": "cinnamon rolls",
+      "expect": {
+        "kind": [
+          "article",
+          "link"
+        ]
+      }
+    },
+    {
+      "id": "article-bird-house",
+      "url": "https://www.bkmag.com/?p=41432",
+      "source": "magazine article",
+      "category": "hair salon",
+      "expect": {
+        "kind": [
+          "article",
+          "link"
+        ]
+      }
+    },
+    {
+      "id": "article-kingswell-vans",
+      "url": "https://abc7.com/vans-shoes-skateboard-skateboarding/6157655/",
+      "source": "news article",
+      "category": "skate shop",
+      "expect": {
+        "kind": [
+          "article",
+          "video",
+          "link"
+        ]
+      }
+    },
+    {
+      "id": "wiki-mighty-o",
+      "url": "https://en.wikipedia.org/wiki/Mighty-O_Donuts",
+      "source": "Wikipedia",
+      "category": "donuts",
+      "expect": {
+        "kind": [
+          "article",
+          "link",
+          "place"
+        ]
+      }
+    },
+    {
+      "id": "recipe-bbc-pancakes",
+      "url": "https://www.bbcgoodfood.com/recipes/easy-pancakes",
+      "source": "recipe site",
+      "category": "recipe",
+      "expect": {
+        "kind": "recipe",
+        "name": "pancakes"
+      }
+    },
+    {
+      "id": "workout-nhs-strength",
+      "url": "https://www.nhs.uk/live-well/exercise/strength-exercises/",
+      "source": "health site",
+      "category": "workout",
+      "expect": {
+        "kind": "workout"
+      }
+    },
+    {
+      "id": "video-youtube-zoo",
+      "url": "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+      "source": "YouTube",
+      "category": "video",
+      "expect": {
+        "kind": "video",
+        "name": "zoo"
+      }
+    },
+    {
+      "id": "film-letterboxd-matrix",
+      "url": "https://letterboxd.com/film/the-matrix/",
+      "source": "Letterboxd",
+      "category": "film",
+      "expect": {
+        "kind": "media",
+        "name": "Matrix"
+      }
+    },
+    {
+      "id": "book-goodreads-earthsea",
+      "url": "https://www.goodreads.com/book/show/13642.A_Wizard_of_Earthsea",
+      "source": "Goodreads",
+      "category": "book",
+      "expect": {
+        "kind": "book",
+        "name": "Earthsea"
+      }
+    }
+  ]
+}

@@ -82,3 +82,13 @@ test('places: a name with no street, city or area is never looked up (it could b
   assert.equal(r, null);
   assert.equal(called, false);
 });
+
+test('places: a pin with no street address gets the address at that pin', async () => {
+  const { lookupAddressAt } = await import('../keepsake/src/shared/lookups.js');
+  const a = await lookupAddressAt({ lat: 47.6152, lng: -122.3411 }, async (url) => {
+    assert.match(url, /nominatim\.openstreetmap\.org\/reverse\?.*lat=47\.6152&lon=-122\.3411/);
+    return { ok: true, json: async () => ({ osm_type: 'way', osm_id: 7, address: { house_number: '2124', road: '5th Avenue', neighbourhood: 'Belltown', city: 'Seattle', postcode: '98121', country: 'United States' } }) };
+  });
+  assert.deepEqual([a.address, a.locality, a.region, a.postalCode], ['2124 5th Avenue', 'Belltown', 'Seattle', '98121']);
+  assert.equal(await lookupAddressAt({ lat: NaN, lng: 1 }, async () => { throw new Error('no'); }), null);
+});

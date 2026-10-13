@@ -439,6 +439,8 @@ export function placeFromMapsUrl(url) {
   let lat = null;
   let lng = null;
   let address = '';
+  let locality = '';
+  let region = '';
   if (/^(?:google\.[a-z.]+|maps\.google\.[a-z.]+)$/.test(host) && /^\/maps\b/.test(u.pathname)) {
     const place = u.pathname.match(/\/maps\/place\/([^/@]+)/);
     if (place) name = decodeURIComponent(place[1].replace(/\+/g, ' '));
@@ -449,13 +451,18 @@ export function placeFromMapsUrl(url) {
     else if (at) [lat, lng] = [at[1], at[2]];
     else if (/^-?\d+(?:\.\d+)?,\s*-?\d+(?:\.\d+)?$/.test(q)) [lat, lng] = q.split(',');
     else if (!name && q) name = q;
+    // A search link with the address in it ("Top Pot Doughnuts 2124 5th Ave Seattle WA"): name, street, city.
+    if (q && !place) {
+      const split = splitNameAddress(q);
+      if (split) { name = split.name; address = split.address; locality = split.locality; region = split.region; }
+    }
   } else if (host === 'maps.apple.com') {
     name = u.searchParams.get('q') || u.searchParams.get('name') || '';
     address = u.searchParams.get('address') || '';
     const ll = u.searchParams.get('ll') || u.searchParams.get('coordinate') || u.searchParams.get('sll') || '';
     if (/^-?\d+(?:\.\d+)?,\s*-?\d+(?:\.\d+)?$/.test(ll)) [lat, lng] = ll.split(',');
   } else return null;
-  const out = { name: clean(name, 120), address: clean(address, 200), lat: coord(lat, 90), lng: coord(lng, 180), source: 'maps-link' };
+  const out = { name: clean(name, 120), address: clean(address, 200), ...(locality ? { locality: clean(locality, 80) } : {}), ...(region ? { region: clean(region, 60) } : {}), lat: coord(lat, 90), lng: coord(lng, 180), source: 'maps-link' };
   return out.name || out.address || (out.lat !== null && out.lng !== null) ? out : null;
 }
 
@@ -557,6 +564,22 @@ export function kindChangePatch(item, kind) {
 // You put a Lifestyle save into a collection: it becomes something to buy (a product when it has a
 // price, else a link), so the shopping rules apply.
 export const shoppingKindFor = (item) => (item.price !== null && item.price !== undefined ? 'product' : 'link');
+
+// "Top Pot Doughnuts 2124 5th Ave Seattle WA" / "…, 2124 5th Ave, Seattle, WA": the name before the house
+// number, the street up to its type (Ave, St…), then the city and a two-letter state if there is one.
+function splitNameAddress(q) {
+  const s = String(q).replace(/\s+/g, ' ').trim();
+  const m = s.match(/^(.+?\D)[,\s]+(\d{1,6}[a-z]?\s+.+)$/i);
+  if (!m) return null;
+  const rest = m[2].replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = rest.split(' ');
+  const at = words.findIndex((w, i) => i > 0 && STREET.test(w));
+  if (at < 0) return null;
+  const address = words.slice(0, at + 1).join(' ');
+  const tail = words.slice(at + 1).filter((w) => !/^\d{5}(?:-\d{4})?$/.test(w));
+  const region = tail.length > 1 && /^[A-Z]{2}$/.test(tail[tail.length - 1]) ? tail.pop() : '';
+  return { name: m[1].replace(/[,\s]+$/, ''), address, locality: tail.join(' '), region };
+}
 
 // One line for the address ("12 High St, London E1 6AN").
 export function addressLine(d = {}) {
@@ -868,7 +891,9 @@ export function kindFromSchemaTypes(types) {
   const t = (types || []).map((x) => String(x).toLowerCase());
   if (t.some((x) => x === 'recipe')) return 'recipe';
   if (t.some((x) => ['product', 'productgroup', 'individualproduct', 'productmodel'].includes(x))) return 'product';
-  if (t.some((x) => ['restaurant', 'foodestablishment', 'cafeorcoffeeshop', 'bakery', 'barorpub', 'localbusiness', 'touristattraction', 'museum', 'park', 'lodgingbusiness', 'hotel'].includes(x))) return 'place';
+  if (t.some((x) => ['restaurant', 'foodestablishment', 'cafeorcoffeeshop', 'bakery', 'barorpub', 'icecreamshop', 'fastfoodrestaurant', 'winery', 'brewery', 'localbusiness', 'touristattraction', 'touristdestination',
+    'museum', 'park', 'lodgingbusiness', 'hotel', 'hairsalon', 'beautysalon', 'nailsalon', 'dayspa', 'healthandbeautybusiness', 'healthclub', 'exercisegym', 'sportsactivitylocation', 'store', 'clothingstore',
+    'sportinggoodsstore', 'bikestore', 'bookstore', 'shoestore', 'shoppingcenter', 'movietheater', 'nightclub', 'entertainmentbusiness', 'zoo', 'aquarium', 'amusementpark', 'artgallery'].includes(x))) return 'place';
   if (t.some((x) => ['movie', 'tvseries'].includes(x))) return 'media';
   if (t.some((x) => x === 'book')) return 'book';
   if (t.some((x) => ['exerciseplan', 'physicalactivity', 'exerciseaction'].includes(x))) return 'workout';

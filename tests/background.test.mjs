@@ -300,9 +300,25 @@ test('a business’s own site with an address and hours is a place named after t
   const res = await F.send({ type: MSG.SAVE_ITEM, product: shop, instant: true }, popup);
   assert.deepEqual([res.item.kind, res.item.title, res.item.details.address, res.item.details.locality, res.item.details.postalCode, res.item.details.phone],
     ['place', 'Example Banh Mi', '560 Larkin St', 'San Francisco', '94102', '(415) 555-0123']);
+  // A restaurant site with its menu prices on the page is still a place.
+  const menu = { ...shop, url: 'https://banhmi.example/menu', price: 6.5, priceText: '$6.50' };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: menu, instant: true }, popup)).item.kind, 'place');
   const office = { title: 'Example Software — Plans', siteName: 'Example Software', url: 'https://software.example/pricing', images: [], image: '', price: null, schemaTypes: ['website'],
     pagePlace: { address: '100 Main St', locality: 'Austin', region: 'TX', postalCode: '78701', phone: '', hours: [], visit: false } };
   assert.notEqual((await F.send({ type: MSG.SAVE_ITEM, product: office, instant: true }, popup)).item.kind, 'place');
+});
+
+test('smoke-test fixes: a review of one venue is the place (named from the title), a salon listing is a place, a Facebook page is a link', async () => {
+  const review = { title: 'Example Ice Cream | Time Out Chicago', siteName: 'Time Out', url: 'https://reviews.example/chicago/restaurants/example-ice-cream', images: [], image: '', price: null,
+    schemaTypes: ['review'], media: { ogType: 'article' }, pagePlace: { address: '608 W 31st St', locality: '', region: '', postalCode: '', phone: '', hours: ['Sun–Thu 11am–10pm'], visit: true } };
+  const r = await F.send({ type: MSG.SAVE_ITEM, product: review, instant: true }, popup);
+  assert.deepEqual([r.item.kind, r.item.title, r.item.details.address], ['place', 'Example Ice Cream', '608 W 31st St'], 'not "Time Out"');
+  const salon = { title: "Example Barber Shop", url: 'https://book.example/lvp/example-barber', images: [], image: '', price: null, schemaTypes: ['healthandbeautybusiness', 'hairsalon', 'website', 'organization'] };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: salon, instant: true }, popup)).item.kind, 'place');
+  const fb = { title: 'Example Bakery', url: 'https://www.facebook.com/examplebakery/', images: [], image: '', price: null, schemaTypes: [], media: { ogType: 'video.other' } };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: fb, instant: true }, popup)).item.kind, 'link');
+  const fbVideo = { ...fb, url: 'https://www.facebook.com/examplebakery/videos/123/' };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: fbVideo, instant: true }, popup)).item.kind, 'video');
 });
 
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
