@@ -10,7 +10,7 @@ import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI } from './src/ai/provider.js';
-import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout } from './src/shared/kinds.js';
+import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl } from './src/shared/kinds.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 const CONTENT_SCRIPT_ID = 'keepsake-floating';
@@ -147,6 +147,7 @@ function normalizeProduct(raw) {
 // The default collection for kinds that have one.
 const KIND_HOME = {
   recipe: { key: 'recipes', name: 'Recipes', reason: (d) => (d.ingredients?.length ? `Recipe: ${d.ingredients.length} ingredients found` : 'Recipe page') },
+  place: { key: 'places', name: 'Places', reason: (d) => (d.locality ? `Place in ${d.locality}` : 'Place page') },
   workout: { key: 'workouts', name: 'Workouts', reason: (d) => (d.exercises?.length ? `Workout: ${d.exercises.length} exercises found` : 'Workout page') },
 };
 
@@ -164,9 +165,18 @@ function workoutOf(product) {
   return Array.isArray(product.workoutLines) && product.workoutLines.length ? workoutFromText(product.workoutLines.slice(0, 150).join('\n'), { source: 'page' }) : null;
 }
 
+// The place's address, pin, hours… from the page's structured data, or from a maps link.
+function placeOf(product) {
+  const fromPage = placeFromSchema(product.place);
+  const fromLink = placeFromMapsUrl(product.url);
+  if (fromPage) return fromPage;
+  return fromLink || {};
+}
+
 // What a capture is: what the page says about itself first (structured data), then what we can tell.
 function kindOfCapture(product) {
   if (isKind(product.kind)) return product.kind;
+  if (placeFromMapsUrl(product.url)) return 'place';
   const fromTypes = kindFromSchemaTypes(product.schemaTypes);
   // A video or article that lists exercises is a workout; other structured kinds are what they say.
   if ((fromTypes === 'video' || fromTypes === 'article') && workoutOf(product)) return 'workout';
@@ -192,7 +202,13 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
   const [collections, prefs, settings] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings()]);
   const kind = kindOfCapture(product);
   const details = kind === 'recipe' ? recipeFromSchema(product.recipe) || recipeFromText(product.description) || {}
-    : kind === 'workout' ? workoutOf(product) || {} : {};
+    : kind === 'workout' ? workoutOf(product) || {}
+      : kind === 'place' ? placeOf(product) : {};
+  // A maps link's page title is the app's ("Google Maps"); the place's name is in the link.
+  if (kind === 'place' && details.name) {
+    if (!product.title || /\bmaps\b/i.test(product.title)) product.title = details.name;
+    delete details.name;
+  }
   if (kind !== 'product') {
     // A price on a recipe or article page is an ad or a cookbook, not this save's price.
     product.price = null;

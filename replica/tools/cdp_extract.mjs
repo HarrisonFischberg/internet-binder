@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { recipeFromSchema, recipeFromText, kindFromSchemaTypes, workoutFromText, looksLikeWorkout, formatExercise } from '../../keepsake/src/shared/kinds.js';
+import { recipeFromSchema, recipeFromText, kindFromSchemaTypes, workoutFromText, looksLikeWorkout, formatExercise, placeFromSchema, placeFromMapsUrl, addressLine } from '../../keepsake/src/shared/kinds.js';
 
 const args = process.argv.slice(2);
 const bi = args.indexOf('--browser');
@@ -37,10 +37,11 @@ try {
     // Same order as background.js kindOfCapture (minus Instagram).
     const types = kindFromSchemaTypes(p.schemaTypes);
     const wk = looksLikeWorkout(`${p.title} ${p.description}`) ? (p.isInstagram ? [p.title, p.description].filter(Boolean).sort((a, b) => b.length - a.length).map((t) => workoutFromText(t)).find(Boolean) : workoutFromText(p.description, { source: 'page' })) || workoutFromText((p.workoutLines || []).join('\n'), { source: 'page' }) : null;
-    const kind = p.isInstagram ? (recipeFromText(p.description) ? 'recipe' : wk ? 'workout' : 'link') : (types === 'video' || types === 'article') && wk ? 'workout' : types && types !== 'product' ? types : p.recipe ? 'recipe'
+    const kind = placeFromMapsUrl(url) ? 'place' : p.isInstagram ? (recipeFromText(p.description) ? 'recipe' : wk ? 'workout' : 'link') : (types === 'video' || types === 'article') && wk ? 'workout' : types && types !== 'product' ? types : p.recipe ? 'recipe'
       : !types && p.price == null && !p.priceText && wk ? 'workout' : types === 'product' || p.price != null || p.priceText ? 'product' : p.sparse ? 'link' : 'product';
     const rec = kind === 'recipe' ? recipeFromSchema(p.recipe) || recipeFromText(p.description) : null;
     console.log(JSON.stringify({ url, kind, title: p.title, priceText: p.priceText || p.price, source: p.source, image: !!p.image, types: (p.schemaTypes || []).slice(0, 8),
+      place: kind === 'place' ? (() => { const d = placeFromSchema(p.place) || placeFromMapsUrl(url) || {}; return { address: addressLine(d), pin: d.lat != null, hours: d.hours, cuisine: d.cuisine, price: d.priceRange, name: d.name }; })() : null,
       workout: kind === 'workout' ? { lines: (p.workoutLines || []).length, exercises: wk.exercises.map(formatExercise) } : null,
       recipe: rec ? { ingredients: rec.ingredients.length, steps: rec.steps.length, totalMinutes: rec.totalMinutes, yield: rec.yield, first: rec.ingredients[0] } : null }));
     if (SHOW_LINES) console.log(JSON.stringify({ description: p.description }), (p.workoutLines || []).join('\n'));

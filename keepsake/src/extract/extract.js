@@ -39,7 +39,7 @@
 
   // ---- 1. JSON-LD ------------------------------------------------------------
   function readJsonLd() {
-    const out = { product: null, breadcrumbs: [], recipe: null, types: [] };
+    const out = { product: null, breadcrumbs: [], recipe: null, place: null, types: [] };
     const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).slice(0, 25);
     const nodes = [];
     for (const s of scripts) {
@@ -62,6 +62,11 @@
     // Everything the page says it is (Recipe, Article, Restaurant, VideoObject…), for its kind.
     out.types = [...new Set(nodes.flatMap(types))].filter(Boolean).slice(0, 30);
     out.recipe = nodes.find((n) => types(n).includes('recipe')) || null;
+    // A restaurant, café, museum… with an address or a pin. The richest one wins.
+    const PLACE = /^(?:restaurant|foodestablishment|cafeorcoffeeshop|bakery|barorpub|winery|brewery|fastfoodrestaurant|icecreamshop|localbusiness|touristattraction|museum|park|lodgingbusiness|hotel|landmarksorhistoricalbuildings|place|nightclub|entertainmentbusiness|sportsactivitylocation|healthandbeautybusiness)$/;
+    const places = nodes.filter((n) => types(n).some((t) => PLACE.test(t)) && (n.address || n.geo));
+    places.sort((a, b) => (b.geo ? 2 : 0) + (b.openingHoursSpecification || b.openingHours ? 1 : 0) - ((a.geo ? 2 : 0) + (a.openingHoursSpecification || a.openingHours ? 1 : 0)));
+    out.place = places[0] || null;
     const crumbs = nodes.find((n) => types(n).includes('breadcrumblist'));
     if (crumbs && Array.isArray(crumbs.itemListElement)) {
       out.breadcrumbs = crumbs.itemListElement
@@ -351,6 +356,18 @@
       }
     }
     if (ld?.breadcrumbs?.length) result.breadcrumbs = ld.breadcrumbs;
+    // A place page: its fields travel raw (bounded); the background worker normalizes them (kinds.js).
+    if (ld?.place && !ld?.product) {
+      const pl = ld.place;
+      result.title = result.title || text(pl.name);
+      result.description = result.description || text(typeof pl.description === 'string' ? pl.description : '').slice(0, 1000);
+      imagesFrom(pl.image, images);
+      result.place = safe(() => JSON.parse(JSON.stringify({
+        '@type': pl['@type'], name: pl.name, address: pl.address, geo: pl.geo, telephone: pl.telephone, servesCuisine: pl.servesCuisine,
+        priceRange: pl.priceRange, openingHours: pl.openingHours, openingHoursSpecification: Array.isArray(pl.openingHoursSpecification) ? pl.openingHoursSpecification.slice(0, 40) : pl.openingHoursSpecification,
+      })), null);
+      if (result.title && result.source === 'fallback') result.source = 'jsonld';
+    }
     // A recipe page: its fields travel raw (bounded); the background worker normalizes them (kinds.js).
     const recipe = ld?.recipe || safe(readMicrodataRecipe, null);
     if (recipe && !ld?.product) {

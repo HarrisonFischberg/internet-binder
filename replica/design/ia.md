@@ -158,6 +158,15 @@ Rules the apps share (`shared/goals.js`, mirrored in Swift):
 | iPhone | full-screen push; segmented Exercises / Goal; check-in as a sheet; screen kept awake while open |
 | iPad, Mac | detail pane with exercises and goal side by side |
 
+### Places (Chrome, built in M2c)
+
+Saving a restaurant or place page reads its schema.org place data (address, pin, phone, cuisine, price range, opening hours). A Google Maps or Apple Maps link is read from the URL itself: the name and the place's own pin (`!3d…!4d…`, not the map's centre). Places file to a **Places** collection unless one of your keywords matches first.
+
+- **Places view:** a list grouped by city (A–Z, "Somewhere else" last), each row with thumb, name, cuisine or category · price · street, a **Been** badge, and **Open in Maps** (menu: Apple Maps / Google Maps). Been places sink to the bottom of their city.
+- **Place view:** photo, name, source, address with Copy, cuisine, price, phone, opening hours ("As published on the page when you saved it. Check before you go."), actions Edit details, Visit page, Apple Maps, Google Maps, Mark been.
+- **Edit details:** address fields, cuisine, price, phone, hours (one line each). Changing the address drops the page's pin, so maps search the new address instead of pointing at the old spot. On an Instagram save, "Use the tagged location as the name".
+- No map in Chrome (no third-party tiles); the Apple apps add the map in M3.
+
 ### F07 Delete and undo
 
 Delete → toast "Moved to Trash" + Undo (8 s) → Trash keeps it for 30 days with Restore. Delete forever is in Trash only, with confirmation.

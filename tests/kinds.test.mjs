@@ -251,3 +251,38 @@ test('workouts: check-mark bullets with muscles in brackets, numbers in sentence
   const t = workoutFromText('20 min HIIT workout 🔥\nExercises:\nBurpees\nSquat jumps\nDo it like this:\n✅ 4 rounds\n✅ Control every rep\n✅ Breathe out on the way up');
   assert.deepEqual(t.exercises.map((e) => [e.name, e.sets]), [['Burpees', 4], ['Squat jumps', 4]]);
 });
+
+test('places: schema.org restaurant, opening hours, maps links read from the link itself', async () => {
+  const { placeFromSchema, placeFromMapsUrl, hoursFrom, mapsLinks, addressLine } = await import('../keepsake/src/shared/kinds.js');
+  const p = placeFromSchema({ '@type': ['Restaurant'], address: { streetAddress: '12 Mill Lane', addressLocality: 'Bristol', postalCode: 'BS1 4XX', addressCountry: { name: 'United Kingdom' } },
+    geo: { latitude: '51.4545', longitude: '-2.5879' }, servesCuisine: ['Georgian'], priceRange: '££', telephone: '+44 117 000 0000',
+    openingHoursSpecification: [{ dayOfWeek: ['Tuesday', 'Wednesday', 'Thursday'], opens: '17:00', closes: '22:00' }, { dayOfWeek: 'https://schema.org/Friday', opens: '17:00:00', closes: '23:00:00' }, { dayOfWeek: 'Saturday', opens: '17:00', closes: '23:00' }] });
+  assert.equal(p.locality, 'Bristol');
+  assert.equal(p.country, 'United Kingdom');
+  assert.deepEqual([p.lat, p.lng], [51.4545, -2.5879]);
+  assert.deepEqual(p.hours, ['Tue–Thu 17:00–22:00', 'Fri–Sat 17:00–23:00']);
+  assert.equal(p.category, 'Restaurant');
+  assert.equal(addressLine(p), '12 Mill Lane, Bristol, BS1 4XX, United Kingdom');
+  assert.equal(placeFromSchema({ '@type': 'Restaurant', name: 'No address' }), null, 'a place needs an address or a pin');
+  assert.deepEqual(hoursFrom(null, 'Mo-Fr 08:00-18:00, Sa 09:00-14:00'), ['Mon–Fri 08:00–18:00', 'Sat 09:00–14:00']);
+  assert.deepEqual(hoursFrom([{ dayOfWeek: 'Sunday', opens: '00:00', closes: '23:59' }]), ['Sun Open 24 hours']);
+
+  const g = placeFromMapsUrl('https://www.google.com/maps/place/Little+Kitchen/@51.4,-2.5,15z/data=!4m6!3m5!1s0x0:0x0!8m2!3d51.4551!4d-2.5911');
+  assert.deepEqual([g.name, g.lat, g.lng, g.source], ['Little Kitchen', 51.4551, -2.5911, 'maps-link'], 'the place’s own pin, not the map centre');
+  assert.deepEqual(placeFromMapsUrl('https://maps.apple.com/?q=Little%20Kitchen&ll=51.45,-2.59').name, 'Little Kitchen');
+  assert.equal(placeFromMapsUrl('https://www.google.com/search?q=maps'), null);
+  assert.equal(placeFromMapsUrl('https://shop.example/maps/place/x'), null);
+
+  const links = mapsLinks('Little Kitchen', p);
+  assert.equal(new URL(links.google).searchParams.get('query'), 'Little Kitchen, 12 Mill Lane, Bristol, BS1 4XX, United Kingdom');
+  assert.equal(new URL(links.apple).searchParams.get('ll'), '51.4545,-2.5879');
+  assert.equal(new URL(mapsLinks('', { lat: 1.5, lng: 2.5 }).google).searchParams.get('query'), '1.5,2.5', 'a pin alone');
+  assert.equal(mapsLinks('', {}), null);
+
+  const d = sanitizeDetails('place', { ...p, lat: 999, hours: ['x'.repeat(200)], source: 'evil' });
+  assert.equal(d.lat, null);
+  assert.equal(d.hours[0].length, 80);
+  assert.equal(d.source, 'you');
+  assert.equal(keyFact({ kind: 'place', details: p }), 'Bristol · Georgian · ££');
+  assert.equal(kindFromSchemaTypes(['WebPage', 'Restaurant']), 'place');
+});

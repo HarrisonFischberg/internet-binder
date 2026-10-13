@@ -7,7 +7,7 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
-import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText } from '../shared/kinds.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks } from '../shared/kinds.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
@@ -657,10 +657,15 @@ function renderGrid(view) {
     }
     view.append(collectionHero(col));
   }
-  if (baseItems().length) view.append(gridFilters);
+  // The places list sorts itself (by city, then name), so the sort and retailer filters don't apply.
+  if (baseItems().length && !(r.name === 'kind' && r.id === 'place')) view.append(gridFilters);
   const items = currentGridItems();
   if (!items.length) {
     view.append(gridEmptyState());
+    return;
+  }
+  if (r.name === 'kind' && r.id === 'place') {
+    renderPlaceList(view, items);
     return;
   }
   const grid = el('div', { class: 'grid', role: 'list' });
@@ -1044,7 +1049,115 @@ async function openSave(id) {
   const item = state.items.find((i) => i.id === id) || (await store.getItem(id));
   if (item && kindOf(item) === 'recipe') return openRecipe(id);
   if (item && kindOf(item) === 'workout') return openWorkout(id);
+  if (item && kindOf(item) === 'place') return openPlace(id);
   return openQuickView(id);
+}
+
+// "Open in Maps": Apple Maps or Google Maps, in a new tab. The links are built from what's saved; Keepsake
+// looks nothing up itself, and the maps site only hears about the place when you click.
+function mapsMenuButton(item, { small = false, primary = false } = {}) {
+  const links = mapsLinks(item.title, item.details || {});
+  if (!links) return null;
+  const btn = el('button', { type: 'button', class: `btn ${small ? 'btn-sm' : ''} ${primary ? 'btn-primary' : ''}`, 'aria-haspopup': 'menu', onClick: (e) => {
+    e.stopPropagation();
+    openMenu(btn, [
+      { label: 'Apple Maps', icon: UI.externalIcon(), onClick: () => window.open(links.apple, '_blank', 'noopener') },
+      { label: 'Google Maps', icon: UI.externalIcon(), onClick: () => window.open(links.google, '_blank', 'noopener') },
+    ]);
+  } }, [kindIcon('place'), 'Open in Maps']);
+  return btn;
+}
+
+// The place view: where it is, when it's open, and a way there.
+async function openPlace(id) {
+  const item = await store.getItem(id);
+  if (!item) {
+    UI.toast('That item no longer exists.', { kind: 'danger' });
+    return;
+  }
+  const d = item.details || {};
+  const where = addressLine(d);
+  const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
+  const sourceLabel = { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you' }[d.source] || '';
+  const copyAddress = el('button', { type: 'button', class: 'btn btn-sm', onClick: async () => {
+    try {
+      await navigator.clipboard.writeText(where);
+      UI.toast('Address copied.', { duration: 1500 });
+    } catch {
+      UI.toast('Select the address and press Ctrl/Cmd+C to copy.', { duration: 2500 });
+    }
+  } }, ['Copy']);
+  const facts = [
+    d.cuisine ? ['Cuisine', d.cuisine] : d.category ? ['Kind of place', d.category] : null,
+    d.priceRange ? ['Price', d.priceRange] : null,
+    d.phone ? ['Phone', el('a', { href: `tel:${d.phone.replace(/[^\d+]/g, '')}` }, [d.phone])] : null,
+  ].filter(Boolean);
+  const body = el('div', { class: 'recipe-view place-view' }, [
+    el('div', { class: `recipe-hero ${item.image ? '' : 'no-pic'}` }, [
+      item.image ? UI.pictureNode({ src: item.image, aspect: item.imageAspect, title: item.title, className: 'recipe-hero-pic' }) : null,
+      el('div', { class: 'recipe-hero-text' }, [
+        el('span', { class: 'badge kind-badge kind-place' }, [kindIcon('place'), 'Place']),
+        el('h2', { class: 'recipe-title' }, [item.title]),
+        el('p', { class: 'recipe-from' }, [[from, sourceLabel].filter(Boolean).join(' · ')]),
+        where ? el('div', { class: 'place-address' }, [el('address', {}, [where]), copyAddress]) : el('p', { class: 'help' }, ['No address on the page. Add one in Edit details so Open in Maps finds it.']),
+        facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
+        d.hours?.length ? el('div', { class: 'place-hours' }, [el('h3', { class: 'recipe-sub' }, ['Opening hours']), el('ul', {}, d.hours.map((h) => el('li', {}, [h]))), el('p', { class: 'help' }, ['As published on the page when you saved it. Check before you go.'])]) : null,
+        item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
+        item.status === 'done' ? el('span', { class: 'badge' }, ['Been']) : null,
+      ]),
+    ]),
+  ]);
+  const been = item.status === 'done';
+  const maps = mapsLinks(item.title, d);
+  await UI.openModal({
+    title: item.title,
+    body,
+    wide: true,
+    className: 'modal-recipe modal-place',
+    actions: [
+      { label: 'Edit details', quiet: true, autofocus: true, closes: false, onClick: async (close) => { close(false); await openItem(item.id); } },
+      item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), icon: UI.externalIcon() } : null,
+      maps ? { label: 'Apple Maps', href: maps.apple, icon: UI.externalIcon() } : null,
+      maps ? { label: 'Google Maps', href: maps.google, icon: UI.externalIcon() } : null,
+      { label: been ? 'Been ✓' : 'Mark been', primary: !been, onClick: async () => {
+        await store.updateItem(item.id, { status: been ? 'saved' : 'done' });
+        UI.toast(been ? 'Marked as not been yet.' : 'Marked as been.', { duration: 2200 });
+      } },
+    ].filter(Boolean),
+  });
+}
+
+// Places as a list grouped by city, each with Open in Maps (Chrome has no map: no third-party map tiles).
+function renderPlaceList(view, items) {
+  const groups = new Map();
+  for (const item of items) {
+    const city = item.details?.locality || 'Somewhere else';
+    if (!groups.has(city)) groups.set(city, []);
+    groups.get(city).push(item);
+  }
+  const cities = [...groups.keys()].sort((a, b) => (a === 'Somewhere else') - (b === 'Somewhere else') || a.localeCompare(b));
+  const box = el('div', { class: 'place-list' });
+  for (const city of cities) {
+    const list = groups.get(city).sort((a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title));
+    box.append(el('section', { class: 'place-group', 'aria-label': city }, [
+      el('h2', { class: 'place-city' }, [city, el('span', { class: 'count' }, [String(list.length)])]),
+      el('ul', { class: 'place-rows', role: 'list' }, list.map((item) => {
+        const d = item.details || {};
+        return el('li', { class: `place-row ${item.status === 'done' ? 'is-done' : ''}` }, [
+          el('button', { type: 'button', class: 'place-row-hit', onClick: () => openSave(item.id) }, [
+            UI.pictureNode({ src: item.image, aspect: 1, title: item.title, className: 'place-thumb' }),
+            el('span', { class: 'place-row-text' }, [
+              el('span', { class: 'place-row-title' }, [item.title]),
+              el('span', { class: 'place-row-meta' }, [[d.cuisine || d.category, d.priceRange, d.address].filter(Boolean).join(' · ') || item.retailer || item.host || '']),
+            ]),
+          ]),
+          item.status === 'done' ? el('span', { class: 'badge' }, ['Been']) : null,
+          mapsMenuButton(item, { small: true }),
+        ]);
+      })),
+    ]));
+  }
+  view.append(box);
 }
 
 // The workout view: what to do (exercises with sets, reps or time, and rest) and its goal. Goals and
@@ -1495,6 +1608,24 @@ async function openItem(id) {
   const workoutFocus = el('input', { class: 'input', maxlength: '60', placeholder: 'Focus, e.g. legs', 'aria-label': 'Focus' });
   workoutFocus.value = startWorkout.focus || '';
   const workoutHelp = el('p', { class: 'help', 'aria-live': 'polite' });
+  const startPlace = startKind === 'place' ? item.details || {} : {};
+  const placeInput = (key, label, max, placeholder = '') => {
+    const i = el('input', { class: 'input', maxlength: String(max), 'aria-label': label, placeholder });
+    i.value = startPlace[key] || '';
+    return i;
+  };
+  const placeFields = {
+    address: placeInput('address', 'Street address', 200, 'Street address'),
+    locality: placeInput('locality', 'City', 80, 'City'),
+    region: placeInput('region', 'Region or state', 80, 'Region or state'),
+    postalCode: placeInput('postalCode', 'Postcode', 20, 'Postcode'),
+    country: placeInput('country', 'Country', 60, 'Country'),
+    cuisine: placeInput('cuisine', 'Cuisine or kind of place', 120, 'Cuisine, e.g. Italian'),
+    priceRange: placeInput('priceRange', 'Price range', 20, 'Price, e.g. ££'),
+    phone: placeInput('phone', 'Phone', 40, 'Phone'),
+  };
+  const placeHours = el('textarea', { class: 'textarea', rows: '3', 'aria-label': 'Opening hours, one line per day or range', placeholder: 'Mon–Fri 12:00–22:00\nSat 10:00–23:00' });
+  placeHours.value = (startPlace.hours || []).join('\n');
   let prefilled = false;
   let prefilledText = '';
   let recipeEditing = false;
@@ -1599,6 +1730,7 @@ async function openItem(id) {
     doneToggle.lastChild.textContent = kindInfo(kind).done;
     clear(kindPanel);
     if (kind === 'recipe') kindPanel.append(recipePanel());
+    if (kind === 'place') kindPanel.append(placePanel());
     if (kind === 'workout') {
       // Switching a save to Workout: fill in what its caption or description lists, to check and keep.
       if (!workoutLines.value.trim() && !prefilled) {
@@ -1628,6 +1760,26 @@ async function openItem(id) {
       else unread.push(l);
     }
     return { exercises, unread };
+  }
+
+  function placePanel() {
+    const box = el('div', { class: 'recipe-panel' });
+    const sourceLabel = { page: 'From the page', 'maps-link': 'From a maps link', you: 'Added by you' }[startPlace.source] || '';
+    const f = placeFields;
+    box.append(
+      el('div', { class: 'recipe-head' }, [el('h3', {}, ['Place']), sourceLabel ? el('span', { class: 'recipe-facts' }, [sourceLabel]) : null]),
+      // An Instagram post's tagged location is usually the place's name.
+      item.instagram?.location && titleInput.value.trim() !== item.instagram.location
+        ? el('button', { type: 'button', class: 'btn btn-sm', onClick: (e) => { titleInput.value = item.instagram.location; e.currentTarget.remove(); } }, [`Use the tagged location “${item.instagram.location}” as the name`])
+        : null,
+      f.address,
+      el('div', { class: 'price-inline' }, [f.locality, f.postalCode]),
+      el('div', { class: 'price-inline' }, [f.region, f.country]),
+      el('div', { class: 'price-inline' }, [f.cuisine, f.priceRange]),
+      f.phone,
+      el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Opening hours (one line each)']), placeHours]),
+    );
+    return box;
   }
 
   function workoutPanel() {
@@ -1763,6 +1915,14 @@ async function openItem(id) {
           const same = JSON.stringify(sanitizeDetails('workout', { ...next, source: was.source }).exercises) === JSON.stringify(was.exercises);
           const fromPrefill = prefilledText && workoutLines.value.trim() === prefilledText.trim();
           patch.details = sanitizeDetails('workout', { ...next, source: same && startKind === 'workout' ? was.source : fromPrefill ? (item.type === 'instagram' ? 'caption' : 'page') : 'you' });
+        } else if (kindSelect.value === 'place') {
+          const next = Object.fromEntries(Object.entries(placeFields).map(([k, i]) => [k, i.value.trim()]));
+          next.hours = placeHours.value.split('\n').map((x) => x.trim()).filter(Boolean);
+          const was = sanitizeDetails('place', startPlace);
+          const changed = Object.keys(placeFields).some((k) => next[k] !== (was[k] || '')) || next.hours.join('\n') !== (was.hours || []).join('\n');
+          // A moved address makes the page's pin wrong, so the pin goes with it (maps then search by address).
+          const moved = ['address', 'locality', 'postalCode', 'country'].some((k) => next[k] !== (was[k] || ''));
+          patch.details = sanitizeDetails('place', { ...was, ...next, lat: moved ? null : was.lat, lng: moved ? null : was.lng, source: changed || startKind !== 'place' ? 'you' : was.source });
         } else if (kindSelect.value !== startKind) patch.details = {};
         const priceText = priceInput.value.trim();
         if (!priceText) {

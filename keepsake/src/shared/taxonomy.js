@@ -32,6 +32,16 @@ export const DEFAULT_TAXONOMY = [
     keywords: [],
   },
   {
+    // Saves of kind "place" (restaurants, cafés, places to visit) are filed here the same way.
+    key: 'places',
+    name: 'Places',
+    description: 'Restaurants and places you want to go.',
+    color: '#8A4F3C',
+    aliases: ['places'],
+    strong: [],
+    keywords: [],
+  },
+  {
     key: 'camping',
     name: 'Camping & Outdoors',
     description: 'Tents, sleeping bags, stoves, packs, hiking and campsite gear.',

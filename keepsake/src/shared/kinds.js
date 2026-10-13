@@ -7,6 +7,8 @@
 //             cuisine, category, author, source: 'page' | 'caption' | 'you' | 'ai-draft' }
 //   workout { exercises: [{ name, sets, reps, durationSeconds, restSeconds }], durationMinutes, focus,
 //             source: 'page' | 'caption' | 'you' }   (goals and check-ins are their own records: goals.js)
+//   place   { address, locality, region, postalCode, country, lat, lng, phone, cuisine, priceRange, hours: [string],
+//             category, source: 'page' | 'maps-link' | 'you' }
 
 import { sanitizeText, tidyImportedText } from './util.js';
 
@@ -342,10 +344,140 @@ export function workoutFromText(text, { source = 'caption' } = {}) {
   return { exercises, durationMinutes: mins ? Number(mins[1]) : null, focus: '', source };
 }
 
+// --- places ------------------------------------------------------------------------------------
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAY_CODES = { mo: 0, tu: 1, we: 2, th: 3, fr: 4, sa: 5, su: 6, monday: 0, tuesday: 1, wednesday: 2, thursday: 3, friday: 4, saturday: 5, sunday: 6 };
+const hhmm = (t) => {
+  const m = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
+};
+
+// schema.org opening hours -> readable lines ("Mon–Fri 12:00–22:00", "Sat 10:00–23:00").
+// Takes openingHoursSpecification objects or the short "Mo-Fr 11:00-22:00" strings.
+export function hoursFrom(spec, short) {
+  const byDay = Array.from({ length: 7 }, () => []);
+  const add = (day, range) => { if (day >= 0 && day < 7 && range && !byDay[day].includes(range)) byDay[day].push(range); };
+  for (const s of (Array.isArray(spec) ? spec : spec ? [spec] : []).slice(0, 40)) {
+    if (!s || typeof s !== 'object') continue;
+    const opens = hhmm(s.opens);
+    const closes = hhmm(s.closes);
+    if (!opens || !closes) continue;
+    const range = opens === '00:00' && (closes === '23:59' || closes === '00:00') ? 'Open 24 hours' : `${opens}–${closes}`;
+    for (const d of (Array.isArray(s.dayOfWeek) ? s.dayOfWeek : [s.dayOfWeek])) {
+      const key = String(d || '').replace(/^https?:\/\/schema\.org\//i, '').toLowerCase();
+      add(DAY_CODES[key] ?? -1, range);
+    }
+  }
+  for (const line of (Array.isArray(short) ? short : short ? String(short).split(/\s*[,;]\s*(?=[A-Za-z]{2})/) : []).slice(0, 14)) {
+    const m = String(line).match(/^\s*([A-Za-z]{2})(?:\s*-\s*([A-Za-z]{2}))?(?:\s*,\s*[A-Za-z]{2})*\s+(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+    if (!m) continue;
+    const from = DAY_CODES[m[1].toLowerCase()];
+    const to = m[2] ? DAY_CODES[m[2].toLowerCase()] : from;
+    if (from === undefined || to === undefined) continue;
+    for (let d = from; d <= (to >= from ? to : to + 7); d++) add(d % 7, `${hhmm(m[3])}–${hhmm(m[4])}`);
+  }
+  // Runs of days with the same hours become one line.
+  const out = [];
+  let i = 0;
+  while (i < 7) {
+    const v = byDay[i].join(', ');
+    let j = i;
+    while (j + 1 < 7 && byDay[j + 1].join(', ') === v) j++;
+    if (v) out.push(`${j > i ? `${DAY_NAMES[i]}–${DAY_NAMES[j]}` : DAY_NAMES[i]} ${v}`);
+    i = j + 1;
+  }
+  return out;
+}
+
+const coord = (v, max) => {
+  const n = Number(v);
+  return Number.isFinite(n) && Math.abs(n) <= max && v !== '' && v !== null ? Math.round(n * 1e6) / 1e6 : null;
+};
+
+// schema.org Restaurant, LocalBusiness, TouristAttraction… -> place details.
+export function placeFromSchema(node) {
+  if (!node || typeof node !== 'object') return null;
+  const a = Array.isArray(node.address) ? node.address[0] : node.address;
+  const addr = typeof a === 'string' ? { streetAddress: a } : a && typeof a === 'object' ? a : {};
+  const geo = Array.isArray(node.geo) ? node.geo[0] : node.geo || {};
+  const types = (Array.isArray(node['@type']) ? node['@type'] : [node['@type']]).map((t) => String(t || ''));
+  const out = {
+    address: clean(addr.streetAddress, 200),
+    locality: clean(addr.addressLocality, 80),
+    region: clean(addr.addressRegion, 80),
+    postalCode: clean(addr.postalCode, 20),
+    country: clean(nameOf(addr.addressCountry), 60),
+    lat: coord(geo.latitude, 90),
+    lng: coord(geo.longitude, 180),
+    phone: clean(node.telephone, 40),
+    cuisine: list(node.servesCuisine, 3, 40).join(', '),
+    priceRange: clean(node.priceRange, 20),
+    hours: hoursFrom(node.openingHoursSpecification, node.openingHours),
+    category: clean(types.find((t) => !/^(?:LocalBusiness|Place|Organization|Thing)$/i.test(t)) || types[0] || '', 40).replace(/([a-z])([A-Z])/g, '$1 $2'),
+    source: 'page',
+  };
+  return out.address || out.locality || (out.lat !== null && out.lng !== null) ? out : null;
+}
+
+// A Google Maps or Apple Maps link -> the place's name and pin, read from the link itself (nothing fetched).
+//   google.com/maps/place/Name+Here/@51.5,-0.12,17z/…   maps.apple.com/?q=Name&ll=51.5,-0.12   maps.apple.com/place?…&coordinate=…
+export function placeFromMapsUrl(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const host = u.hostname.replace(/^www\./, '');
+  let name = '';
+  let lat = null;
+  let lng = null;
+  let address = '';
+  if (/^(?:google\.[a-z.]+|maps\.google\.[a-z.]+)$/.test(host) && /^\/maps\b/.test(u.pathname)) {
+    const place = u.pathname.match(/\/maps\/place\/([^/@]+)/);
+    if (place) name = decodeURIComponent(place[1].replace(/\+/g, ' '));
+    const at = u.pathname.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+    const pin = u.pathname.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/); // the place itself, not the map's centre
+    const q = u.searchParams.get('query') || u.searchParams.get('q') || '';
+    if (pin) [lat, lng] = [pin[1], pin[2]];
+    else if (at) [lat, lng] = [at[1], at[2]];
+    else if (/^-?\d+(?:\.\d+)?,\s*-?\d+(?:\.\d+)?$/.test(q)) [lat, lng] = q.split(',');
+    else if (!name && q) name = q;
+  } else if (host === 'maps.apple.com') {
+    name = u.searchParams.get('q') || u.searchParams.get('name') || '';
+    address = u.searchParams.get('address') || '';
+    const ll = u.searchParams.get('ll') || u.searchParams.get('coordinate') || u.searchParams.get('sll') || '';
+    if (/^-?\d+(?:\.\d+)?,\s*-?\d+(?:\.\d+)?$/.test(ll)) [lat, lng] = ll.split(',');
+  } else return null;
+  const out = { name: clean(name, 120), address: clean(address, 200), lat: coord(lat, 90), lng: coord(lng, 180), source: 'maps-link' };
+  return out.name || out.address || (out.lat !== null && out.lng !== null) ? out : null;
+}
+
+// One line for the address ("12 High St, London E1 6AN").
+export function addressLine(d = {}) {
+  const tail = [d.locality, [d.region, d.postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  return [d.address, tail, d.country].filter(Boolean).join(', ');
+}
+
+// Links that open the place in Apple Maps or Google Maps. Built from what's saved; nothing is looked up.
+// Name plus address finds the place's own page; a pin alone drops a pin.
+export function mapsLinks(name, d = {}) {
+  const where = addressLine(d);
+  const hasPin = Number.isFinite(d.lat) && Number.isFinite(d.lng);
+  if (!where && !hasPin && !name) return null;
+  const q = [name, where].filter(Boolean).join(', ');
+  const google = new URL('https://www.google.com/maps/search/');
+  google.searchParams.set('api', '1');
+  google.searchParams.set('query', where || !hasPin ? q : `${d.lat},${d.lng}`);
+  const apple = new URL('https://maps.apple.com/');
+  if (name) apple.searchParams.set('q', name);
+  if (where) apple.searchParams.set('address', where);
+  if (hasPin) apple.searchParams.set('ll', `${d.lat},${d.lng}`);
+  return { google: google.href, apple: apple.href };
+}
+
 // --- details ------------------------------------------------------------------------------------
 
 const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai-draft'];
 const WORKOUT_SOURCES = ['page', 'caption', 'you'];
+const PLACE_SOURCES = ['page', 'maps-link', 'you'];
 
 export function sanitizeDetails(kind, details) {
   if (!details || typeof details !== 'object') return {};
@@ -374,6 +506,23 @@ export function sanitizeDetails(kind, details) {
       source: WORKOUT_SOURCES.includes(details.source) ? details.source : 'you',
     };
   }
+  if (kind === 'place') {
+    return {
+      address: clean(details.address, 200),
+      locality: clean(details.locality, 80),
+      region: clean(details.region, 80),
+      postalCode: clean(details.postalCode, 20),
+      country: clean(details.country, 60),
+      lat: coord(details.lat, 90),
+      lng: coord(details.lng, 180),
+      phone: clean(details.phone, 40),
+      cuisine: clean(details.cuisine, 120),
+      priceRange: clean(details.priceRange, 20),
+      hours: list(details.hours, 14, 80),
+      category: clean(details.category, 40),
+      source: PLACE_SOURCES.includes(details.source) ? details.source : 'you',
+    };
+  }
   // Other kinds keep a small, flat set of strings and numbers until their own fields land.
   const out = {};
   for (const [k, v] of Object.entries(details).slice(0, 20)) {
@@ -400,6 +549,7 @@ export function keyFact(item, { formatPrice } = {}) {
     if (d.focus) parts.push(d.focus);
     return parts.join(' · ');
   }
+  if (kind === 'place') return [d.locality, d.cuisine || d.category, d.priceRange].filter(Boolean).join(' · ');
   if (kind === 'product' && formatPrice) return formatPrice(item.price, item.currency) || '';
   return '';
 }

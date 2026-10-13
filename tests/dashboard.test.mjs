@@ -239,6 +239,49 @@ test('switching an Instagram save to Workout fills in the exercises its caption 
   assert.equal(saved.details.source, 'caption', 'kept as found, so labelled as from the caption');
 });
 
+test('places: a list grouped by city, the place view with maps links, Been, and editing the address drops the pin', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const a = await store.addItem({ title: 'Little Kitchen', url: 'https://eat.example/lk', kind: 'place', details: { address: '12 Mill Lane', locality: 'Bristol', lat: 51.45, lng: -2.59, cuisine: 'Georgian', hours: ['Tue–Sat 17:00–22:00'], source: 'page' } });
+  await store.addItem({ title: 'Harbour Café', url: 'https://eat.example/hc', kind: 'place', details: { locality: 'Bath', source: 'page' } });
+  await store.addItem({ title: 'Somewhere', url: 'https://eat.example/s', kind: 'place', details: {} });
+  await afterChange();
+  assert.match(window.document.getElementById('navKinds').textContent, /Places/);
+  await go('#kind/place');
+  const cities = [...view().querySelectorAll('.place-city')].map((h) => h.firstChild.textContent);
+  assert.deepEqual(cities, ['Bath', 'Bristol', 'Somewhere else']);
+  assert.ok(!view().querySelector('.grid'), 'a list, not the grid');
+  const row = [...view().querySelectorAll('.place-row')].find((r) => r.textContent.includes('Little Kitchen'));
+  assert.match(row.textContent, /Georgian · 12 Mill Lane/);
+  assert.ok(row.querySelector('button[aria-haspopup="menu"]'), 'Open in Maps on the row');
+
+  row.querySelector('.place-row-hit').click();
+  await afterChange();
+  const pv = window.document.querySelector('.modal-place .place-view');
+  assert.ok(pv, 'the place view opened');
+  assert.match(pv.querySelector('address').textContent, /12 Mill Lane, Bristol/);
+  assert.match(pv.textContent, /Tue–Sat 17:00–22:00/);
+  const google = [...window.document.querySelectorAll('.modal-place a')].find((x) => x.textContent.includes('Google Maps'));
+  assert.equal(new URL(google.href).searchParams.get('query'), 'Little Kitchen, 12 Mill Lane, Bristol');
+  [...window.document.querySelectorAll('.modal-place button')].find((b) => b.textContent === 'Mark been').click();
+  await afterChange();
+  assert.equal((await store.getItem(a.id)).status, 'done');
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+
+  await go(`#item/${a.id}`);
+  await afterChange();
+  const street = window.document.querySelector('input[aria-label="Street address"]');
+  assert.equal(street.value, '12 Mill Lane');
+  street.value = '3 New Street';
+  [...window.document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Save changes').click();
+  await afterChange();
+  const saved = await store.getItem(a.id);
+  assert.equal(saved.details.address, '3 New Street');
+  assert.equal(saved.details.lat, null, 'the old pin pointed at the old address');
+  assert.equal(saved.details.source, 'you');
+});
+
 test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);

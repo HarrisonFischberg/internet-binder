@@ -167,6 +167,27 @@ test('workout gear with a price stays a product; a caption that lists exercises 
   assert.equal(res.item.details.source, 'caption');
 });
 
+test('a restaurant page is saved as a place with its address and hours, filed in Places, with no price', async () => {
+  const page = {
+    title: 'Little Kitchen', url: 'https://eat.example/little-kitchen', price: '$25', images: [], image: '', schemaTypes: ['restaurant'],
+    place: { '@type': 'Restaurant', address: { streetAddress: '12 Mill Lane', addressLocality: 'Bristol' }, geo: { latitude: 51.45, longitude: -2.59 }, servesCuisine: 'Georgian', openingHours: 'Tu-Sa 17:00-22:00' },
+  };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: page, instant: true }, popup);
+  assert.equal(res.item.kind, 'place');
+  assert.equal(res.item.details.locality, 'Bristol');
+  assert.deepEqual(res.item.details.hours, ['Tue–Sat 17:00–22:00']);
+  assert.equal(res.item.price, null);
+  assert.equal(res.collection.name, 'Places');
+});
+
+test('a Google Maps link is saved as a place named from the link', async () => {
+  const page = { title: 'Google Maps', url: 'https://www.google.com/maps/place/Little+Kitchen/@51.4,-2.5,15z/data=!3d51.4551!4d-2.5911', images: [], image: '', price: null };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: page, instant: true }, popup);
+  assert.equal(res.item.kind, 'place');
+  assert.equal(res.item.title, 'Little Kitchen');
+  assert.deepEqual([res.item.details.lat, res.item.details.lng, res.item.details.source], [51.4551, -2.5911, 'maps-link']);
+});
+
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
   const link = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'Reading list', url: 'https://notes.example/x', sparse: true }, instant: true }, popup);
   assert.equal(link.item.kind, 'link');
