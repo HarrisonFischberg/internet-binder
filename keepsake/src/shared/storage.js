@@ -261,6 +261,7 @@ export function makeItem(input = {}) {
     topicsBy: input.topicsBy === 'guess' || input.topicsBy === 'you' ? input.topicsBy : '',
     imageAspect: Number.isFinite(input.imageAspect) && input.imageAspect > 0.2 && input.imageAspect < 5 ? input.imageAspect : null,
     favorite: !!input.favorite,
+    // No longer used (Archive was removed in M2): kept so older data and exports round-trip unchanged.
     archived: !!input.archived,
     purchased: !!input.purchased,
     confidence: Number.isFinite(input.confidence) ? Math.max(0, Math.min(1, input.confidence)) : null,

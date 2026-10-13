@@ -10,7 +10,7 @@ import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI } from './src/ai/provider.js';
-import { isKind, kindInfo, hasOwnView, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
+import { isKind, kindInfo, hasOwnView, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -190,6 +190,9 @@ function kindOfCapture(product) {
   if (isKind(product.kind)) return product.kind;
   // Anything on YouTube is a video (your choice: one place for everything you save from there).
   if (isYouTube(product.url)) return 'video';
+  // A title's page on a film or book site (Letterboxd, IMDb, Goodreads…): a film/show or a book.
+  const site = titleSite(product.url);
+  if (site) return site.kind;
   if (placeFromMapsUrl(product.url)) return 'place';
   const fromTypes = kindFromSchemaTypes(product.schemaTypes);
   // A video or article that lists exercises is a workout; other structured kinds are what they say.
@@ -217,9 +220,11 @@ function captureFacts(product) {
     : kind === 'workout' ? workoutOf(product) || {}
       : kind === 'place' ? placeOf(product)
         : kind === 'video' ? videoFromCapture(product.media || {}, product.url)
-          : kind === 'media' ? mediaFromSchema(product.screen) || {}
+          : kind === 'media' ? mediaFromSchema(product.screen) || { format: titleSite(product.url)?.format || 'film' }
             : kind === 'book' ? bookFromSchema(product.book) || {}
               : kind === 'article' ? articleFromCapture({ ...(product.media || {}), siteName: product.media?.siteName || product.siteName }) : {};
+  // The site's own path knows film from series (Rotten Tomatoes /tv/, TMDB /tv/…) when the data doesn't.
+  if (kind === 'media' && titleSite(product.url)?.format && !product.screen) details.format = titleSite(product.url).format;
   // "The Matrix (1999)": the year belongs in the details, not the title.
   if (kind === 'media') {
     const y = String(product.title || '').match(/^(.*\S)\s*\((\d{4})(?:[–-]\s*(?:\d{4})?)?\)\s*$/);
@@ -243,12 +248,11 @@ function captureFacts(product) {
   return { kind, details };
 }
 
-// Where a capture goes: the local categorizer for products and links. Other kinds live in their own
-// view (Recipes, Videos, Places…) and need no collection, unless one of your own collections claims
-// it by keyword; then it's filed there too.
+// Where a capture goes. Collections are for shopping: the local categorizer files products and links.
+// Everything else (recipes, places, videos…) lives in its Lifestyle view and never gets a collection.
 function classifyCapture(product, kind, details, ctx) {
   const classification = classify(product, ctx);
-  if (hasOwnView(kind) && !(classification.confidence >= 0.85 && !classification.taxonomyKey && !classification.isInbox)) {
+  if (hasOwnView(kind)) {
     return { collectionId: null, collectionName: kindInfo(kind).plural, isNew: false, isInbox: false, shelf: kind, confidence: 0.9, alternatives: classification.alternatives || [],
       reason: (KIND_REASON[kind] || (() => kindInfo(kind).label))(details), kind };
   }
@@ -411,9 +415,11 @@ async function showPageToast(tabId, res, product) {
         ? { kind: 'duplicate', existing: res.existing, title: (product && product.title) || '', look }
         : {
           kind: 'saved', itemId: res.item.id, title: res.item.title, collectionId: res.item.collectionId || '',
-          // A recipe, video, place… with no collection is saved to its own view ("Saved to Videos").
-          collectionName: res.collection ? res.collection.name : hasOwnView(res.item.kind) ? kindInfo(res.item.kind).plural : '', isInbox: !!res.classification?.isInbox, look,
-          collections: !res.collection && hasOwnView(res.item.kind) ? [{ id: '', name: kindInfo(res.item.kind).plural }, ...collections] : collections,
+          // A recipe, video, place… is saved to its Lifestyle view ("Saved to Videos"); collections are for
+          // shopping, so it gets no collection picker.
+          collectionName: res.collection ? res.collection.name : '', isInbox: !!res.classification?.isInbox, look,
+          lifestyle: hasOwnView(res.item.kind) && !res.collection ? kindInfo(res.item.kind).plural : '',
+          collections: hasOwnView(res.item.kind) && !res.collection ? [] : collections,
           thumb: /^https:\/\//.test(res.item.image || '') ? res.item.image : '',
           meta: [(() => { try { return fmt(res.item.price, res.item.currency); } catch { return ''; } })(), res.item.retailer || res.item.host].filter(Boolean).join(' · '),
           pending: res.item.captureState === 'pending',
@@ -450,7 +456,7 @@ async function showPageToast(tabId, res, product) {
           const status = [p.pending ? 'Finishing details…' : '', 'Saved on this device'].filter(Boolean).join(' · ');
           t.show({
             tone: p.isInbox ? 'review' : 'ok', look: p.look,
-            title: p.isInbox ? 'Saved. Pick a collection now or later' : 'Saved to',
+            title: p.lifestyle ? `Saved to ${p.lifestyle}` : p.isInbox ? 'Saved. Pick a collection now or later' : 'Saved to',
             picker: !p.isInbox && p.collections.length ? { options: p.collections, selectedId: p.collectionId, label: 'Move to collection', onChange: (id) => move(id) } : null,
             thumb: p.thumb, message: cut(p.title, 90), meta: p.meta, status,
             suggestions: p.isInbox && p.suggestions.length ? { items: p.suggestions, onPick: (id) => move(id) } : null,
@@ -670,7 +676,7 @@ async function handleMessage(msg, sender) {
       if (Object.keys(patch).length) {
         const normalized = normalizeProduct({ ...item, ...patch, priceText: patch.priceText || '' });
         // Only carry over fields we allow the page to update.
-        const allowed = ['title', 'price', 'currency', 'image', 'images', 'description', 'note', 'favorite', 'archived', 'purchased', 'imageAspect'];
+        const allowed = ['title', 'price', 'currency', 'image', 'images', 'description', 'note', 'favorite', 'purchased', 'imageAspect'];
         const safePatch = {};
         for (const k of allowed) if (k in patch || (k === 'price' && 'priceText' in patch)) safePatch[k] = normalized[k];
         if (safePatch.price === undefined || safePatch.price === null) delete safePatch.price;

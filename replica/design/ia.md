@@ -13,7 +13,7 @@ Date: 2026-10-11. Screen IDs (S01–S15) and flows (F01–F09) are from `replica
 | **Kind** | what a save is: Product, Place, Recipe, Video, Article, Workout, Film or show, Book, Link | type, category |
 | **Wishlist** | products you haven't bought (filter: Kind = Product, not Purchased) | — |
 | **To do / Done** | your plan for a save. Done has a per-kind verb: Bought, Been, Cooked, Watched, Read, Finished | completed |
-| **Purchased**, **Archive**, **Favourite** | unchanged from 1.x | — |
+| **Purchased**, **Favourite** | unchanged from 1.x (Archive was removed in M2: archived saves are back in the Library) | — |
 | **Goal** | a workout target with check-ins | challenge, streak |
 | **Trash** | deleted saves, kept 30 days | bin, recycle |
 | **Finishing details** | saved; Keepsake is still reading the page | processing, syncing |
@@ -30,13 +30,15 @@ Keepsake
 │   ├── Recent saves          one row
 │   ├── Collections           pinned first, then most used
 │   └── Come back to          to-dos and saves not opened in 6+ weeks (local, can be turned off)
-├── Library                   every save; filter by Kind, Collection, Status, Source; sort; grid or list
+├── Library                   two tabs: Saves (every save; filter by Kind, Status, Source; sort; grid or list) · Collections (every collection)
 │   ├── Wishlist              preset filter: products, not purchased
 │   ├── Places                list grouped by city (Chrome) · Map (Apple)
 │   ├── Favourites · Review
-│   ├── Kinds (collapsible; open while you're on one of its views, otherwise as you left it)
-│   │   ├── Recipes · Videos · Articles · Workouts · Places · Films & shows · Books   (shown only when they have saves)
-│   │   └── Purchased · Archive
+│   ├── Lifestyle (collapsible; open while you're on one of its views, otherwise as you left it)
+│   │   └── Places · Recipes · Videos · Articles · Workouts · Films & shows · Books   (shown only when they have saves)
+│   ├── Purchased (right after Favorites)
+│   ├── Collections (shopping): your collections; the word opens Library ▸ Collections, the chevron folds it, + adds one
+│   └── Tools at the bottom: Instagram import · Import from tabs · Settings · Trash (Privacy is a section in Settings, opening a dialog)
 │   └── Trash
 ├── Review                    file uncertain saves; appears only when non-empty
 ├── Collections               all collections → one collection
@@ -182,6 +184,10 @@ Read from schema.org Movie / TVSeries / Book (Letterboxd, IMDb, Goodreads, Open 
 - **List (owner decision: scroll-only):** "To watch" / "To read" first, then "Watched" / "Read"; each row has a 2:3 poster or cover, title, year · Film or Series (or author · year), genres, and a Watched / Read checkbox that moves it. No ratings, no progress, nothing else.
 - **View:** poster or cover, facts (format, year, director or creator, runtime or seasons, genre; author, year, pages, ISBN), description, note; Edit details, Open on (site), Mark watched / Mark read.
 
+### Shopping and Lifestyle are separate (owner decision 2026-10-12)
+
+**Collections are for shopping**: products you might buy, sorted into collections (Kitchen, Clothing…), with Purchased under them. **Lifestyle** is everything else: places to go, food to make, videos to watch, workouts, articles, films and books, each in its own view. Lifestyle saves never get a collection: no picker in the popup, the page card or Edit details, and collection keywords don't claim them. One kept in a collection from before can be taken out ("No collection" in Edit details). There is no Wishlist view: the Library and Collections cover products. Menu: Home · Library · Favorites · Review · Lifestyle ▸, then Collections (All collections, Purchased, Trash). Archive was removed (owner decision): saves that were archived are back in the Library. This replaces the "Kinds" name below.
+
 ### Kinds are views, not collections (owner decision 2026-10-12)
 
 Recipes, workouts, places, videos, articles, films & shows and books live in their **view** (under Kinds) and need no collection: they never go to Review and never show "Needs a collection". Collections are your own groupings (a "Japan trip" can hold places, videos and products) plus product categories. One of your own collections can still claim a save by keyword, and you can add any save to a collection. Products and plain links are sorted into collections as before. The popup and the page card say "Saved to Videos". The automatic kind collections made before this (Videos, Recipes…) are removed once, only where they still have the default name and hold nothing but that kind; their saves stay in the view. Menu names (owner decision 2026-10-12): **Library** (every save; was "All saves"), **Kinds** (the views by kind, Wishlist, Purchased, Archive; was "Shelves"), **Collections**.
@@ -191,12 +197,15 @@ Recipes, workouts, places, videos, articles, films & shows and books live in the
 - **Save card:** kind chip + source, title (2 lines), the kind's key fact (price for products), note (1 line), tags, then state pills: Needs a collection, Finishing details…, Couldn't read details, the done verb ✓, Purchased, Archived, and the collection name outside a collection. No picture: a 16:10 tile in the kind's tint with its icon. Done, bought or archived saves are muted. The favourite star stays visible; the other card buttons show on hover or focus. One button per card, named "{title}, {kind}, {key fact}, {source}".
 - **Grid or List** (remembered on this device); list rows have a 56 px thumb.
 - **Filter bar:** Kind chips (several at once; only on mixed views), Status (Any / To do / the done verb / Purchased where it applies), Source, Site or shop, Sort (Newest, Oldest, A–Z, and Price when prices exist). Filters with one choice are hidden. Active filters repeat as removable chips with Clear all.
-- **Wishlist** (under Kinds): products not yet bought.
 - **Search** (`shared/search.js`): every word must match; rank title > tags > note > collection > source > text (ingredients, exercises, address, author…), word starts beat word middles, accents ignored, prices searchable. No match: one typo per word corrected from the library's own words ("Showing results for ‘linen lamp’"). While searching, the kind and tag chips count matches. "/" focuses the search box.
 - **Home:** Review banner, Recently saved, **Come back to** (not done, not bought, saved and not opened for 6+ weeks; `openedAt` is local; Settings → Appearance turns it off), Collections.
 - **Save detail:** a History section: saved from where and when, the first title, last edit, last opened, and AI changes from the change log with Undo each.
 - **Toasts:** with an action, 8 s and paused on hover or focus; errors stay until dismissed; Alt+Z (⌥Z) presses the newest Undo.
 - **Narrow windows:** the sidebar stays a slide-out drawer under 900 px (kept from 1.x rather than an icon rail: it already works with the keyboard and screen readers).
+
+### Film and book sites (owner decision 2026-10-12)
+
+Like the YouTube rule: a single title's page on Letterboxd (`/film/…`), IMDb (`/title/tt…`), Rotten Tomatoes (`/m/…`, `/tv/…`), TMDB (`/movie/…`, `/tv/…`), JustWatch (`/xx/movie|tv-show/…`), Trakt (`/movies/…`, `/shows/…`) is a Film or show; on Goodreads (`/book/show/…`), StoryGraph (`/books/…`), Open Library (`/works/OL…W`, `/books/OL…M`) or Hardcover (`/books/…`) a Book. Home pages, lists, reviews and search are not matched. The page's own data still fills the details; the path settles film vs series when the data doesn't (`shared/kinds.js` `titleSite`).
 
 ### Tags (all platforms)
 

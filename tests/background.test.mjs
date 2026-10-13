@@ -126,10 +126,10 @@ test('a recipe page is saved as a recipe in its own view (no collection, not Rev
   assert.match(res.item.categorizationReason, /3 ingredients/);
 });
 
-test('a recipe matching one of your own collection keywords goes there instead', async () => {
-  const weeknight = await S.createCollection({ name: 'Weeknight dinners', keywords: ['pasta'] });
+test('collections are for shopping: a recipe matching a collection keyword still stays out of it', async () => {
+  await S.createCollection({ name: 'Weeknight dinners', keywords: ['pasta'] });
   const res = await F.send({ type: MSG.SAVE_ITEM, product: recipePage, instant: true }, popup);
-  assert.equal(res.item.collectionId, weeknight.collection.id);
+  assert.deepEqual([res.item.collectionId, res.item.needsReview], [null, false]);
 });
 
 test('with AI on, recipes are not sent for the product tidy', async () => {
@@ -243,6 +243,13 @@ test('the popup’s “where would this go?” knows kinds: a YouTube video is s
   // Same for a recipe page.
   const rc = await F.send({ type: MSG.CLASSIFY, product: { title: 'Soup', url: 'https://cook.example/soup-cls', images: [], image: '', schemaTypes: ['recipe'], recipe: { recipeIngredient: ['a', 'b'] } } }, popup);
   assert.equal(rc.classification.collectionName, 'Recipes');
+});
+
+test('a film or book site title page is saved as a film/show or book even with no data on the page', async () => {
+  const rt = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'Severance', url: 'https://www.rottentomatoes.com/tv/severance', images: [], image: '', price: null, schemaTypes: [] }, instant: true }, popup);
+  assert.deepEqual([rt.item.kind, rt.item.details.format], ['media', 'series']);
+  const gr = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'A Wizard of Earthsea', url: 'https://www.goodreads.com/book/show/13642.A_Wizard_of_Earthsea', images: [], image: '', price: '$9.99', schemaTypes: [] }, instant: true }, popup);
+  assert.deepEqual([gr.item.kind, gr.item.price], ['book', null], 'a price on Goodreads is a shop link, not the save’s price');
 });
 
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {

@@ -38,50 +38,49 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.8 2.5 5.3 5.8.7-4.3 4 1.1 5.8L12 16.8l-5.1 2.8 1.1-5.8-4.3-4 5.8-.7L12 3.8Z"/></svg>
           <span>Favorites</span><span class="count" id="countFav"></span>
         </a>
+        <a class="nav-item" href="#purchased" data-route="purchased">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="m9.5 14 1.8 1.8 3.2-3.3"/></svg>
+          <span>Purchased</span><span class="count" id="countPurchased"></span>
+        </a>
         <a class="nav-item" href="#review" data-route="review" id="navReview">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4.5l2.5 1.5"/></svg>
           <span>Review</span><span class="count" id="countReview"></span>
         </a>
-        <!-- Kinds: one view per kind of save (Recipes, Workouts, Videos…), plus Purchased and Archive, folded
-             into one group so the menu stays short. Open or closed is remembered in this browser. -->
+        <!-- Lifestyle: places to go, food to make, videos to watch… one view per kind of save, folded into
+             one group so the menu stays short. Open or closed is remembered in this browser. Shopping
+             (products) lives under Collections instead. -->
         <div class="nav-group" id="navKindsGroup">
           <button class="nav-item nav-group-toggle" type="button" id="navKindsToggle" aria-expanded="false" aria-controls="navKindsList">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16M4 12h16M4 18.5h16M7 5.5v-2M15 12v-2M10 18.5v-2"/></svg>
-            <span>Kinds</span><span class="count" id="countKindsGroup"></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c-3 3-4.5 5.5-4.5 8a4.5 4.5 0 0 0 9 0c0-2.5-1.5-5-4.5-8ZM12 20.5v-5"/></svg>
+            <span>Lifestyle</span><span class="count" id="countKindsGroup"></span>
             <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
           </button>
           <div class="nav-group-list" id="navKindsList" hidden>
-            <a class="nav-item" href="#wishlist" data-route="wishlist" id="navWishlist">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/></svg>
-              <span>Wishlist</span><span class="count" id="countWishlist"></span>
-            </a>
             <div class="nav-kinds" id="navKinds"></div>
-            <a class="nav-item" href="#purchased" data-route="purchased">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/><path d="m9.5 14 1.8 1.8 3.2-3.3"/></svg>
-              <span>Purchased</span><span class="count" id="countPurchased"></span>
-            </a>
-            <a class="nav-item" href="#archive" data-route="archive">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="4" rx="1"/><path d="M5 8.5v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9M10 12.5h4"/></svg>
-              <span>Archive</span><span class="count" id="countArchive"></span>
-            </a>
+            <p class="help nav-group-empty" id="navKindsEmpty" hidden>Save a recipe, place, video, workout, article, film or book and it shows up here.</p>
           </div>
         </div>
-        <a class="nav-item" href="#trash" data-route="trash">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/></svg>
-          <span>Trash</span><span class="count" id="countTrash"></span>
-        </a>
       </nav>
 
       <div class="sidebar-section">
-        <div class="sidebar-heading">
-          <span>Collections</span>
-          <button class="btn btn-quiet btn-sm" id="newCollectionBtn" type="button" aria-label="New collection">＋ New</button>
+        <!-- Collections (shopping) fold like Lifestyle: same row, same indented list with a bar. Closed, pinned
+             collections (and the one you're on) stay listed, with the "All collections" row first. -->
+        <div class="nav-group-row">
+          <a class="nav-item nav-group-link" href="#collections" title="All collections, in the Library">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+            <span>Collections</span>
+          </a>
+          <button class="btn btn-icon btn-quiet nav-group-chevron" type="button" id="collectionsToggle" aria-expanded="true" aria-controls="collectionList" aria-label="Show or hide collections">
+            <svg class="nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+          <button class="btn btn-icon btn-quiet nav-group-add" id="newCollectionBtn" type="button" aria-label="New collection" title="New collection">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
         </div>
+        <div class="nav-group-list collections-group">
         <ul class="collection-list" id="collectionList" aria-label="Collections"></ul>
-        <a class="nav-item collections-all" href="#collections" data-route="collections">
-          <span>All collections</span><span class="count" id="countCollections"></span>
-        </a>
         <p class="help sidebar-help" id="collectionHelp">Pin a collection to keep it on top</p>
+        </div>
       </div>
 
       <nav class="nav nav-bottom" aria-label="Tools">
@@ -97,9 +96,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
           <span>Settings</span>
         </a>
-        <a class="nav-item" href="#privacy" data-route="privacy">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 5 6.2v5.3c0 4.3 3 8.2 7 9.1 4-.9 7-4.8 7-9.1V6.2l-7-2.7Z"/><path d="m9.5 12 1.8 1.8L15 10"/></svg>
-          <span>Privacy</span>
+        <a class="nav-item" href="#trash" data-route="trash">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l1 12.5h9l1-12.5M9.5 7V4.5h5V7"/></svg>
+          <span>Trash</span><span class="count" id="countTrash"></span>
         </a>
       </nav>
     </aside>
@@ -127,7 +126,6 @@
         <button class="btn btn-sm" id="bulkAll" type="button">Select all</button>
         <button class="btn btn-sm" id="bulkMove" type="button">Move to…</button>
         <button class="btn btn-sm" id="bulkFav" type="button">Favorite</button>
-        <button class="btn btn-sm" id="bulkArchive" type="button">Archive</button>
         <button class="btn btn-sm hidden" id="bulkAi" type="button">Find products (AI)</button>
         <button class="btn btn-sm btn-danger" id="bulkDelete" type="button">Delete</button>
         <span class="grow"></span>

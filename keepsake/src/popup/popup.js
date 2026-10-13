@@ -33,7 +33,7 @@ const state = {
   chosenImage: '',
   userOverride: false,
   savedItem: null,
-  savedMode: 'saved', // saved | updated
+  savedMode: 'saved', // saved | updated | existing (a video, recipe… already saved: shown, not saved again)
   instant: false, // saved straight away (AI, or a confident local pick), without the preview
   ig: null,
   igScanListener: null,
@@ -119,8 +119,16 @@ async function loadProduct() {
   }
   state.product = extracted.product;
   state.chosenImage = state.product.image || '';
-  // Pages already saved always get the preview, with its "update existing" option.
-  if (!(await store.findByUrl(state.product.canonicalUrl || state.product.url).catch(() => null))) {
+  // A video, recipe, place… already saved just shows that save: it's in its view, there's nothing to
+  // choose. Products already saved get the preview, with its "update existing" option.
+  const existing = await store.findByUrl(state.product.canonicalUrl || state.product.url).catch(() => null);
+  if (existing && hasOwnView(kindOf(existing))) {
+    state.savedItem = existing;
+    state.savedMode = 'existing';
+    showSaved(existing, existing.collectionId ? state.collections.find((c) => c.id === existing.collectionId) || null : null);
+    return;
+  }
+  if (!existing) {
     if (await instantSaveOn()) {
       if (await instantSave({ label: 'Saving…', instant: true })) return;
     } else {
@@ -185,7 +193,8 @@ function renderProduct() {
   title.addEventListener('input', () => autosize(title));
   $('heroInitial').textContent = (p.title || p.host || 'K').trim().charAt(0).toUpperCase() || 'K';
 
-  // Price
+  // Price: only for products (a number on a video or recipe page is never its price).
+  document.querySelector('.price-row')?.classList.toggle('hidden', !!state.classification?.kind && state.classification.kind !== 'product');
   const priceInput = $('priceInput');
   const curInput = $('currencyInput');
   if (p.price !== null && p.price !== undefined && p.price !== '' && Number.isFinite(Number(p.price))) {
@@ -279,6 +288,17 @@ function renderCollectionPicker() {
   clear(sel);
   const cls = state.classification;
   if (cls.isInbox) sel.append(el('option', { value: '', text: 'Not sure — leave for Review' }));
+  // A recipe, video, place… lives in its Lifestyle view: no collection to pick.
+  else if (cls.shelf) sel.append(el('option', { value: '', text: cls.collectionName }));
+  sel.closest('.collection-picker').classList.toggle('hidden', !!cls.shelf);
+  $('confidencePill').classList.toggle('hidden', !!cls.shelf);
+  let target = document.getElementById('shelfTarget');
+  if (!target) {
+    target = el('p', { class: 'shelf-target', id: 'shelfTarget' });
+    sel.closest('.collection-picker').after(target);
+  }
+  target.textContent = cls.shelf ? `${cls.collectionName}, under Lifestyle` : '';
+  target.classList.toggle('hidden', !cls.shelf);
   for (const c of state.collections) sel.append(el('option', { value: c.id, text: c.name }));
   if (cls.isNew && cls.taxonomyKey) {
     sel.append(el('option', { value: `new:${cls.taxonomyKey}`, text: `${cls.collectionName} (new collection)` }));
@@ -497,7 +517,9 @@ function showSaved(item, collection, classification = null) {
   const view = !collection && hasOwnView(kindOf(item)) ? kindInfo(kindOf(item)).plural : '';
   const isInbox = !collection && !view;
   const updated = state.savedMode === 'updated';
-  $('savedTitle').textContent = updated ? 'Updated' : isInbox ? 'Saved. Pick a collection now or later' : 'Saved to';
+  const already = state.savedMode === 'existing';
+  // Lifestyle saves (recipes, videos, places…) name their view; collections are for shopping.
+  $('savedTitle').textContent = updated ? 'Updated' : view ? `${already ? 'Already in' : 'Saved to'} ${view}` : already ? 'Already in' : isInbox ? 'Saved. Pick a collection now or later' : 'Saved to';
   document.querySelector('.capture').classList.toggle('is-review', isInbox && !updated);
   $('savedSubtitle').textContent = cut(item.title, 90);
   $('savedMeta').textContent = [formatPrice(item.price, item.currency), item.retailer || item.host].filter(Boolean).join(' · ');
@@ -506,10 +528,10 @@ function showSaved(item, collection, classification = null) {
   if (item.image) thumb.append(el('img', { src: item.image, alt: '', onError: () => clear(thumb) }));
   $('savedInboxHint').textContent = [
     item.captureState === 'pending' ? 'Finishing details: your AI provider is tidying the title. You can close this.' : '',
-    'Saved on this device.',
+    already ? `Saved ${new Date(item.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}, on this device.` : 'Saved on this device.',
   ].filter(Boolean).join(' ');
   renderSuggestions(item, isInbox && !updated ? classification : null);
-  $('savedUndo').classList.toggle('hidden', updated);
+  $('savedUndo').classList.toggle('hidden', updated || already);
   const learnRow = $('learnRow');
   const learnCheck = $('learnCheck');
   learnCheck.checked = false;
@@ -539,7 +561,11 @@ function showSaved(item, collection, classification = null) {
     $('savedUndo').disabled = false;
   };
   // Show the item where it landed: its collection, or Review if it wasn't filed.
-  $('savedOpen').onclick = () => openDashboard(state.savedItem?.collectionId ? `#c/${state.savedItem.collectionId}` : '#review');
+  // Where the save lives: its collection, else its kind's view (Videos, Recipes…), else Review.
+  $('savedOpen').onclick = () => {
+    const it = state.savedItem;
+    openDashboard(it?.collectionId ? `#c/${it.collectionId}` : it && hasOwnView(kindOf(it)) ? `#kind/${kindOf(it)}` : '#review');
+  };
   show('state-saved');
   setTimeout(() => $('savedOpen').focus(), 30);
 }
@@ -547,8 +573,10 @@ function showSaved(item, collection, classification = null) {
 // After every save: a one-step "Move to", so a wrong collection is easy to spot and fix.
 function renderSavedMove(item) {
   const row = $('savedMoveRow');
-  row.classList.toggle('hidden', state.savedMode !== 'saved');
-  if (state.savedMode !== 'saved') return;
+  // Lifestyle saves have no collection to move between (one kept from before still can be).
+  const movable = (state.savedMode === 'saved' || state.savedMode === 'existing') && !(hasOwnView(kindOf(item)) && !item.collectionId);
+  row.classList.toggle('hidden', !movable);
+  if (!movable) return;
   const sel = $('savedMove');
   clear(sel);
   const view = hasOwnView(kindOf(item)) ? kindInfo(kindOf(item)).plural : '';

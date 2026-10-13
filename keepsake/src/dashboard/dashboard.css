@@ -3309,7 +3309,6 @@ body.modal-open {
 
 .nav-group-toggle.has-active {
   color: var(--c-text);
-  font-weight: 600;
 }
 
 .nav-group-list {
@@ -3888,4 +3887,278 @@ body.modal-open {
 
 .nav-bottom {
   margin-top: auto;
+}
+
+/* Collections heading as a fold toggle */
+.sidebar-heading-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sidebar-heading-toggle:hover {
+  color: var(--c-text);
+}
+
+.sidebar-heading-toggle:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.sidebar-heading-toggle .nav-chevron {
+  width: 12px;
+  height: 12px;
+  transform: rotate(90deg);
+  transition: transform var(--t-fast, 120ms) ease;
+}
+
+.sidebar-section.is-collapsed .sidebar-heading-toggle .nav-chevron {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-heading-toggle .nav-chevron {
+    transition: none;
+  }
+}
+
+.nav-group-empty {
+  margin: 4px 10px 6px;
+  font-size: 12px;
+}
+
+.nav-item.collections-purchased {
+  margin-top: 0;
+}
+
+/* Collections styled like Lifestyle: a menu row with icon, label and chevron (+ to add), then an
+   indented list with the same bar on the left. */
+.nav-group-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-group-row .nav-group-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nav-group-row .nav-group-toggle .nav-chevron {
+  margin-left: 6px;
+}
+
+.nav-group-add {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--c-text-muted);
+}
+
+.nav-group-add svg {
+  width: 15px;
+  height: 15px;
+}
+
+#collectionsToggle[aria-expanded="true"] .nav-chevron,
+.nav-group.is-open .nav-chevron {
+  transform: rotate(90deg);
+}
+
+#collectionsToggle[aria-expanded="false"] .nav-chevron {
+  transform: none;
+}
+
+.collections-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: none;
+  overflow: visible;
+  margin-top: 2px;
+}
+
+.collections-group .collection-list {
+  padding-right: 0;
+}
+
+.collections-group .nav-item.collections-all {
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.collections-group .nav-item.collections-all:hover,
+.collections-group .nav-item.collections-all.active {
+  color: var(--ink);
+}
+
+.collections-group .sidebar-help {
+  padding: 2px 8px 2px;
+}
+
+/* A Lifestyle view with nothing saved yet: listed, dimmed, so you know it's there. */
+.nav-item.is-empty {
+  opacity: 0.55;
+}
+
+/* Inside the indented group the rows match the Lifestyle rows; the pin takes no room until you
+   point at a row (or the collection is pinned), so names get the width. */
+.collections-group .collection-item {
+  flex: 0 0 36px;
+  height: 36px;
+  gap: 9px;
+  padding: 0 8px;
+}
+
+.collections-group .collection-cover {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 6px;
+}
+
+.collections-group .collection-item:not(:hover):not(:focus-within) .collection-pin:not(.is-pinned) {
+  display: none;
+}
+
+.nav-after-collections {
+  margin-top: 4px;
+}
+
+.nav-after-collections .nav-item.collections-all {
+  margin-top: 0;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.nav-after-collections .nav-item.collections-all:hover,
+.nav-after-collections .nav-item.collections-all.active {
+  color: var(--ink);
+}
+
+/* Collections is a menu row like Lifestyle now, so it sits at the menu's own 2 px rhythm instead of
+   the old section gap. */
+.sidebar-section {
+  margin-top: 2px;
+}
+
+/* The fold rows (Lifestyle, Collections) are buttons; give them the link rows' type exactly. */
+.nav-item.nav-group-toggle {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: normal;
+  color: var(--ink-2);
+}
+
+.nav-item.nav-group-toggle:hover {
+  color: var(--ink);
+}
+
+/* The Collections row: the word opens All collections, the chevron folds the group, + adds one. */
+.nav-group-row .nav-group-link {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.nav-group-row .nav-group-link.active {
+  flex: 1 1 auto;
+}
+
+.nav-group-chevron {
+  flex: none;
+  width: 24px;
+  height: 28px;
+  color: var(--c-text-muted);
+}
+
+.nav-group-chevron .nav-chevron {
+  width: 14px;
+  height: 14px;
+  opacity: 0.6;
+  transition: transform var(--t-fast, 120ms) ease;
+}
+
+.nav-group-row .nav-group-add {
+  margin-left: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-group-chevron .nav-chevron {
+    transition: none;
+  }
+}
+
+/* All collections and Purchased close the Collections group, set apart from the collections above. */
+.collections-group .nav-item.collections-all {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--c-border);
+  border-radius: 0 0 10px 10px;
+  height: auto;
+  min-height: 36px;
+  flex: none;
+}
+
+.privacy-modal .page {
+  padding: 0;
+  max-width: none;
+}
+
+/* "All collections" as the first collection row: a folder tile in place of a photo. */
+.collection-cover-all {
+  background: var(--c-surface-2);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+}
+
+.collection-cover-all svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Library tabs: Saves · Collections */
+.library-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  margin: 0 0 16px;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+}
+
+.library-tab {
+  padding: 5px 14px;
+  border-radius: 999px;
+  font: var(--t-footnote);
+  font-weight: 600;
+  color: var(--c-text-muted);
+  text-decoration: none;
+}
+
+.library-tab:hover {
+  color: var(--c-text);
+  text-decoration: none;
+}
+
+.library-tab.on {
+  background: var(--c-surface-2);
+  color: var(--c-text);
+}
+
+.library-tab:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
 }

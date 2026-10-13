@@ -53,7 +53,7 @@ test('the dashboard boots without errors', () => {
   assert.doesNotMatch(view().textContent, /couldn.t start/i);
 });
 
-const ROUTES = ['#home', '#all', '#favorites', '#purchased', '#archive', '#trash', '#collections', '#import', '#settings', '#ai', '#ailog', '#privacy', '#welcome'];
+const ROUTES = ['#home', '#all', '#favorites', '#purchased', '#trash', '#collections', '#import', '#settings', '#ai', '#ailog', '#privacy', '#welcome'];
 for (const r of ROUTES) {
   test(`route ${r} renders`, async () => {
     const text = await go(r);
@@ -314,7 +314,7 @@ test('videos open into a view with their length and a Watch link; editing the le
   assert.equal((await store.getItem(it.id)).details.source, 'you');
 });
 
-test('tags: filter chips in a view, pills on cards, edited in Edit details; the Kinds group folds the kind views', async () => {
+test('tags: filter chips in a view, pills on cards, edited in Edit details; the Lifestyle group folds the kind views', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
   const a = await store.addItem({ title: 'GTA mod with one prompt', url: 'https://www.youtube.com/watch?v=t1', kind: 'video', topics: ['Video games', 'AI'], topicsBy: 'guess' });
@@ -335,7 +335,10 @@ test('tags: filter chips in a view, pills on cards, edited in Edit details; the 
   const toggle = window.document.getElementById('navKindsToggle');
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.ok(window.document.getElementById('navKindsList').querySelector('a[href="#kind/video"]'));
-  assert.ok(window.document.getElementById('navKindsList').querySelector('a[href="#purchased"]'));
+  assert.match(toggle.textContent, /Lifestyle/);
+  assert.ok(!window.document.getElementById('navKindsList').querySelector('a[href="#purchased"]'));
+  assert.ok(window.document.querySelector('.nav a[href="#favorites"] + a[href="#purchased"]'), 'Purchased sits right after Favorites');
+  assert.ok(!window.document.querySelector('a[href="#wishlist"]'), 'no Wishlist: Collections and the Library cover products');
   await go('#home');
   assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'closed elsewhere unless you opened it');
   toggle.click();
@@ -383,7 +386,7 @@ test('films and books: a list to scroll, to-watch first; tick to move; the view 
   await afterChange();
 });
 
-test('redesign: card anatomy, kind and status filters with removable chips, list layout, Wishlist', async () => {
+test('redesign: card anatomy, kind and status filters with removable chips, list layout', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
   const lamp = await store.addItem({ title: 'Brass desk lamp', url: 'https://shop.example/lamp-r', price: 89, currency: 'USD', retailer: 'Lamp Shop', kind: 'product' });
@@ -439,12 +442,6 @@ test('redesign: card anatomy, kind and status filters with removable chips, list
   await settle();
   sort.value = 'newest';
 
-  // Wishlist: products not yet bought.
-  await go('#wishlist');
-  const wl = [...view().querySelectorAll('.card-title')].map((t) => t.textContent);
-  assert.ok(wl.includes('Brass desk lamp'));
-  assert.ok(!wl.includes('Linen sheets'));
-  assert.ok(!wl.includes('Lemon tart'));
   assert.ok(lamp);
 });
 
@@ -532,6 +529,58 @@ test('toasts: Alt+Z presses the newest Undo; an Undo toast pauses while pointed 
   node.dispatchEvent(new window.Event('mouseenter'));
   assert.ok(node.isConnected);
   node.querySelector('.toast-close').click();
+});
+
+test('Collections fold: closed, only pinned collections (and the one you’re on) stay listed; remembered', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const cols = await store.getCollections();
+  const pin = cols[0];
+  await store.updateCollection(pin.id, { pinned: true });
+  await afterChange();
+  await go('#home');
+  const names = () => [...window.document.querySelectorAll('#collectionList .collection-item:not(.collection-all) .collection-name')].map((n) => n.textContent);
+  const toggle = window.document.getElementById('collectionsToggle');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'open the first time');
+  const all = names().length;
+  assert.ok(all > 1);
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.deepEqual(names(), [pin.name], 'only the pinned one');
+  const other = cols.find((c) => c.id !== pin.id);
+  await go(`#c/${other.id}`);
+  assert.deepEqual(names().sort(), [pin.name, other.name].sort(), 'plus the one you are on');
+  await go('#home');
+  assert.deepEqual(names(), [pin.name], 'still closed: remembered');
+  toggle.click();
+  assert.equal(names().length, all);
+  await store.updateCollection(pin.id, { pinned: false });
+  await afterChange();
+});
+
+test('Privacy lives in Settings as a dialog; the menu has no Privacy row; Trash is last', async () => {
+  assert.ok(!window.document.querySelector('.sidebar a[href="#privacy"]'));
+  const tools = [...window.document.querySelectorAll('.nav-bottom .nav-item')].map((a) => a.textContent.trim().replace(/\d+$/, ''));
+  assert.equal(tools.at(-1), 'Trash');
+  assert.ok(!window.document.querySelector('#collectionList .collection-all'), 'All collections lives in the Library now');
+  await go('#settings');
+  [...view().querySelectorAll('button')].find((b) => b.textContent === 'See what Keepsake stores and sends').click();
+  await settle();
+  const dlg = [...window.document.querySelectorAll('.modal')].find((m) => /Privacy/.test(m.querySelector('.modal-title')?.textContent || ''));
+  assert.ok(dlg, 'the Privacy dialog opened');
+  assert.match(dlg.textContent, /The short version/);
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await settle();
+});
+
+test('Library has two tabs, Saves and Collections; both keep Library highlighted', async () => {
+  await go('#all');
+  const tabs = () => [...view().querySelectorAll('.library-tab')].map((t) => [t.textContent.replace(/ · \d+$/, ''), t.getAttribute('aria-selected')]);
+  assert.deepEqual(tabs(), [['Saves', 'true'], ['Collections', 'false']]);
+  await go('#collections');
+  assert.deepEqual(tabs(), [['Saves', 'false'], ['Collections', 'true']]);
+  assert.equal(window.document.getElementById('viewTitle').textContent, 'Library');
+  assert.ok(window.document.querySelector('.sidebar .nav-item.active[href="#all"]'), 'Library stays highlighted');
 });
 
 test('an unknown collection route says so', async () => {

@@ -570,6 +570,35 @@ export function articleFromCapture(media = {}) {
 
 // --- films, shows and books ---------------------------------------------------------------------
 
+// A single title's page on a film or book site: saved as a film/show or a book whatever the page's own
+// data says (like the YouTube rule). Home pages, lists, reviews and search are not matched.
+const TITLE_SITES = [
+  // [host, path, kind, format]
+  [/(^|\.)letterboxd\.com$/, /^\/film\/[^/]+\/?$/, 'media', ''],
+  [/(^|\.)imdb\.com$/, /^\/(?:[a-z]{2}\/)?title\/tt\d+\/?$/, 'media', ''],
+  [/(^|\.)rottentomatoes\.com$/, /^\/m\/[^/]+\/?$/, 'media', 'film'],
+  [/(^|\.)rottentomatoes\.com$/, /^\/tv\/[^/]+(?:\/s\d+)?\/?$/, 'media', 'series'],
+  [/(^|\.)themoviedb\.org$/, /^\/movie\/\d+[^/]*\/?$/, 'media', 'film'],
+  [/(^|\.)themoviedb\.org$/, /^\/tv\/\d+[^/]*\/?$/, 'media', 'series'],
+  [/(^|\.)justwatch\.com$/, /^\/[a-z]{2}\/(?:movie|film|filme|pelicula|elokuva)\/[^/]+\/?$/, 'media', 'film'],
+  [/(^|\.)justwatch\.com$/, /^\/[a-z]{2}\/(?:tv-show|tv-series|serie|series|tv-serie|tv-sarja)\/[^/]+\/?$/, 'media', 'series'],
+  [/(^|\.)trakt\.tv$/, /^\/movies\/[^/]+\/?$/, 'media', 'film'],
+  [/(^|\.)trakt\.tv$/, /^\/shows\/[^/]+\/?$/, 'media', 'series'],
+  [/(^|\.)goodreads\.com$/, /^\/(?:[a-z]{2}\/)?book\/show\/[^/]+\/?$/, 'book', ''],
+  [/(^|\.)thestorygraph\.com$/, /^\/books\/[^/]+\/?$/, 'book', ''],
+  [/(^|\.)openlibrary\.org$/, /^\/(?:works\/OL\d+W|books\/OL\d+M)(?:\/[^/]*)?\/?$/, 'book', ''],
+  [/(^|\.)hardcover\.app$/, /^\/books\/[^/]+\/?$/, 'book', ''],
+];
+
+// { kind: 'media' | 'book', format: 'film' | 'series' | '' } for a title page on those sites, else null.
+export function titleSite(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const host = u.hostname.replace(/^www\.|^m\./, '');
+  const hit = TITLE_SITES.find(([h, path]) => h.test(host) && path.test(u.pathname));
+  return hit ? { kind: hit[2], format: hit[3] } : null;
+}
+
 const yearOf = (v) => {
   const m = String(v || '').match(/\b(1[89]\d{2}|20\d{2}|21\d{2})\b/);
   return m ? Number(m[1]) : null;

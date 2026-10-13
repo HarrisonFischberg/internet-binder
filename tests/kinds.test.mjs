@@ -362,3 +362,26 @@ test('search: every word must match; title beats note beats text; one typo forgi
   assert.equal(editDistance('lmap', 'lamp'), 1, 'a swap is one edit');
   assert.equal(correctQuery('cat', [searchFields({ title: 'car' })]), null, 'short words are never "corrected"');
 });
+
+test('film and book sites: a title page is a film/show or a book; home, lists and reviews are not', async () => {
+  const { titleSite } = await import('../keepsake/src/shared/kinds.js');
+  const yes = {
+    'https://letterboxd.com/film/the-matrix/': ['media', ''],
+    'https://www.imdb.com/title/tt0133093/': ['media', ''],
+    'https://m.imdb.com/title/tt0903747': ['media', ''],
+    'https://www.rottentomatoes.com/m/the_matrix': ['media', 'film'],
+    'https://www.rottentomatoes.com/tv/severance/s02': ['media', 'series'],
+    'https://www.themoviedb.org/movie/603-the-matrix': ['media', 'film'],
+    'https://www.themoviedb.org/tv/95396-severance': ['media', 'series'],
+    'https://www.justwatch.com/us/movie/the-matrix': ['media', 'film'],
+    'https://www.justwatch.com/uk/tv-show/severance': ['media', 'series'],
+    'https://trakt.tv/shows/severance': ['media', 'series'],
+    'https://www.goodreads.com/book/show/13642.A_Wizard_of_Earthsea': ['book', ''],
+    'https://app.thestorygraph.com/books/0a1b2c3d': ['book', ''],
+    'https://openlibrary.org/works/OL59863W/A_Wizard_of_Earthsea': ['book', ''],
+    'https://hardcover.app/books/a-wizard-of-earthsea': ['book', ''],
+  };
+  for (const [url, [kind, format]] of Object.entries(yes)) assert.deepEqual(titleSite(url), { kind, format }, url);
+  for (const url of ['https://letterboxd.com/', 'https://letterboxd.com/film/the-matrix/reviews/', 'https://letterboxd.com/someone/list/favourites/', 'https://www.imdb.com/chart/top/',
+    'https://www.goodreads.com/review/list/1', 'https://www.goodreads.com/', 'https://shop.example/film/x', 'nonsense']) assert.equal(titleSite(url), null, url);
+});

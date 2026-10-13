@@ -54,7 +54,8 @@ export function renderSettings(ctx, view) {
   page.append(instagramSection(ctx));
   page.append(aiSummarySection(ctx));
   page.append(dataSection(ctx));
-  page.append(aboutSection());
+  page.append(privacySection(ctx));
+  page.append(aboutSection(ctx));
   view.append(page);
 }
 
@@ -214,7 +215,7 @@ function categorizationSection(ctx) {
       } }, ['Clear learned preferences'])]),
     ]);
     box.append(learnedBox);
-    box.append(el('p', { class: 'help' }, [`${ctx.state.items.filter((i) => i.needsReview && !i.archived && !i.purchased).length} low-confidence saves waiting in the `, el('a', { href: '#review' }, ['review queue']), '.']));
+    box.append(el('p', { class: 'help' }, [`${ctx.state.items.filter((i) => i.needsReview && !i.purchased).length} low-confidence saves waiting in the `, el('a', { href: '#review' }, ['review queue']), '.']));
   };
   draw();
   return UI.section('Categorization', 'How Keepsake decides where a save goes: your collections’ keywords first, then collection names and built-in category words, then what it learned from your moves. All of it runs locally. Add keywords from a collection’s page.', [box]);
@@ -362,10 +363,10 @@ function stat(value, label) {
   return el('div', { class: 'stat' }, [el('div', { class: 'stat-value' }, [String(value)]), el('div', { class: 'stat-label' }, [label])]);
 }
 
-function aboutSection() {
+function aboutSection(ctx) {
   const manifest = chrome.runtime.getManifest();
   return UI.section('About', '', [
-    el('p', { class: 'prose' }, [`Keepsake ${manifest.version}. Open source, no account, no telemetry. `, el('a', { href: '#privacy' }, ['Privacy details'])]),
+    el('p', { class: 'prose' }, [`Keepsake ${manifest.version}. Open source, no account, no telemetry. `, el('button', { type: 'button', class: 'link-btn', onClick: () => openPrivacy(ctx) }, ['Privacy details'])]),
   ]);
 }
 
@@ -572,6 +573,19 @@ export async function analyzeItems(ctx, items, { web = null } = {}) {
 }
 
 // --- Privacy --------------------------------------------------------------------------------------------
+
+// Privacy lives in Settings: a short summary and a button that opens the full page in a dialog.
+export function openPrivacy(ctx) {
+  const box = el('div', { class: 'privacy-modal' });
+  renderPrivacy(ctx, box);
+  return UI.openModal({ title: 'Privacy', body: box, wide: true, actions: [{ label: 'Close', primary: true, value: true }] });
+}
+
+function privacySection(ctx) {
+  return UI.section('Privacy', 'Everything stays in this browser. No account, no tracking; the only network calls are the ones you turn on.', [
+    el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn', onClick: () => openPrivacy(ctx) }, ['See what Keepsake stores and sends'])]),
+  ]);
+}
 
 export function renderPrivacy(ctx, view) {
   const page = el('div', { class: 'page' });

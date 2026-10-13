@@ -7,7 +7,7 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
-import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection } from '../shared/kinds.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection, hasOwnView } from '../shared/kinds.js';
 import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { searchItems } from '../shared/search.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
@@ -146,6 +146,11 @@ function bindChrome() {
   $('menuToggle').addEventListener('click', () => toggleNav());
   $('scrim').addEventListener('click', () => toggleNav(false));
   $('newCollectionBtn').addEventListener('click', () => newCollection());
+  $('collectionsToggle').addEventListener('click', () => {
+    collectionsChoice = !collectionsOpen();
+    try { localStorage.setItem(COLLECTIONS_NAV_KEY, collectionsChoice ? 'open' : 'closed'); } catch { /* this page only */ }
+    renderSidebarCollections();
+  });
   $('navKindsToggle').addEventListener('click', () => {
     const open = $('navKindsToggle').getAttribute('aria-expanded') !== 'true';
     kindsChoice = open;
@@ -189,7 +194,6 @@ function bindChrome() {
   });
   $('bulkMove').addEventListener('click', () => bulkMove());
   $('bulkFav').addEventListener('click', () => bulkPatch((items) => ({ favorite: !items.every((i) => i.favorite) })));
-  $('bulkArchive').addEventListener('click', () => bulkPatch((items) => ({ archived: !items.every((i) => i.archived) })));
   $('bulkDelete').addEventListener('click', () => bulkDelete());
   $('bulkAi').addEventListener('click', () => bulkAi());
   $('bulkCancel').addEventListener('click', () => exitSelection(true));
@@ -212,11 +216,11 @@ function toggleNav(force) {
 
 // --- rendering -------------------------------------------------------------------------
 
-const GRID_ROUTES = new Set(['all', 'wishlist', 'favorites', 'purchased', 'archive', 'c', 'item', 'kind']);
+const GRID_ROUTES = new Set(['all', 'favorites', 'purchased', 'c', 'item', 'kind']);
 
-// Archived and purchased items leave All, Favorites, Review and their collection; they
+// Purchased items leave the Library, Favorites, Review and their collection; they
 // keep their collectionId, so un-marking puts them straight back where they were.
-const isActive = (i) => !i.archived && !i.purchased;
+const isActive = (i) => !i.purchased;
 
 // keepScroll: re-render the current view in place (data changed underneath it)
 // instead of treating it as a navigation, so the page stays where the user was.
@@ -229,9 +233,9 @@ function render({ keepScroll = false } = {}) {
   toggleNav(false);
 }
 
-// The Kinds group in the menu: open or closed as you left it, and always open while you're on one of its views.
+// The Lifestyle group in the menu: open or closed as you left it, and always open while you're on one of its views.
 const KINDS_NAV_KEY = 'keepsake.nav.kinds';
-const KIND_ROUTES = new Set(['kind', 'wishlist', 'purchased', 'archive']);
+const KIND_ROUTES = new Set(['kind']);
 function setKindsOpen(open) {
   $('navKindsToggle').setAttribute('aria-expanded', open ? 'true' : 'false');
   $('navKindsList').hidden = !open;
@@ -247,20 +251,17 @@ function renderNav() {
   const r = state.route;
   document.querySelectorAll('.nav-item').forEach((a) => {
     const route = a.dataset.route;
-    a.classList.toggle('active', route === r.name || (r.name === 'item' && route === 'all'));
+    // Library covers both of its tabs, Saves (#all) and Collections (#collections).
+    a.classList.toggle('active', route === r.name || (route === 'all' && (r.name === 'item' || r.name === 'collections')));
   });
   const live = state.items.filter(isActive);
   setCount('countAll', live.length);
   setCount('countFav', live.filter((i) => i.favorite).length);
   setCount('countPurchased', state.items.filter((i) => i.purchased).length);
-  const wishlist = live.filter((i) => kindOf(i) === 'product' && !i.purchased).length;
-  setCount('countWishlist', wishlist);
-  $('navWishlist').classList.toggle('hidden', !wishlist && r.name !== 'wishlist');
   const toReview = live.filter(needsCollection).length;
   setCount('countReview', toReview);
   // Review is only in the menu while something is waiting (or while it's open).
   $('navReview').classList.toggle('hidden', !toReview && state.route.name !== 'review');
-  setCount('countArchive', state.items.filter((i) => i.archived).length);
   setCount('countTrash', (state.trash || []).length);
   renderKindNav(live);
   const inKinds = KIND_ROUTES.has(r.name);
@@ -277,15 +278,19 @@ function renderKindNav(live) {
   const box = $('navKinds');
   if (!box) return;
   clear(box);
+  // Every Lifestyle view is listed, so you can see what Keepsake can hold; empty ones are dimmed.
+  let shown = 0;
   for (const k of KINDS) {
     if (k.value === 'product' || k.value === 'link') continue;
     const n = live.filter((i) => kindOf(i) === k.value).length;
-    if (!n) continue;
+    shown++;
     const active = state.route.name === 'kind' && state.route.id === k.value;
-    box.append(el('a', { class: `nav-item ${active ? 'active' : ''}`, href: `#kind/${k.value}`, 'aria-current': active ? 'page' : null }, [
-      kindIcon(k.value), el('span', {}, [k.plural]), el('span', { class: 'count' }, [String(n)]),
+    box.append(el('a', { class: `nav-item ${active ? 'active' : ''} ${n ? '' : 'is-empty'}`, href: `#kind/${k.value}`, 'aria-current': active ? 'page' : null }, [
+      kindIcon(k.value), el('span', {}, [k.plural]), el('span', { class: 'count' }, [n ? String(n) : '']),
     ]));
   }
+  const empty = $('navKindsEmpty');
+  if (empty) empty.hidden = shown > 0;
 }
 
 function kindIcon(kind) {
@@ -381,15 +386,33 @@ function pinnedIds() {
   return state.collections.filter((c) => c.pinned).map((c) => c.id);
 }
 
+// The Collections group: open or closed as you left it (open the first time). Closed, it still lists
+// pinned collections and the one you're on, so the ones you use most stay one click away.
+const COLLECTIONS_NAV_KEY = 'keepsake.nav.collections';
+let collectionsChoice = null;
+function collectionsOpen() {
+  if (collectionsChoice !== null) return collectionsChoice;
+  try { return localStorage.getItem(COLLECTIONS_NAV_KEY) !== 'closed'; } catch { return true; }
+}
+
 function renderSidebarCollections() {
   const list = $('collectionList');
   const scrollTop = list.scrollTop;
   clear(list);
   const stats = collectionStats();
+  const open = collectionsOpen();
+  const toggle = $('collectionsToggle');
+  if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  list.closest('.sidebar-section')?.classList.toggle('is-collapsed', !open);
+  list.closest('.sidebar-section')?.classList.toggle('is-open', open);
   const help = $('collectionHelp');
-  if (help) help.textContent = pinnedIds().length > 1 ? 'Drag pinned collections to reorder' : 'Pin a collection to keep it on top';
+  if (help) {
+    help.textContent = pinnedIds().length > 1 ? 'Drag pinned ones to reorder' : 'Pin one to keep it on top';
+    help.hidden = !open;
+  }
   for (const c of sidebarOrder(stats)) {
     const active = state.route.name === 'c' && state.route.id === c.id;
+    if (!open && !c.pinned && !active) continue;
     const cover = c.coverImage || stats.get(c.id)?.images[0] || '';
     const coverNode = el('span', { class: 'collection-cover' }, cover ? [el('img', { src: cover, alt: '', loading: 'lazy', onError: (e) => { e.target.remove(); } })] : [UI.initialFor(c.name)]);
     if (!cover) coverNode.style.background = c.color || '#8A9A88';
@@ -513,11 +536,9 @@ function renderToolbar() {
   $('bulkbar').classList.toggle('hidden', !(isGrid && state.selecting));
   let title = 'Library';
   if (r.name === 'home') title = 'Home';
-  else if (r.name === 'collections') title = 'Collections';
+  else if (r.name === 'collections') title = 'Library';
   else if (r.name === 'favorites') title = 'Favorites';
-  else if (r.name === 'wishlist') title = 'Wishlist';
   else if (r.name === 'purchased') title = 'Purchased';
-  else if (r.name === 'archive') title = 'Archive';
   else if (r.name === 'trash') title = 'Trash';
   else if (r.name === 'kind') title = kindInfo(r.id).plural;
   else if (r.name === 'review') title = 'Review queue';
@@ -618,11 +639,8 @@ function baseItems() {
   const r = state.route;
   const live = state.items.filter(isActive);
   if (r.name === 'favorites') return live.filter((i) => i.favorite);
-  // Products you haven't bought yet.
-  if (r.name === 'wishlist') return live.filter((i) => kindOf(i) === 'product' && !i.purchased);
-  // Everything marked bought, archived or not: a record of what was purchased.
+  // Everything marked bought: a record of what was purchased.
   if (r.name === 'purchased') return state.items.filter((i) => i.purchased);
-  if (r.name === 'archive') return state.items.filter((i) => i.archived);
   if (r.name === 'c') return live.filter((i) => i.collectionId === r.id);
   if (r.name === 'kind') return live.filter((i) => kindOf(i) === r.id);
   return live;
@@ -676,6 +694,7 @@ function renderGrid(view) {
     view.append(collectionHero(col));
   }
   // The places list sorts itself (by city, then name), so the sort and retailer filters don't apply.
+  if (r.name === 'all') view.append(libraryTabs('saves'));
   const listView = r.name === 'kind' && ['place', 'media', 'book'].includes(r.id);
   if (baseItems().length && !listView) view.append(filterBar());
   const chips = topicChips();
@@ -832,7 +851,6 @@ function gridEmptyState() {
       icon: UI.folderIcon(),
     });
   }
-  if (r.name === 'wishlist') return UI.emptyState({ title: 'Wishlist', message: 'Products you save land here until you buy them.', icon: kindIcon('product') });
   if (r.name === 'kind') {
     const copy = {
       place: 'Save a restaurant or place and it shows up here with its address.',
@@ -847,7 +865,6 @@ function gridEmptyState() {
   }
   if (r.name === 'favorites') return UI.emptyState({ title: 'No favorites yet', message: 'Tap the star on any card to keep it close.', icon: UI.starIcon(true) });
   if (r.name === 'purchased') return UI.emptyState({ title: 'Nothing purchased yet', message: 'Mark something as purchased from its ⋯ menu or its details, and it’s kept here.', icon: UI.bagIcon() });
-  if (r.name === 'archive') return UI.emptyState({ title: 'Nothing archived', message: 'Archive items you’ve bought or moved on from. They stay searchable here.', icon: UI.folderIcon() });
   if (r.name === 'c') return UI.emptyState({ title: 'This collection is empty', message: 'Save something from a product page and Keepsake will file it here when it fits.', icon: UI.folderIcon() });
   return nothingSavedState();
 }
@@ -881,7 +898,7 @@ function cardNode(item, { list = false } = {}) {
   const creator = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : '';
   const source = creator || item.retailer || item.host || '';
   const done = item.status === 'done';
-  const muted = done || item.purchased || item.archived;
+  const muted = done || item.purchased;
   const card = el('article', { class: `card ${list ? 'card-row' : ''} ${selected ? 'selected' : ''} ${muted ? 'is-done' : ''} ${state.selecting ? 'selecting' : ''}`, role: 'listitem', 'aria-label': item.title });
   if (state.selecting) {
     const cb = el('input', { type: 'checkbox', class: 'card-check', 'aria-label': `Select ${item.title}` });
@@ -899,7 +916,6 @@ function cardNode(item, { list = false } = {}) {
     item.captureState === 'failed' ? el('span', { class: 'state-pill state-warn' }, ['Couldn’t read details']) : null,
     done ? el('span', { class: 'state-pill state-done' }, [UI.checkIcon(), info.done]) : null,
     item.purchased && kind === 'product' ? el('span', { class: 'state-pill state-done' }, [UI.checkIcon(), 'Purchased']) : null,
-    item.archived ? el('span', { class: 'state-pill state-quiet' }, ['Archived']) : null,
   ].filter(Boolean);
   const hit = el('button', { type: 'button', class: 'card-hit', 'aria-label': [item.title, info.label, fact, source].filter(Boolean).join(', '), onClick: () => {
     if (state.selecting) {
@@ -944,12 +960,13 @@ function cardNode(item, { list = false } = {}) {
 function itemMenu(item) {
   const entries = [
     { label: 'Edit details', icon: UI.pencilIcon(), onClick: () => openItem(item.id) },
-    { label: 'Move to…', icon: UI.folderIcon(), onClick: () => moveDialog([item]) },
+    // Collections are for shopping: Lifestyle saves aren't moved into them (one kept from before can be).
+    hasOwnView(kindOf(item)) && !item.collectionId ? null : { label: 'Move to…', icon: UI.folderIcon(), onClick: () => moveDialog([item]) },
     { label: item.favorite ? 'Remove favorite' : 'Favorite', icon: UI.starIcon(item.favorite), onClick: () => store.updateItem(item.id, { favorite: !item.favorite }) },
     { label: item.purchased ? 'Mark as not purchased' : 'Mark as purchased', icon: UI.checkIcon(), onClick: () => store.updateItem(item.id, { purchased: !item.purchased }) },
-    { label: item.archived ? 'Unarchive' : 'Archive', icon: UI.folderIcon(), onClick: () => store.updateItem(item.id, { archived: !item.archived }) },
   ];
   if (item.url) entries.push({ label: item.type === 'instagram' ? 'Open on Instagram' : 'Visit page', icon: UI.externalIcon(), onClick: () => window.open(openableUrl(item.url), '_blank', 'noopener') });
+  for (let n = entries.length - 1; n >= 0; n--) if (!entries[n]) entries.splice(n, 1);
   entries.push({ sep: true });
   entries.push({ label: 'Delete', icon: UI.trashIcon(), danger: true, onClick: () => deleteItems([item]) });
   return entries;
@@ -1036,10 +1053,9 @@ function exitSelection(rerender) {
 function updateBulkbar() {
   const n = state.selected.size;
   $('bulkCount').textContent = `${n} selected`;
-  for (const id of ['bulkMove', 'bulkFav', 'bulkArchive', 'bulkDelete', 'bulkAi']) $(id).disabled = n === 0;
+  for (const id of ['bulkMove', 'bulkFav', 'bulkDelete', 'bulkAi']) $(id).disabled = n === 0;
   const visible = currentGridItems();
   $('bulkAll').textContent = visible.length && visible.every((i) => state.selected.has(i.id)) ? 'Select none' : 'Select all';
-  $('bulkArchive').textContent = state.route.name === 'archive' ? 'Unarchive' : 'Archive';
   $('bulkbar').classList.toggle('hidden', !(isGridRoute() && state.selecting));
 }
 
@@ -1905,7 +1921,10 @@ async function openItem(id) {
   noteInput.value = item.note || '';
   // An uncategorized item (still waiting in Review) gets a placeholder option so
   // saving other edits doesn't silently file it into whatever collection sorts first.
-  const colOptions = [...(item.collectionId ? [] : [{ value: '', label: 'Not sorted yet' }]), ...collections.map((c) => ({ value: c.id, label: c.name }))];
+  // A Lifestyle save has no collection field (collections are for shopping); one still in a
+  // collection from before can be taken out with "No collection".
+  const lifestyleSave = hasOwnView(kindOf(item));
+  const colOptions = [...(item.collectionId ? (lifestyleSave ? [{ value: '__none', label: 'No collection' }] : []) : [{ value: '', label: 'Not sorted yet' }]), ...collections.map((c) => ({ value: c.id, label: c.name }))];
   const colSelect = UI.selectInput({ value: item.collectionId || '', options: colOptions, onChange: () => learnRow.classList.toggle('hidden', colSelect.value === item.collectionId), label: 'Collection' });
   const learnCheck = el('input', { type: 'checkbox' });
   const learnRow = el('label', { class: 'check hidden' }, [learnCheck, el('span', {}, ['Use this choice for similar items in the future'])]);
@@ -1977,7 +1996,7 @@ async function openItem(id) {
   const kindPanel = el('div', {});
   const kindSelect = UI.selectInput({ value: startKind, options: KINDS.map((k) => ({ value: k.value, label: k.label })), onChange: () => renderKindPanel(), label: 'Kind' });
 
-  const flags = { favorite: !!item.favorite, purchased: !!item.purchased, archived: !!item.archived, done: item.status === 'done' };
+  const flags = { favorite: !!item.favorite, purchased: !!item.purchased, done: item.status === 'done' };
   const toggle = (key, label, icon) => {
     const b = el('button', { type: 'button', class: `toggle-chip ${flags[key] ? 'on' : ''}`, 'aria-pressed': flags[key] ? 'true' : 'false', onClick: () => {
       flags[key] = !flags[key];
@@ -2246,12 +2265,12 @@ async function openItem(id) {
     urlField,
     priceField,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Kind']), kindSelect]),
-    el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Collection']), colSelect, learnRow]),
+    lifestyleSave && !item.collectionId ? null : el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Collection']), colSelect, learnRow]),
     el('div', { class: 'category-box' }, [catText]),
     topicsField,
     kindPanel,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Note']), noteInput]),
-    el('div', { class: 'toggles' }, [toggle('favorite', 'Favorite', UI.starIcon(true)), doneToggle, toggle('purchased', 'Purchased', UI.checkIcon()), toggle('archived', 'Archived', UI.folderIcon())]),
+    el('div', { class: 'toggles' }, [toggle('favorite', 'Favorite', UI.starIcon(true)), doneToggle, toggle('purchased', 'Purchased', UI.checkIcon())]),
     igInfo,
     aiBox,
     relatedNode(item),
@@ -2278,7 +2297,6 @@ async function openItem(id) {
           note: sanitizeText(noteInput.value, 1000),
           favorite: flags.favorite,
           purchased: flags.purchased,
-          archived: flags.archived,
           kind: kindSelect.value,
           status: flags.done ? 'done' : item.status === 'done' ? 'saved' : item.status || 'saved',
         };
@@ -2359,7 +2377,9 @@ async function openItem(id) {
             changes: [{ field: 'recipe', from: 'no recipe', to: `${patch.details.ingredients.length} ingredients, ${patch.details.steps.length} steps` }],
             before: { details: item.details || {} }, after: { details: patch.details }, reason: 'Recipe drafted on request', undone: false }]);
         }
-        if (colSelect.value && colSelect.value !== item.collectionId) {
+        if (colSelect.value === '__none') {
+          await store.updateItem(item.id, { collectionId: null, needsReview: false });
+        } else if (colSelect.value && colSelect.value !== item.collectionId) {
           await store.moveItems([item.id], colSelect.value, { learn: learnCheck.checked ? 'strong' : 'light' });
         }
         UI.toast('Saved.', { duration: 1800 });
@@ -2792,7 +2812,14 @@ const COLLECTION_SORTS = {
 
 // Every collection, pinned first. Built for hundreds: a name search, three sorts, and
 // images that load only as tiles scroll into view.
+// The Library's two tabs: every save, or every collection.
+function libraryTabs(current) {
+  const tab = (value, label, href) => el('a', { class: `library-tab ${current === value ? 'on' : ''}`, href, role: 'tab', 'aria-selected': current === value ? 'true' : 'false' }, [label]);
+  return el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Library' }, [tab('saves', 'Saves', '#all'), tab('collections', `Collections${state.collections.length ? ` · ${state.collections.length}` : ''}`, '#collections')]);
+}
+
 function renderCollections(view) {
+  view.append(libraryTabs('collections'));
   const page = el('div', { class: 'collections-page' });
   const grid = el('div', { class: 'tile-grid' });
   const stats = collectionStats();
