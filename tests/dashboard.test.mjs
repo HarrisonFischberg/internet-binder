@@ -173,6 +173,72 @@ test('recipes get their own view, a kind badge, and a recipe panel', async () =>
   await afterChange();
 });
 
+test('workouts open into the workout view: exercises, a goal, check-in with undo', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'Leg day', url: 'https://fit.example/legs', kind: 'workout', details: { exercises: [{ name: 'Squats', sets: 3, reps: 12 }, { name: 'Plank', sets: 3, durationSeconds: 45, restSeconds: 60 }], durationMinutes: 20, source: 'page' } });
+  await afterChange();
+  assert.match(window.document.getElementById('navKinds').textContent, /Workouts/);
+  const text = await go('#kind/workout');
+  assert.match(text, /2 exercises · 20 min/);
+  const card = [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('Leg day'));
+  card.querySelector('.card-hit').click();
+  await afterChange();
+  const wv = window.document.querySelector('.modal-workout .workout-view');
+  assert.ok(wv, 'the workout view opened');
+  const rows = [...wv.querySelectorAll('.exercise-table tbody tr')].map((r) => r.textContent);
+  assert.deepEqual(rows, ['Squats312 reps—', 'Plank345s1 min']);
+  assert.doesNotMatch(wv.textContent, /Suggest a progression/, 'AI off: never shown');
+
+  const btn = (label) => [...wv.querySelectorAll('button')].find((b) => b.textContent === label);
+  btn('Make it a goal').click();
+  await afterChange();
+  wv.querySelector('.goal-form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+  await afterChange();
+  assert.match(wv.querySelector('.goal-card').textContent, /3× a week for 4 weeks/);
+  assert.match(wv.textContent, /0 of 3 this week · week 1 of 4/);
+
+  btn('Done today').click();
+  await afterChange();
+  assert.match(wv.textContent, /1 of 3 this week/);
+  const [goal] = await store.getGoals({ itemId: it.id });
+  assert.equal((await store.getCheckins(goal.id)).length, 1);
+  [...window.document.querySelectorAll('.toast-action')].find((b) => b.textContent === 'Undo').click();
+  await afterChange();
+  assert.equal((await store.getCheckins(goal.id)).length, 0);
+  assert.match(wv.textContent, /0 of 3 this week/);
+
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+  await go(`#item/${it.id}`);
+  await afterChange();
+  const box = window.document.querySelector('textarea[aria-label="Exercises, one per line"]');
+  assert.equal(box.value, 'Squats 3×12\nPlank 3×45s rest 60s');
+  window.document.querySelectorAll('.modal button').forEach((b) => { if (b.textContent === 'Cancel') b.click(); });
+  await afterChange();
+});
+
+test('switching an Instagram save to Workout fills in the exercises its caption lists', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'Instagram post', url: 'https://www.instagram.com/p/testback1/', type: 'instagram', kind: 'link',
+    description: 'Back day with one kettlebell. Exercises: 1. KB Row 2. KB Swing 3. KB Halo ✅ 3 sets ✅ 8–12 reps per exercise ✅ 60 sec rest #workout' });
+  await afterChange();
+  await go(`#item/${it.id}`);
+  await afterChange();
+  const kind = window.document.querySelector('select[aria-label="Kind"]');
+  kind.value = 'workout';
+  kind.dispatchEvent(new window.Event('change'));
+  const box = window.document.querySelector('textarea[aria-label="Exercises, one per line"]');
+  assert.equal(box.value, 'KB Row 3×8–12 rest 60s\nKB Swing 3×8–12 rest 60s\nKB Halo 3×8–12 rest 60s');
+  [...window.document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Save changes').click();
+  await afterChange();
+  const saved = await store.getItem(it.id);
+  assert.equal(saved.kind, 'workout');
+  assert.deepEqual(saved.details.exercises.map((e) => [e.name, e.sets, e.reps, e.repsMax, e.restSeconds]), [['KB Row', 3, 8, 12, 60], ['KB Swing', 3, 8, 12, 60], ['KB Halo', 3, 8, 12, 60]]);
+  assert.equal(saved.details.source, 'caption', 'kept as found, so labelled as from the caption');
+});
+
 test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);

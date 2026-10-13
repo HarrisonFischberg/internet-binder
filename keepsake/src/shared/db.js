@@ -14,11 +14,16 @@
 //   clear(stores[])
 //   onChanged(fn)                   fn({ stores }) after any write, in this context and every other Keepsake context
 //
-// Stores: items (keyPath id, index urlKey), collections (keyPath id), kv (keyPath key: prefs, importHistory, aiLog).
+// Stores: items (keyPath id, index urlKey), collections (keyPath id), kv (keyPath key: prefs, importHistory, aiLog),
+// goals (keyPath id, index itemId) and checkins (keyPath id, index goalId): workout goals, see goals.js.
+//
+// Versions: 1 = items, collections, kv (M1). 2 = adds goals and checkins (M2). Upgrades only ever add
+// stores, so an older build can still read a newer database: if it asks for a lower version than the
+// one on disk, it opens the database as it is instead of failing (see open()).
 
 export const DB_NAME = 'keepsake';
-export const DB_VERSION = 1;
-export const STORES = ['items', 'collections', 'kv'];
+export const DB_VERSION = 2;
+export const STORES = ['items', 'collections', 'kv', 'goals', 'checkins'];
 const CHANNEL = 'keepsake-records';
 
 export class StorageFullError extends Error {
@@ -78,20 +83,35 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
   const open = () => {
     if (!dbp) {
       dbp = new Promise((resolve, reject) => {
-        const r = factory.open(name, DB_VERSION);
-        r.onupgradeneeded = () => {
-          const db = r.result;
-          if (!db.objectStoreNames.contains('items')) db.createObjectStore('items', { keyPath: 'id' }).createIndex('urlKey', 'urlKey', { unique: false });
-          if (!db.objectStoreNames.contains('collections')) db.createObjectStore('collections', { keyPath: 'id' });
-          if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'key' });
+        const attach = (r, retry) => {
+          r.onupgradeneeded = () => {
+            const db = r.result;
+            if (!db.objectStoreNames.contains('items')) db.createObjectStore('items', { keyPath: 'id' }).createIndex('urlKey', 'urlKey', { unique: false });
+            if (!db.objectStoreNames.contains('collections')) db.createObjectStore('collections', { keyPath: 'id' });
+            if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'key' });
+            if (!db.objectStoreNames.contains('goals')) db.createObjectStore('goals', { keyPath: 'id' }).createIndex('itemId', 'itemId', { unique: false });
+            if (!db.objectStoreNames.contains('checkins')) db.createObjectStore('checkins', { keyPath: 'id' }).createIndex('goalId', 'goalId', { unique: false });
+          };
+          r.onsuccess = () => {
+            const db = r.result;
+            db.onversionchange = () => { db.close(); dbp = null; };
+            resolve(db);
+          };
+          r.onerror = (ev) => {
+            // A newer Keepsake already upgraded this database (rolled back to an older build): open it as is.
+            if (retry && r.error && r.error.name === 'VersionError') {
+              if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+              attach(factory.open(name), false);
+              return;
+            }
+            dbp = null;
+            reject(r.error);
+          };
+          // An open Keepsake tab from before an upgrade closes its connection (onversionchange), so this is
+          // rare; dbp is reset so the next call tries again instead of failing for good.
+          r.onblocked = () => { dbp = null; reject(new Error('Keepsake storage is busy in another tab. Close other Keepsake tabs and try again.')); };
         };
-        r.onsuccess = () => {
-          const db = r.result;
-          db.onversionchange = () => { db.close(); dbp = null; };
-          resolve(db);
-        };
-        r.onerror = () => { dbp = null; reject(r.error); };
-        r.onblocked = () => reject(new Error('Keepsake storage is busy in another tab. Close other Keepsake tabs and try again.'));
+        attach(factory.open(name, DB_VERSION), true);
       });
     }
     return dbp;

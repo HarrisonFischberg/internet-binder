@@ -10,7 +10,7 @@ import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI } from './src/ai/provider.js';
-import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText } from './src/shared/kinds.js';
+import { isKind, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout } from './src/shared/kinds.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 const CONTENT_SCRIPT_ID = 'keepsake-floating';
@@ -144,13 +144,36 @@ function normalizeProduct(raw) {
   return p;
 }
 
+// The default collection for kinds that have one.
+const KIND_HOME = {
+  recipe: { key: 'recipes', name: 'Recipes', reason: (d) => (d.ingredients?.length ? `Recipe: ${d.ingredients.length} ingredients found` : 'Recipe page') },
+  workout: { key: 'workouts', name: 'Workouts', reason: (d) => (d.exercises?.length ? `Workout: ${d.exercises.length} exercises found` : 'Workout page') },
+};
+
+// Exercises from a caption, or from a workout page's list lines. Only when the text talks about
+// training too, so a recipe's "2 x 400 g tins" never turns into a workout.
+function workoutOf(product) {
+  const about = `${product.title || ''} ${product.description || ''}`;
+  if (!looksLikeWorkout(about)) return null;
+  const source = product.isInstagram ? 'caption' : 'page';
+  // Instagram puts the caption in the page title as well as the description, and either may be cut
+  // short: read the longer one first.
+  const texts = product.isInstagram ? [product.title, product.description].filter(Boolean).sort((a, b) => b.length - a.length) : [product.description];
+  const fromCaption = texts.map((t) => workoutFromText(t, { source })).find(Boolean) || null;
+  if (fromCaption) return fromCaption;
+  return Array.isArray(product.workoutLines) && product.workoutLines.length ? workoutFromText(product.workoutLines.slice(0, 150).join('\n'), { source: 'page' }) : null;
+}
+
 // What a capture is: what the page says about itself first (structured data), then what we can tell.
 function kindOfCapture(product) {
   if (isKind(product.kind)) return product.kind;
   const fromTypes = kindFromSchemaTypes(product.schemaTypes);
+  // A video or article that lists exercises is a workout; other structured kinds are what they say.
+  if ((fromTypes === 'video' || fromTypes === 'article') && workoutOf(product)) return 'workout';
   if (fromTypes && fromTypes !== 'product') return fromTypes;
   if (product.recipe) return 'recipe';
-  if (product.isInstagram) return recipeFromText(product.description) ? 'recipe' : 'link';
+  if (product.isInstagram) return recipeFromText(product.description) ? 'recipe' : workoutOf(product) ? 'workout' : 'link';
+  if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
   if (fromTypes === 'product' || product.price !== null || product.priceText) return 'product';
   return product.sparse ? 'link' : 'product';
 }
@@ -168,17 +191,19 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
   }
   const [collections, prefs, settings] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings()]);
   const kind = kindOfCapture(product);
-  const details = kind === 'recipe' ? recipeFromSchema(product.recipe) || recipeFromText(product.description) || {} : {};
+  const details = kind === 'recipe' ? recipeFromSchema(product.recipe) || recipeFromText(product.description) || {}
+    : kind === 'workout' ? workoutOf(product) || {} : {};
   if (kind !== 'product') {
     // A price on a recipe or article page is an ad or a cookbook, not this save's price.
     product.price = null;
     product.priceText = '';
   }
   let classification = given || classify(product, { collections, prefs, settings });
-  if (kind === 'recipe' && !given && !collectionId && !(classification.confidence >= 0.85 && !classification.taxonomyKey && !classification.isInbox)) {
-    // Recipes go to Recipes, unless one of the person's own collections claimed it by keyword.
-    classification = { collectionId: null, collectionName: 'Recipes', taxonomyKey: 'recipes', isNew: true, isInbox: false, confidence: 0.9, alternatives: classification.alternatives || [],
-      reason: details.ingredients?.length ? `Recipe: ${details.ingredients.length} ingredients found` : 'Recipe page' };
+  const home = KIND_HOME[kind];
+  if (home && !given && !collectionId && !(classification.confidence >= 0.85 && !classification.taxonomyKey && !classification.isInbox)) {
+    // Recipes go to Recipes and workouts to Workouts, unless one of the person's own collections claimed it by keyword.
+    classification = { collectionId: null, collectionName: home.name, taxonomyKey: home.key, isNew: true, isInbox: false, confidence: 0.9, alternatives: classification.alternatives || [],
+      reason: home.reason(details) };
   }
 
   // With AI on, the save is stored first with the local result and marked "finishing details";

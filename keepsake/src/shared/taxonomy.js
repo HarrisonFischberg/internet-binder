@@ -22,6 +22,16 @@ export const DEFAULT_TAXONOMY = [
     keywords: [],
   },
   {
+    // Saves of kind "workout" are filed here the same way. Gym gear stays in Fitness & Wellness.
+    key: 'workouts',
+    name: 'Workouts',
+    description: 'Workouts you want to do, and their goals.',
+    color: '#3C6E8A',
+    aliases: ['workouts'],
+    strong: [],
+    keywords: [],
+  },
+  {
     key: 'camping',
     name: 'Camping & Outdoors',
     description: 'Tents, sleeping bags, stoves, packs, hiking and campsite gear.',

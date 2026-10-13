@@ -142,6 +142,31 @@ test('with AI on, recipes are not sent for the product tidy', async () => {
   assert.equal(called, false);
 });
 
+test('a workout page with an exercise list is saved as a workout, filed in Workouts', async () => {
+  const page = {
+    title: '20-minute full body workout', url: 'https://fit.example/full-body', description: 'A quick routine you can do at home.', images: [], image: '', price: null,
+    schemaTypes: ['webpage', 'article'],
+    workoutLines: ['Warm up for 5 minutes', '1. Squats 3x12', '2. Push-ups 3x10', 'Plank 3 x 45s', 'Rest 60s', 'Posted on 12 March 2026'],
+  };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: page, instant: true }, popup);
+  assert.equal(res.item.kind, 'workout');
+  assert.deepEqual(res.item.details.exercises.map((e) => e.name), ['Squats', 'Push-ups', 'Plank']);
+  assert.equal(res.item.details.exercises[2].restSeconds, 60);
+  assert.equal(res.item.details.source, 'page');
+  assert.equal(res.collection.name, 'Workouts');
+  assert.match(res.item.categorizationReason, /3 exercises/);
+});
+
+test('workout gear with a price stays a product; a caption that lists exercises is a workout', async () => {
+  const gear = { title: 'High-rise workout leggings', url: 'https://shop.example/leggings', price: '$68.00', images: [], image: '', schemaTypes: ['product'], workoutLines: ['Squats 3x12', 'Lunges 3x10'] };
+  assert.equal((await F.send({ type: MSG.SAVE_ITEM, product: gear, instant: true }, popup)).item.kind, 'product');
+  const post = { title: 'Instagram post', url: 'https://www.instagram.com/p/legday1/', isInstagram: true, images: [], image: '', price: null,
+    description: 'Leg day 🔥\n3x12 squats\n3x10 lunges\n3x15 glute bridges' };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: post, instant: true }, popup);
+  assert.equal(res.item.kind, 'workout');
+  assert.equal(res.item.details.source, 'caption');
+});
+
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
   const link = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'Reading list', url: 'https://notes.example/x', sparse: true }, instant: true }, popup);
   assert.equal(link.item.kind, 'link');

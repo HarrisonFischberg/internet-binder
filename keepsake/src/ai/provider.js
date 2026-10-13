@@ -361,6 +361,37 @@ export async function draftRecipe(item, settings, apiKey) {
   };
 }
 
+const PROGRESSION_SYSTEM = `You plan gentle, safe training progressions for a home workout app. Only on the person's request.
+Return ONLY JSON: {"plan":[{"week":1,"perWeek":number|null,"sets":number|null,"reps":number|null,"durationSeconds":number|null,"note":"short"}, …],"note":"one short caveat"}
+Rules: one entry per week; for a frequency goal set perWeek (never above the goal's) and leave sets/reps empty unless useful; for a target goal build sets and reps (or seconds) up to the target by the last week, in small steps, starting near the person's best so far; never more than 10% harder week to week; no medical claims.`;
+
+// A week-by-week plan for a workout goal. Sends the workout's title, its exercises and the goal's
+// numbers (and best result so far), nothing else. The person previews it and accepts or dismisses it.
+export async function suggestProgression(item, goal, progress, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  const ex = (item.details?.exercises || []).slice(0, 20).map((e) => `- ${e.name}${e.sets ? ` ${e.sets} sets` : ''}${e.reps ? ` × ${e.reps}` : ''}${e.durationSeconds ? ` × ${e.durationSeconds}s` : ''}`).join('\n');
+  const s = goal.spec || {};
+  const weeks = goal.kind === 'frequency' ? s.weeks : Math.max(2, Math.min(12, Number(s.weeks) || 6));
+  const text = [
+    `Workout: ${String(item.title || '').slice(0, 200)}`,
+    ex ? `Exercises:\n${ex}` : '',
+    goal.kind === 'frequency' ? `Goal: do it ${s.perWeek} times a week for ${s.weeks} weeks.` : `Goal: reach ${s.sets} sets of ${s.durationSeconds ? `${s.durationSeconds} seconds` : `${s.reps} reps`} of ${s.exercise}. Plan ${weeks} weeks.`,
+    progress?.best ? `Best so far: ${progress.best.result.sets || 1} sets of ${progress.best.result.durationSeconds ? `${progress.best.result.durationSeconds} seconds` : `${progress.best.result.reps} reps`}.` : '',
+    progress?.weekNumber ? `They are in week ${progress.weekNumber}.` : '',
+  ].filter(Boolean).join('\n');
+  const raw = await callProvider(cfg, apiKey, { system: PROGRESSION_SYSTEM, userText: text, maxTokens: 700 });
+  const parsed = parseJsonBlock(raw);
+  const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) <= max ? Math.round(Number(v)) : null);
+  const plan = (Array.isArray(parsed?.plan) ? parsed.plan : []).slice(0, weeks).map((p, i) => ({
+    week: num(p?.week, 52) || i + 1,
+    perWeek: goal.kind === 'frequency' ? Math.min(num(p?.perWeek, 14) || s.perWeek, s.perWeek) : null,
+    sets: num(p?.sets, 20), reps: num(p?.reps, 500), durationSeconds: num(p?.durationSeconds, 36000),
+    note: String(p?.note || '').slice(0, 160),
+  })).filter((p) => p.perWeek || p.sets || p.reps || p.durationSeconds);
+  if (!plan.length) throw new Error('The provider didn’t return a usable plan.');
+  return { plan, note: String(parsed?.note || '').slice(0, 200) };
+}
+
 export async function testConnection(settings, apiKey) {
   const cfg = providerConfig(settings);
   const raw = await callProvider(cfg, apiKey, { system: 'Reply with the single word OK.', userText: 'Connection test.', maxTokens: 5 });

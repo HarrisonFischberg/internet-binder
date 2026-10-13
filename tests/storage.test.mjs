@@ -86,6 +86,81 @@ test('saves stored with HTML entities are decoded once on init; nothing else cha
   assert.equal((await again.getItem(raw.id)).title, 'Fish &amp; chips');
 });
 
+test('workout goals: create, check in, end and restore; deleting the workout for good takes them along', async () => {
+  const { store, db } = await fresh();
+  const w = await store.addItem({ title: 'Leg day', url: 'https://fit.example/legs', kind: 'workout', details: { exercises: [{ name: 'Squats', sets: 3, reps: 12 }] } });
+  await assert.rejects(store.createGoal({ itemId: 'nope', kind: 'frequency' }), /no longer exists/);
+  const g = await store.createGoal({ itemId: w.id, kind: 'frequency', spec: { perWeek: 3, weeks: 4 }, id: 'forged', createdAt: '1999-01-01' });
+  assert.notEqual(g.id, 'forged');
+  assert.notEqual(g.createdAt, '1999-01-01');
+  const c1 = await store.addCheckin(g.id, { sets: 3, reps: 12 });
+  await store.addCheckin(g.id, {});
+  assert.equal((await store.getCheckins(g.id)).length, 2);
+  await store.removeCheckin(c1.id);
+  assert.equal((await store.getCheckins(g.id)).length, 1);
+  assert.equal((await store.getAll()).goals.length, 1);
+
+  const updated = await store.updateGoal(g.id, { plan: [{ week: 1, perWeek: 2 }], planSource: 'ai-suggested', itemId: 'moved' });
+  assert.equal(updated.itemId, w.id, 'a goal stays with its workout');
+  assert.equal(updated.plan.length, 1);
+  await store.deleteGoal(g.id);
+  assert.equal((await store.getGoals({ itemId: w.id })).length, 0);
+  await assert.rejects(store.addCheckin(g.id, {}), /no longer exists/);
+  await store.restoreGoal(g.id);
+  assert.equal((await store.getGoals({ itemId: w.id })).length, 1);
+
+  await store.deleteItems([w.id]);
+  assert.equal((await store.getGoals()).length, 1, 'a workout in Trash keeps its goal, for restore');
+  await store.deleteForever([w.id]);
+  assert.equal((await db.all('goals')).length, 0);
+  assert.equal((await db.all('checkins')).length, 0);
+});
+
+test('ended goals are purged with the Trash after 30 days, with their check-ins', async () => {
+  const { store, db } = await fresh();
+  const w = await store.addItem({ title: 'Core', url: 'https://fit.example/core', kind: 'workout' });
+  const g = await store.createGoal({ itemId: w.id, kind: 'target', spec: { exercise: 'Plank', sets: 3, durationSeconds: 60 } });
+  await store.addCheckin(g.id, { sets: 3, durationSeconds: 40 });
+  await store.deleteGoal(g.id);
+  assert.equal(await store.purgeTrash({ now: Date.now() + 5 * 864e5 }), 0);
+  assert.equal((await db.all('goals')).length, 1);
+  await store.purgeTrash({ now: Date.now() + 31 * 864e5 });
+  assert.equal((await db.all('goals')).length, 0);
+  assert.equal((await db.all('checkins')).length, 0);
+});
+
+test('export and import carry goals and check-ins; a goal follows its workout to the save already here', async () => {
+  const a = await fresh();
+  const w = await a.store.addItem({ title: 'Leg day', url: 'https://fit.example/legs', kind: 'workout' });
+  const g = await a.store.createGoal({ itemId: w.id, kind: 'frequency', spec: { perWeek: 2, weeks: 2 } });
+  await a.store.addCheckin(g.id, { note: 'felt good' });
+  const file = await a.store.exportJSON();
+  assert.equal(file.goals.length, 1);
+  assert.equal(file.checkins.length, 1);
+
+  // Another profile already has the same workout (same link, different id).
+  const b = await fresh();
+  const mine = await b.store.addItem({ title: 'Leg day (mine)', url: 'https://fit.example/legs', kind: 'workout' });
+  const r = await b.store.importJSON(JSON.parse(JSON.stringify(file)));
+  assert.equal(r.addedGoals, 1);
+  assert.equal(r.addedCheckins, 1);
+  const [goal] = await b.store.getGoals();
+  assert.equal(goal.itemId, mine.id);
+  assert.equal((await b.store.getCheckins(goal.id))[0].result.note, 'felt good');
+  const again = await b.store.importJSON(JSON.parse(JSON.stringify(file)));
+  assert.equal(again.addedGoals, 0, 'importing twice adds nothing');
+
+  // A goal without its workout, or a check-in without its goal, is dropped.
+  const orphan = { ...JSON.parse(JSON.stringify(file)), goals: [{ ...file.goals[0], itemId: 'missing' }] };
+  const v = validateExport(orphan);
+  assert.equal(v.goals.length, 0);
+  assert.equal(v.checkins.length, 0);
+
+  // Replace wipes goals too.
+  await b.store.importJSON({ format: 'keepsake-export', schemaVersion: SCHEMA_VERSION, items: {}, collections: {} }, { mode: 'replace' });
+  assert.equal((await b.store.getGoals({ includeDeleted: true })).length, 0);
+});
+
 test('makeItem: types and defaults', () => {
   assert.equal(makeItem({ url: 'https://www.instagram.com/p/AbCdE1/' }).type, 'instagram');
   assert.equal(makeItem({ url: 'https://www.instagram.com/p/AbCdE1/' }).title, 'Instagram post');

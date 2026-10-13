@@ -20,7 +20,8 @@ import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
 import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, forgetCollection } from './categorizer.js';
 import { memoryRecordBackend, STORES } from './db.js';
-import { isKind, kindOf, sanitizeDetails, recipeFromText, STATUSES } from './kinds.js';
+import { isKind, kindOf, sanitizeDetails, recipeFromText, workoutFromText, looksLikeWorkout, STATUSES } from './kinds.js';
+import { makeGoal, makeCheckin } from './goals.js';
 
 export { idbBackend, memoryRecordBackend, StorageFullError } from './db.js';
 
@@ -44,7 +45,7 @@ export const TRASH_DAYS = 30;
 // Fields a person edits by hand. Once edited, AI and enrichment leave them alone.
 const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'url', 'description'];
 const CAPTURE_STATES = ['pending', 'complete', 'failed'];
-export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024 };
+export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024, maxGoals: 2000, maxCheckins: 50000, maxCheckinsPerGoal: 2000 };
 
 // Styles a person can pick in Settings → Appearance. The first is the default.
 export const STYLES = [
@@ -222,9 +223,12 @@ export function makeItem(input = {}) {
   const type = ['product', 'inspiration', 'instagram'].includes(input.type) ? input.type : /instagram\.com/.test(host) ? 'instagram' : 'product';
   // What the save is. Records from before kinds existed get one derived from their type; an
   // Instagram caption with an ingredient list makes the save a recipe.
-  const captionRecipe = !isKind(input.kind) && input.instagram && typeof input.instagram === 'object' ? recipeFromText(input.instagram.caption) : null;
-  const kind = isKind(input.kind) ? input.kind : captionRecipe ? 'recipe' : kindOf({ ...input, type });
-  const details = sanitizeDetails(kind, input.details && typeof input.details === 'object' && Object.keys(input.details).length ? input.details : captionRecipe || {});
+  // A caption that lists exercises and talks about training makes it a workout.
+  const caption = !isKind(input.kind) && input.instagram && typeof input.instagram === 'object' ? input.instagram.caption : '';
+  const captionRecipe = caption ? recipeFromText(caption) : null;
+  const captionWorkout = caption && !captionRecipe && looksLikeWorkout(caption) ? workoutFromText(caption) : null;
+  const kind = isKind(input.kind) ? input.kind : captionRecipe ? 'recipe' : captionWorkout ? 'workout' : kindOf({ ...input, type });
+  const details = sanitizeDetails(kind, input.details && typeof input.details === 'object' && Object.keys(input.details).length ? input.details : captionRecipe || captionWorkout || {});
   return {
     id: input.id || uid(),
     collectionId: input.collectionId || null,
@@ -374,13 +378,14 @@ export function createStore(kv, db = memoryRecordBackend()) {
   }
 
   async function readAll() {
-    const [{ meta, settings, secrets }, items, collections, prefs, importHistory] = await Promise.all([
-      readSettings(), db.all('items'), db.all('collections'), kvGet('prefs', null), kvGet('importHistory', null),
+    const [{ meta, settings, secrets }, items, collections, prefs, importHistory, goals] = await Promise.all([
+      readSettings(), db.all('items'), db.all('collections'), kvGet('prefs', null), kvGet('importHistory', null), db.all('goals'),
     ]);
     return {
       meta,
       collections: mapOf(collections),
       items: mapOf(items.filter(live)),
+      goals: goals.filter((g) => !g.deletedAt),
       prefs: { ...emptyPrefs(), ...(prefs || {}) },
       settings,
       importHistory: importHistory || { instagram: {} },
@@ -444,6 +449,13 @@ export function createStore(kv, db = memoryRecordBackend()) {
       });
     }
     return repaired;
+  }
+
+  // Goals and every check-in they have, for good.
+  async function removeGoals(goalIds) {
+    const checkins = (await Promise.all(goalIds.map((id) => db.byIndex('checkins', 'goalId', id)))).flat();
+    if (checkins.length) await db.remove('checkins', checkins.map((c) => c.id));
+    await db.remove('goals', goalIds);
   }
 
   const api = {
@@ -647,6 +659,9 @@ export function createStore(kv, db = memoryRecordBackend()) {
     async deleteForever(ids) {
       const set = new Set(ids);
       await db.remove('items', ids);
+      // A workout's goals and their check-ins go with it.
+      const goals = (await Promise.all(ids.map((id) => db.byIndex('goals', 'itemId', id)))).flat();
+      if (goals.length) await removeGoals(goals.map((g) => g.id));
       await kvUpdate('importHistory', { instagram: {} }, (h) => {
         const ig = { ...(h.instagram || {}) };
         for (const [k, v] of Object.entries(ig)) if (set.has(v)) delete ig[k];
@@ -658,6 +673,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
       const cutoff = new Date(now - olderThanDays * 864e5).toISOString();
       const old = (await db.all('items')).filter((i) => i.deletedAt && i.deletedAt < cutoff).map((i) => i.id);
       if (old.length) await api.deleteForever(old);
+      const oldGoals = (await db.all('goals')).filter((g) => g.deletedAt && g.deletedAt < cutoff).map((g) => g.id);
+      if (oldGoals.length) await removeGoals(oldGoals);
       return old.length;
     },
 
@@ -760,11 +777,62 @@ export function createStore(kv, db = memoryRecordBackend()) {
       return id && (await db.get('items', id)) ? id : null;
     },
 
+    // -- workout goals (goals.js) --
+    async getGoals({ itemId = null, includeDeleted = false } = {}) {
+      const list = itemId ? await db.byIndex('goals', 'itemId', itemId) : await db.all('goals');
+      return list.filter((g) => includeDeleted || !g.deletedAt).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    },
+
+    async getGoal(id) {
+      return (await db.get('goals', id)) || null;
+    },
+
+    async createGoal(input) {
+      const item = input && typeof input.itemId === 'string' ? await db.get('items', input.itemId) : null;
+      if (!item || item.deletedAt) throw new Error('That workout no longer exists.');
+      if ((await db.count('goals')) >= LIMITS.maxGoals) throw new Error('Goal limit reached. Delete an old goal first.');
+      const goal = makeGoal({ ...input, id: undefined, createdAt: undefined, updatedAt: undefined, deletedAt: null });
+      await db.put('goals', [goal]);
+      return goal;
+    },
+
+    async updateGoal(id, patch = {}) {
+      const [goal] = await db.update('goals', [id], (g) => (g ? makeGoal({ ...g, ...patch, id: g.id, itemId: g.itemId, createdAt: g.createdAt, updatedAt: nowIso() }) : undefined));
+      return goal || null;
+    },
+
+    // Ending a goal keeps it and its check-ins for TRASH_DAYS, so it can be undone.
+    async deleteGoal(id) {
+      return api.updateGoal(id, { deletedAt: nowIso() });
+    },
+
+    async restoreGoal(id) {
+      return api.updateGoal(id, { deletedAt: null });
+    },
+
+    async getCheckins(goalId) {
+      return (await db.byIndex('checkins', 'goalId', goalId)).sort((a, b) => (a.at < b.at ? -1 : 1));
+    },
+
+    async addCheckin(goalId, result = {}, { at } = {}) {
+      const goal = await db.get('goals', goalId);
+      if (!goal || goal.deletedAt) throw new Error('That goal no longer exists.');
+      if ((await db.byIndex('checkins', 'goalId', goalId)).length >= LIMITS.maxCheckinsPerGoal) throw new Error('This goal has as many check-ins as Keepsake keeps. Start a new goal.');
+      const checkin = makeCheckin({ goalId, result, at });
+      await db.put('checkins', [checkin]);
+      return checkin;
+    },
+
+    // Only offered as Undo right after a check-in: check-ins are otherwise add-only.
+    async removeCheckin(id) {
+      await db.remove('checkins', [id]);
+    },
+
     // -- export / import --
     // Every save is exported, including the Trash (with deletedAt), so a backup restores everything.
     async exportJSON() {
-      const [items, collections, prefs, importHistory, { settings }] = await Promise.all([
-        db.all('items'), db.all('collections'), kvGet('prefs', emptyPrefs()), kvGet('importHistory', { instagram: {} }), readSettings(),
+      const [items, collections, prefs, importHistory, { settings }, goals, checkins] = await Promise.all([
+        db.all('items'), db.all('collections'), kvGet('prefs', emptyPrefs()), kvGet('importHistory', { instagram: {} }), readSettings(), db.all('goals'), db.all('checkins'),
       ]);
       return {
         format: 'keepsake-export',
@@ -772,6 +840,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
         exportedAt: nowIso(),
         collections: mapOf(collections),
         items: mapOf(items),
+        goals,
+        checkins,
         prefs,
         settings,
         importHistory,
@@ -782,7 +852,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
       const validated = validateExport(payload);
       return serial(async () => {
         if (mode === 'replace') {
-          await db.clear(['items', 'collections']);
+          await db.clear(['items', 'collections', 'goals', 'checkins']);
           await kvSet('prefs', emptyPrefs());
           await kvSet('importHistory', { instagram: {} });
         }
@@ -817,12 +887,17 @@ export function createStore(kv, db = memoryRecordBackend()) {
         }
         const ids = new Set(existingItems.map((i) => i.id));
         const keys = new Set(existingItems.filter(live).map((i) => i.urlKey).filter(Boolean));
+        // Where each backup item ended up: itself, or the save already here with the same id or link.
+        const itemIdMap = new Map();
+        const byKey = new Map(existingItems.filter(live).filter((i) => i.urlKey).map((i) => [i.urlKey, i.id]));
         const newItems = [];
         for (const item of Object.values(validated.items)) {
           if (ids.has(item.id) || (item.urlKey && !item.deletedAt && keys.has(item.urlKey))) {
+            itemIdMap.set(item.id, ids.has(item.id) ? item.id : byKey.get(item.urlKey));
             skippedItems++;
             continue;
           }
+          itemIdMap.set(item.id, item.id);
           const resolvedId = idMap.get(item.collectionId) || (collections[item.collectionId] ? item.collectionId : null);
           item.collectionId = resolvedId;
           if (!resolvedId) item.needsReview = true;
@@ -834,6 +909,15 @@ export function createStore(kv, db = memoryRecordBackend()) {
         if ((await db.count('items')) + newItems.length > LIMITS.maxItems) throw new Error('Item limit reached');
         if (newCols.length) await db.put('collections', newCols);
         for (let i = 0; i < newItems.length; i += 500) await db.put('items', newItems.slice(i, i + 500));
+        // Goals follow their workout; check-ins follow their goal. Anything already here is kept as is.
+        const haveGoals = new Set((await db.all('goals')).map((g) => g.id));
+        const newGoals = validated.goals.filter((g) => !haveGoals.has(g.id) && itemIdMap.get(g.itemId)).map((g) => ({ ...g, itemId: itemIdMap.get(g.itemId) }));
+        if (haveGoals.size + newGoals.length > LIMITS.maxGoals) throw new Error('Goal limit reached');
+        if (newGoals.length) await db.put('goals', newGoals);
+        newGoals.forEach((g) => haveGoals.add(g.id));
+        const haveCheckins = new Set((await db.all('checkins')).map((c) => c.id));
+        const newCheckins = validated.checkins.filter((c) => !haveCheckins.has(c.id) && haveGoals.has(c.goalId));
+        for (let i = 0; i < newCheckins.length; i += 1000) await db.put('checkins', newCheckins.slice(i, i + 1000));
         if (validated.prefs) prefs = mergePrefs(prefs, validated.prefs, idMap);
         await kvSet('prefs', prefs);
         if (validated.importHistory?.instagram) {
@@ -844,7 +928,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
         const write = { [KEYS.meta]: { ...((await readSettings()).meta || {}), schemaVersion: SCHEMA_VERSION, updatedAt: nowIso() } };
         if (mode === 'replace' && validated.settings) write[KEYS.settings] = deepMerge(DEFAULT_SETTINGS, validated.settings);
         await be.set(write);
-        return { addedCollections, addedItems, skippedItems };
+        return { addedCollections, addedItems, skippedItems, addedGoals: newGoals.length, addedCheckins: newCheckins.length };
       });
     },
 
@@ -959,6 +1043,22 @@ export function validateExport(payload) {
     if (!it.url && !it.sourceUrl && !it.image && it.title === 'Untitled item') continue;
     items[it.id] = it;
   }
+  // Workout goals and check-ins (exports from M2 on). A goal needs its workout in the file; a check-in its goal.
+  const rawGoals = Array.isArray(payload.goals) ? payload.goals : [];
+  const rawCheckins = Array.isArray(payload.checkins) ? payload.checkins : [];
+  if (rawGoals.length > LIMITS.maxGoals) throw new Error(`Too many goals (${rawGoals.length}).`);
+  if (rawCheckins.length > LIMITS.maxCheckins) throw new Error(`Too many check-ins (${rawCheckins.length}).`);
+  const goals = [];
+  for (const raw of rawGoals) {
+    if (!raw || typeof raw !== 'object' || typeof raw.itemId !== 'string' || !items[raw.itemId]) continue;
+    goals.push(makeGoal({ ...raw, id: safeId(raw.id) }));
+  }
+  const goalIds = new Set(goals.map((g) => g.id));
+  const checkins = [];
+  for (const raw of rawCheckins) {
+    if (!raw || typeof raw !== 'object' || !goalIds.has(raw.goalId)) continue;
+    checkins.push(makeCheckin({ ...raw, id: safeId(raw.id) }));
+  }
   let prefs = null;
   if (payload.prefs && typeof payload.prefs === 'object') {
     const p = payload.prefs;
@@ -1003,7 +1103,7 @@ export function validateExport(payload) {
       if (typeof k === 'string' && typeof v === 'string') importHistory.instagram[k.slice(0, 200)] = v.slice(0, 64);
     }
   }
-  return { collections, items, prefs, settings, importHistory };
+  return { collections, items, goals, checkins, prefs, settings, importHistory };
 }
 
 function safeId(id) {

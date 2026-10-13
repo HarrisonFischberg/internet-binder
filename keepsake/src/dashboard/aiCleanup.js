@@ -306,6 +306,12 @@ export async function undoEntries(ctx, entries) {
   const sorted = [...entries].sort((a, b) => (a.at < b.at ? 1 : -1));
   const done = [];
   for (const e of sorted) {
+    if (e.goalId) {
+      // A workout goal's plan, suggested on request.
+      if (await ctx.store.getGoal(e.goalId)) await ctx.store.updateGoal(e.goalId, e.before);
+      done.push(e.id);
+      continue;
+    }
     const item = await ctx.store.getItem(e.itemId);
     if (!item) {
       done.push(e.id);

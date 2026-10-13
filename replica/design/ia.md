@@ -144,6 +144,20 @@ Workout detail → [Make it a goal] → choose: "Do it 3× a week for 4 weeks" |
 
 States: no exercises found ("Keepsake couldn't find exercises on this page. Add them yourself"), goal finished, goal missed a week (neutral wording: "1 of 3 last week"), AI off ("Suggest a progression" hidden, never teased), provider error ("Your AI provider didn't answer. Nothing changed."). ✓ (iPhone mock)
 
+**Workouts open as workouts (all platforms, built in Chrome M2b).** Like recipes, opening a workout from anywhere goes straight to the **workout view**: title, source, exercise count, time and focus; an **Exercises** table (exercise, sets, reps or time, rest); and the **Goal** column with the goal card above. Actions: Mark finished, Visit page or Open post, Edit details (where exercises are edited as text, one per line, "Squats 3×12" or "Plank 45s rest 60s").
+
+Rules the apps share (`shared/goals.js`, mirrored in Swift):
+- Weeks run from the goal's start day, not the calendar week. Check-ins count once per day for "× a week".
+- A frequency goal finishes after its last week or when every week is met; a target goal when one check-in reaches it (sets and reps, or sets and time).
+- One active goal per workout; finished and ended goals stay listed under it. Ending a goal and a check-in both have Undo; ended goals are purged with the Trash after 30 days.
+- A target goal's check-in asks for the numbers (that's what it measures); a frequency goal's check-in is one tap ("Done today"), with sets and reps optional.
+
+| platform | workout view |
+| --- | --- |
+| Chrome | full-size dialog; exercises left, goal right; one column under 820 px |
+| iPhone | full-screen push; segmented Exercises / Goal; check-in as a sheet; screen kept awake while open |
+| iPad, Mac | detail pane with exercises and goal side by side |
+
 ### F07 Delete and undo
 
 Delete → toast "Moved to Trash" + Undo (8 s) → Trash keeps it for 30 days with Restore. Delete forever is in Trash only, with confirmation.

@@ -7,8 +7,9 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
-import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails } from '../shared/kinds.js';
-import { draftRecipe } from '../ai/provider.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText } from '../shared/kinds.js';
+import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
+import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { renderSettings, renderAI, renderPrivacy, analyzeItems } from './settings.js';
 import { renderImport } from './importer.js';
@@ -1042,7 +1043,275 @@ function cut(s, n) {
 async function openSave(id) {
   const item = state.items.find((i) => i.id === id) || (await store.getItem(id));
   if (item && kindOf(item) === 'recipe') return openRecipe(id);
+  if (item && kindOf(item) === 'workout') return openWorkout(id);
   return openQuickView(id);
+}
+
+// The workout view: what to do (exercises with sets, reps or time, and rest) and its goal. Goals and
+// check-ins save as you go; ending a goal or a check-in can be undone from the toast.
+async function openWorkout(id) {
+  const item = await store.getItem(id);
+  if (!item) {
+    UI.toast('That item no longer exists.', { kind: 'danger' });
+    return;
+  }
+  const d = item.details || {};
+  const exercises = d.exercises || [];
+  const aiReady = !!state.settings?.ai?.on && !!(await store.getSecret('aiApiKey').catch(() => ''));
+  const sourceLabel = { page: 'Exercises from the page', caption: 'Exercises from the caption', you: 'Exercises added by you' }[d.source] || '';
+  const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
+  const facts = [
+    exercises.length ? ['Exercises', String(exercises.length)] : null,
+    d.durationMinutes ? ['Time', formatMinutes(d.durationMinutes)] : null,
+    d.focus ? ['Focus', d.focus] : null,
+  ].filter(Boolean);
+  const amount = (e) => (e.durationSeconds ? formatSeconds(e.durationSeconds) : e.reps ? `${e.reps}${e.repsMax ? `–${e.repsMax}` : ''} reps` : '—');
+  const restText = (e) => (e.restSeconds ? (e.restMaxSeconds ? `${e.restSeconds}–${e.restMaxSeconds}s` : formatSeconds(e.restSeconds)) : '—');
+  const table = el('table', { class: 'exercise-table' }, [
+    el('thead', {}, [el('tr', {}, [el('th', { scope: 'col' }, ['Exercise']), el('th', { scope: 'col' }, ['Sets']), el('th', { scope: 'col' }, ['Reps or time']), el('th', { scope: 'col' }, ['Rest'])])]),
+    el('tbody', {}, exercises.map((e) => el('tr', {}, [
+      el('th', { scope: 'row' }, [e.name, e.note ? el('span', { class: 'exercise-note' }, [e.note]) : null]), el('td', {}, [e.sets ? String(e.sets) : '—']), el('td', {}, [amount(e)]), el('td', {}, [restText(e)]),
+    ]))),
+  ]);
+  const goalBox = el('div', { class: 'goal-stack' });
+  const body = el('div', { class: 'recipe-view workout-view' }, [
+    el('div', { class: `recipe-hero ${item.image ? '' : 'no-pic'}` }, [
+      item.image ? UI.pictureNode({ src: item.image, aspect: item.imageAspect, title: item.title, className: 'recipe-hero-pic' }) : null,
+      el('div', { class: 'recipe-hero-text' }, [
+        el('span', { class: 'badge kind-badge kind-workout' }, [kindIcon('workout'), 'Workout']),
+        el('h2', { class: 'recipe-title' }, [item.title]),
+        el('p', { class: 'recipe-from' }, [[from, sourceLabel].filter(Boolean).join(' · ')]),
+        facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
+        item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
+        item.status === 'done' ? el('span', { class: 'badge' }, ['Finished']) : null,
+      ]),
+    ]),
+    el('div', { class: 'recipe-columns workout-columns' }, [
+      el('section', { class: 'recipe-col' }, [
+        el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Exercises']), el('span', { class: 'recipe-count' }, [exercises.length ? pluralize(exercises.length, 'exercise', 'exercises') : ''])]),
+        exercises.length ? el('div', { class: 'table-scroll' }, [table]) : el('div', { class: 'recipe-empty' }, [
+          el('p', {}, ['Keepsake couldn’t find exercises on this page. Add them yourself.']),
+          el('p', { class: 'help' }, ['In Edit details, write one exercise per line, like “Squats 3×12” or “Plank 45s”.']),
+        ]),
+      ]),
+      el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Goal'])]), goalBox]),
+    ]),
+  ]);
+
+  async function renderGoals() {
+    const goals = await store.getGoals({ itemId: item.id });
+    const withProgress = await Promise.all(goals.map(async (g) => goalProgress(g, await store.getCheckins(g.id))));
+    clear(goalBox);
+    const active = withProgress.filter((p) => p.status === 'active');
+    for (const p of [...active, ...withProgress.filter((x) => x.status !== 'active').reverse()]) goalBox.append(goalCard(p));
+    if (!active.length) goalBox.append(newGoalForm(!withProgress.length));
+  }
+
+  function newGoalForm(first) {
+    const box = el('div', { class: 'goal-new' });
+    const closed = el('div', { class: 'goal-empty' }, [
+      first ? el('p', {}, ['Turn this workout into a goal and check in each time you do it.']) : null,
+      el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: () => { clear(box); box.append(form()); box.querySelector('select, input')?.focus(); } }, [first ? 'Make it a goal' : 'Start a new goal']),
+    ]);
+    box.append(closed);
+    function form() {
+      const pick = (value, label, checked) => el('label', { class: 'check' }, [el('input', { type: 'radio', name: `goal-kind-${item.id}`, value, checked: checked ? 'checked' : null, onChange: sync }), el('span', {}, [label])]);
+      const perWeek = el('select', { class: 'select select-sm', 'aria-label': 'Times a week' }, [1, 2, 3, 4, 5, 6, 7].map((n) => el('option', { value: String(n), text: `${n}×`, selected: n === 3 ? 'selected' : null })));
+      const weeks = el('input', { class: 'input input-sm input-num', type: 'number', min: '1', max: '52', value: '4', 'aria-label': 'Weeks' });
+      const first = exercises[0] || {};
+      const exercise = el('input', { class: 'input input-sm', list: `goal-ex-${item.id}`, maxlength: '80', value: first.name || '', 'aria-label': 'Exercise', placeholder: 'Push-ups' });
+      const datalist = el('datalist', { id: `goal-ex-${item.id}` }, exercises.map((e) => el('option', { value: e.name })));
+      const sets = el('input', { class: 'input input-sm input-num', type: 'number', min: '1', max: '20', value: String(first.sets || 3), 'aria-label': 'Sets' });
+      const reps = el('input', { class: 'input input-sm input-num', type: 'number', min: '1', max: '500', value: first.durationSeconds ? '' : String((first.reps || 10) + 2), 'aria-label': 'Reps' });
+      const secs = el('input', { class: 'input input-sm input-num', type: 'number', min: '1', max: '36000', value: first.durationSeconds ? String(first.durationSeconds + 15) : '', 'aria-label': 'Seconds', placeholder: 'or seconds' });
+      const freqRow = el('div', { class: 'goal-row' }, [el('span', {}, ['Do it']), perWeek, el('span', {}, ['a week for']), weeks, el('span', {}, ['weeks'])]);
+      const targetRow = el('div', { class: 'goal-row hidden' }, [el('span', {}, ['Reach']), sets, el('span', {}, ['×']), reps, secs, exercise, datalist]);
+      const err = el('p', { class: 'help help-error', role: 'alert' });
+      function sync() {
+        const kind = f.querySelector('input[type=radio]:checked')?.value;
+        freqRow.classList.toggle('hidden', kind !== 'frequency');
+        targetRow.classList.toggle('hidden', kind !== 'target');
+      }
+      const f = el('form', { class: 'goal-form', onSubmit: async (e) => {
+        e.preventDefault();
+        const kind = f.querySelector('input[type=radio]:checked')?.value;
+        const spec = kind === 'frequency' ? { perWeek: Number(perWeek.value), weeks: Number(weeks.value) } : { exercise: exercise.value.trim(), sets: Number(sets.value), reps: secs.value ? null : Number(reps.value), durationSeconds: Number(secs.value) || null };
+        if (kind === 'frequency' && !(spec.weeks >= 1 && spec.weeks <= 52)) { err.textContent = 'Pick between 1 and 52 weeks.'; return; }
+        if (kind === 'target' && (!spec.exercise || !(spec.reps || spec.durationSeconds))) { err.textContent = 'Name the exercise and give reps or seconds.'; return; }
+        try {
+          await store.createGoal({ itemId: item.id, kind, spec });
+          await renderGoals();
+        } catch (ex) {
+          err.textContent = (ex && ex.message) || String(ex);
+        }
+      } }, [
+        el('fieldset', { class: 'goal-kinds' }, [el('legend', { class: 'sr-only' }, ['Kind of goal']), pick('frequency', 'Do it regularly', true), pick('target', 'Reach a target', false)]),
+        freqRow, targetRow, err,
+        el('div', { class: 'review-actions' }, [
+          el('button', { type: 'submit', class: 'btn btn-primary btn-sm' }, ['Create goal']),
+          el('button', { type: 'button', class: 'btn btn-sm', onClick: () => { clear(box); box.append(closed); } }, ['Cancel']),
+        ]),
+      ]);
+      return f;
+    }
+    return box;
+  }
+
+  function ring(fraction, label) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 44 44');
+    svg.setAttribute('class', 'goal-ring');
+    svg.setAttribute('aria-hidden', 'true');
+    const c = (cls, dash) => {
+      const n = document.createElementNS(NS, 'circle');
+      n.setAttribute('cx', '22'); n.setAttribute('cy', '22'); n.setAttribute('r', '18'); n.setAttribute('class', cls);
+      if (dash !== undefined) { n.setAttribute('stroke-dasharray', `${dash} 200`); n.setAttribute('transform', 'rotate(-90 22 22)'); }
+      return n;
+    };
+    svg.append(c('goal-ring-track'), c('goal-ring-fill', (Math.max(0, Math.min(1, fraction)) * 2 * Math.PI * 18).toFixed(1)));
+    return el('div', { class: 'goal-ring-wrap' }, [svg, el('span', { class: 'goal-ring-label' }, [label])]);
+  }
+
+  function goalCard(p) {
+    const g = p.goal;
+    const finished = p.status === 'finished';
+    const card = el('article', { class: `goal-card ${finished ? 'is-finished' : ''}`, 'aria-label': `Goal: ${goalTitle(g)}` });
+    const ringLabel = g.kind === 'frequency' ? (p.thisWeek ? `${p.thisWeek.count}/${p.thisWeek.target}` : `${p.weeksMet}/${g.spec.weeks}`) : finished ? '✓' : `${Math.round(p.ring * 100)}%`;
+    card.append(el('div', { class: 'goal-top' }, [
+      ring(p.ring, ringLabel),
+      el('div', { class: 'goal-top-text' }, [
+        el('h4', { class: 'goal-title' }, [goalTitle(g)]),
+        el('p', { class: 'goal-summary' }, [p.summary]),
+        p.lastWeekNote ? el('p', { class: 'goal-note' }, [p.lastWeekNote]) : null,
+      ]),
+      finished ? el('span', { class: 'badge badge-success' }, [g.kind === 'target' ? 'Reached' : 'Finished']) : null,
+    ]));
+    if (g.kind === 'frequency') {
+      card.append(el('ol', { class: 'goal-strip', 'aria-label': 'Weeks' }, p.strip.map((w) => el('li', {
+        class: `goal-week ${w.met ? 'is-met' : ''} ${w.current ? 'is-current' : ''} ${!w.past && !w.current ? 'is-future' : ''}`,
+        title: `Week ${w.week}: ${w.count} of ${w.target}`,
+      }, [el('span', { class: 'sr-only' }, [`Week ${w.week}: ${w.count} of ${w.target}${w.met ? ', done' : ''}`]), el('span', { 'aria-hidden': 'true' }, [w.met ? '✓' : String(w.count)])]))));
+    }
+    if (p.next) {
+      const n = p.next;
+      const what = [n.perWeek ? `${n.perWeek}× this week` : '', n.sets || n.reps || n.durationSeconds ? resultText(n) : '', n.note].filter(Boolean).join(' · ');
+      card.append(el('p', { class: 'goal-plan-line' }, [el('strong', {}, [`Week ${n.week} plan: `]), what, g.planSource === 'ai-suggested' ? el('span', { class: 'goal-plan-src' }, [' (suggested by AI)']) : null]));
+    }
+    if (!finished) card.append(checkinArea(p));
+    const recent = p.checkins.slice(-5).reverse();
+    if (recent.length) {
+      card.append(el('details', { class: 'goal-history' }, [
+        el('summary', {}, [`Check-ins (${p.checkins.length})`]),
+        el('ul', {}, recent.map((c) => el('li', {}, [
+          el('span', { class: 'goal-history-date' }, [new Date(c.at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })]),
+          el('span', {}, [[resultText(c.result), c.result.note].filter(Boolean).join(' · ') || 'Done']),
+        ]))),
+      ]));
+    }
+    const actions = [];
+    if (aiReady && !finished) {
+      const suggestBtn = el('button', { type: 'button', class: 'btn btn-sm', onClick: () => suggest(p, card, suggestBtn) }, ['Suggest a progression']);
+      actions.push(suggestBtn);
+    }
+    actions.push(el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: async () => {
+      await store.deleteGoal(g.id);
+      await renderGoals();
+      UI.toast('Goal ended.', { action: { label: 'Undo', onClick: async () => { await store.restoreGoal(g.id); await renderGoals(); } } });
+    } }, [finished ? 'Remove' : 'End goal']));
+    card.append(el('div', { class: 'review-actions goal-actions' }, actions));
+    return card;
+  }
+
+  function checkinArea(p) {
+    const g = p.goal;
+    const box = el('div', { class: 'goal-checkin' });
+    const today = localDay();
+    const doneToday = p.checkins.some((c) => localDay(new Date(c.at)) === today);
+    const save = async (result) => {
+      const c = await store.addCheckin(g.id, result);
+      await renderGoals();
+      UI.toast('Checked in.', { action: { label: 'Undo', onClick: async () => { await store.removeCheckin(c.id); await renderGoals(); } } });
+    };
+    const quick = el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: () => save({}) }, [doneToday ? 'Check in again' : 'Done today']);
+    const more = el('button', { type: 'button', class: 'btn btn-sm', onClick: () => { clear(box); box.append(form()); box.querySelector('input')?.focus(); } }, ['Add sets and reps']);
+    // A target goal is measured by what you did, so its check-in asks for the numbers first.
+    if (g.kind === 'target') { box.append(form()); return box; }
+    box.append(el('div', { class: 'review-actions' }, [quick, more]));
+    return box;
+    function form() {
+      const plan = p.next || {};
+      const s = g.spec;
+      const sets = el('input', { class: 'input input-sm input-num', type: 'number', min: '1', max: '20', 'aria-label': 'Sets', placeholder: 'Sets', value: g.kind === 'target' ? String(plan.sets || s.sets || '') : '' });
+      const reps = el('input', { class: 'input input-sm input-num', type: 'number', min: '1', max: '500', 'aria-label': 'Reps', placeholder: 'Reps' });
+      const secs = el('input', { class: 'input input-sm input-num', type: 'number', min: '1', max: '36000', 'aria-label': 'Seconds', placeholder: 'Seconds' });
+      const note = el('input', { class: 'input input-sm', maxlength: '300', 'aria-label': 'Note', placeholder: 'Note (optional)' });
+      const timed = g.kind === 'target' && !!s.durationSeconds;
+      const f = el('form', { class: 'goal-form', onSubmit: async (e) => {
+        e.preventDefault();
+        await save({ sets: Number(sets.value) || null, reps: Number(reps.value) || null, durationSeconds: Number(secs.value) || null, note: note.value.trim() });
+      } }, [
+        el('div', { class: 'goal-row' }, [sets, el('span', {}, ['×']), timed ? secs : reps, timed ? null : secs, g.kind === 'target' ? el('span', {}, [s.exercise]) : null]),
+        note,
+        el('div', { class: 'review-actions' }, [
+          el('button', { type: 'submit', class: 'btn btn-primary btn-sm' }, [doneToday ? 'Check in again' : 'Check in']),
+          g.kind === 'target' ? null : el('button', { type: 'button', class: 'btn btn-sm', onClick: () => { clear(box); box.append(el('div', { class: 'review-actions' }, [quick, more])); } }, ['Cancel']),
+        ]),
+      ]);
+      return f;
+    }
+  }
+
+  async function suggest(p, card, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Suggesting…';
+    let out;
+    try {
+      out = await suggestProgression(item, p.goal, p, state.settings, await store.getSecret('aiApiKey'));
+    } catch {
+      btn.disabled = false;
+      btn.textContent = 'Suggest a progression';
+      UI.toast('Your AI provider didn’t answer. Nothing changed.', { kind: 'danger' });
+      return;
+    }
+    btn.remove();
+    const preview = el('div', { class: 'goal-suggestion', role: 'group', 'aria-label': 'Suggested progression' }, [
+      el('p', { class: 'goal-suggestion-head' }, ['Suggested by your AI provider. Check it suits you before you follow it.']),
+      el('ol', {}, out.plan.map((w) => el('li', {}, [el('strong', {}, [`Week ${w.week}: `]), [w.perWeek ? `${w.perWeek}×` : '', resultText(w), w.note].filter(Boolean).join(' · ')]))),
+      out.note ? el('p', { class: 'help' }, [out.note]) : null,
+      el('div', { class: 'review-actions' }, [
+        el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: async () => {
+          const before = { plan: p.goal.plan || [], planSource: p.goal.planSource || '' };
+          const updated = await store.updateGoal(p.goal.id, { plan: out.plan, planSource: 'ai-suggested' });
+          // Logged like every AI change, so the AI change log can undo it.
+          await store.appendAiLog([{ id: crypto.randomUUID(), runId: `plan-${p.goal.id}`, at: new Date().toISOString(), itemId: item.id, goalId: p.goal.id, itemTitle: item.title,
+            changes: [{ field: 'plan', from: before.plan.length ? `${before.plan.length}-week plan` : 'no plan', to: `${updated.plan.length}-week plan` }],
+            before, after: { plan: updated.plan, planSource: 'ai-suggested' }, reason: 'Progression suggested on request', undone: false }]);
+          await renderGoals();
+          UI.toast('Plan added to the goal.', { action: { label: 'Undo', onClick: async () => { await store.updateGoal(p.goal.id, before); await renderGoals(); } } });
+        } }, ['Accept']),
+        el('button', { type: 'button', class: 'btn btn-sm', onClick: () => { preview.remove(); renderGoals(); } }, ['Dismiss']),
+      ]),
+    ]);
+    card.append(preview);
+  }
+
+  await renderGoals();
+  const finishedItem = item.status === 'done';
+  await UI.openModal({
+    title: item.title,
+    body,
+    full: true,
+    className: 'modal-recipe modal-workout',
+    actions: [
+      { label: 'Edit details', quiet: true, autofocus: true, closes: false, onClick: async (close) => { close(false); await openItem(item.id); } },
+      item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), icon: UI.externalIcon() } : null,
+      { label: finishedItem ? 'Finished ✓' : 'Mark finished', primary: !finishedItem, onClick: async () => {
+        await store.updateItem(item.id, { status: finishedItem ? 'saved' : 'done' });
+        UI.toast(finishedItem ? 'Marked as not finished.' : 'Marked as finished.', { duration: 2200 });
+      } },
+    ].filter(Boolean),
+  });
 }
 
 // The recipe view: a large dialog with the photo, what you need and what to do. Checking off
@@ -1080,8 +1349,8 @@ async function openRecipe(id) {
   }));
   const empty = !ingredients.length && !steps.length;
   const body = el('div', { class: 'recipe-view' }, [
-    el('div', { class: 'recipe-hero' }, [
-      UI.pictureNode({ src: item.image, aspect: item.imageAspect, title: item.title, className: 'recipe-hero-pic' }),
+    el('div', { class: `recipe-hero ${item.image ? '' : 'no-pic'}` }, [
+      item.image ? UI.pictureNode({ src: item.image, aspect: item.imageAspect, title: item.title, className: 'recipe-hero-pic' }) : null,
       el('div', { class: 'recipe-hero-text' }, [
         el('span', { class: 'badge kind-badge kind-recipe' }, [kindIcon('recipe'), 'Recipe']),
         el('h2', { class: 'recipe-title' }, [item.title]),
@@ -1218,6 +1487,16 @@ async function openItem(id) {
   // Kind and its details (a recipe's ingredients and steps). Edits stay in this dialog until Save.
   const startKind = kindOf(item);
   let recipe = startKind === 'recipe' ? { ...(item.details || {}) } : {};
+  const startWorkout = startKind === 'workout' ? item.details || {} : {};
+  const workoutLines = el('textarea', { class: 'textarea', rows: '6', 'aria-label': 'Exercises, one per line', placeholder: 'Squats 3×12\nPush-ups 3×10\nPlank 3×45s rest 60s' });
+  workoutLines.value = (startWorkout.exercises || []).map(formatExercise).join('\n');
+  const workoutMinutes = el('input', { class: 'input', inputmode: 'numeric', placeholder: 'Minutes', 'aria-label': 'Workout minutes' });
+  workoutMinutes.value = startWorkout.durationMinutes || '';
+  const workoutFocus = el('input', { class: 'input', maxlength: '60', placeholder: 'Focus, e.g. legs', 'aria-label': 'Focus' });
+  workoutFocus.value = startWorkout.focus || '';
+  const workoutHelp = el('p', { class: 'help', 'aria-live': 'polite' });
+  let prefilled = false;
+  let prefilledText = '';
   let recipeEditing = false;
   let drafted = false;
   const aiReady = !!state.settings?.ai?.on && !!(await store.getSecret('aiApiKey').catch(() => ''));
@@ -1320,6 +1599,53 @@ async function openItem(id) {
     doneToggle.lastChild.textContent = kindInfo(kind).done;
     clear(kindPanel);
     if (kind === 'recipe') kindPanel.append(recipePanel());
+    if (kind === 'workout') {
+      // Switching a save to Workout: fill in what its caption or description lists, to check and keep.
+      if (!workoutLines.value.trim() && !prefilled) {
+        prefilled = true;
+        // The longest text first: a description or title may be a cut-short copy of the caption.
+        const found = [item.instagram?.caption, item.description, item.title].filter(Boolean).sort((a, b) => b.length - a.length).map((t) => workoutFromText(t)).find(Boolean);
+        if (found) {
+          workoutLines.value = found.exercises.map(formatExercise).join('\n');
+          prefilledText = workoutLines.value;
+          if (!workoutMinutes.value && found.durationMinutes) workoutMinutes.value = found.durationMinutes;
+        }
+      }
+      kindPanel.append(workoutPanel());
+    }
+  }
+
+  // Exercises are edited as text, one per line ("Squats 3×12", "Plank 45s rest 60s").
+  function readWorkoutLines() {
+    const lines = workoutLines.value.split('\n').map((x) => x.trim()).filter(Boolean);
+    const exercises = [];
+    const unread = [];
+    for (const l of lines) {
+      const rest = l.match(/\s+rest\s+(\d{1,4})(?:\s*[-–]\s*(\d{1,4}))?\s*(s|sec|secs|seconds?|m|min|mins|minutes?)\b\s*$/i);
+      const e = parseExerciseLine(rest ? l.slice(0, rest.index) : l) || exerciseName(rest ? l.slice(0, rest.index) : l);
+      const secs = (v) => (v ? (/^m/i.test(rest[3]) ? Number(v) * 60 : Number(v)) : null);
+      if (e) exercises.push({ ...e, restSeconds: rest ? secs(rest[1]) : null, restMaxSeconds: rest ? secs(rest[2]) : null });
+      else unread.push(l);
+    }
+    return { exercises, unread };
+  }
+
+  function workoutPanel() {
+    const box = el('div', { class: 'recipe-panel' });
+    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you' }[startWorkout.source] || '';
+    box.append(el('div', { class: 'recipe-head' }, [el('h3', {}, ['Workout']), sourceLabel ? el('span', { class: 'recipe-facts' }, [sourceLabel]) : null]));
+    const check = () => {
+      const { exercises, unread } = readWorkoutLines();
+      workoutHelp.textContent = unread.length ? `Keepsake can’t read ${unread.length === 1 ? 'this line' : 'these lines'} yet: ${unread.slice(0, 3).join('; ')}. Write them like “Squats 3×12” or “Plank 45s”.` : exercises.length ? pluralize(exercises.length, 'exercise', 'exercises') : 'One exercise per line, like “Squats 3×12” or “Plank 45s”.';
+      workoutHelp.classList.toggle('help-error', unread.length > 0);
+    };
+    workoutLines.oninput = check;
+    check();
+    box.append(
+      el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Exercises (one per line)']), workoutLines, workoutHelp]),
+      el('div', { class: 'price-inline' }, [workoutMinutes, workoutFocus]),
+    );
+    return box;
   }
 
   function recipePanel() {
@@ -1429,7 +1755,15 @@ async function openItem(id) {
           status: flags.done ? 'done' : item.status === 'done' ? 'saved' : item.status || 'saved',
         };
         if (kindSelect.value === 'recipe') patch.details = sanitizeDetails('recipe', recipe);
-        else if (kindSelect.value !== startKind) patch.details = {};
+        else if (kindSelect.value === 'workout') {
+          const { exercises, unread } = readWorkoutLines();
+          if (unread.length) throw new Error('Some exercise lines can’t be read. Fix or remove them first.');
+          const next = { exercises, durationMinutes: Number(workoutMinutes.value) || null, focus: workoutFocus.value.trim() };
+          const was = sanitizeDetails('workout', startWorkout);
+          const same = JSON.stringify(sanitizeDetails('workout', { ...next, source: was.source }).exercises) === JSON.stringify(was.exercises);
+          const fromPrefill = prefilledText && workoutLines.value.trim() === prefilledText.trim();
+          patch.details = sanitizeDetails('workout', { ...next, source: same && startKind === 'workout' ? was.source : fromPrefill ? (item.type === 'instagram' ? 'caption' : 'page') : 'you' });
+        } else if (kindSelect.value !== startKind) patch.details = {};
         const priceText = priceInput.value.trim();
         if (!priceText) {
           patch.price = null;

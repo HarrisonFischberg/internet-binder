@@ -299,6 +299,26 @@
     return meta('meta[property="og:url"]') && abs(meta('meta[property="og:url"]')) || location.href;
   }
 
+  // ---- workout lines -------------------------------------------------------------
+  // Only on a page that talks about training (title, description or main heading): the short lines of
+  // its lists and headings, where workouts write "Squats 3×12". Bounded; read locally like the rest.
+  const WORKOUT_WORDS = /\b(?:work[- ]?outs?|exercises?|routine|hiit|wod|amrap|emom|tabata|circuit|full[- ]body|upper body|lower body|leg day|strength training|calisthenics|mobility)\b/i;
+  function workoutLines(title, description) {
+    const h1 = text(document.querySelector('h1')?.textContent);
+    if (!WORKOUT_WORDS.test(`${title} ${description} ${h1}`)) return [];
+    const root = document.querySelector('main, article, [role="main"]') || document.body;
+    const out = [];
+    for (const n of root.querySelectorAll('li, h2, h3, h4, p, td')) {
+      if (out.length >= 150) break;
+      if (n.closest(BAD_CONTAINER)) continue;
+      const t = text(n.textContent);
+      // Headings travel marked ("## Wall push-ups"): prose under one ("Repeat 5 times") is that exercise.
+      if (/^H[234]$/.test(n.tagName) && t && t.length <= 60 && !/\d/.test(t)) out.push(`## ${t}`);
+      else if (t && t.length <= 160 && /\d/.test(t)) out.push(t);
+    }
+    return out;
+  }
+
   // ---- assemble ----------------------------------------------------------------
   function extract(hints) {
     const h = hints || safe(() => globalThis.__keepsakeHints) || {};
@@ -433,6 +453,7 @@
     if (h.selectionText && !result.description) result.description = text(h.selectionText).slice(0, 500);
     if (h.linkUrl) result.linkUrl = abs(h.linkUrl);
     result.pageTitle = pageTitle();
+    if (!ld?.product && !recipe && !result.isInstagram) result.workoutLines = safe(() => workoutLines(result.title, result.description), []);
     return result;
   }
 

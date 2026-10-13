@@ -2657,6 +2657,11 @@ body.modal-open {
   height: calc(100vh - 48px);
 }
 
+/* Short content still keeps the actions at the bottom edge. */
+.modal-full .modal-body {
+  flex: 1 1 auto;
+}
+
 .modal-recipe .modal-title {
   /* The recipe's own heading is in the body; keep the dialog bar quiet. */
   font: var(--t-footnote);
@@ -2677,6 +2682,10 @@ body.modal-open {
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
+}
+
+.recipe-hero.no-pic {
+  grid-template-columns: 1fr;
 }
 
 .recipe-hero-pic {
@@ -2838,5 +2847,284 @@ body.modal-open {
 
   .modal-full {
     height: calc(100vh - 24px);
+  }
+}
+
+/* Workout view: exercises table and goals */
+.modal-workout .recipe-columns {
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr);
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.exercise-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: var(--t-body-web);
+  font-variant-numeric: tabular-nums;
+}
+
+.exercise-table th,
+.exercise-note {
+  display: block;
+  font: var(--t-caption);
+  font-weight: 400;
+  color: var(--c-text-muted);
+}
+
+.exercise-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.exercise-table thead th {
+  font: var(--t-caption);
+  font-weight: 600;
+  color: var(--c-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.exercise-table tbody th {
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.exercise-table td {
+  color: var(--c-text);
+  white-space: nowrap;
+}
+
+.goal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.goal-card,
+.goal-empty,
+.goal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  background: var(--c-surface-2);
+}
+
+.goal-new .goal-form {
+  padding: 14px 16px;
+}
+
+.goal-card.is-finished {
+  opacity: 0.85;
+}
+
+.goal-top {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.goal-ring-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+
+.goal-ring {
+  width: 56px;
+  height: 56px;
+}
+
+.goal-ring circle {
+  fill: none;
+  stroke-width: 5;
+}
+
+.goal-ring-track {
+  stroke: var(--c-border);
+}
+
+.goal-ring-fill {
+  stroke: var(--c-kind-workout);
+  stroke-linecap: round;
+}
+
+.is-finished .goal-ring-fill {
+  stroke: var(--c-success);
+}
+
+.goal-ring-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: var(--t-caption);
+  font-weight: 700;
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-title {
+  font-family: var(--font-display);
+  font-weight: var(--w-display);
+  font-size: 17px;
+  line-height: 22px;
+  color: var(--c-text);
+  text-wrap: balance;
+}
+
+.goal-summary,
+.goal-note,
+.goal-plan-line {
+  font: var(--t-footnote);
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-plan-line strong {
+  color: var(--c-text);
+}
+
+.goal-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.goal-week {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font: var(--t-caption);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--c-surface);
+  color: var(--c-text-muted);
+  border: 1px solid var(--c-border);
+}
+
+.goal-week.is-future {
+  opacity: 0.55;
+}
+
+.goal-week.is-current {
+  border-color: var(--c-kind-workout);
+  color: var(--c-text);
+}
+
+.goal-week.is-met {
+  background: var(--c-success-soft);
+  border-color: transparent;
+  color: var(--c-success);
+}
+
+.goal-kinds {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.goal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font: var(--t-footnote);
+  color: var(--c-text);
+}
+
+.goal-row .input-num {
+  width: 72px;
+}
+
+.goal-row .input:not(.input-num) {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.input.input-sm {
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.goal-history summary {
+  cursor: pointer;
+  font: var(--t-footnote);
+  color: var(--c-text-muted);
+}
+
+.goal-history ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font: var(--t-footnote);
+  color: var(--c-text);
+}
+
+.goal-history li {
+  display: flex;
+  gap: 10px;
+}
+
+.goal-history-date {
+  color: var(--c-text-muted);
+  min-width: 96px;
+}
+
+.goal-actions {
+  justify-content: flex-start;
+}
+
+.goal-suggestion {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--c-warning-soft);
+  font: var(--t-footnote);
+  color: var(--c-text);
+}
+
+.goal-suggestion ol {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.goal-suggestion-head {
+  font-weight: 600;
+}
+
+.badge-success {
+  background: var(--c-success-soft);
+  color: var(--c-success);
+}
+
+.help-error {
+  color: var(--c-danger);
+}
+
+@media (max-width: 820px) {
+  .modal-workout .recipe-columns {
+    grid-template-columns: 1fr;
   }
 }
