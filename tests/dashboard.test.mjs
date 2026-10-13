@@ -583,6 +583,45 @@ test('Library has two tabs, Saves and Collections; both keep Library highlighted
   assert.ok(window.document.querySelector('.sidebar .nav-item.active[href="#all"]'), 'Library stays highlighted');
 });
 
+test('save anywhere: Move to… puts a save into a Lifestyle view (details worked out) or back into a collection', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const cols = await store.getCollections();
+  const it = await store.addItem({ title: 'Instagram', url: 'https://www.instagram.com/reel/move1/', type: 'instagram', collectionId: cols[0].id,
+    description: 'Glazed heaven 🍩\n📍 Peter Pan Donut & Pastry Shop, Greenpoint' });
+  await afterChange();
+  await go('#all');
+  const card = () => [...view().querySelectorAll('.card')].find((c) => c.querySelector('.card-hit')?.getAttribute('aria-label')?.startsWith(saved0().title));
+  const titles = { now: 'Instagram' };
+  const saved0 = () => ({ title: titles.now });
+  card().querySelector('button[aria-label="More actions"]').click();
+  [...window.document.querySelectorAll('[role="menuitem"], .menu button')].find((b) => /Move to/.test(b.textContent)).click();
+  await settle();
+  const dlg = [...window.document.querySelectorAll('.modal')].pop();
+  const sel = dlg.querySelector('select');
+  assert.deepEqual([...sel.querySelectorAll('optgroup')].map((g) => g.label), ['Lifestyle', 'Collections']);
+  sel.value = 'kind:place';
+  sel.dispatchEvent(new window.Event('change'));
+  [...dlg.querySelectorAll('button')].find((b) => b.textContent === 'Move').click();
+  await afterChange();
+  let saved = await store.getItem(it.id);
+  titles.now = saved.title;
+  assert.deepEqual([saved.kind, saved.title, saved.details.locality, saved.collectionId, saved.needsReview], ['place', 'Peter Pan Donut & Pastry Shop', 'Greenpoint', null, false]);
+
+  // And back into a collection: something to buy again.
+  card().querySelector('button[aria-label="More actions"]').click();
+  [...window.document.querySelectorAll('[role="menuitem"], .menu button')].find((b) => /Move to/.test(b.textContent)).click();
+  await settle();
+  const dlg2 = [...window.document.querySelectorAll('.modal')].pop();
+  const sel2 = dlg2.querySelector('select');
+  sel2.value = cols[1].id;
+  sel2.dispatchEvent(new window.Event('change'));
+  [...dlg2.querySelectorAll('button')].find((b) => b.textContent === 'Move').click();
+  await afterChange();
+  saved = await store.getItem(it.id);
+  assert.deepEqual([saved.kind, saved.collectionId], ['link', cols[1].id]);
+});
+
 test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);

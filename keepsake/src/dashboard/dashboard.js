@@ -7,9 +7,10 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
-import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection, hasOwnView } from '../shared/kinds.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection, hasOwnView, LIFESTYLE, kindChangePatch, shoppingKindFor, detailsForKind } from '../shared/kinds.js';
 import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { searchItems } from '../shared/search.js';
+import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
@@ -711,7 +712,7 @@ function renderGrid(view) {
     return;
   }
   if (r.name === 'kind' && r.id === 'place') {
-    renderPlaceList(view, items);
+    renderPlaces(view, items);
     return;
   }
   if (r.name === 'kind' && (r.id === 'media' || r.id === 'book')) {
@@ -960,8 +961,7 @@ function cardNode(item, { list = false } = {}) {
 function itemMenu(item) {
   const entries = [
     { label: 'Edit details', icon: UI.pencilIcon(), onClick: () => openItem(item.id) },
-    // Collections are for shopping: Lifestyle saves aren't moved into them (one kept from before can be).
-    hasOwnView(kindOf(item)) && !item.collectionId ? null : { label: 'Move to…', icon: UI.folderIcon(), onClick: () => moveDialog([item]) },
+    { label: 'Move to…', icon: UI.folderIcon(), onClick: () => moveDialog([item]) },
     { label: item.favorite ? 'Remove favorite' : 'Favorite', icon: UI.starIcon(item.favorite), onClick: () => store.updateItem(item.id, { favorite: !item.favorite }) },
     { label: item.purchased ? 'Mark as not purchased' : 'Mark as purchased', icon: UI.checkIcon(), onClick: () => store.updateItem(item.id, { purchased: !item.purchased }) },
   ];
@@ -1106,8 +1106,9 @@ function relatedNode(item) {
 
 // Move one or more items with a collection picker. Resolves true when moved.
 async function moveDialog(items) {
-  const options = [...ctx.regularCollections().map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '＋ New collection…' }];
-  const current = items.length === 1 ? items[0].collectionId : '';
+  const options = [...lifestyleOptions(), ...ctx.regularCollections().map((c) => ({ value: c.id, label: c.name, group: 'Collections' })), { value: '__new', label: '＋ New collection…', group: 'Collections' }];
+  const one = items.length === 1 ? items[0] : null;
+  const current = one ? one.collectionId || (hasOwnView(kindOf(one)) ? `kind:${kindOf(one)}` : '') : '';
   const select = UI.selectInput({ value: current || options[0].value, options, onChange: (v) => { newRow.classList.toggle('hidden', v !== '__new'); if (v === '__new') newInput.focus(); }, label: 'Collection' });
   const newInput = el('input', { class: 'input', placeholder: 'New collection name', maxlength: '80', 'aria-label': 'New collection name' });
   const newRow = el('div', { class: 'field hidden' }, [newInput]);
@@ -1125,7 +1126,7 @@ async function moveDialog(items) {
     source ? el('label', { class: 'check' }, [mergeCheck, el('span', {}, [`Merge: move everything in “${source.name}” and remove “${source.name}”. Its name becomes an alias of the new collection.`])]) : null,
   ];
   const result = await UI.openModal({
-    title: 'Move to collection',
+    title: 'Move to',
     body,
     actions: [
       { label: 'Cancel', quiet: true, value: false },
@@ -1149,9 +1150,7 @@ async function moveDialog(items) {
           navigate(`#c/${merged.id}`);
           return false;
         }
-        await store.moveItems(items.map((i) => i.id), target, { learn: learnCheck.checked ? 'strong' : 'light' });
-        const col = await store.getCollection(target);
-        UI.toast(`Moved to ${col ? col.name : 'collection'}.`);
+        await putItems(items, target, { learn: learnCheck.checked ? 'strong' : 'light' });
         close(true);
         return false;
       } },
@@ -1294,6 +1293,14 @@ async function openMedia(id) {
   });
 }
 
+// "Details from Wikidata ↗": where looked-up details came from, linked.
+function lookupLink(d) {
+  const l = d.lookup;
+  if (!l || !l.source) return null;
+  if (l.source === 'AI') return el('span', { class: 'lookup-src' }, [' · Named by your AI provider']);
+  return el('span', { class: 'lookup-src' }, [' · Details from ', l.url ? el('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, [l.source, ' ↗']) : l.source]);
+}
+
 // A film, show or book: the poster or cover, the few facts, and a way to it.
 function shelfFacts(item) {
   const d = item.details || {};
@@ -1328,6 +1335,7 @@ async function openShelfItem(id) {
       el('span', { class: `badge kind-badge kind-${kind}` }, [kindIcon(kind), kindInfo(kind).label]),
       el('h2', { class: 'recipe-title' }, [item.title]),
       facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
+      lookupLink(item.details || {}),
       item.description ? el('p', { class: 'media-summary' }, [cut(item.description, 600)]) : null,
       item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
       done ? el('span', { class: 'badge' }, [verb]) : null,
@@ -1407,7 +1415,7 @@ async function openPlace(id) {
   const d = item.details || {};
   const where = addressLine(d);
   const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
-  const sourceLabel = { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you' }[d.source] || '';
+  const sourceLabel = d.lookup?.source && d.lookup.source !== 'AI' ? '' : { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you' }[d.source] || '';
   const copyAddress = el('button', { type: 'button', class: 'btn btn-sm', onClick: async () => {
     try {
       await navigator.clipboard.writeText(where);
@@ -1427,7 +1435,7 @@ async function openPlace(id) {
       el('div', { class: 'recipe-hero-text' }, [
         el('span', { class: 'badge kind-badge kind-place' }, [kindIcon('place'), 'Place']),
         el('h2', { class: 'recipe-title' }, [item.title]),
-        el('p', { class: 'recipe-from' }, [[from, sourceLabel].filter(Boolean).join(' · ')]),
+        el('p', { class: 'recipe-from' }, [[from, sourceLabel].filter(Boolean).join(' · '), lookupLink(d)]),
         where ? el('div', { class: 'place-address' }, [el('address', {}, [where]), copyAddress]) : el('p', { class: 'help' }, ['No address on the page. Add one in Edit details so Open in Maps finds it.']),
         facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
         d.hours?.length ? el('div', { class: 'place-hours' }, [el('h3', { class: 'recipe-sub' }, ['Opening hours']), el('ul', {}, d.hours.map((h) => el('li', {}, [h]))), el('p', { class: 'help' }, ['As published on the page when you saved it. Check before you go.'])]) : null,
@@ -1457,6 +1465,106 @@ async function openPlace(id) {
 }
 
 // Places as a list grouped by city, each with Open in Maps (Chrome has no map: no third-party map tiles).
+// Places: a list grouped by city, or a map of the ones with a pin. The map is OpenStreetMap data drawn
+// by MapLibre (bundled in Keepsake), with tiles from OpenFreeMap; it loads only once Places lookups are on.
+const PLACES_VIEW_KEY = 'keepsake.places.view';
+let placesViewChoice = null;
+function placesView() {
+  if (placesViewChoice) return placesViewChoice;
+  try { return localStorage.getItem(PLACES_VIEW_KEY) === 'map' ? 'map' : 'list'; } catch { return 'list'; }
+}
+
+function renderPlaces(view, items) {
+  const current = placesView();
+  const seg = (value, label) => el('button', { type: 'button', class: `library-tab ${current === value ? 'on' : ''}`, role: 'tab', 'aria-selected': current === value ? 'true' : 'false', onClick: () => {
+    placesViewChoice = value;
+    try { localStorage.setItem(PLACES_VIEW_KEY, value); } catch { /* this page only */ }
+    renderView({ keepScroll: true });
+  } }, [label]);
+  view.append(el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Places view' }, [seg('list', 'List'), seg('map', 'Map')]));
+  if (current === 'map') renderPlacesMap(view, items);
+  else renderPlaceList(view, items);
+}
+
+let maplibreLoading = null;
+function loadMapLibre() {
+  if (globalThis.maplibregl) return Promise.resolve(globalThis.maplibregl);
+  if (!maplibreLoading) {
+    maplibreLoading = new Promise((resolve, reject) => {
+      const css = el('link', { rel: 'stylesheet', href: '../../vendor/maplibre/maplibre-gl.css' });
+      document.head.append(css);
+      const s = el('script', { src: '../../vendor/maplibre/maplibre-gl-csp.js' });
+      s.onload = () => {
+        globalThis.maplibregl.setWorkerUrl(chrome.runtime.getURL('vendor/maplibre/maplibre-gl-csp-worker.js'));
+        resolve(globalThis.maplibregl);
+      };
+      s.onerror = () => { maplibreLoading = null; reject(new Error('The map didn’t load.')); };
+      document.head.append(s);
+    });
+  }
+  return maplibreLoading;
+}
+
+async function mapAllowed() {
+  if (!state.settings?.lookups?.places) return false;
+  try { return await chrome.permissions.contains({ origins: LOOKUP_SOURCES.places.origins }); } catch { return false; }
+}
+
+function renderPlacesMap(view, items) {
+  const box = el('div', { class: 'places-map-wrap' });
+  view.append(box);
+  const pinned = items.filter((i) => Number.isFinite(i.details?.lat) && Number.isFinite(i.details?.lng));
+  const unpinned = items.length - pinned.length;
+  mapAllowed().then(async (ok) => {
+    if (!ok) {
+      box.append(el('div', { class: 'recipe-empty map-off' }, [
+        el('p', {}, ['The map shows your places on OpenStreetMap. It needs Places lookups, which also find each place’s address and pin.']),
+        el('p', { class: 'help' }, [`Sends ${LOOKUP_SOURCES.places.sends} to OpenStreetMap and OpenFreeMap. No account, nothing else.`]),
+        el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn btn-primary', onClick: async () => {
+          let granted = false;
+          try { granted = await chrome.permissions.request({ origins: LOOKUP_SOURCES.places.origins }); } catch { granted = false; }
+          if (!granted) { UI.toast('Chrome didn’t grant access, so the map stays off.', { kind: 'danger' }); return; }
+          await store.updateSettings({ lookups: { ...(state.settings.lookups || {}), places: true } });
+          const res = await send({ type: MSG.FILL_KIND, kind: 'place' });
+          if (res?.count) UI.toast(`Finding ${pluralize(res.count, 'place', 'places')} on the map…`, { duration: 3000 });
+        } }, ['Turn on the map and place lookups'])]),
+      ]));
+      return;
+    }
+    const mapEl = el('div', { class: 'places-map', role: 'region', 'aria-label': `Map of ${pluralize(pinned.length, 'place', 'places')}` });
+    box.append(mapEl);
+    if (unpinned) {
+      box.append(el('p', { class: 'help map-note' }, [`${pluralize(unpinned, 'place has', 'places have')} no pin yet. `,
+        el('button', { type: 'button', class: 'link-btn', onClick: async () => { await send({ type: MSG.FILL_KIND, kind: 'place' }); UI.toast('Looking them up…', { duration: 2500 }); } }, ['Look them up']),
+        ' · or add an address in Edit details.']));
+    }
+    let maplibregl;
+    try { maplibregl = await loadMapLibre(); } catch (e) { mapEl.replaceWith(el('p', { class: 'help help-error' }, [e.message])); return; }
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+    const map = new maplibregl.Map({ container: mapEl, style: `https://tiles.openfreemap.org/styles/${dark ? 'dark' : 'positron'}`, center: [0, 20], zoom: 1.4, attributionControl: { compact: true }, cooperativeGestures: false });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    const bounds = new maplibregl.LngLatBounds();
+    for (const item of pinned) {
+      const d = item.details;
+      const dot = el('button', { type: 'button', class: `map-pin ${item.status === 'done' ? 'is-done' : ''}`, 'aria-label': item.title });
+      const links = mapsLinks(item.title, d);
+      const pop = el('div', { class: 'map-pop' }, [
+        el('strong', {}, [item.title]),
+        el('span', { class: 'help' }, [[d.cuisine || d.category, d.priceRange, addressLine(d)].filter(Boolean).join(' · ')]),
+        el('div', { class: 'review-actions' }, [
+          el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => openSave(item.id) }, ['Open']),
+          links ? el('a', { class: 'btn btn-sm', href: links.google, target: '_blank', rel: 'noopener noreferrer' }, ['Google Maps']) : null,
+          links ? el('a', { class: 'btn btn-sm', href: links.apple, target: '_blank', rel: 'noopener noreferrer' }, ['Apple Maps']) : null,
+        ]),
+      ]);
+      new maplibregl.Marker({ element: dot }).setLngLat([d.lng, d.lat]).setPopup(new maplibregl.Popup({ offset: 14, closeButton: true }).setDOMContent(pop)).addTo(map);
+      bounds.extend([d.lng, d.lat]);
+    }
+    if (pinned.length === 1) map.jumpTo({ center: [pinned[0].details.lng, pinned[0].details.lat], zoom: 14 });
+    else if (pinned.length > 1) map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 0 });
+  });
+}
+
 function renderPlaceList(view, items) {
   const groups = new Map();
   for (const item of items) {
@@ -1989,6 +2097,7 @@ async function openItem(id) {
     published: mediaInput('Published', startMedia.publishedOn, { type: 'date' }),
   };
   let prefilled = false;
+  const prefilledKinds = new Set();
   let prefilledText = '';
   let recipeEditing = false;
   let drafted = false;
@@ -2093,6 +2202,16 @@ async function openItem(id) {
     doneToggle.lastChild.textContent = kindInfo(kind).done;
     clear(kindPanel);
     if (kind === 'recipe') kindPanel.append(recipePanel());
+    colField.classList.toggle('hidden', hasOwnView(kind) && !item.collectionId);
+    // Switching to Place or Recipe: fill in what the save already holds (caption, location, link).
+    if (kind !== startKind && !prefilledKinds.has(kind) && (kind === 'place' || kind === 'recipe')) {
+      prefilledKinds.add(kind);
+      const found = detailsForKind(kind, item);
+      if (kind === 'place') {
+        for (const [k, input] of Object.entries(placeFields)) if (!input.value && found.details[k]) input.value = found.details[k];
+        if (found.title && titleInput.value.trim() === item.title) titleInput.value = found.title;
+      } else if (!recipe.ingredients?.length && found.details.ingredients?.length) recipe = { ...found.details };
+    }
     if (kind === 'place') kindPanel.append(placePanel());
     if (kind === 'media' || kind === 'book') {
       const f = shelfFields;
@@ -2259,13 +2378,15 @@ async function openItem(id) {
     } }, [`+ ${t}`]))) : null,
   ]);
 
+  // Collections are for shopping: the field shows for products and links (and a Lifestyle save still in one).
+  const colField = el('div', { class: `field ${lifestyleSave && !item.collectionId ? 'hidden' : ''}` }, [el('label', { class: 'label' }, ['Collection']), colSelect, learnRow]);
   const side = el('div', { class: 'item-detail-side' }, [
     source,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Title']), titleInput]),
     urlField,
     priceField,
     el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Kind']), kindSelect]),
-    lifestyleSave && !item.collectionId ? null : el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Collection']), colSelect, learnRow]),
+    colField,
     el('div', { class: 'category-box' }, [catText]),
     topicsField,
     kindPanel,
@@ -2371,13 +2492,19 @@ async function openItem(id) {
           patch.images = [chosenImage, ...(item.images || []).filter((u) => u !== chosenImage)];
         }
         await store.updateItem(item.id, patch);
+        // A new Lifestyle kind: fill in what's missing (AI if on, lookups if on).
+        if (patch.kind !== startKind && hasOwnView(patch.kind)) send({ type: MSG.FILL_ITEM, itemId: item.id });
         if (drafted && patch.details?.source === 'ai-draft') {
           // A kept AI draft is logged like any AI change, so it can be undone later.
           await store.appendAiLog([{ id: crypto.randomUUID(), runId: `draft-${item.id}`, at: new Date().toISOString(), itemId: item.id, itemTitle: patch.title,
             changes: [{ field: 'recipe', from: 'no recipe', to: `${patch.details.ingredients.length} ingredients, ${patch.details.steps.length} steps` }],
             before: { details: item.details || {} }, after: { details: patch.details }, reason: 'Recipe drafted on request', undone: false }]);
         }
-        if (colSelect.value === '__none') {
+        // Into a Lifestyle kind from shopping: it leaves its collection (collections are for shopping).
+        const intoLifestyle = hasOwnView(kindSelect.value) && !hasOwnView(startKind) && item.collectionId;
+        if (intoLifestyle) {
+          await store.updateItem(item.id, { collectionId: null, needsReview: false }, { by: 'kind' });
+        } else if (colSelect.value === '__none') {
           await store.updateItem(item.id, { collectionId: null, needsReview: false });
         } else if (colSelect.value && colSelect.value !== item.collectionId) {
           await store.moveItems([item.id], colSelect.value, { learn: learnCheck.checked ? 'strong' : 'light' });
@@ -2889,9 +3016,10 @@ function renderReview(view) {
     const select = UI.selectInput({
       value: '',
       options: [
-        { value: '', label: 'Other collection…' },
-        ...regular.map((c) => ({ value: c.id, label: c.name })),
-        { value: '__new', label: '+ New collection…' },
+        { value: '', label: 'Somewhere else…' },
+        ...lifestyleOptions(),
+        ...regular.map((c) => ({ value: c.id, label: c.name, group: 'Collections' })),
+        { value: '__new', label: '+ New collection…', group: 'Collections' },
       ],
       onChange: async (v) => {
         if (!v) return;
@@ -2958,7 +3086,29 @@ function topSuggestions(cls, collections, counts) {
   return picks;
 }
 
+// Lifestyle views as picker options ("kind:place" → Places).
+const lifestyleOptions = () => LIFESTYLE().map((k) => ({ value: `kind:${k.value}`, label: k.plural, group: 'Lifestyle' }));
+
+// Puts saves where you chose: a Lifestyle view (each becomes that kind, its details worked out from
+// what it holds) or a collection (a Lifestyle save going there becomes something to buy).
+async function putItems(items, target, { learn = 'light' } = {}) {
+  if (target.startsWith('kind:')) {
+    const kind = target.slice(5);
+    for (const it of items) {
+      await store.updateItem(it.id, kindChangePatch(it, kind), { by: 'kind' });
+      send({ type: MSG.FILL_ITEM, itemId: it.id });
+    }
+    UI.toast(`Moved to ${kindInfo(kind).plural}.`);
+    return;
+  }
+  for (const it of items) if (hasOwnView(kindOf(it))) await store.updateItem(it.id, { kind: shoppingKindFor(it), details: {} }, { by: 'kind' });
+  await store.moveItems(items.map((i) => i.id), target, { learn });
+  const col = await store.getCollection(target);
+  UI.toast(`Moved to ${col ? col.name : 'collection'}.`);
+}
+
 async function fileItem(item, collectionId) {
+  if (typeof collectionId === 'string' && collectionId.startsWith('kind:')) return putItems([item], collectionId);
   if (typeof collectionId === 'string' && collectionId.startsWith('new:')) {
     const created = await store.ensureCollectionForTaxonomy(collectionId.slice(4));
     if (!created) return;

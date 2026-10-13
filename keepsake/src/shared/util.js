@@ -73,6 +73,18 @@ export function tidyImportedText(value, max = 2000) {
   return sanitizeText(s, max);
 }
 
+// Like sanitizeText, but keeps line breaks (at most one blank line in a row): captions and descriptions,
+// where the lines carry meaning ("📍 Name" then the address; "Ingredients:" then one per line).
+export function sanitizeMultiline(value, max = 2000) {
+  if (value === null || value === undefined) return '';
+  let s = String(value).replace(/\r\n?/g, '\n');
+  // eslint-disable-next-line no-control-regex
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  s = s.replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (s.length > max) s = s.slice(0, max).trim();
+  return s;
+}
+
 // Only allow http(s) URLs (and data: images for locally captured thumbnails).
 export function sanitizeUrl(value, { allowData = false, max = 4000 } = {}) {
   if (!value) return '';

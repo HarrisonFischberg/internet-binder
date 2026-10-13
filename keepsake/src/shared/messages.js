@@ -18,6 +18,8 @@ export const MSG = {
   IG_SCAN_SET_POSTS: 'keepsake:ig-set-posts', // extension pages -> background { posts } (after "Read post details")
   IG_READ_POST: 'keepsake:ig-read-post', // extension pages -> background { url } -> { ok, bundle } (opens the post in a background tab briefly)
   PAGE_TOAST: 'keepsake:page-toast',
+  FILL_ITEM: 'keepsake:fill-item', // extension pages -> background { itemId }: fill in a Lifestyle save (AI if on, lookups if on)
+  FILL_KIND: 'keepsake:fill-kind', // extension pages -> background { kind }: the same for every save of that kind
 };
 
 export const SESSION_KEYS = {

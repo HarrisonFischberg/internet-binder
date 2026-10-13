@@ -459,6 +459,105 @@ export function placeFromMapsUrl(url) {
   return out.name || out.address || (out.lat !== null && out.lng !== null) ? out : null;
 }
 
+// A place named in a caption, with its address when the caption gives one:
+//   "📍 Peter Pan Donut & Pastry Shop, Greenpoint"           -> name, area
+//   "📍 Randy’s Donuts\n186 Bleecker St, New York, NY"        -> name, street, city, state
+//   "📍 Randy’s Donuts 186 Bleecker St, New York, NY"          (the same, line breaks lost)
+//   "Location: Joe's Pizza, NYC. Best slice in town"         -> name, area (the next sentence dropped)
+const STREET = /\b(?:st|street|ave|avenue|av|rd|road|blvd|boulevard|ln|lane|dr|drive|way|pl|place|sq|square|ct|court|pkwy|parkway|hwy|highway|broadway|bowery)\b\.?/i;
+const looksLikeAddress = (s) => /^\d{1,6}[a-z]?(?:-\d+)?\s+\S/i.test(s) && STREET.test(s);
+export function placeFromText(text) {
+  const lines = String(text || '').replace(/\r/g, '').split(/\n+|(?=📍)/u);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const m = raw.match(/(?:📍|📌|🗺️?|\b(?:location|address|where|find (?:it|them|us) at|spot)\s*[:：-])\s*([^\n#@]{2,160})/iu);
+    if (!m) continue;
+    let s = m[1].replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, ' ').replace(/\s+/g, ' ').trim().replace(/[.,;:!]+$/, '');
+    // Stop at the next sentence ("📍 Joe's Pizza, NYC. Best slice in town").
+    s = s.split(/(?<=\b[\p{L}\p{N}']{3,})[.!]\s+(?=\p{Lu})|\s+[-–—]\s+(?=[a-z])/u)[0].trim();
+    // The address on the next line ("📍 Randy's Donuts" / "186 Bleecker St, New York, NY").
+    const next = (lines[i + 1] || '').trim();
+    if (!/,/.test(s) && looksLikeAddress(next)) s = `${s}, ${next.replace(/[.;!]+$/, '')}`;
+    if (!s || s.length < 2 || /^https?:/i.test(s)) continue;
+    let parts = s.split(/\s*(?:,|\||·|–|—)\s*/).map((x) => x.replace(/(?:\s*\.)+$/, '').trim()).filter(Boolean);
+    // A name glued to its street number ("Randy's Donuts 186 Bleecker St").
+    const glued = parts[0].match(/^(.+?\D)\s+(\d{1,6}[a-z]?\s+.+)$/i);
+    if (glued && looksLikeAddress(glued[2])) parts = [glued[1], glued[2], ...parts.slice(1)];
+    // Only an address ("Address: 23 Cleveland Place, New York, NY"): no name here; the place's @handle
+    // nearby (the same line or the one before) names it, if there is one.
+    const addressOnly = looksLikeAddress(parts[0]);
+    const near = `${lines[i - 1] || ''} ${raw.slice(0, m.index)}`;
+    const handle = addressOnly ? ((near.match(/@([A-Za-z0-9._]{2,30})/g) || []).pop() || '').slice(1) : '';
+    const name = addressOnly ? nameFromHandle(handle) : clean(parts[0], 120);
+    if (!name && !addressOnly) continue;
+    const rest = addressOnly ? parts : parts.slice(1);
+    const at = rest.findIndex(looksLikeAddress);
+    const address = at >= 0 ? clean(rest[at], 200) : '';
+    const after = at >= 0 ? rest.slice(at + 1) : rest;
+    const locality = clean(after[0] || '', 80);
+    const region = clean(after[1] || '', 60);
+    return { name, address, locality: locality !== name ? locality : '', region, ...(handle ? { handle } : {}) };
+  }
+  return null;
+}
+
+// "homies_nyc" -> "Homies NYC", "joes.pizza" -> "Joes Pizza": an account name read as words (short words
+// such as nyc, la, bk in capitals). Only used for a place's own @handle, never the poster's.
+export function nameFromHandle(handle) {
+  const words = String(handle || '').replace(/^@/, '').split(/[._]+/).filter(Boolean);
+  if (!words.length) return '';
+  return clean(words.map((w) => (/^(?:nyc|la|sf|bk|uk|us|dc|ny|atl|chi|phx)$/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' '), 80);
+}
+
+// What a page title says when it isn't the thing's name ("Instagram", "Name on Instagram: …", "Google Maps").
+export const genericTitle = (t) => !t || /^(?:instagram(?: (?:post|reel|photo|video))?|tiktok|youtube|google maps|facebook|untitled( item)?)$/i.test(String(t).trim())
+  || /\son instagram:/i.test(String(t));
+
+// Turning a save into another kind (you picked a Lifestyle for it): that kind's details, worked out from
+// what the save already holds (its link, caption, description, title). Returns { details, title } where
+// title is a better name when the current one is a site's ("Instagram"), else ''. Nothing is looked up.
+export function detailsForKind(kind, item = {}) {
+  const ig = item.instagram && typeof item.instagram === 'object' ? item.instagram : {};
+  const texts = [ig.caption, item.description, item.title].filter((t) => typeof t === 'string' && t.trim()).sort((a, b) => b.length - a.length);
+  const firstOf = (fn) => { for (const t of texts) { const r = fn(t); if (r) return r; } return null; };
+  const keep = item.kind === kind && item.details && Object.keys(item.details).length ? item.details : null;
+  let details = {};
+  let title = '';
+  if (kind === 'recipe') details = keep || firstOf((t) => recipeFromText(t)) || {};
+  else if (kind === 'workout') details = keep || firstOf((t) => workoutFromText(t)) || {};
+  else if (kind === 'place') {
+    const fromLink = placeFromMapsUrl(item.url);
+    // The caption's 📍 line (with any address) first; the post's location tag names the place when there's none.
+    const caption = firstOf(placeFromText);
+    const fromText = caption || (ig.location ? { name: clean(ig.location, 120), locality: '' } : null);
+    details = { ...(keep || {}), ...(fromLink ? { lat: fromLink.lat, lng: fromLink.lng, address: fromLink.address || keep?.address || '' } : {}) };
+    for (const k of ['address', 'locality', 'region']) if (fromText?.[k] && !details[k]) details[k] = fromText[k];
+    if (!details.source) details.source = fromLink ? 'maps-link' : 'page';
+    // No name anywhere: the street address stands in until a lookup or your AI provider names it.
+    const name = fromLink?.name || fromText?.name || fromText?.address || '';
+    if (name && genericTitle(item.title)) title = name;
+    // A site's home page title ("Home | Saigon Sandwich"): the site's name.
+    else if (!name && /^(?:home|welcome|index)\s*[|–—-]\s*\S/i.test(String(item.title || ''))) title = clean(String(item.title).replace(/^(?:home|welcome|index)\s*[|–—-]\s*/i, ''), 120);
+  } else if (kind === 'video') details = keep || videoFromCapture({}, item.url || '');
+  else if (kind === 'media') details = keep || { format: titleSite(item.url || '')?.format || 'film', source: 'page' };
+  else details = keep || {};
+  return { details: sanitizeDetails(kind, details), title };
+}
+
+// The Lifestyle views, in menu order (everything except products and plain links).
+export const LIFESTYLE = () => KINDS.filter((k) => hasOwnView(k.value));
+
+// You put a save into a Lifestyle view: it becomes that kind, with that kind's details worked out
+// from what it holds, and leaves any collection (collections are for shopping).
+export function kindChangePatch(item, kind) {
+  const { details, title } = detailsForKind(kind, item);
+  return { kind, details, ...(title ? { title } : {}), collectionId: null, needsReview: false };
+}
+
+// You put a Lifestyle save into a collection: it becomes something to buy (a product when it has a
+// price, else a link), so the shopping rules apply.
+export const shoppingKindFor = (item) => (item.price !== null && item.price !== undefined ? 'product' : 'link');
+
 // One line for the address ("12 High St, London E1 6AN").
 export function addressLine(d = {}) {
   const tail = [d.locality, [d.region, d.postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
@@ -641,9 +740,16 @@ export function bookFromSchema(node) {
 // --- details ------------------------------------------------------------------------------------
 
 const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai-draft'];
-const WORKOUT_SOURCES = ['page', 'caption', 'you'];
+const WORKOUT_SOURCES = ['page', 'caption', 'you', 'ai'];
 const PLACE_SOURCES = ['page', 'maps-link', 'you'];
 const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+// Where looked-up details came from (OpenStreetMap, Wikidata, Open Library, or your AI provider), with a link.
+const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI'];
+function cleanLookup(v) {
+  if (!v || typeof v !== 'object' || !LOOKUP_SOURCES.includes(v.source)) return undefined;
+  const url = typeof v.url === 'string' && /^https:\/\//.test(v.url) ? v.url.slice(0, 300) : '';
+  return { source: v.source, url };
+}
 
 export function sanitizeDetails(kind, details) {
   if (!details || typeof details !== 'object') return {};
@@ -687,6 +793,7 @@ export function sanitizeDetails(kind, details) {
       hours: list(details.hours, 14, 80),
       category: clean(details.category, 40),
       source: PLACE_SOURCES.includes(details.source) ? details.source : 'you',
+      ...(cleanLookup(details.lookup) ? { lookup: cleanLookup(details.lookup) } : {}),
     };
   }
   if (kind === 'video') {
@@ -713,7 +820,8 @@ export function sanitizeDetails(kind, details) {
   if (kind === 'media' || kind === 'book') {
     const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) <= max && v !== '' && v !== null ? Math.round(Number(v)) : null);
     const year = num(details.year, 2200);
-    const base = { year: year && year >= 1800 ? year : null, genres: list(details.genres, 4, 30), source: details.source === 'page' ? 'page' : 'you' };
+    const base = { year: year && year >= 1800 ? year : null, genres: list(details.genres, 4, 30), source: details.source === 'page' ? 'page' : 'you',
+      ...(cleanLookup(details.lookup) ? { lookup: cleanLookup(details.lookup) } : {}) };
     if (kind === 'media') {
       return { format: details.format === 'series' ? 'series' : 'film', ...base, director: clean(details.director, 160), runtimeMinutes: num(details.runtimeMinutes, 2000), seasons: num(details.seasons, 200) };
     }

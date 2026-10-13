@@ -392,6 +392,39 @@ export async function suggestProgression(item, goal, progress, settings, apiKey)
   return { plan, note: String(parsed?.note || '').slice(0, 200) };
 }
 
+const IDENTIFY_SYSTEM = {
+  place: 'From this saved post, name the one place it is about. Return ONLY JSON: {"name":"the place\'s own name or null","city":"city or neighbourhood or null"}. Use only what the text says; if it does not name a place, return {"name":null}.',
+  media: 'From this saved post, name the one film or TV show it is about. Return ONLY JSON: {"title":"the official title or null","year":number|null,"format":"film"|"series"|null}. Use only what the text says or clearly refers to; if unsure, return {"title":null}.',
+  book: 'From this saved post, name the one book it is about. Return ONLY JSON: {"title":"the book\'s title or null","author":"author or null"}. Use only what the text says; if unsure, return {"title":null}.',
+  workout: 'From this saved post, list the exercises it describes. Return ONLY JSON: {"exercises":[{"name":"exercise","sets":number|null,"reps":number|null,"seconds":number|null}],"minutes":number|null}. Use only what the text says; if it lists no exercises, return {"exercises":[]}.',
+};
+
+// Asks your AI provider what a saved post is about, for the kind you put it in (a place's name and city,
+// a film's title, a book's title and author, a workout's exercises). Sends the save's title, caption or
+// description and site; returns null when the text doesn't say.
+export async function identifyForKind(kind, item, settings, apiKey) {
+  const system = IDENTIFY_SYSTEM[kind];
+  if (!system) return null;
+  const cfg = providerConfig(settings);
+  const text = [
+    `Title: ${String(item.title || '').slice(0, 200)}`,
+    item.instagram?.caption ? `Caption: ${String(item.instagram.caption).slice(0, 1500)}` : '',
+    item.description ? `Description: ${String(item.description).slice(0, 1200)}` : '',
+    item.retailer || item.host ? `From: ${item.retailer || item.host}` : '',
+  ].filter(Boolean).join('\n');
+  const parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system, userText: text, maxTokens: 500 }));
+  if (!parsed || typeof parsed !== 'object') return null;
+  const s = (v, n) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim().slice(0, n) : '');
+  if (kind === 'place') return s(parsed.name, 120) ? { name: s(parsed.name, 120), locality: s(parsed.city, 80) } : null;
+  if (kind === 'media') return s(parsed.title, 200) ? { title: s(parsed.title, 200), year: Number(parsed.year) || null, format: parsed.format === 'series' ? 'series' : parsed.format === 'film' ? 'film' : '' } : null;
+  if (kind === 'book') return s(parsed.title, 200) ? { title: s(parsed.title, 200), author: s(parsed.author, 120) } : null;
+  if (kind === 'workout') {
+    const exercises = (Array.isArray(parsed.exercises) ? parsed.exercises : []).slice(0, 30).map((e) => ({ name: s(e?.name, 60), sets: Number(e?.sets) || null, reps: Number(e?.reps) || null, durationSeconds: Number(e?.seconds) || null })).filter((e) => e.name);
+    return exercises.length ? { exercises, durationMinutes: Number(parsed.minutes) || null } : null;
+  }
+  return null;
+}
+
 export async function testConnection(settings, apiKey) {
   const cfg = providerConfig(settings);
   const raw = await callProvider(cfg, apiKey, { system: 'Reply with the single word OK.', userText: 'Connection test.', maxTokens: 5 });

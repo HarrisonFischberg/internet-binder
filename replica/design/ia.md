@@ -207,6 +207,13 @@ Recipes, workouts, places, videos, articles, films & shows and books live in the
 
 Like the YouTube rule: a single title's page on Letterboxd (`/film/…`), IMDb (`/title/tt…`), Rotten Tomatoes (`/m/…`, `/tv/…`), TMDB (`/movie/…`, `/tv/…`), JustWatch (`/xx/movie|tv-show/…`), Trakt (`/movies/…`, `/shows/…`) is a Film or show; on Goodreads (`/book/show/…`), StoryGraph (`/books/…`), Open Library (`/works/OL…W`, `/books/OL…M`) or Hardcover (`/books/…`) a Book. Home pages, lists, reviews and search are not matched. The page's own data still fills the details; the path settles film vs series when the data doesn't (`shared/kinds.js` `titleSite`).
 
+### Save anywhere, fill in, map (owner decisions 2026-10-13)
+
+- **Every destination menu** (popup preview and saved card, page card, Move to…, Review's "Somewhere else…") lists **Lifestyle** (Places, Recipes, Videos, Articles, Workouts, Films & shows, Books) and **Collections**. A Lifestyle pick makes the save that kind (`kindChangePatch`: details from its link, caption, location tag; leaves any collection). A collection pick makes a Lifestyle save something to buy (product with a price, else link).
+- **Instagram:** a post with a location tag or a "📍 Name, Area" line is saved as a Place named from it.
+- **Fill-in after a save or a move** (background `fillKind`, one at a time): (1) Optional AI if on: names the place/film/book, lists a workout's exercises, drafts a recipe; logged with Undo. (2) Lookups if on (Settings → Lookups, each its own switch and Chrome permission): OpenStreetMap Nominatim (places, ≤1/s), Wikidata (films & shows; poster only from P3383), Open Library (books). A result is used only when its name matches; only missing fields are filled; "Details from … ↗" shows the source.
+- **Places map:** List | Map. MapLibre GL 4.7.1 (vendored CSP build) with OpenFreeMap tiles (positron / dark). Pins with Open, Google Maps, Apple Maps; "N places have no pin yet · Look them up". Off until Places lookups are on (the map offers the switch).
+
 ### Tags (all platforms)
 
 A save can carry up to 8 **tags** saying what it's about ("AI", "Video games", "Shoes"). Videos, articles and links get up to 3 **guessed** on save, locally, from the title (counts most), the channel or site, the description and hashtags (`shared/topics.js`: about 30 topics, whole-word phrases; no AI, no network). No tag beats a wrong one: a guess needs a title hit or several hits elsewhere.

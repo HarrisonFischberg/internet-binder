@@ -4162,3 +4162,76 @@ body.modal-open {
   outline: 2px solid var(--c-focus);
   outline-offset: 2px;
 }
+
+.lookup-src {
+  font: var(--t-caption);
+  color: var(--c-text-muted);
+}
+
+.lookup-src a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Places map */
+.places-map-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 1100px;
+}
+
+.places-map {
+  height: min(68vh, 640px);
+  min-height: 360px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+}
+
+.map-pin {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--c-kind-place);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.map-pin.is-done {
+  opacity: 0.6;
+}
+
+.map-pin:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+
+.map-pop {
+  display: grid;
+  gap: 6px;
+  max-width: 240px;
+  font: var(--t-footnote);
+  color: #1d1d1f;
+}
+
+.map-pop .help {
+  color: #555;
+}
+
+.map-off {
+  max-width: 640px;
+}
+
+button.library-tab {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+button.library-tab.on {
+  background: var(--c-surface-2);
+}

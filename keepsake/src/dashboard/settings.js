@@ -7,6 +7,7 @@ import { originPattern, hostFromPattern } from '../shared/url.js';
 import { emptyPrefs } from '../shared/categorizer.js';
 import { PROVIDERS, providerConfig, originFor, describePayload, analyzePost, testConnection, findProductOnline, supportsWebLookup } from '../ai/provider.js';
 import * as UI from './ui.js';
+import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { cleanupSection } from './aiCleanup.js';
 import { hasInstagramAccess, revokeInstagramAccess } from '../instagram/enrich.js';
 
@@ -52,6 +53,7 @@ export function renderSettings(ctx, view) {
   page.append(categorizationSection(ctx));
   page.append(collectionsSection(ctx));
   page.append(instagramSection(ctx));
+  page.append(lookupsSection(ctx));
   page.append(aiSummarySection(ctx));
   page.append(dataSection(ctx));
   page.append(privacySection(ctx));
@@ -268,6 +270,39 @@ function instagramSection(ctx) {
       const ok = await UI.confirmDialog({ title: 'Forget imported posts?', message: 'Keepsake will no longer mark these posts as already imported. Items you imported are kept.', confirmLabel: 'Forget' });
       if (ok) await ctx.store.clearImportHistory();
     } }, [`Forget ${pluralize(n, 'remembered post', 'remembered posts')}`]), 'Used to skip posts you already imported.'),
+  ]);
+}
+
+// Lookups: free public sources that fill in saves you put into Places, Films & shows and Books. Each is
+// off until you turn it on, and turning it on asks Chrome for that one site (given back when turned off).
+function lookupsSection(ctx) {
+  const s = ctx.state.settings.lookups || {};
+  const row = (which) => {
+    const src = LOOKUP_SOURCES[which];
+    const status = el('span', { class: 'help' });
+    const sw = UI.switchInput({ checked: !!s[which], label: `Look up ${src.label}`, onChange: async (on) => {
+      if (on) {
+        let granted = false;
+        try { granted = await chrome.permissions.request({ origins: src.origins }); } catch { granted = false; }
+        if (!granted) {
+          UI.toast(`Chrome didn’t grant access to ${src.service}, so ${src.label} lookups stay off.`, { kind: 'danger' });
+          ctx.render();
+          return;
+        }
+        await ctx.store.updateSettings({ lookups: { ...(ctx.state.settings.lookups || {}), [which]: true } });
+        // Fill in what's already saved there too.
+        const kind = which === 'places' ? 'place' : which === 'media' ? 'media' : 'book';
+        const res = await ctx.send({ type: MSG.FILL_KIND, kind });
+        if (res?.count) UI.toast(`Looking up ${pluralize(res.count, 'save', 'saves')} in ${src.label}…`, { duration: 3000 });
+      } else {
+        await ctx.store.updateSettings({ lookups: { ...(ctx.state.settings.lookups || {}), [which]: false } });
+        try { await chrome.permissions.remove({ origins: src.origins }); } catch { /* already gone */ }
+      }
+    } });
+    return UI.settingRow(`${src.label}: ${src.service}`, el('span', {}, [sw, status]), `Sends ${src.sends} to ${src.service}. Nothing else; no account.`);
+  };
+  return UI.section('Lookups', 'Fill in what a save is missing (an address and map pin, a film’s year and director, a book’s author) from free public sources. Off until you turn one on.', [
+    row('places'), row('media'), row('books'),
   ]);
 }
 

@@ -386,7 +386,14 @@ export function switchInput({ checked, onChange, label }) {
 
 export function selectInput({ value, options, onChange, label }) {
   const sel = el('select', { class: 'select', 'aria-label': label });
-  for (const o of options) sel.append(el('option', { value: o.value, text: o.label }));
+  // Options with a group ("Lifestyle", "Collections") go under a labelled optgroup.
+  const groups = new Map();
+  for (const o of options) {
+    const opt = el('option', { value: o.value, text: o.label });
+    if (!o.group) { sel.append(opt); continue; }
+    if (!groups.has(o.group)) { const g = el('optgroup', { label: o.group }); groups.set(o.group, g); sel.append(g); }
+    groups.get(o.group).append(opt);
+  }
   sel.value = value;
   sel.addEventListener('change', () => onChange(sel.value, sel));
   return sel;

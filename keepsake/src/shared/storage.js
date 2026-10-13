@@ -15,7 +15,7 @@
 // keepsake_prefs, keepsake_importHistory and keepsake_aiLog. init() copies those into IndexedDB once,
 // checks the copy, and leaves the old keys untouched so a rollback to 1.3.x still finds its data.
 
-import { uid, nowIso, sanitizeText, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer, decodeEntities, hasEntities } from './util.js';
+import { uid, nowIso, sanitizeText, sanitizeMultiline, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer, decodeEntities, hasEntities } from './util.js';
 import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
 import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, forgetCollection } from './categorizer.js';
@@ -69,6 +69,9 @@ export const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
   style: 'modern', // modern | moss | minimal: the look, per device (see src/shared/tokens.css)
   home: { comeBack: true }, // Home's "Come back to": saves not opened in 6+ weeks (worked out on this device)
+  // Lookups (off until turned on, each needs its site granted): fill in places (OpenStreetMap), films and
+  // shows (Wikidata) and books (Open Library) from free public sources. See src/shared/lookups.js.
+  lookups: { places: false, media: false, books: false },
   floating: {
     mode: 'off', // off | all | selected
     sites: [], // origin patterns like *://www.example.com/*
@@ -239,7 +242,7 @@ export function makeItem(input = {}) {
     details,
     status: STATUSES.includes(input.status) ? input.status : 'saved',
     title: sanitizeText(decodeEntities(input.title), 200) || (type === 'instagram' ? 'Instagram post' : 'Untitled item'),
-    description: sanitizeText(decodeEntities(input.description), 1000),
+    description: sanitizeMultiline(decodeEntities(input.description), 2200),
     note: sanitizeText(input.note, 1000),
     price: Number.isFinite(price) && price >= 0 ? price : null,
     currency: sanitizeText(input.currency, 8).toUpperCase(),
@@ -288,7 +291,7 @@ function sanitizeInstagram(ig, now) {
   return {
     collectionName: sanitizeText(ig.collectionName, 80),
     creator: sanitizeText(ig.creator, 80),
-    caption: sanitizeText(ig.caption, 2200),
+    caption: sanitizeMultiline(ig.caption, 2200),
     postType: sanitizeText(ig.postType, 20),
     importedAt: ig.importedAt || now,
     postedAt: sanitizeText(ig.postedAt, 40),

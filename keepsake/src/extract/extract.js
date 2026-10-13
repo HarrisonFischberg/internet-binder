@@ -394,6 +394,35 @@
     return out;
   }
 
+  // ---- a place's address on the page ----------------------------------------------
+  // For pages with no place data (a restaurant's own site): the visible address block, e.g.
+  //   "Location / 560 Larkin St / San Francisco, CA 94102 / Phone / (415) 474-5698 / Opening Hours / …"
+  // plus a phone number and opening hours near it, and the words that say people visit (menu, hours…).
+  const STREET_RE = /\b(?:st|street|ave|avenue|av|rd|road|blvd|boulevard|ln|lane|dr|drive|way|pl|place|sq|square|ct|court|pkwy|parkway|hwy|highway|broadway|bowery)\b\.?/i;
+  const PHONE_RE = /(?:\+\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]\d{3,4}[\s.-]\d{3,4}/;
+  const DAY_RE = /\b(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\b/i;
+  function pagePlace() {
+    const text = String(document.body?.innerText || document.body?.textContent || '').slice(0, 200000);
+    const lines = text.split(/\n+/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i];
+      if (l.length > 90 || !/^\d{1,6}[a-z]?(?:-\d+)?\s+\S/i.test(l) || !STREET_RE.test(l)) continue;
+      const parts = l.split(/\s*,\s*/);
+      let address = parts[0];
+      let rest = parts.slice(1).join(', ');
+      const next = lines[i + 1] || '';
+      if (!rest && /^[\p{L} .'-]{2,40},\s*[\p{L}]{2,}/u.test(next) && next.length < 60) rest = next;
+      const m = rest.match(/^([^,]+?)(?:,\s*([A-Za-z .]{2,30}?))?(?:\s+(\d{4,6}(?:-\d{4})?|[A-Z]\d[A-Z] ?\d[A-Z]\d|[A-Z]{1,2}\d[A-Z\d]? ?\d[A-Z]{2}))?\s*$/);
+      const near = lines.slice(Math.max(0, i - 6), i + 14);
+      const phone = (near.find((x) => PHONE_RE.test(x) && x.length < 40) || '').match(PHONE_RE)?.[0] || '';
+      const hoursAt = near.findIndex((x) => /^(?:opening )?hours\b|^open\b/i.test(x));
+      const hours = hoursAt >= 0 ? near.slice(hoursAt + 1, hoursAt + 9).filter((x) => DAY_RE.test(x) && x.length < 60).slice(0, 7) : [];
+      const visit = /\b(?:menu|order online|reservations?|book a table|visit us|visit our|our shop|location|directions|opening hours|hours)\b/i.test(near.join(' '));
+      return { address: address.slice(0, 120), locality: m ? m[1].trim() : '', region: m && m[2] ? m[2].trim() : '', postalCode: m && m[3] ? m[3] : '', phone, hours, visit };
+    }
+    return null;
+  }
+
   // ---- assemble ----------------------------------------------------------------
   function extract(hints) {
     const h = hints || safe(() => globalThis.__keepsakeHints) || {};
@@ -543,6 +572,54 @@
     if (h.linkUrl) result.linkUrl = abs(h.linkUrl);
     result.pageTitle = pageTitle();
     if (!ld?.product && !recipe) result.media = safe(() => mediaFacts(ld, meta('meta[property="og:type"]')), null);
+    // An Instagram post or reel: its own caption, creator and location, from the page's data for this post
+    // (matched by its shortcode, so a grid or suggestions around it don't count) and the caption on screen.
+    // Parsed in the extension (src/instagram/post.js); nothing here is sent anywhere.
+    if (result.isInstagram) {
+      result.igBundle = safe(() => {
+        const code = (location.pathname.match(/\/(?:p|reel|reels)\/([\w-]{5,})/) || [])[1] || '';
+        if (!code) return null;
+        let metaMap = {};
+        for (const m of document.querySelectorAll('meta[property], meta[name]')) {
+          const k = m.getAttribute('property') || m.getAttribute('name');
+          const v = m.getAttribute('content');
+          if (k && v && !(k in metaMap)) metaMap[k] = v;
+        }
+        // The head's tags count only when they are this post's (their link carries its code).
+        if (STALE || !String(metaMap['og:url'] || '').includes(code)) metaMap = {};
+        const scripts = [];
+        let total = 0;
+        for (const s of document.querySelectorAll('script[type="application/json"], script[type="application/ld+json"], script:not([src])')) {
+          const t = s.textContent || '';
+          if (t.length < 20 || !t.includes(code) || !/"caption"|"edge_media_to_caption"|"location"/.test(t)) continue;
+          if (total + t.length > 3000000) break;
+          total += t.length;
+          scripts.push({ type: s.getAttribute('type') || '', text: t });
+        }
+        // On screen: the caption heading, or the text block that holds a 📍 line.
+        let visibleCaption = '';
+        const roots = [document.querySelector('[role="dialog"]'), document.querySelector('main'), document.querySelector('article')].filter(Boolean);
+        for (const root of roots) {
+          const h1 = root.querySelector('h1');
+          const t = h1 ? String(h1.innerText || h1.textContent || '').trim() : '';
+          if (t.length > 20) { visibleCaption = t; break; }
+        }
+        if (!visibleCaption) {
+          let best = '';
+          for (const root of roots) for (const n of root.querySelectorAll('span[dir="auto"], div[dir="auto"], h1, span')) {
+            const t = String(n.innerText || n.textContent || '').trim();
+            if (t.length > best.length && t.length < 4000 && /📍|📌/u.test(t)) best = t;
+          }
+          visibleCaption = best;
+        }
+        return { meta: metaMap, scripts, visibleCaption: visibleCaption.slice(0, 4000) };
+      }, null);
+      result.igLocation = safe(() => {
+        const a = document.querySelector('main a[href*="/explore/locations/"], article a[href*="/explore/locations/"]');
+        const name = a ? text(a.textContent) : '';
+        return name && name.length <= 120 ? { name, url: abs(a.getAttribute('href')) } : null;
+      }, null);
+    }
     // A film, show or book: its fields travel raw (bounded); kinds.js normalizes them. The open graph tags
     // stand in when there's no structured data (og:type video.movie / video.tv_show / book).
     const pick = (n, keys) => safe(() => JSON.parse(JSON.stringify(Object.fromEntries(keys.map((k) => [k, n[k]])))), null);
@@ -574,6 +651,7 @@
       result.media = { ...(result.media || {}), ogType: 'video.other', channel: yt.channel || (STALE ? '' : result.media?.channel || ''), duration: yt.duration || (STALE ? '' : result.media?.duration || '') };
       if (STALE && result.media) result.media.published = '';
     }
+    if (!ld?.product && !recipe && !ld?.place && !result.isInstagram) result.pagePlace = safe(pagePlace, null);
     if (!ld?.product && !recipe && !result.isInstagram) result.workoutLines = safe(() => workoutLines(result.title, result.description), []);
     return result;
   }

@@ -37,7 +37,8 @@ try {
     // Same order as background.js kindOfCapture (minus Instagram).
     const types = kindFromSchemaTypes(p.schemaTypes);
     const wk = looksLikeWorkout(`${p.title} ${p.description}`) ? (p.isInstagram ? [p.title, p.description].filter(Boolean).sort((a, b) => b.length - a.length).map((t) => workoutFromText(t)).find(Boolean) : workoutFromText(p.description, { source: 'page' })) || workoutFromText((p.workoutLines || []).join('\n'), { source: 'page' }) : null;
-    const kind = placeFromMapsUrl(url) ? 'place' : p.isInstagram ? (recipeFromText(p.description) ? 'recipe' : wk ? 'workout' : 'link') : (types === 'video' || types === 'article') && wk ? 'workout' : types && types !== 'product' ? types : p.recipe ? 'recipe'
+    const pp = p.pagePlace;
+    const kind = placeFromMapsUrl(url) ? 'place' : !types && p.price == null && pp?.address && (pp.hours?.length || (pp.phone && pp.visit)) ? 'place' : p.isInstagram ? (recipeFromText(p.description) ? 'recipe' : wk ? 'workout' : 'link') : (types === 'video' || types === 'article') && wk ? 'workout' : types && types !== 'product' ? types : p.recipe ? 'recipe'
       : !types && p.price == null && !p.priceText && wk ? 'workout'
         : !types && p.screen ? 'media' : !types && p.book ? 'book'
         : !types && (videoPlatform(url) || /^video\./i.test(p.media?.ogType || '')) ? 'video'
@@ -47,6 +48,7 @@ try {
       shelf: kind === 'media' ? mediaFromSchema(p.screen) : kind === 'book' ? bookFromSchema(p.book) : null,
       video: kind === 'video' ? (() => { const d = videoFromCapture(p.media || {}, url); return { ...d, length: formatDuration(d.durationSeconds) }; })() : null,
       article: kind === 'article' ? articleFromCapture({ ...(p.media || {}), siteName: p.media?.siteName || p.siteName }) : null,
+      pagePlace: p.pagePlace || null, siteName: p.siteName || '',
       place: kind === 'place' ? (() => { const d = placeFromSchema(p.place) || placeFromMapsUrl(url) || {}; return { address: addressLine(d), pin: d.lat != null, hours: d.hours, cuisine: d.cuisine, price: d.priceRange, name: d.name }; })() : null,
       workout: kind === 'workout' ? { lines: (p.workoutLines || []).length, exercises: wk.exercises.map(formatExercise) } : null,
       recipe: rec ? { ingredients: rec.ingredients.length, steps: rec.steps.length, totalMinutes: rec.totalMinutes, yield: rec.yield, first: rec.ingredients[0] } : null }));

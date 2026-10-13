@@ -252,6 +252,59 @@ test('a film or book site title page is saved as a film/show or book even with n
   assert.deepEqual([gr.item.kind, gr.item.price], ['book', null], 'a price on Goodreads is a shop link, not the save’s price');
 });
 
+test('fill-in: a place saved with lookups on gets its address and pin; with lookups off nothing is sent', async () => {
+  const post = { title: 'nyceats on Instagram: "Glazed heaven"', url: 'https://www.instagram.com/reel/fill1/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
+    description: 'Glazed heaven 🍩\n📍 Peter Pan Donut & Pastry Shop, Greenpoint' };
+  const calls = [];
+  globalThis.fetch = async (url) => { calls.push(String(url)); return { ok: true, status: 200, json: async () => [{ name: 'Peter Pan Donut & Pastry Shop', lat: '40.726', lon: '-73.952', type: 'bakery', address: { house_number: '727', road: 'Manhattan Avenue', suburb: 'Greenpoint', city: 'New York' } }] }; };
+  let res = await F.send({ type: MSG.SAVE_ITEM, product: post, instant: true }, popup);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(calls.length, 0, 'lookups off: nothing sent');
+  assert.deepEqual([res.item.kind, res.item.title], ['place', 'Peter Pan Donut & Pastry Shop']);
+
+  F.local.keepsake_settings = { ...F.local.keepsake_settings, lookups: { places: true, media: false, books: false } };
+  F.state.granted.push('https://nominatim.openstreetmap.org/*', 'https://tiles.openfreemap.org/*');
+  await F.send({ type: MSG.FILL_ITEM, itemId: res.item.id }, popup);
+  for (let i = 0; i < 60 && !(await S.getItem(res.item.id)).details.lat; i++) await new Promise((r) => setTimeout(r, 50));
+  const filled = await S.getItem(res.item.id);
+  assert.ok(calls.some((u) => u.startsWith('https://nominatim.openstreetmap.org/search')));
+  assert.deepEqual([filled.details.address, filled.details.locality, filled.details.lat, filled.details.lookup.source], ['727 Manhattan Avenue', 'Greenpoint', 40.726, 'OpenStreetMap']);
+});
+
+test('fill-in with AI on: a post with no place name gets one from your AI provider, logged with Undo', async () => {
+  await aiOn();
+  globalThis.fetch = aiReply({ name: 'Doughnut Plant', city: 'Lower East Side' });
+  const post = { title: 'Instagram', url: 'https://www.instagram.com/reel/fill2/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [], description: 'best donut in nyc, the tres leches one 😍' };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: post, instant: true }, popup);
+  await F.send({ type: MSG.UPDATE_ITEM, itemId: res.item.id, patch: { kind: 'place' } }, popup);
+  for (let i = 0; i < 60 && (await S.getItem(res.item.id)).title === 'Instagram'; i++) await new Promise((r) => setTimeout(r, 50));
+  const it = await S.getItem(res.item.id);
+  assert.deepEqual([it.kind, it.title, it.details.locality], ['place', 'Doughnut Plant', 'Lower East Side']);
+  const log = await S.getAiLog();
+  assert.ok(log.some((e) => e.itemId === it.id && e.reason === 'Filled in for Places'));
+});
+
+test('one click on an Instagram reel: its own caption is read, so it saves as the place, with the address', async () => {
+  const data = JSON.stringify({ items: [{ code: 'REEL55555', caption: { text: 'Best donuts in the city 🍩\n📍 Example Donuts\n186 Bleecker St, New York, NY' }, user: { username: 'nyceats' } }] });
+  const product = { title: 'Instagram', url: 'https://www.instagram.com/reel/REEL55555/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
+    igBundle: { meta: {}, scripts: [{ type: 'application/json', text: data }], visibleCaption: '' } };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product, instant: true }, popup);
+  assert.deepEqual([res.item.kind, res.item.title, res.item.details.address, res.item.details.locality, res.item.details.region], ['place', 'Example Donuts', '186 Bleecker St', 'New York', 'NY']);
+  assert.equal(res.item.instagram.creator, 'nyceats');
+  assert.match(res.item.instagram.caption, /\n📍 Example Donuts\n/, 'line breaks kept');
+});
+
+test('a business’s own site with an address and hours is a place named after the site; an office address alone is not', async () => {
+  const shop = { title: 'Home | Example Banh Mi', siteName: 'Example Banh Mi', url: 'https://banhmi.example/', images: [], image: '', price: null, schemaTypes: ['website'],
+    pagePlace: { address: '560 Larkin St', locality: 'San Francisco', region: 'CA', postalCode: '94102', phone: '(415) 555-0123', hours: ['Mon–Tue: 7:00 AM – 5:30 PM'], visit: true } };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: shop, instant: true }, popup);
+  assert.deepEqual([res.item.kind, res.item.title, res.item.details.address, res.item.details.locality, res.item.details.postalCode, res.item.details.phone],
+    ['place', 'Example Banh Mi', '560 Larkin St', 'San Francisco', '94102', '(415) 555-0123']);
+  const office = { title: 'Example Software — Plans', siteName: 'Example Software', url: 'https://software.example/pricing', images: [], image: '', price: null, schemaTypes: ['website'],
+    pagePlace: { address: '100 Main St', locality: 'Austin', region: 'TX', postalCode: '78701', phone: '', hours: [], visit: false } };
+  assert.notEqual((await F.send({ type: MSG.SAVE_ITEM, product: office, instant: true }, popup)).item.kind, 'place');
+});
+
 test('a sparse page with nothing to sell is saved as a link; a shop page stays a product', async () => {
   const link = await F.send({ type: MSG.SAVE_ITEM, product: { title: 'Reading list', url: 'https://notes.example/x', sparse: true }, instant: true }, popup);
   assert.equal(link.item.kind, 'link');

@@ -160,12 +160,22 @@
       const chip = el('span', 'chip');
       pickerEl = document.createElement('select');
       pickerEl.setAttribute('aria-label', opts.picker.label || 'Collection');
+      // Options may carry a group ("Lifestyle", "Collections"): shown as labelled groups.
+      const groups = new Map();
       for (const o of opts.picker.options) {
         const opt = document.createElement('option');
         opt.value = o.id;
         opt.textContent = o.name;
         if (o.id === opts.picker.selectedId) opt.selected = true;
-        pickerEl.append(opt);
+        if (o.group) {
+          if (!groups.has(o.group)) {
+            const g = document.createElement('optgroup');
+            g.label = o.group;
+            groups.set(o.group, g);
+            pickerEl.append(g);
+          }
+          groups.get(o.group).append(opt);
+        } else pickerEl.append(opt);
       }
       if (typeof opts.picker.onChange === 'function') pickerEl.addEventListener('change', () => opts.picker.onChange(pickerEl.value, { close: hide }));
       chip.append(pickerEl, svg('m7 10 5 5 5-5', { width: '2' }));

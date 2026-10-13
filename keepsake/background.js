@@ -9,8 +9,10 @@ import { classify, learnFromCorrection, AUTO_FILE_CONFIDENCE } from './src/share
 import { parsePrice, sanitizeText, uid, nowIso } from './src/shared/util.js';
 import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
-import { cleanupWithAI } from './src/ai/provider.js';
-import { isKind, kindInfo, hasOwnView, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
+import { cleanupWithAI, identifyForKind, draftRecipe } from './src/ai/provider.js';
+import { parsePostBundle } from './src/instagram/post.js';
+import { LOOKUP_SOURCES, lookupPlace, lookupFilm, lookupBook, fillMissing } from './src/shared/lookups.js';
+import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -128,6 +130,17 @@ function friendlyError(e) {
 
 function normalizeProduct(raw) {
   const p = { ...(raw || {}) };
+  // An Instagram post: read its own caption, creator and location (src/instagram/post.js) and keep them,
+  // so the save knows what the post says even when the page's title is just "Instagram".
+  if (p.isInstagram && p.igBundle && !p.instagram) {
+    const post = parsePostBundle(p.igBundle, p.canonicalUrl || p.url);
+    if (post.caption || post.creator || post.location) {
+      p.instagram = { caption: post.caption, creator: post.creator, location: post.location || p.igLocation?.name || '', hashtags: post.hashtags, postedAt: post.postedAt, links: post.links, products: post.products };
+      if (post.caption && (!p.description || p.description.length < post.caption.length)) p.description = post.caption;
+      if (post.location && !p.igLocation?.name) p.igLocation = { name: post.location };
+    }
+  }
+  delete p.igBundle;
   if (p.price === null || p.price === undefined || p.price === '' || Number.isNaN(Number(p.price))) {
     const parsed = parsePrice(p.priceText || p.price, p.currency);
     if (parsed) {
@@ -182,7 +195,17 @@ function placeOf(product) {
   const fromPage = placeFromSchema(product.place);
   const fromLink = placeFromMapsUrl(product.url);
   if (fromPage) return fromPage;
-  return fromLink || {};
+  if (fromLink) return fromLink;
+  // The page's own address block; its name is the site's ("Saigon Sandwich", not "Home | Saigon Sandwich").
+  const pp = product.pagePlace;
+  if (pp?.address) {
+    const site = String(product.siteName || '').trim();
+    const name = site || String(product.title || '').split(/\s+[|–—-]\s+/).filter((x) => !/^(?:home|welcome|index)$/i.test(x.trim())).pop() || '';
+    return { address: pp.address, locality: pp.locality, region: pp.region, postalCode: pp.postalCode, phone: pp.phone, hours: pp.hours, source: 'page', ...(name ? { name } : {}) };
+  }
+  // A post or page that names the place in its caption or location tag.
+  const { details, title } = detailsForKind('place', { title: product.title, description: product.description, url: product.url, instagram: { caption: product.description, location: product.igLocation?.name || '' } });
+  return title ? { ...details, name: title } : details;
 }
 
 // What a capture is: what the page says about itself first (structured data), then what we can tell.
@@ -199,7 +222,14 @@ function kindOfCapture(product) {
   if ((fromTypes === 'video' || fromTypes === 'article') && workoutOf(product)) return 'workout';
   if (fromTypes && fromTypes !== 'product') return fromTypes;
   if (product.recipe) return 'recipe';
-  if (product.isInstagram) return recipeFromText(product.description) ? 'recipe' : workoutOf(product) ? 'workout' : 'link';
+  // An Instagram post: a recipe or workout in the caption, a place when it's tagged with a location or
+  // names one with 📍; otherwise a link.
+  if (product.isInstagram) {
+    if (recipeFromText(product.description)) return 'recipe';
+    if (workoutOf(product)) return 'workout';
+    if (product.igLocation?.name || placeFromText(product.description) || placeFromText(product.title)) return 'place';
+    return 'link';
+  }
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
   // A video site's watch page, or a page that calls itself a video or an article (og:type).
   if (!fromTypes && product.screen) return 'media';
@@ -207,6 +237,9 @@ function kindOfCapture(product) {
   const og = String(product.media?.ogType || '').toLowerCase();
   if (!fromTypes && (videoPlatform(product.url) || /^video\./.test(og))) return 'video';
   if (!fromTypes && og === 'article') return 'article';
+  // A business's own site with its address, and opening hours or a phone number and "menu", "visit us"…
+  const pp = product.pagePlace;
+  if (!fromTypes && product.price === null && pp?.address && (pp.hours?.length || (pp.phone && pp.visit))) return 'place';
   if (fromTypes === 'product' || product.price !== null || product.priceText) return 'product';
   return product.sparse ? 'link' : 'product';
 }
@@ -235,7 +268,7 @@ function captureFacts(product) {
   }
   // A maps link's page title is the app's ("Google Maps"); the place's name is in the link.
   if (kind === 'place' && details.name) {
-    if (!product.title || /\bmaps\b/i.test(product.title)) product.title = details.name;
+    if (!product.title || /\bmaps\b/i.test(product.title) || genericTitle(product.title) || /^(?:home|welcome)\b|\|\s*home$/i.test(product.title) || product.pagePlace) product.title = details.name;
     delete details.name;
   }
   // A video's site by its own name ("YouTube", not "Youtube" from the address).
@@ -323,7 +356,95 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
     await store.updateCollection(collection.id, { coverImage: item.image });
   }
   if (aiWanted) queueEnrich(item.id);
+  if (FILLED_KINDS.includes(kind)) queueFill(item.id);
   return { ok: true, item, collection, classification: { ...classification, collectionId: targetId, collectionName: collection ? collection.name : classification.collectionName } };
+}
+
+// --- after the save: fill in a Lifestyle save ---------------------------------------------------------
+// A save you put into a Lifestyle view (or that Keepsake recognised as one) gets what's missing filled in:
+//   1. Optional AI, only if you turned it on: names the place, film or book the post is about, lists a
+//      workout's exercises, or drafts a recipe. Logged in the AI change log with Undo.
+//   2. Lookups you turned on (Settings → Lookups, each site granted): OpenStreetMap for a place's address
+//      and pin, Wikidata for a film or show, Open Library for a book. Only missing fields are filled.
+// One save at a time; OpenStreetMap gets at most one request a second.
+let fillQueue = Promise.resolve();
+let lastNominatim = 0;
+const FILLED_KINDS = ['place', 'media', 'book', 'recipe', 'workout'];
+function queueFill(id) {
+  fillQueue = fillQueue.then(() => fillKind(id)).catch(() => {});
+  return fillQueue;
+}
+
+async function lookupAllowed(settings, which) {
+  if (!settings.lookups?.[which]) return false;
+  try {
+    return await chrome.permissions.contains({ origins: LOOKUP_SOURCES[which].origins });
+  } catch {
+    return false;
+  }
+}
+
+async function fillKind(id) {
+  let item = await store.getItem(id);
+  if (!item || item.deletedAt) return;
+  const kind = kindOf(item);
+  if (!FILLED_KINDS.includes(kind)) return;
+  const settings = await store.getSettings();
+  const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
+  let d = item.details || {};
+  const unnamed = genericTitle(item.title) && !(item.userFields || []).includes('title');
+  if (key && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length) || (kind === 'recipe' && !d.ingredients?.length))) {
+    try {
+      let patch = null;
+      if (kind === 'recipe') {
+        const r = await draftRecipe(item, settings, key);
+        patch = { details: { ...d, ...r } };
+      } else {
+        const r = await identifyForKind(kind, item, settings, key);
+        if (r && kind === 'place') patch = { title: r.name, details: { ...d, locality: d.locality || r.locality } };
+        else if (r && kind === 'media') patch = { title: r.title, details: { ...d, year: d.year || r.year, format: r.format || d.format } };
+        else if (r && kind === 'book') patch = { title: r.title, details: { ...d, author: d.author || r.author } };
+        else if (r && kind === 'workout') patch = { details: { ...d, exercises: r.exercises, durationMinutes: d.durationMinutes || r.durationMinutes, source: 'ai' } };
+      }
+      if (patch) {
+        const before = Object.fromEntries(Object.keys(patch).map((k) => [k, item[k] ?? null]));
+        await store.updateItem(id, patch, { by: 'ai' });
+        await store.appendAiLog([{ id: uid(), runId: `fill-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || item.title,
+          changes: Object.keys(patch).map((f) => (f === 'details' ? { field: `${kindInfo(kind).label.toLowerCase()} details`, from: '—', to: 'filled in' } : { field: f, from: String(before[f] ?? ''), to: String(patch[f]) })),
+          before, after: patch, reason: `Filled in for ${kindInfo(kind).plural}`, undone: false }]);
+        item = await store.getItem(id);
+        d = item.details || {};
+      }
+    } catch {
+      /* the provider didn't answer: the save stays as it was */
+    }
+  }
+  if (genericTitle(item.title)) return; // nothing to look up by
+  try {
+    let found = null;
+    if (kind === 'place' && d.lat == null && await lookupAllowed(settings, 'places')) {
+      const waitTurn = async () => {
+        const wait = 1100 - (Date.now() - lastNominatim);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        lastNominatim = Date.now();
+      };
+      found = await lookupPlace({ name: item.title, locality: d.locality, address: d.address, region: d.region }, fetch, waitTurn);
+    } else if (kind === 'media' && (!d.year || !d.director) && await lookupAllowed(settings, 'media')) {
+      found = await lookupFilm({ title: item.title, year: d.year, format: d.format === 'series' ? 'series' : '' }, fetch);
+    } else if (kind === 'book' && (!d.author || !d.year) && await lookupAllowed(settings, 'books')) {
+      found = await lookupBook({ title: item.title, author: d.author }, fetch);
+    }
+    if (found) {
+      const patch = { details: fillMissing(d, found) };
+      if (found.image && !item.image) {
+        patch.image = found.image;
+        patch.images = [found.image];
+      }
+      await store.updateItem(id, patch, { by: 'lookup' });
+    }
+  } catch {
+    /* offline or the service didn't answer: try again from Settings → Lookups */
+  }
 }
 
 // --- after the save: optional AI tidy ---------------------------------------------------------------
@@ -415,11 +536,10 @@ async function showPageToast(tabId, res, product) {
         ? { kind: 'duplicate', existing: res.existing, title: (product && product.title) || '', look }
         : {
           kind: 'saved', itemId: res.item.id, title: res.item.title, collectionId: res.item.collectionId || '',
-          // A recipe, video, place… is saved to its Lifestyle view ("Saved to Videos"); collections are for
-          // shopping, so it gets no collection picker.
+          // Where it went, changeable to any Lifestyle view (it becomes that kind) or collection (shopping).
           collectionName: res.collection ? res.collection.name : '', isInbox: !!res.classification?.isInbox, look,
-          lifestyle: hasOwnView(res.item.kind) && !res.collection ? kindInfo(res.item.kind).plural : '',
-          collections: hasOwnView(res.item.kind) && !res.collection ? [] : collections,
+          lifestyle: hasOwnView(res.item.kind) && !res.collection ? `kind:${res.item.kind}` : '',
+          collections: [...LIFESTYLE().map((k) => ({ id: `kind:${k.value}`, name: k.plural, group: 'Lifestyle' })), ...collections.map((c) => ({ ...c, group: 'Collections' }))],
           thumb: /^https:\/\//.test(res.item.image || '') ? res.item.image : '',
           meta: [(() => { try { return fmt(res.item.price, res.item.currency); } catch { return ''; } })(), res.item.retailer || res.item.host].filter(Boolean).join(' · '),
           pending: res.item.captureState === 'pending',
@@ -449,15 +569,15 @@ async function showPageToast(tabId, res, product) {
             chrome.runtime.sendMessage({ type: M.UPDATE_ITEM, itemId: p.itemId, patch: { collectionId: id }, learn: 'light' }, (up) => {
               void chrome.runtime.lastError;
               t.show(up && up.ok
-                ? { tone: 'ok', look: p.look, title: `Moved to ${nameOf(id)}`, message: 'Keepsake will remember this for similar items.', duration: 4000 }
+                ? { tone: 'ok', look: p.look, title: `Moved to ${nameOf(id)}`, message: id.startsWith('kind:') ? 'Its details were worked out from the page.' : 'Keepsake will remember this for similar items.', duration: 4000 }
                 : { tone: 'error', look: p.look, title: 'Couldn’t move', message: (up && up.error) || '' });
             });
           };
           const status = [p.pending ? 'Finishing details…' : '', 'Saved on this device'].filter(Boolean).join(' · ');
           t.show({
             tone: p.isInbox ? 'review' : 'ok', look: p.look,
-            title: p.lifestyle ? `Saved to ${p.lifestyle}` : p.isInbox ? 'Saved. Pick a collection now or later' : 'Saved to',
-            picker: !p.isInbox && p.collections.length ? { options: p.collections, selectedId: p.collectionId, label: 'Move to collection', onChange: (id) => move(id) } : null,
+            title: p.isInbox ? 'Saved. Pick a collection now or later' : 'Saved to',
+            picker: !p.isInbox && p.collections.length ? { options: p.collections, selectedId: p.collectionId || p.lifestyle, label: 'Move to', onChange: (id) => move(id) } : null,
             thumb: p.thumb, message: cut(p.title, 90), meta: p.meta, status,
             suggestions: p.isInbox && p.suggestions.length ? { items: p.suggestions, onPick: (id) => move(id) } : null,
             duration: p.isInbox ? 14000 : 10000,
@@ -664,6 +784,19 @@ async function handleMessage(msg, sender) {
       const item = await store.getItem(msg.itemId);
       if (!item) throw new Error('That item no longer exists.');
       const patch = { ...(msg.patch || {}) };
+      // Into a Lifestyle view ("kind:place" from a picker, or { kind }): becomes that kind, details worked out.
+      if (typeof patch.collectionId === 'string' && patch.collectionId.startsWith('kind:')) patch.kind = patch.collectionId.slice(5);
+      if (typeof patch.kind === 'string' && isKind(patch.kind) && hasOwnView(patch.kind)) {
+        delete patch.collectionId;
+        await store.updateItem(item.id, kindChangePatch(item, patch.kind), { by: 'kind' });
+        queueFill(item.id);
+        delete patch.kind;
+      }
+      // A Lifestyle save going into a collection becomes something to buy.
+      if (typeof patch.collectionId === 'string' && patch.collectionId && hasOwnView(kindOf(item))) {
+        await store.updateItem(item.id, { kind: shoppingKindFor(item), details: {} }, { by: 'kind' });
+      }
+      delete patch.kind;
       if (typeof patch.collectionId === 'string' && patch.collectionId.startsWith('new:')) {
         const col = await store.ensureCollectionForTaxonomy(patch.collectionId.slice(4));
         if (!col) throw new Error('That collection no longer exists.');
@@ -684,6 +817,15 @@ async function handleMessage(msg, sender) {
         await store.updateItem(item.id, safePatch);
       }
       return { ok: true, item: await store.getItem(item.id) };
+    }
+    case MSG.FILL_ITEM: {
+      queueFill(msg.itemId);
+      return { ok: true };
+    }
+    case MSG.FILL_KIND: {
+      const ids = (await store.getItems()).filter((i) => kindOf(i) === msg.kind && !i.deletedAt).map((i) => i.id);
+      for (const id of ids) queueFill(id);
+      return { ok: true, count: ids.length };
     }
     case MSG.UNDO_SAVE: {
       // Undoing a save that just happened removes it outright (it never reaches the Trash).

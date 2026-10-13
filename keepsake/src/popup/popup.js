@@ -7,7 +7,7 @@ import { createStore, chromeBackend, idbBackend, applyLook } from '../shared/sto
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
-import { kindOf, kindInfo, hasOwnView } from '../shared/kinds.js';
+import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -287,27 +287,19 @@ function renderCollectionPicker() {
   const sel = $('collectionSelect');
   clear(sel);
   const cls = state.classification;
+  // Anywhere you like: a Lifestyle view (the save becomes that kind) or a collection (shopping).
   if (cls.isInbox) sel.append(el('option', { value: '', text: 'Not sure — leave for Review' }));
-  // A recipe, video, place… lives in its Lifestyle view: no collection to pick.
-  else if (cls.shelf) sel.append(el('option', { value: '', text: cls.collectionName }));
-  sel.closest('.collection-picker').classList.toggle('hidden', !!cls.shelf);
-  $('confidencePill').classList.toggle('hidden', !!cls.shelf);
-  let target = document.getElementById('shelfTarget');
-  if (!target) {
-    target = el('p', { class: 'shelf-target', id: 'shelfTarget' });
-    sel.closest('.collection-picker').after(target);
-  }
-  target.textContent = cls.shelf ? `${cls.collectionName}, under Lifestyle` : '';
-  target.classList.toggle('hidden', !cls.shelf);
-  for (const c of state.collections) sel.append(el('option', { value: c.id, text: c.name }));
-  if (cls.isNew && cls.taxonomyKey) {
-    sel.append(el('option', { value: `new:${cls.taxonomyKey}`, text: `${cls.collectionName} (new collection)` }));
-  }
-  sel.append(el('option', { value: '__new', text: '＋ New collection…' }));
-  const initial = cls.isNew ? `new:${cls.taxonomyKey}` : cls.collectionId || '';
+  sel.append(el('optgroup', { label: 'Lifestyle' }, LIFESTYLE().map((k) => el('option', { value: `kind:${k.value}`, text: k.plural }))));
+  const cols = el('optgroup', { label: 'Collections' }, state.collections.map((c) => el('option', { value: c.id, text: c.name })));
+  if (cls.isNew && cls.taxonomyKey) cols.append(el('option', { value: `new:${cls.taxonomyKey}`, text: `${cls.collectionName} (new collection)` }));
+  cols.append(el('option', { value: '__new', text: '＋ New collection…' }));
+  sel.append(cols);
+  const initial = cls.shelf ? `kind:${cls.shelf}` : cls.isNew ? `new:${cls.taxonomyKey}` : cls.collectionId || '';
   sel.value = initial;
   if (sel.value !== initial) sel.value = sel.options[0]?.value || '';
   sel.onchange = () => {
+    // A price only means something for shopping.
+    document.querySelector('.price-row')?.classList.toggle('hidden', sel.value.startsWith('kind:'));
     if (sel.value === '__new') {
       $('newCollectionRow').classList.remove('hidden');
       $('newCollectionInput').focus();
@@ -455,8 +447,13 @@ async function save({ force }) {
   setBusy(true);
   state.retry = () => save({ force });
   try {
-    const chosen = await resolveCollectionChoice();
+    let chosen = await resolveCollectionChoice();
     const product = collectEdits();
+    // A Lifestyle view picked: save it as that kind (its details are worked out from the page).
+    if (chosen.startsWith('kind:')) {
+      product.kind = chosen.slice(5);
+      chosen = null;
+    }
     const note = sanitizeText($('noteInput').value, 1000);
     const res = await send({
       type: MSG.SAVE_ITEM, product, force, note, source: 'toolbar',
@@ -519,7 +516,7 @@ function showSaved(item, collection, classification = null) {
   const updated = state.savedMode === 'updated';
   const already = state.savedMode === 'existing';
   // Lifestyle saves (recipes, videos, places…) name their view; collections are for shopping.
-  $('savedTitle').textContent = updated ? 'Updated' : view ? `${already ? 'Already in' : 'Saved to'} ${view}` : already ? 'Already in' : isInbox ? 'Saved. Pick a collection now or later' : 'Saved to';
+  $('savedTitle').textContent = updated ? 'Updated' : already ? 'Already in' : isInbox ? 'Saved. Pick a collection now or later' : 'Saved to';
   document.querySelector('.capture').classList.toggle('is-review', isInbox && !updated);
   $('savedSubtitle').textContent = cut(item.title, 90);
   $('savedMeta').textContent = [formatPrice(item.price, item.currency), item.retailer || item.host].filter(Boolean).join(' · ');
@@ -573,16 +570,17 @@ function showSaved(item, collection, classification = null) {
 // After every save: a one-step "Move to", so a wrong collection is easy to spot and fix.
 function renderSavedMove(item) {
   const row = $('savedMoveRow');
-  // Lifestyle saves have no collection to move between (one kept from before still can be).
-  const movable = (state.savedMode === 'saved' || state.savedMode === 'existing') && !(hasOwnView(kindOf(item)) && !item.collectionId);
+  const movable = state.savedMode === 'saved' || state.savedMode === 'existing';
   row.classList.toggle('hidden', !movable);
   if (!movable) return;
   const sel = $('savedMove');
   clear(sel);
-  const view = hasOwnView(kindOf(item)) ? kindInfo(kindOf(item)).plural : '';
-  if (!item.collectionId) sel.append(el('option', { value: '', text: view || 'Review (not sorted)' }));
-  for (const c of state.collections) sel.append(el('option', { value: c.id, text: c.name }));
-  sel.value = item.collectionId || '';
+  // Move it anywhere: a Lifestyle view (it becomes that kind) or a collection (shopping).
+  const ownView = hasOwnView(kindOf(item)) && !item.collectionId;
+  if (!item.collectionId && !ownView) sel.append(el('option', { value: '', text: 'Review (not sorted)' }));
+  sel.append(el('optgroup', { label: 'Lifestyle' }, LIFESTYLE().map((k) => el('option', { value: `kind:${k.value}`, text: k.plural }))));
+  sel.append(el('optgroup', { label: 'Collections' }, state.collections.map((c) => el('option', { value: c.id, text: c.name }))));
+  sel.value = item.collectionId || (ownView ? `kind:${kindOf(item)}` : '');
   row.classList.toggle('is-user', item.categorizationSource === 'manual');
   sel.onchange = async () => {
     if (!sel.value) return;
@@ -591,6 +589,12 @@ function renderSavedMove(item) {
     sel.disabled = false;
     if (!res.ok) return;
     state.savedItem = res.item;
+    if (sel.value.startsWith('kind:')) {
+      // Now that kind: show it as saved there (with the name or details it picked up).
+      showSaved(res.item, null);
+      $('savedTitle').textContent = 'Moved to';
+      return;
+    }
     filedTo(sel.value, 'Moved to');
   };
 }

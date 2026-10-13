@@ -682,8 +682,3 @@ body {
   background: var(--paper);
 }
 
-.shelf-target {
-  margin: 6px 0 0;
-  font-weight: 600;
-  color: var(--c-text);
-}

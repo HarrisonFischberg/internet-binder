@@ -385,3 +385,28 @@ test('film and book sites: a title page is a film/show or a book; home, lists an
   for (const url of ['https://letterboxd.com/', 'https://letterboxd.com/film/the-matrix/reviews/', 'https://letterboxd.com/someone/list/favourites/', 'https://www.imdb.com/chart/top/',
     'https://www.goodreads.com/review/list/1', 'https://www.goodreads.com/', 'https://shop.example/film/x', 'nonsense']) assert.equal(titleSite(url), null, url);
 });
+
+test('places from captions: "📍 Name" with the address on the next line, or glued on when line breaks are lost', async () => {
+  const { placeFromText, detailsForKind } = await import('../keepsake/src/shared/kinds.js');
+  // In the shape of a real NYC food post (wording written for the test).
+  const cap = '🚨 New spot alert 🚨 Example Donuts just opened in NYC 🍩\n\n🍩 What I tried:\n🍩 Pink\n🍩 Glazed\n\n📍 Example Donuts\n186 Bleecker St, New York, NY';
+  const want = { name: 'Example Donuts', address: '186 Bleecker St', locality: 'New York', region: 'NY' };
+  assert.deepEqual(placeFromText(cap), want);
+  assert.deepEqual(placeFromText(cap.replace(/\s+/g, ' ')), want);
+  assert.deepEqual(placeFromText('📍 Example Donuts, 186 Bleecker St, New York, NY'), want);
+  assert.equal(placeFromText('🍩 Pink\n🍩 Glazed'), null, 'food emoji lines are not places');
+  const d = detailsForKind('place', { title: 'Instagram', instagram: { caption: cap }, url: 'https://www.instagram.com/reel/abc/' });
+  assert.deepEqual([d.title, d.details.address, d.details.locality, d.details.region], ['Example Donuts', '186 Bleecker St', 'New York', 'NY']);
+});
+
+test('places: an "Address:" line is the address, never the name; the place’s @handle nearby names it', async () => {
+  const { placeFromText, detailsForKind, nameFromHandle } = await import('../keepsake/src/shared/kinds.js');
+  const cap = 'NYC’s newest viral donuts! @example_nyc\nAddress: 23 Cleveland Place, New York, NY\n.\n.\n.\n#newyork #nyc';
+  const want = { name: 'Example NYC', address: '23 Cleveland Place', locality: 'New York', region: 'NY', handle: 'example_nyc' };
+  assert.deepEqual(placeFromText(cap), want);
+  assert.deepEqual(placeFromText(cap.replace(/\s+/g, ' ')), want, 'line breaks lost: the same');
+  assert.deepEqual(placeFromText('Address: 23 Cleveland Place, New York, NY'), { name: '', address: '23 Cleveland Place', locality: 'New York', region: 'NY' });
+  const d = detailsForKind('place', { title: 'Instagram', instagram: { caption: 'Address: 23 Cleveland Place, New York, NY', creator: 'someone' } });
+  assert.deepEqual([d.title, d.details.address], ['23 Cleveland Place', '23 Cleveland Place'], 'no name: the address stands in as the title');
+  assert.equal(nameFromHandle('joes.pizza'), 'Joes Pizza');
+});

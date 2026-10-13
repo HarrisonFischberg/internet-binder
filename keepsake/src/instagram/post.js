@@ -8,7 +8,7 @@
 // the meta tags (og:title / og:description / og:image) are the most stable
 // source, the embedded JSON the richest.
 
-import { sanitizeText, sanitizeUrl, parsePrice } from '../shared/util.js';
+import { sanitizeText, sanitizeMultiline, sanitizeUrl, parsePrice } from '../shared/util.js';
 
 const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>()"']+[^\s<>()"'.,!?:;])/gi;
 const HASHTAG_RE = /#([\p{L}\p{N}_]{2,60})/gu;
@@ -99,11 +99,23 @@ function fromMeta(meta) {
   return out;
 }
 
-function fromScripts(scripts) {
+function fromScripts(scripts, shortcode = '') {
   const out = { caption: '', creator: '', image: '', postedAt: '', products: [], location: '' };
   for (const s of scripts) {
     const data = parseJsonLoose(s.text);
     if (!data) continue;
+    // The page's data can hold several posts (the grid you came from, suggestions): the one whose code
+    // is this post's shortcode wins.
+    if (shortcode) {
+      const own = deepFind(data, (o) => (o.code === shortcode || o.shortcode === shortcode) && ('caption' in o || 'edge_media_to_caption' in o || 'location' in o), [])[0];
+      if (own) {
+        const cap = own.caption?.text || own.edge_media_to_caption?.edges?.[0]?.node?.text || '';
+        if (cap && !out.caption) out.caption = String(cap);
+        if (own.location?.name && !out.location) out.location = String(own.location.name);
+        const user = own.owner?.username || own.user?.username || '';
+        if (user && !out.creator) out.creator = String(user);
+      }
+    }
     // LD+JSON: VideoObject / ImageObject with author.identifier
     if (s.type === 'application/ld+json') {
       const nodes = deepFind(data, (o) => typeof o['@type'] === 'string' && /Video|Image|Social|Article/i.test(o['@type']), []);
@@ -176,9 +188,10 @@ export function parsePostBundle(bundle, url) {
   const b = bundle || {};
   const meta = b.meta || {};
   const m = fromMeta(meta);
-  const j = fromScripts(b.scripts || []);
   const { shortcode, type } = postKindFromUrl(url);
-  const caption = sanitizeText(j.caption || m.caption, 2200);
+  const j = fromScripts(b.scripts || [], shortcode);
+  // The caption as shown on screen is the fallback (a page reached without a reload may have no data for it).
+  const caption = sanitizeMultiline(j.caption || m.caption || b.visibleCaption || '', 2200);
   const creator = sanitizeText(j.creator || m.creator, 80).replace(/^@/, '');
   const links = [];
   for (const mm of caption.matchAll(URL_RE)) {

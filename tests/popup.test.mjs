@@ -59,15 +59,16 @@ const video = { title: 'Top 5 cold opens', url: 'https://www.youtube.com/watch?v
 
 test('popup: a new YouTube video saves straight to Videos', async () => {
   await openPopup(video);
-  assert.equal(page.getElementById('savedTitle').textContent, 'Saved to Videos');
-  assert.ok(!visible('savedMoveRow'), 'no collection picker: collections are for shopping');
+  assert.equal(page.getElementById('savedTitle').textContent, 'Saved to');
+  assert.equal(page.getElementById('savedMove').value, 'kind:video');
+  assert.deepEqual([...page.querySelectorAll('#savedMove optgroup')].map((g) => g.label), ['Lifestyle', 'Collections'], 'any Lifestyle view or collection');
   assert.ok(visible('savedUndo'));
 });
 
 test('popup: opening it again on a saved video shows that save, not the duplicate preview', async () => {
   await openPopup(video);
-  assert.equal(page.getElementById('savedTitle').textContent, 'Already in Videos');
-  assert.ok(!visible('savedMoveRow'));
+  assert.equal(page.getElementById('savedTitle').textContent, 'Already in');
+  assert.equal(page.getElementById('savedMove').value, 'kind:video');
   assert.ok(!visible('savedUndo'), 'nothing new was saved, so nothing to undo');
   assert.match(page.getElementById('savedInboxHint').textContent, /^Saved .*on this device\.$/);
   assert.ok(!page.querySelector('#state-product:not(.hidden)'), 'no preview');
@@ -77,15 +78,16 @@ test('popup: opening it again on a saved video shows that save, not the duplicat
   assert.match(F.calls.tabsCreated.at(-1)?.url || '', /dashboard\.html#kind\/video$/, 'Open in dashboard goes to Videos, not Review');
 });
 
-test('popup: the preview for a video names its Lifestyle view, with no collection picker or price', async () => {
+test('popup: the preview for a video picks its Lifestyle view, and shows no price', async () => {
   // A preview is shown after Undo on a save made straight away.
   const fresh = { ...video, title: 'Another sketch', url: 'https://www.youtube.com/watch?v=popup2' };
   await openPopup(fresh);
   page.getElementById('savedUndo').click();
   await settle(150);
   await ready();
-  assert.ok(page.querySelector('.collection-picker').classList.contains('hidden'), 'no collection picker for a video');
-  assert.equal(page.getElementById('shelfTarget').textContent, 'Videos, under Lifestyle');
+  const sel = page.getElementById('collectionSelect');
+  assert.equal(sel.value, 'kind:video', 'Videos is picked');
+  assert.ok([...sel.querySelectorAll('optgroup')].some((g) => g.label === 'Lifestyle'));
   assert.ok(page.querySelector('.price-row').classList.contains('hidden'), 'no price for a video');
 });
 
@@ -99,4 +101,33 @@ test('popup: a product page still shows its price in the preview', async () => {
   }
   assert.ok(!page.querySelector('.price-row').classList.contains('hidden'));
   assert.equal(page.getElementById('priceInput').value, '12');
+});
+
+test('popup: a saved post moved into Places becomes a place named from its caption', async () => {
+  const post = { title: 'nyceats on Instagram: "Best donuts in the city"', url: 'https://www.instagram.com/reel/donut1/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
+    description: '1,234 likes - nyceats: "Best donuts in the city 🍩 Try the glazed. #nyc"' };
+  await openPopup(post);
+  // Keepsake wasn't sure, so it shows the preview: pick Places from the Lifestyle group and save.
+  const sel = page.getElementById('collectionSelect');
+  assert.ok(!page.getElementById('state-product').classList.contains('hidden'), 'the preview');
+  sel.value = 'kind:place';
+  sel.dispatchEvent(new window.Event('change'));
+  assert.ok(page.querySelector('.price-row').classList.contains('hidden'), 'no price for a place');
+  page.getElementById('saveBtn').click();
+  for (let i = 0; i < 60 && page.getElementById('state-saved')?.classList.contains('hidden') !== false; i++) await settle(25);
+  assert.equal(page.getElementById('savedMove').value, 'kind:place');
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const saved = await store.findByUrl(post.url);
+  assert.deepEqual([saved.kind, saved.collectionId, saved.needsReview], ['place', null, false]);
+});
+
+test('popup: an Instagram post with 📍 in its caption is saved as a place, named from it', async () => {
+  const post = { title: 'nyceats on Instagram: "Glazed heaven"', url: 'https://www.instagram.com/reel/donut2/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
+    description: '987 likes - nyceats: "Glazed heaven 🍩\n📍 Peter Pan Donut & Pastry Shop, Greenpoint\n#nycfood"' };
+  await openPopup(post);
+  assert.equal(page.getElementById('savedMove').value, 'kind:place');
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const saved = await createStore(chromeBackend(), idbBackend()).findByUrl(post.url);
+  assert.deepEqual([saved.kind, saved.title, saved.details.locality], ['place', 'Peter Pan Donut & Pastry Shop', 'Greenpoint']);
 });

@@ -195,3 +195,36 @@ test('extract: structured data wrapped in CDATA comments is still read (a film p
   assert.equal(p.screen.director[0].name, 'A. Director');
   assert.equal(p.image, 'https://films.example/poster.jpg');
 });
+
+test('extract: an Instagram reel reached from the grid: its own caption from the page data (not the grid’s), or from the screen', () => {
+  const data = JSON.stringify({ items: [
+    { code: 'GRIDPOST1', caption: { text: 'Some other post 📍 Somewhere Else' }, user: { username: 'other' } },
+    { code: 'REEL12345', caption: { text: 'Best donuts\n📍 Example Donuts\n186 Bleecker St, New York, NY' }, user: { username: 'nyceats' }, location: { name: 'Example Donuts NYC' } },
+  ] });
+  const p = extractFrom(`<html><head><title>Instagram</title><meta property="og:url" content="https://www.instagram.com/explore/"><meta property="og:title" content="Instagram"></head>
+    <body><main><script type="application/json">${data}</script></main></body></html>`, 'https://www.instagram.com/reel/REEL12345/');
+  assert.ok(p.isInstagram);
+  assert.equal(p.igBundle.scripts.length, 1);
+  assert.equal(Object.keys(p.igBundle.meta).length, 0, 'the grid’s head tags are not used');
+  const onScreen = extractFrom(`<html><head><title>Instagram</title></head><body><main><div><span dir="auto">Best donuts 🍩
+📍 Example Donuts
+186 Bleecker St, New York, NY</span></div></main></body></html>`, 'https://www.instagram.com/reel/REEL99999/');
+  assert.match(onScreen.igBundle.visibleCaption, /📍 Example Donuts\n186 Bleecker St/);
+});
+
+test('extract: a restaurant’s own site with no place data: its visible address block, phone and hours', () => {
+  const p = extractFrom(`<html><head><title>Home | Example Banh Mi</title><meta property="og:site_name" content="Example Banh Mi"><meta property="og:type" content="website"></head><body>
+<main><h1>Fresh sandwiches daily</h1></main><footer>
+Visit Our Shop
+Location
+560 Larkin St
+San Francisco, CA 94102
+Phone
+(415) 555-0123
+Opening Hours
+Mon–Tue: 7:00 AM – 5:30 PM
+Wed-Sunday: 7:00 AM - 6:00 PM
+</footer></body></html>`, 'https://banhmi.example/');
+  assert.deepEqual([p.pagePlace.address, p.pagePlace.locality, p.pagePlace.region, p.pagePlace.postalCode, p.pagePlace.phone, p.pagePlace.hours.length, p.pagePlace.visit],
+    ['560 Larkin St', 'San Francisco', 'CA', '94102', '(415) 555-0123', 2, true]);
+});
