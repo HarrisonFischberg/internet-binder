@@ -722,7 +722,7 @@ function renderView({ keepScroll = false } = {}) {
   if (isGridRoute()) $('viewCount').textContent = pluralize(currentGridItems().length, 'item', 'items');
   else if (r.name === 'collections') $('viewCount').textContent = pluralize(state.collections.length, 'collection', 'collections');
   else $('viewCount').textContent = '';
-  if (keepScroll) view.scrollTop = prevScroll;
+  if (keepScroll) UI.holdScroll(view, prevScroll);
 }
 
 function isGridRoute() {
@@ -2736,6 +2736,7 @@ async function saveCandidateAsItem(post, c) {
 }
 
 function renderAiBox(box, item) {
+  UI.holdHeight(box);
   clear(box);
   const ai = state.settings?.ai;
   const eligible = item.type === 'instagram' || item.type === 'inspiration';

@@ -28,7 +28,8 @@ export function openModal({ title, body, actions = [], wide = false, full = fals
       if (openModals === 0) {
         root.hidden = true;
         document.body.classList.remove('modal-open');
-        if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+        // Back to what was focused, without scrolling the page to it.
+        if (lastFocus && typeof lastFocus.focus === 'function' && lastFocus.isConnected) lastFocus.focus({ preventScroll: true });
       }
       document.removeEventListener('keydown', onKey, true);
       if (onClose) onClose(value);
@@ -406,6 +407,36 @@ export function emptyState({ title, message, actions = [], icon = null }) {
     message ? el('p', { class: 'empty-state-text' }, [message]) : null,
     actions.length ? el('div', { class: 'empty-state-actions' }, actions) : null,
   ]);
+}
+
+// Keeping your place. A page redrawn after a change fills in asynchronously, so its old scroll position
+// is put back once there's room for it (for up to 1.5 s); scrolling yourself meanwhile wins.
+export function holdScroll(box, top) {
+  if (!box || !(top > 0)) return;
+  box.scrollTop = top;
+  if (Math.abs(box.scrollTop - top) < 2) return;
+  const events = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+  let stopped = false;
+  const stop = () => { stopped = true; };
+  const done = () => events.forEach((e) => box.removeEventListener(e, stop));
+  events.forEach((e) => box.addEventListener(e, stop, { passive: true }));
+  const until = Date.now() + 1500;
+  const tick = () => {
+    if (stopped || Date.now() > until) return done();
+    box.scrollTop = top;
+    if (Math.abs(box.scrollTop - top) < 2) return done();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// A section about to be emptied and refilled in place keeps its height meanwhile, so the page under it
+// doesn't jump up (and the scroll position isn't lost) while the new content arrives.
+export function holdHeight(box) {
+  const h = box?.offsetHeight || 0;
+  if (!h) return;
+  box.style.minHeight = `${h}px`;
+  setTimeout(() => { box.style.minHeight = ''; }, 1000);
 }
 
 export { clear };

@@ -331,6 +331,7 @@ function detailsBanner(ctx, scan) {
   const box = el('div', { class: 'notice details-banner' });
   const missing = scan.posts.filter((p) => !p.details);
   const draw = () => {
+    UI.holdHeight(box);
     clear(box);
     if (enrich.running) {
       const pr = enrich.progress || { done: 0, total: scan.posts.length, failed: 0 };

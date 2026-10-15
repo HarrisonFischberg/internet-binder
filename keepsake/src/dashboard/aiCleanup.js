@@ -343,6 +343,7 @@ export function renderAiLog(ctx, view) {
   page.append(box);
   view.append(page);
   ctx.store.getAiLog().then((log) => {
+    UI.holdHeight(box);
     clear(box);
     if (!log.length) {
       box.append(UI.emptyState({ title: 'No AI changes yet', message: 'When you run “Fix with AI” from Review or the AI settings, every change shows up here.', icon: UI.checkIcon() }));

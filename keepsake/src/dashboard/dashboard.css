@@ -514,6 +514,9 @@ a.sidebar-brand:hover .brand-name {
 }
 
 .view {
+  /* The one scrolling area: anything positioned inside (a hidden file input) stays inside it, so the page
+     itself never scrolls. */
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;

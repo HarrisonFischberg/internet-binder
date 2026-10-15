@@ -73,6 +73,7 @@ function appearanceSection(ctx) {
 function floatingSection(ctx) {
   const box = el('div', {});
   const draw = async () => {
+    UI.holdHeight(box);
     clear(box);
     const s = ctx.state.settings.floating;
     const origins = await grantedOrigins();
@@ -185,6 +186,7 @@ function floatingSection(ctx) {
 function categorizationSection(ctx) {
   const box = el('div', {});
   const draw = () => {
+    UI.holdHeight(box);
     clear(box);
     const prefs = ctx.state.prefs || emptyPrefs();
     const threshold = Number(prefs.confidenceThreshold) || 0.6;
@@ -240,6 +242,7 @@ function collectionsSection(ctx) {
 function igAccessControl(ctx) {
   const box = el('span', {});
   const draw = async () => {
+    UI.holdHeight(box);
     clear(box);
     const has = await hasInstagramAccess();
     box.append(el('span', { class: `pill ${has ? 'pill-ok' : ''}` }, [has ? 'Granted' : 'Not granted']));
@@ -410,6 +413,7 @@ export function renderAI(ctx, view) {
   const page = el('div', { class: 'page' });
   const box = el('div', {});
   const draw = async () => {
+    UI.holdHeight(box);
     clear(box);
     const ai = ctx.state.settings.ai;
     const cfg = providerConfig(ctx.state.settings);
