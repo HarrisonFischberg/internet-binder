@@ -400,8 +400,8 @@ const IDENTIFY_SYSTEM = {
 };
 
 // Asks your AI provider what a saved post is about, for the kind you put it in (a place's name and city,
-// a film's title, a book's title and author, a workout's exercises). Sends the save's title, caption or
-// description and site; returns null when the text doesn't say.
+// a film's title, a book's title and author, a workout's exercises). Sends the save's title, caption,
+// Instagram location tag or description and site; returns null when the text doesn't say.
 export async function identifyForKind(kind, item, settings, apiKey) {
   const system = IDENTIFY_SYSTEM[kind];
   if (!system) return null;
@@ -409,6 +409,7 @@ export async function identifyForKind(kind, item, settings, apiKey) {
   const text = [
     `Title: ${String(item.title || '').slice(0, 200)}`,
     item.instagram?.caption ? `Caption: ${String(item.instagram.caption).slice(0, 1500)}` : '',
+    item.instagram?.location ? `Location tag: ${String(item.instagram.location).slice(0, 120)}` : '',
     item.description ? `Description: ${String(item.description).slice(0, 1200)}` : '',
     item.retailer || item.host ? `From: ${item.retailer || item.host}` : '',
   ].filter(Boolean).join('\n');

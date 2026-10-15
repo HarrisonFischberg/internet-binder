@@ -100,7 +100,15 @@ function fromMeta(meta) {
 }
 
 function fromScripts(scripts, shortcode = '') {
-  const out = { caption: '', creator: '', image: '', postedAt: '', products: [], location: '' };
+  const out = { caption: '', creator: '', image: '', postedAt: '', products: [], location: '', place: null };
+  // The post's location tag as Instagram describes it: name, street, city, pin (when it has them).
+  const placeOf = (loc) => {
+    if (!loc || typeof loc !== 'object' || typeof loc.name !== 'string') return null;
+    let a = {};
+    try { a = typeof loc.address_json === 'string' ? JSON.parse(loc.address_json) || {} : {}; } catch { a = {}; }
+    const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+    return { name: loc.name, address: loc.address || a.street_address || '', city: loc.city || a.city_name || '', region: a.region_name || '', postalCode: a.zip_code || '', lat: num(loc.lat), lng: num(loc.lng) };
+  };
   for (const s of scripts) {
     const data = parseJsonLoose(s.text);
     if (!data) continue;
@@ -111,7 +119,10 @@ function fromScripts(scripts, shortcode = '') {
       if (own) {
         const cap = own.caption?.text || own.edge_media_to_caption?.edges?.[0]?.node?.text || '';
         if (cap && !out.caption) out.caption = String(cap);
-        if (own.location?.name && !out.location) out.location = String(own.location.name);
+        if (own.location?.name && !out.location) {
+          out.location = String(own.location.name);
+          out.place = placeOf(own.location);
+        }
         const user = own.owner?.username || own.user?.username || '';
         if (user && !out.creator) out.creator = String(user);
       }
@@ -160,7 +171,10 @@ function fromScripts(scripts, shortcode = '') {
     }
     if (!out.location) {
       const locs = deepFind(data, (o) => o.location && typeof o.location === 'object' && typeof o.location.name === 'string', []);
-      if (locs[0]) out.location = locs[0].location.name;
+      if (locs[0]) {
+        out.location = locs[0].location.name;
+        out.place = placeOf(locs[0].location);
+      }
     }
     const tags = deepFind(data, (o) => Array.isArray(o.product_tags) && o.product_tags.length, []);
     for (const holder of tags) {
@@ -214,10 +228,20 @@ export function parsePostBundle(bundle, url) {
     postedAt: sanitizeText(j.postedAt || m.postedAt, 40),
     likes: m.likes,
     location: sanitizeText(j.location, 120),
+    place: cleanPlace(j.place),
     linkInBio: /link in (?:my )?bio|link in profile|shop (?:my|the) (?:link|bio)/i.test(caption),
     title: titleFromCaption(caption, creator, type),
     readAt: new Date().toISOString(),
   };
+}
+
+// A location tag's fields, bounded; a pin only when both numbers are real coordinates.
+function cleanPlace(p) {
+  if (!p || typeof p !== 'object' || !p.name) return null;
+  const lat = Number.isFinite(p.lat) && Math.abs(p.lat) <= 90 ? p.lat : null;
+  const lng = Number.isFinite(p.lng) && Math.abs(p.lng) <= 180 ? p.lng : null;
+  return { name: sanitizeText(p.name, 120), address: sanitizeText(p.address, 200), city: sanitizeText(p.city, 80), region: sanitizeText(p.region, 60), postalCode: sanitizeText(p.postalCode, 20),
+    lat: lat !== null && lng !== null && !(lat === 0 && lng === 0) ? lat : null, lng: lat !== null && lng !== null && !(lat === 0 && lng === 0) ? lng : null };
 }
 
 export function parsePostHtml(html, url) {

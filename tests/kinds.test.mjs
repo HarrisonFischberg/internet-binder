@@ -452,3 +452,32 @@ test('placeFromHome: says what it is (a bakery, a skate shop) and where (a city,
   assert.equal(placeFromHome({ name: 'Example Donuts', about: 'Organic donut shop', siteName: '', title: '', phone: '', visitLink: false }), null, 'no city, phone or locations link');
   assert.equal(placeFromHome({ name: 'Example Shoes', about: 'Shoes made from wool', siteName: '', title: '', phone: '', visitLink: true }), null, 'a brand');
 });
+
+test('kindForCollectionName: an Instagram collection named for a Lifestyle view goes there', async () => {
+  const { kindForCollectionName } = await import('../keepsake/src/shared/kinds.js');
+  assert.deepEqual(['Restaurant', 'Restaurants', 'NYC eats', 'Coffee shops', 'Date night', 'Brunch recipes', 'Workouts', 'Movies to watch', 'Home decor', 'Outfits', 'All posts'].map(kindForCollectionName),
+    ['place', 'place', 'place', 'place', 'place', 'recipe', 'workout', 'media', null, null, null]);
+});
+
+test('placeFromPost: the caption names the place, the location tag gives its street, city and pin; a city-only tag is the area', async () => {
+  const { placeFromPost } = await import('../keepsake/src/shared/kinds.js');
+  const tag = { name: 'Example Pizza', address: '7 Carmine St', city: 'New York, New York', lat: 40.7305, lng: -74.0021 };
+  const a = placeFromPost({ caption: 'Best slice', location: 'Example Pizza', place: tag });
+  assert.deepEqual([a.name, a.details.address, a.details.locality, a.details.region, a.details.lat], ['Example Pizza', '7 Carmine St', 'New York', 'New York', 40.7305]);
+  const b = placeFromPost({ caption: '📍 Other Place, SoHo', location: 'Example Pizza', place: tag });
+  assert.deepEqual([b.name, b.details.locality, b.details.address, b.details.lat], ['Other Place', 'SoHo', '', null], 'another place’s tag is not used');
+  const c = placeFromPost({ caption: 'so good', location: 'Brooklyn, New York' });
+  assert.deepEqual([c.name, c.details.locality, c.details.region], ['', 'Brooklyn', 'New York']);
+  assert.equal(placeFromPost({ caption: 'yum' }), null);
+});
+
+test('moving an imported Instagram post into Places: named from its location tag, with the tag’s street, city and pin', async () => {
+  const { kindChangePatch } = await import('../keepsake/src/shared/kinds.js');
+  const post = { type: 'instagram', kind: 'link', title: 'Best slice in the city', url: 'https://www.instagram.com/p/MOVE1/',
+    instagram: { caption: 'Best slice in the city', location: 'Example Pizza', place: { name: 'Example Pizza', address: '7 Carmine St', city: 'New York, New York', lat: 40.7305, lng: -74.0021 } } };
+  const p = kindChangePatch(post, 'place');
+  assert.deepEqual([p.kind, p.title, p.details.address, p.details.locality, p.details.lat, p.details.lng], ['place', 'Example Pizza', '7 Carmine St', 'New York', 40.7305, -74.0021]);
+  assert.equal(kindChangePatch({ ...post, userFields: ['title'] }, 'place').title, undefined, 'a title you wrote stays');
+  const noTag = kindChangePatch({ ...post, instagram: { caption: 'Best slice in the city' } }, 'place');
+  assert.equal(noTag.title, undefined, 'nothing names it: the caption title stays until AI names it');
+});

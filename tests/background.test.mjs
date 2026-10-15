@@ -495,3 +495,22 @@ test('a venue listing’s labeled Address block with its city is a place, even w
   const r = (await F.send({ type: MSG.SAVE_ITEM, product: listing, instant: true }, popup)).item;
   assert.deepEqual([r.kind, r.details.address, r.details.locality], ['place', '5337 W Devon Ave', 'Chicago']);
 });
+
+test('fill-in with AI on: an imported Instagram place that says nothing about where it is gets a name and city', async () => {
+  await aiOn();
+  let asked = '';
+  globalThis.fetch = async (url, opts) => { asked = String(opts?.body || ''); return aiReply({ name: 'Example Noodle Bar', city: 'East Village' })(); };
+  const item = await S.addItem({ type: 'instagram', kind: 'place', title: 'Slurp-worthy noodles tonight', url: 'https://www.instagram.com/p/IMPFILL1/', details: { source: 'page' },
+    instagram: { caption: 'Slurp-worthy noodles tonight 🍜', location: 'Example Noodle Bar' } });
+  await F.send({ type: MSG.FILL_ITEM, itemId: item.id }, popup);
+  for (let i = 0; i < 60 && (await S.getItem(item.id)).title !== 'Example Noodle Bar'; i++) await new Promise((r) => setTimeout(r, 50));
+  const it = await S.getItem(item.id);
+  assert.deepEqual([it.title, it.details.locality], ['Example Noodle Bar', 'East Village']);
+  assert.match(asked, /Location tag: Example Noodle Bar/, 'the location tag goes with the caption');
+  // One that already has its street or pin is not sent.
+  asked = '';
+  const known = await S.addItem({ type: 'instagram', kind: 'place', title: 'Example Pizza', url: 'https://www.instagram.com/p/IMPFILL2/', details: { address: '7 Carmine St', locality: 'New York', source: 'page' }, instagram: { caption: 'pizza', location: 'Example Pizza' } });
+  await F.send({ type: MSG.FILL_ITEM, itemId: known.id }, popup);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(asked, '');
+});

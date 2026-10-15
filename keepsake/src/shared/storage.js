@@ -286,6 +286,15 @@ export function makeItem(input = {}) {
   };
 }
 
+function sanitizePlaceTag(p) {
+  if (!p || typeof p !== 'object' || !p.name) return null;
+  const coord = (v, max) => (Number.isFinite(Number(v)) && v !== null && v !== '' && Math.abs(Number(v)) <= max ? Number(v) : null);
+  const lat = coord(p.lat, 90);
+  const lng = coord(p.lng, 180);
+  const pin = lat !== null && lng !== null && !(lat === 0 && lng === 0);
+  return { name: sanitizeText(p.name, 120), address: sanitizeText(p.address, 200), city: sanitizeText(p.city, 80), region: sanitizeText(p.region, 60), postalCode: sanitizeText(p.postalCode, 20), lat: pin ? lat : null, lng: pin ? lng : null };
+}
+
 function sanitizeInstagram(ig, now) {
   const priceOf = (v) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : null);
   return {
@@ -296,6 +305,8 @@ function sanitizeInstagram(ig, now) {
     importedAt: ig.importedAt || now,
     postedAt: sanitizeText(ig.postedAt, 40),
     location: sanitizeText(ig.location, 120),
+    // The location tag's street, city and pin, when the post's page had them (1.4.2+; older builds drop it).
+    place: sanitizePlaceTag(ig.place),
     originalImage: sanitizeUrl(ig.originalImage),
     hashtags: uniqStrings(ig.hashtags, 30).map((h) => sanitizeText(h, 60)),
     links: (Array.isArray(ig.links) ? ig.links : []).slice(0, 10)

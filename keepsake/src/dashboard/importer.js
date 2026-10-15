@@ -1,8 +1,11 @@
 // Instagram Saved-collection import: review screen for a scan captured by the
-// popup. Posts become "inspiration" cards — Keepsake makes no claim about which
-// product a post shows unless the optional AI feature is used explicitly.
+// popup. Each post goes into a Lifestyle view (a restaurants collection into Places, with the
+// place's name, address and pin from the caption and location tag) or a collection, where it is an
+// inspiration card. Keepsake makes no claim about which product a post shows unless the optional AI
+// feature is used explicitly.
 
 import { MSG } from '../shared/messages.js';
+import { LIFESTYLE, kindInfo, kindForCollectionName, placeFromPost, detailsForKind, recipeFromText, workoutFromText, looksLikeWorkout, placeFromText } from '../shared/kinds.js';
 import { el, clear, sanitizeText, pluralize, formatPrice } from '../shared/util.js';
 import { classify, learnFromCorrection, findSimilarCollection } from '../shared/categorizer.js';
 import { normalizeUrl, openableUrl } from '../shared/url.js';
@@ -28,7 +31,7 @@ export function productFor(post, scan) {
     instagram: {
       collectionName: scan.collectionName || '', caption, creator: post.creator || '', postType: post.type || 'post',
       hashtags: post.hashtags || [], links: post.links || [], products: post.products || [], postedAt: post.postedAt || '',
-      location: post.location || '', originalImage: post.originalImage || '', linkInBio: !!post.linkInBio, details: !!post.details,
+      location: post.location || '', place: post.place || null, originalImage: post.originalImage || '', linkInBio: !!post.linkInBio, details: !!post.details,
     },
   };
 }
@@ -107,8 +110,21 @@ async function reviewScreen(ctx, page, scan) {
   const itemsById = new Map(ctx.state.items.map((i) => [i.id, i]));
 
   const igName = scan.collectionName || 'collection';
-  const nameMatch = regular.find((c) => c.name.toLowerCase() === igName.toLowerCase()) || findSimilarCollection(igName, regular, 0.85);
+  // A collection named for a Lifestyle view ("Restaurants") goes there: collections are for shopping.
+  const nameKind = kindForCollectionName(igName);
+  const nameMatch = nameKind ? null : regular.find((c) => c.name.toLowerCase() === igName.toLowerCase()) || findSimilarCollection(igName, regular, 0.85);
   const NONE = '__none'; // leave uncategorized, for Review
+  const lifestyle = LIFESTYLE().map((k) => ({ value: `kind:${k.value}`, label: k.plural, group: 'Lifestyle' }));
+  const shopping = regular.map((c) => ({ value: c.id, label: c.name, group: 'Collections' }));
+  // A post's own caption can say what it is (a recipe, a workout, a 📍 place) when the collection's name doesn't.
+  const kindOfPost = (post) => {
+    if (nameKind) return nameKind;
+    const cap = post.caption || '';
+    if (recipeFromText(cap)) return 'recipe';
+    if (looksLikeWorkout(cap) && workoutFromText(cap, { source: 'caption' })) return 'workout';
+    if (placeFromText(cap)) return 'place';
+    return null;
+  };
 
   // Classify each post once; the Instagram collection name is a strong signal.
   const rows = scan.posts.map((post) => {
@@ -116,11 +132,12 @@ async function reviewScreen(ctx, page, scan) {
     const cls = classify(product, context);
     const rememberedId = history[normalizeUrl(post.url)];
     const alreadyImported = (!!rememberedId && itemsById.has(rememberedId)) || ctx.state.items.some((i) => i.type === 'instagram' && i.sourceUrl === post.url);
-    const def = cls.isNew ? `new:${cls.taxonomyKey}` : cls.collectionId || NONE;
+    const postKind = kindOfPost(post);
+    const def = postKind ? `kind:${postKind}` : cls.isNew ? `new:${cls.taxonomyKey}` : cls.collectionId || NONE;
     const existing = selection.get(post.url);
     if (!existing) selection.set(post.url, { selected: !alreadyImported, collectionId: def, defaultChoice: def, touched: false });
     else if (!existing.touched) Object.assign(existing, { collectionId: def, defaultChoice: def });
-    return { post, product, cls, alreadyImported };
+    return { post, product, cls, alreadyImported, postKind };
   });
 
   const counts = () => rows.filter((r) => selection.get(r.post.url).selected).length;
@@ -129,12 +146,12 @@ async function reviewScreen(ctx, page, scan) {
   const updateSummary = () => { summary.textContent = `${counts()} of ${scan.posts.length} selected · ${rows.filter((r) => r.alreadyImported).length} already imported`; };
   updateSummary();
 
-  const bulkSel = UI.selectInput({ value: '', options: [{ value: '', label: 'Set collection for all selected…' }, ...regular.map((c) => ({ value: c.id, label: c.name })), { value: NONE, label: 'Leave uncategorized (Review)' }], onChange: (v) => {
+  const bulkSel = UI.selectInput({ value: '', options: [{ value: '', label: 'Put all selected in…' }, ...lifestyle, ...shopping, { value: NONE, label: 'Leave uncategorized (Review)' }], onChange: (v) => {
     if (!v) return;
     for (const r of rows) if (selection.get(r.post.url).selected) { Object.assign(selection.get(r.post.url), { collectionId: v, touched: true }); }
     bulkSel.value = '';
     grid.querySelectorAll('select[data-post]').forEach((s) => { if (selection.get(s.dataset.post).selected) s.value = v; });
-  }, label: 'Set collection for all selected' });
+  }, label: 'Put all selected in' });
 
   const importBtn = el('button', { type: 'button', class: 'btn btn-primary', onClick: () => doImport() }, [`Import ${pluralize(counts(), 'post', 'posts')}`]);
   const refreshImportBtn = () => { importBtn.textContent = `Import ${pluralize(counts(), 'post', 'posts')}`; importBtn.disabled = counts() === 0; };
@@ -157,8 +174,9 @@ async function reviewScreen(ctx, page, scan) {
   page.append(head);
   page.append(detailsBanner(ctx, scan));
   page.append(el('p', { class: 'help' }, [
-    nameMatch ? `Your Instagram collection name matches your “${nameMatch.name}” collection, so posts default there. ` : `Keepsake uses the collection name “${igName}” plus each caption to suggest a collection; anything it can’t place goes to Review. `,
-    'Posts are saved as inspiration cards with a link back to the original. ',
+    nameKind ? `“${igName}” sounds like ${kindInfo(nameKind).plural}, so posts go there. ${nameKind === 'place' ? 'Each place is named from its caption’s 📍 line or its location tag, with the address and pin when the post has them; Lookups and Optional AI fill in the rest. ' : ''}`
+      : nameMatch ? `Your Instagram collection name matches your “${nameMatch.name}” collection, so posts default there. ` : `Keepsake uses the collection name “${igName}” plus each caption to suggest where each post goes; anything it can’t place goes to Review. `,
+    'Every post keeps a link back to the original. ',
     scan.reason === 'limit' ? `The scan stopped at the safety limit (${scan.posts.length}); scroll further on Instagram and scan again to get more.` : '',
   ]));
 
@@ -175,13 +193,15 @@ async function reviewScreen(ctx, page, scan) {
       updateSummary();
       refreshImportBtn();
     });
-    const options = [...regular.map((c) => ({ value: c.id, label: c.name }))];
-    if (r.cls.isNew && r.cls.taxonomyKey) options.push({ value: `new:${r.cls.taxonomyKey}`, label: `${r.cls.collectionName} (new)` });
+    const options = [...lifestyle, ...shopping];
+    if (r.cls.isNew && r.cls.taxonomyKey) options.push({ value: `new:${r.cls.taxonomyKey}`, label: `${r.cls.collectionName} (new)`, group: 'Collections' });
     options.push({ value: NONE, label: 'Leave uncategorized (Review)' });
-    const colSel = UI.selectInput({ value: sel.collectionId, options, onChange: (v) => { sel.collectionId = v; sel.touched = true; }, label: `Collection for ${r.product.title}` });
+    const colSel = UI.selectInput({ value: sel.collectionId, options, onChange: (v) => { sel.collectionId = v; sel.touched = true; }, label: `Where ${r.product.title} goes` });
     colSel.dataset.post = r.post.url;
     if (colSel.value !== sel.collectionId) { colSel.value = NONE; sel.collectionId = NONE; }
-    const conf = r.cls.isInbox ? 'Not sure — leave uncategorized' : `${Math.round(r.cls.confidence * 100)}% · ${r.cls.reason}`;
+    const where = r.postKind === 'place' ? placeFromPost(r.post) : null;
+    const conf = r.postKind ? (where ? [where.name, where.details.address || where.details.locality].filter(Boolean).join(' · ') || kindInfo(r.postKind).label : nameKind ? `From “${igName}”` : kindInfo(r.postKind).label)
+      : r.cls.isInbox ? 'Not sure — leave uncategorized' : `${Math.round(r.cls.confidence * 100)}% · ${r.cls.reason}`;
     card.append(
       cb,
       UI.pictureNode({ src: r.post.thumbnail || r.post.originalThumbnail, title: r.product.title }),
@@ -242,11 +262,21 @@ async function reviewScreen(ctx, page, scan) {
           skipped++;
           continue;
         }
-        const targetId = await resolve(sel.collectionId);
         const userChose = sel.collectionId !== sel.defaultChoice;
-        const isUncategorized = !targetId;
+        const kind = typeof sel.collectionId === 'string' && sel.collectionId.startsWith('kind:') ? sel.collectionId.slice(5) : '';
+        const targetId = kind ? null : await resolve(sel.collectionId);
+        const isUncategorized = !targetId && !kind;
+        const base = { ...r.product, url: r.post.url };
+        // Into a Lifestyle view: that kind, with its details from the caption (and for a place, its
+        // location tag); the place's name becomes the title. Lookups and AI fill in the rest afterwards.
+        let kindFields = {};
+        if (kind) {
+          const { details, title } = detailsForKind(kind, { ...base, type: 'instagram' });
+          kindFields = { kind, details, ...(title ? { title } : {}) };
+        }
         const item = await ctx.store.addItem({
           ...r.product,
+          ...kindFields,
           type: 'instagram',
           url: r.post.url,
           sourceUrl: r.post.url,
@@ -257,11 +287,12 @@ async function reviewScreen(ctx, page, scan) {
           collectionId: targetId,
           confidence: userChose ? 1 : r.cls.confidence,
           categorizationSource: userChose ? 'manual' : 'local',
-          categorizationReason: userChose ? 'Chosen by you during import' : r.cls.reason,
+          categorizationReason: userChose ? 'Chosen by you during import' : kind ? `Imported into ${kindInfo(kind).plural}` : r.cls.reason,
           needsReview: !userChose && isUncategorized,
         });
         created.push(item);
         entries.push([r.post.url, item.id]);
+        if (kind) continue;
         if (userChose && !isUncategorized) {
           // A correction during review is a lesson worth keeping.
           prefs = learnFromCorrection(item, r.cls.isInbox ? null : r.cls.collectionId, targetId, prefs);
@@ -272,14 +303,19 @@ async function reviewScreen(ctx, page, scan) {
       await ctx.store.markImported(entries);
       // Set covers for collections that lack one.
       for (const item of created) {
+        if (!item.collectionId) continue;
         const col = await ctx.store.getCollection(item.collectionId);
         if (col && !col.coverImage && item.image) await ctx.store.updateCollection(col.id, { coverImage: item.image });
       }
+      // Lifestyle saves: fill in what the post didn't say (a place's address and pin) with the
+      // Lookups and Optional AI you turned on. The worker works through them in the background.
+      for (const item of created) if (LIFESTYLE().some((k) => k.value === item.kind)) ctx.send({ type: MSG.FILL_ITEM, itemId: item.id });
       await ctx.send({ type: MSG.IG_SCAN_CLEAR });
       ctx.state.scan = null;
       selection.clear();
       UI.toast(`Imported ${pluralize(created.length, 'post', 'posts')}${skipped ? ` (${skipped} already saved)` : ''}.`, { duration: 6000 });
-      ctx.navigate(created.length && created.every((i) => !i.collectionId) ? '#review' : '#all');
+      const kinds = [...new Set(created.map((i) => i.kind))];
+      ctx.navigate(kinds.length === 1 && LIFESTYLE().some((k) => k.value === kinds[0]) ? `#kind/${kinds[0]}` : created.length && created.every((i) => !i.collectionId && i.needsReview) ? '#review' : '#all');
     } catch (e) {
       UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 8000 });
       importBtn.disabled = false;

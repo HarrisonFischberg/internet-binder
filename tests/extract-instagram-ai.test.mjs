@@ -272,3 +272,15 @@ test('extract: a home page with no address: the business’s name, about, phone 
   assert.deepEqual([p.home.name, p.home.siteName, p.home.phone, p.home.visitLink], ['Mighty Example Donuts', 'Mighty Example Donuts', '+12065550335', true]);
   assert.ok(!extractFrom('<html><body><p>x</p></body></html>', 'https://donuts.example/menu/').home, 'only a home page');
 });
+
+test('instagram: a post’s location tag keeps its street, city and pin', () => {
+  const data = JSON.stringify({ items: [{ code: 'LOCTAG123', caption: { text: 'Best slice in the city' }, user: { username: 'nyceats' },
+    location: { pk: 1, name: 'Example Pizza', address: '7 Carmine St', city: 'New York, New York', lat: 40.7305, lng: -74.0021 } }] });
+  const d = parsePostHtml(`<html><head><title>x</title></head><body><script type="application/json">${data}</script></body></html>`, 'https://www.instagram.com/p/LOCTAG123/');
+  assert.equal(d.location, 'Example Pizza');
+  assert.deepEqual({ ...d.place }, { name: 'Example Pizza', address: '7 Carmine St', city: 'New York, New York', region: '', postalCode: '', lat: 40.7305, lng: -74.0021 });
+  const old = JSON.stringify({ shortcode_media: { shortcode: 'LOCTAG456', edge_media_to_caption: { edges: [{ node: { text: 'yum' } }] },
+    location: { id: '2', name: 'Example Diner', address_json: '{"street_address":"1 Main St","zip_code":"10001","city_name":"New York","region_name":"NY"}' } } });
+  const e = parsePostHtml(`<html><body><script type="application/json">${old}</script></body></html>`, 'https://www.instagram.com/p/LOCTAG456/');
+  assert.deepEqual([e.place.address, e.place.city, e.place.region, e.place.postalCode, e.place.lat], ['1 Main St', 'New York', 'NY', '10001', null]);
+});

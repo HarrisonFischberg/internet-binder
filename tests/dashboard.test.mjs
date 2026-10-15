@@ -626,3 +626,40 @@ test('an unknown collection route says so', async () => {
   const text = await go('#c/does-not-exist');
   assert.match(text, /Collection not found/);
 });
+
+test('Instagram import: a “Restaurants” collection goes to Places, named and pinned from each post, then filled in', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const scan = { status: 'done', collectionName: 'Restaurants', collectionUrl: 'https://www.instagram.com/me/saved/restaurants/1/', posts: [
+    { url: 'https://www.instagram.com/p/IMPORT01/', type: 'post', creator: 'nyceats', thumbnail: '', details: true, caption: 'Best slice in the city 🍕', location: "Example Pizza",
+      place: { name: 'Example Pizza', address: '7 Carmine St', city: 'New York, New York', region: '', postalCode: '', lat: 40.7305, lng: -74.0021 } },
+    { url: 'https://www.instagram.com/p/IMPORT02/', type: 'reel', creator: 'nyceats', thumbnail: '', details: true, caption: 'Date night 🍝\n📍 Example Trattoria\n12 Mott St, New York, NY', location: '' },
+    { url: 'https://www.instagram.com/p/IMPORT03/', type: 'post', creator: 'nyceats', thumbnail: '', details: true, caption: 'so good', location: 'Brooklyn, New York' },
+  ] };
+  const sent = [];
+  const realSend = chrome.runtime.sendMessage;
+  chrome.runtime.sendMessage = (msg, cb) => { sent.push(msg); cb && cb(msg.type === 'keepsake:ig-state' ? { ok: true, scan } : { ok: true }); };
+  try {
+    await go('#import');
+    await afterChange();
+    const bulk = [...view().querySelectorAll('select')].find((s) => /Put all selected in/.test(s.getAttribute('aria-label') || ''));
+    assert.ok(bulk, 'a bulk picker');
+    assert.deepEqual([...bulk.querySelectorAll('optgroup')].map((g) => g.label), ['Lifestyle', 'Collections'], 'Lifestyle views and collections');
+    const perPost = [...view().querySelectorAll('select[data-post]')];
+    assert.equal(perPost.length, 3);
+    assert.ok(perPost.every((s) => s.value === 'kind:place'), 'every post defaults to Places');
+    assert.match(view().textContent, /sounds like Places/);
+    [...view().querySelectorAll('button')].find((b) => /^Import 3 posts$/.test(b.textContent)).click();
+    for (let i = 0; i < 40 && !/kind\/place/.test(window.location.hash); i++) await settle();
+    assert.equal(window.location.hash, '#kind/place', 'opens Places');
+    const saved = await Promise.all(scan.posts.map((p) => store.findByUrl(p.url)));
+    assert.deepEqual(saved.map((i) => [i.kind, i.title, i.collectionId, i.needsReview]), [
+      ['place', 'Example Pizza', null, false], ['place', 'Example Trattoria', null, false], ['place', 'so good', null, false]]);
+    assert.deepEqual([saved[0].details.address, saved[0].details.locality, saved[0].details.lat, saved[0].details.lng], ['7 Carmine St', 'New York', 40.7305, -74.0021], 'the location tag’s street and pin');
+    assert.deepEqual([saved[1].details.address, saved[1].details.locality, saved[1].details.region], ['12 Mott St', 'New York', 'NY'], 'the caption’s 📍 address');
+    assert.deepEqual([saved[2].details.locality, saved[2].details.region, saved[2].details.address], ['Brooklyn', 'New York', ''], 'a city-only tag is the area, not the name');
+    assert.deepEqual(sent.filter((m) => m.type === 'keepsake:fill-item').map((m) => m.itemId).sort(), saved.map((i) => i.id).sort(), 'each is filled in (lookups, AI) afterwards');
+  } finally {
+    chrome.runtime.sendMessage = realSend;
+  }
+});

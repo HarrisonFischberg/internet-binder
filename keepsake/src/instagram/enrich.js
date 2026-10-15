@@ -93,6 +93,7 @@ export function mergeDetails(post, d) {
     postedAt: d.postedAt || '',
     likes: d.likes ?? null,
     location: d.location || '',
+    place: d.place || null,
     linkInBio: !!d.linkInBio,
     title: titleFromCaption(caption, creator, post.type),
     details: true,

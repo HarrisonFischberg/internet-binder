@@ -615,6 +615,54 @@ export function placeFromHome(h) {
   return { name, address: '', locality: area ? clean(area[1], 80) : '', region: area ? clean(area[2], 60) : '', postalCode: area?.[3] || '', phone: clean(h.phone || '', 40), source: 'page' };
 }
 
+// --- Instagram imports ------------------------------------------------------------------------------
+// An Instagram Saved collection whose name says what's in it ("Restaurants", "NYC eats", "Recipes",
+// "Workouts"): that Lifestyle view. Recipes and workouts are checked first ("Brunch recipes" is recipes). Null when the name doesn't say (a shopping collection, "Ideas").
+const COLLECTION_KINDS = [
+  ['recipe', /\b(?:recipes?|cooking|to cook|meals?|dinners?|baking|desserts?|meal ?prep)\b/i],
+  ['workout', /\b(?:workouts?|exercises?|fitness|training|routines?|abs|yoga|pilates|stretch(?:es|ing)?)\b/i],
+  ['place', /\b(?:restaurants?|eats?|food ?spots?|spots|places?|caf[eé]s?|coffee(?: shops?)?|bars?|brunch|bakery|bakeries|donuts?|pizza|date ?nights?|hangouts?|dining|foodie|salons?|barbers?|gyms?)\b/i],
+  ['video', /\b(?:videos?|watch later)\b/i],
+  ['media', /\b(?:movies?|films?|shows?|tv|to watch)\b/i],
+  ['book', /\b(?:books?|reading|to read)\b/i],
+];
+export function kindForCollectionName(name) {
+  const s = String(name || '').trim();
+  if (!s || /^all posts$/i.test(s)) return null;
+  for (const [kind, re] of COLLECTION_KINDS) if (re.test(s)) return kind;
+  return null;
+}
+
+// A place from an imported post: the caption's 📍 line (with any address) names it, the post's location
+// tag gives its street, city and pin, and a tag that is only a city ("Brooklyn, New York") is its area,
+// not its name. The tag's street and pin are used only when it is the same place the caption names.
+export function placeFromPost({ caption = '', location = '', place = null } = {}) {
+  const tag = place && typeof place === 'object' ? place : {};
+  const fromCaption = placeFromText(caption);
+  const tagName = clean(String(tag.name || location || ''), 120);
+  const cityOnly = /^[\p{L} .'-]{2,40},\s*[\p{L} .'-]{2,40}(?:,\s*[\p{L} .'-]{2,40})?$/u.test(tagName) && !looksLikeAddress(tagName) && !tag.address;
+  const name = fromCaption?.name || (cityOnly ? '' : tagName);
+  const sameTag = !!tagName && !cityOnly && (!fromCaption?.name || tagMatches(fromCaption.name, tagName));
+  const area = String(tag.city || (cityOnly ? tagName : '')).split(/\s*,\s*/).filter(Boolean);
+  const details = {
+    address: fromCaption?.address || (sameTag ? tag.address : '') || '',
+    locality: fromCaption?.locality || (sameTag || cityOnly ? area[0] : '') || '',
+    region: fromCaption?.region || (sameTag ? tag.region : '') || (sameTag || cityOnly ? area[1] : '') || '',
+    postalCode: sameTag ? tag.postalCode || '' : '',
+    lat: sameTag && Number.isFinite(tag.lat) ? tag.lat : null,
+    lng: sameTag && Number.isFinite(tag.lng) ? tag.lng : null,
+    source: 'page',
+  };
+  if (!name && !details.address && !details.locality) return null;
+  return { name, details: sanitizeDetails('place', details) };
+}
+const tagMatches = (a, b) => {
+  const n = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const x = n(a);
+  const y = n(b);
+  return !!x && !!y && (x === y || x.includes(y) || y.includes(x));
+};
+
 // What a page title says when it isn't the thing's name ("Instagram", "Name on Instagram: …", "Google Maps").
 export const genericTitle = (t) => !t || /^(?:instagram(?: (?:post|reel|photo|video))?|tiktok|youtube|google maps|facebook|untitled( item)?)$/i.test(String(t).trim())
   || /\son instagram:/i.test(String(t));
@@ -633,15 +681,19 @@ export function detailsForKind(kind, item = {}) {
   else if (kind === 'workout') details = keep || firstOf((t) => workoutFromText(t)) || {};
   else if (kind === 'place') {
     const fromLink = placeFromMapsUrl(item.url);
-    // The caption's 📍 line (with any address) first; the post's location tag names the place when there's none.
+    // The caption's 📍 line (with any address) first; the post's location tag names the place when there's
+    // none, and gives its street, city and pin (placeFromPost: a tag that is only a city is the area).
     const caption = firstOf(placeFromText);
-    const fromText = caption || (ig.location ? { name: clean(ig.location, 120), locality: '' } : null);
+    const post = ig.location || ig.place ? placeFromPost({ caption: ig.caption || '', location: ig.location || '', place: ig.place || null }) : null;
+    const fromText = caption && !post ? caption : post ? { ...post.details, name: post.name } : null;
     details = { ...(keep || {}), ...(fromLink ? { lat: fromLink.lat, lng: fromLink.lng, address: fromLink.address || keep?.address || '' } : {}) };
-    for (const k of ['address', 'locality', 'region']) if (fromText?.[k] && !details[k]) details[k] = fromText[k];
+    for (const k of ['address', 'locality', 'region', 'postalCode']) if (fromText?.[k] && !details[k]) details[k] = fromText[k];
+    if (!fromLink && Number.isFinite(fromText?.lat) && Number.isFinite(fromText?.lng) && details.lat == null) [details.lat, details.lng] = [fromText.lat, fromText.lng];
     if (!details.source) details.source = fromLink ? 'maps-link' : 'page';
     // No name anywhere: the street address stands in until a lookup or your AI provider names it.
     const name = fromLink?.name || fromText?.name || fromText?.address || '';
-    if (name && genericTitle(item.title)) title = name;
+    // An Instagram post's title is its caption's first line: the place's name replaces it, unless you wrote it.
+    if (name && (genericTitle(item.title) || (item.type === 'instagram' && !(item.userFields || []).includes('title')))) title = name;
     // A site's home page title ("Home | Saigon Sandwich"): the site's name.
     else if (!name && /^(?:home|welcome|index)\s*[|–—-]\s*\S/i.test(String(item.title || ''))) title = clean(String(item.title).replace(/^(?:home|welcome|index)\s*[|–—-]\s*/i, ''), 120);
   } else if (kind === 'video') details = keep || videoFromCapture({}, item.url || '');

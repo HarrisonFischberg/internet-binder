@@ -415,7 +415,10 @@ async function fillKind(id) {
   const settings = await store.getSettings();
   const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
   let d = item.details || {};
-  const unnamed = genericTitle(item.title) && !(item.userFields || []).includes('title');
+  // A post with no name for its place (its title is the caption's), or an imported post that says nothing
+  // about where it is: your provider names it and its city, so the lookup can find it.
+  const unknownPlace = kind === 'place' && item.type === 'instagram' && !d.address && d.lat == null && !d.locality;
+  const unnamed = (genericTitle(item.title) || unknownPlace) && !(item.userFields || []).includes('title');
   if (key && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length) || (kind === 'recipe' && !d.ingredients?.length))) {
     try {
       let patch = null;

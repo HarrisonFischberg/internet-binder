@@ -631,6 +631,17 @@ test('changes are announced to listeners', async () => {
   assert.ok(seen.some((k) => k.includes('keepsake_items')));
 });
 
+test('an Instagram post keeps its location tag (bounded, a pin only with both real coordinates); older saves without one are unchanged', async () => {
+  const { store } = await fresh();
+  const a = await store.addItem({ type: 'instagram', title: 't', url: 'https://www.instagram.com/p/TAG1/', instagram: { caption: 'c', location: 'Example Pizza',
+    place: { name: 'Example Pizza', address: '7 Carmine St', city: 'New York, New York', lat: 40.7305, lng: -74.0021, extra: 'dropped' } } });
+  assert.deepEqual(a.instagram.place, { name: 'Example Pizza', address: '7 Carmine St', city: 'New York, New York', region: '', postalCode: '', lat: 40.7305, lng: -74.0021 });
+  const b = await store.addItem({ type: 'instagram', title: 't', url: 'https://www.instagram.com/p/TAG2/', instagram: { caption: 'c', place: { name: 'X', lat: 0, lng: 0 } } });
+  assert.deepEqual([b.instagram.place.lat, b.instagram.place.lng], [null, null]);
+  const c = await store.addItem({ type: 'instagram', title: 't', url: 'https://www.instagram.com/p/TAG3/', instagram: { caption: 'c' } });
+  assert.equal(c.instagram.place, null);
+});
+
 for (const [kind, factory] of Object.entries(KINDS)) {
   describe(`storage on ${kind}`, () => {
     for (const [name, fn] of tests) {
