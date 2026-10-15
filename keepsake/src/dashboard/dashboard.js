@@ -49,6 +49,7 @@ const state = {
   shown: 120,
   scan: null,
   fillJob: null, // the background check running now or last (session storage: keepsake_fillJob)
+  localJob: null, // a job running in this page (an Instagram import), shown in the same bar
 };
 
 const send = (msg) => new Promise((resolve) => {
@@ -64,6 +65,8 @@ const send = (msg) => new Promise((resolve) => {
 
 const ctx = {
   store, state, send,
+  // A job running in this page (an Instagram import) shown in the bar under the header; null takes it away.
+  setLocalJob: (job) => { state.localJob = job; renderJobBar(); },
   toast: UI.toast,
   reload: () => reload(),
   render: () => render(),
@@ -606,7 +609,7 @@ const jobDismissed = new Set();
 function renderJobBar() {
   const bar = $('jobbar');
   if (!bar) return;
-  const job = state.fillJob;
+  const job = state.localJob || state.fillJob;
   const recent = job && job.finishedAt && Date.now() - Date.parse(job.finishedAt) < JOB_SHOWN_MS;
   const show = !!job && (job.running || recent) && !jobDismissed.has(job.id);
   bar.classList.toggle('hidden', !show);
@@ -622,7 +625,10 @@ function renderJobBar() {
       el('div', { class: `progress-fill ${job.running ? 'is-running' : ''}`, style: { width: `${Math.max(job.running ? 3 : 0, pct)}%` } }),
     ]),
     job.running
-      ? el('button', { type: 'button', class: 'btn btn-sm', onClick: (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Stopping…'; send({ type: MSG.FILL_STOP }); } }, ['Stop'])
+      ? el('div', { class: 'jobbar-actions' }, [
+        job.onShow ? el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => job.onShow() }, ['Show']) : null,
+        el('button', { type: 'button', class: 'btn btn-sm', onClick: (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Stopping…'; if (job.onStop) job.onStop(); else send({ type: MSG.FILL_STOP }); } }, ['Stop']),
+      ])
       : el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => { jobDismissed.add(job.id); renderJobBar(); } }, ['Dismiss']),
   );
 }

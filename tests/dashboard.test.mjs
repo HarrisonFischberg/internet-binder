@@ -639,7 +639,7 @@ test('an unknown collection route says so', async () => {
   assert.match(text, /Collection not found/);
 });
 
-test('Instagram import: a “Restaurants” collection goes to Places, named and pinned from each post, then filled in', async () => {
+test('Instagram import: one button; a “Restaurants” collection goes to Places, named and pinned from each post; then where everything went', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
   const scan = { status: 'done', collectionName: 'Restaurants', collectionUrl: 'https://www.instagram.com/me/saved/restaurants/1/', posts: [
@@ -654,16 +654,15 @@ test('Instagram import: a “Restaurants” collection goes to Places, named and
   try {
     await go('#import');
     await afterChange();
-    const bulk = [...view().querySelectorAll('select')].find((s) => /Put all selected in/.test(s.getAttribute('aria-label') || ''));
-    assert.ok(bulk, 'a bulk picker');
-    assert.deepEqual([...bulk.querySelectorAll('optgroup')].map((g) => g.label), ['Lifestyle', 'Collections'], 'Lifestyle views and collections');
-    const perPost = [...view().querySelectorAll('select[data-post]')];
-    assert.equal(perPost.length, 3);
-    assert.ok(perPost.every((s) => s.value === 'kind:place'), 'every post defaults to Places');
+    assert.ok(!view().querySelector('select'), 'no pickers, no select all / none');
     assert.match(view().textContent, /sounds like Places/);
     [...view().querySelectorAll('button')].find((b) => /^Import 3 posts$/.test(b.textContent)).click();
-    for (let i = 0; i < 40 && !/kind\/place/.test(window.location.hash); i++) await settle();
-    assert.equal(window.location.hash, '#kind/place', 'opens Places');
+    let summary = null;
+    for (let i = 0; i < 60 && !summary; i++) { await settle(); summary = window.document.querySelector('.import-summary'); }
+    assert.ok(summary, 'the summary dialog');
+    assert.match(summary.textContent, /Imported 3 posts from “Restaurants”/);
+    assert.deepEqual([...summary.querySelectorAll('.import-dest')].map((r) => r.textContent), ['Places3']);
+    assert.match(summary.textContent, /being filled in/);
     const saved = await Promise.all(scan.posts.map((p) => store.findByUrl(p.url)));
     assert.deepEqual(saved.map((i) => [i.kind, i.title, i.collectionId, i.needsReview]), [
       ['place', 'Example Pizza', null, false], ['place', 'Example Trattoria', null, false], ['place', 'so good', null, false]]);
@@ -671,23 +670,48 @@ test('Instagram import: a “Restaurants” collection goes to Places, named and
     assert.deepEqual([saved[1].details.address, saved[1].details.locality, saved[1].details.region], ['12 Mott St', 'New York', 'NY'], 'the caption’s 📍 address');
     assert.deepEqual([saved[2].details.locality, saved[2].details.region, saved[2].details.address], ['Brooklyn', 'New York', ''], 'a city-only tag is the area, not the name');
     assert.deepEqual(sent.filter((m) => m.type === 'keepsake:fill-item').map((m) => m.itemId).sort(), saved.map((i) => i.id).sort(), 'each is filled in (lookups, AI) afterwards');
+    assert.ok(sent.some((m) => m.type === 'keepsake:ig-clear'), 'the scan is cleared');
+    [...summary.querySelectorAll('button')].find((b) => b.textContent === 'Done').click();
+    await settle();
+    assert.equal(window.location.hash, '#home', 'back to Home');
   } finally {
     chrome.runtime.sendMessage = realSend;
   }
 });
 
-test('Instagram import: the “missing details” banner never shows the word null', async () => {
-  const scan = { status: 'done', collectionName: 'Restaurants', collectionUrl: 'https://www.instagram.com/me/saved/r/2/', posts: [{ url: 'https://www.instagram.com/p/NODETAIL1/', type: 'post', creator: '', thumbnail: '', details: false, caption: '' }] };
+test('Instagram import: already-saved posts are skipped; without instagram.com access posts still import; the summary counts each destination and Review', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  await store.addItem({ type: 'instagram', title: 'Old', url: 'https://www.instagram.com/p/MIXED00/', sourceUrl: 'https://www.instagram.com/p/MIXED00/' });
+  const scan = { status: 'done', collectionName: 'Nice products', collectionUrl: 'https://www.instagram.com/me/saved/nice/3/', posts: [
+    { url: 'https://www.instagram.com/p/MIXED00/', type: 'post', creator: 'a', thumbnail: '', details: false, caption: '' },
+    { url: 'https://www.instagram.com/p/MIXED01/', type: 'post', creator: 'a', thumbnail: '', details: false, caption: 'Weeknight pasta\nIngredients\n200 g spaghetti\n2 cloves garlic\nMethod\nBoil the pasta.\nFry the garlic.' },
+    { url: 'https://www.instagram.com/p/MIXED02/', type: 'post', creator: 'a', thumbnail: '', details: false, caption: 'Morning light ✨' },
+  ] };
   const realSend = chrome.runtime.sendMessage;
+  const realRequest = chrome.permissions.request;
+  let asked = 0;
+  chrome.permissions.request = async () => { asked++; return false; };
   chrome.runtime.sendMessage = (msg, cb) => { cb && cb(msg.type === 'keepsake:ig-state' ? { ok: true, scan } : { ok: true }); };
   try {
     await go('#import');
     await afterChange();
-    const banner = view().querySelector('.details-banner');
-    assert.match(banner.textContent, /missing details/);
-    assert.doesNotMatch(banner.textContent, /\bnull\b/);
+    assert.match(view().textContent, /1 post is already in Keepsake and will be skipped/);
+    assert.doesNotMatch(view().textContent, /\bnull\b/);
+    [...view().querySelectorAll('button')].find((b) => /^Import 2 posts$/.test(b.textContent)).click();
+    let summary = null;
+    for (let i = 0; i < 60 && !summary; i++) { await settle(); summary = window.document.querySelector('.import-summary'); }
+    assert.equal(asked, 1, 'instagram.com access asked for on the click');
+    assert.match(summary.textContent, /Imported 2 posts/);
+    const rows = [...summary.querySelectorAll('.import-dest')].map((r) => r.textContent);
+    assert.ok(rows.includes('Recipes1'), rows.join(' | '));
+    assert.equal(rows.length, 2);
+    assert.match(summary.textContent, /1 post was already in Keepsake, so it was skipped/);
+    [...summary.querySelectorAll('button')].find((b) => b.textContent === 'Done').click();
+    await settle();
   } finally {
     chrome.runtime.sendMessage = realSend;
+    chrome.permissions.request = realRequest;
   }
 });
 

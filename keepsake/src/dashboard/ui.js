@@ -13,7 +13,8 @@ let lastFocus = null;
 // { label, primary, danger, quiet, onClick(close), autofocus } definitions,
 // or { label, href, icon, target, rel } to render a real link (e.g. "Visit page").
 // Resolves when the modal closes with whatever value close() was given.
-export function openModal({ title, body, actions = [], wide = false, full = false, className = '', onClose = null, closeOnScrim = true, describedBy = '' }) {
+// onOpen({ close, dialog }) hands the opener a way to close it (a progress dialog that finishes on its own).
+export function openModal({ title, body, actions = [], wide = false, full = false, className = '', onClose = null, onOpen = null, closeOnScrim = true, describedBy = '' }) {
   return new Promise((resolve) => {
     const root = modalRoot();
     if (openModals === 0) lastFocus = document.activeElement;
@@ -100,6 +101,7 @@ export function openModal({ title, body, actions = [], wide = false, full = fals
       if (target) target.focus();
     });
     dialog.close = close;
+    if (onOpen) onOpen({ close, dialog });
   });
 }
 

@@ -493,9 +493,38 @@ a.sidebar-brand:hover .brand-name {
   margin: 0;
 }
 
-.jobbar .btn {
+.jobbar > .btn,
+.jobbar-actions {
   grid-column: 2;
   grid-row: 1 / span 2;
+}
+
+.jobbar-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.import-dests {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.import-dest {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.import-dest-count {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.import-dest.is-review .import-dest-name {
+  color: var(--c-text-muted);
 }
 
 .progress-fill.is-running {

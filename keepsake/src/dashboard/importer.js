@@ -5,16 +5,15 @@
 // feature is used explicitly.
 
 import { MSG } from '../shared/messages.js';
-import { LIFESTYLE, kindInfo, kindForCollectionName, placeFromPost, detailsForKind, recipeFromText, workoutFromText, looksLikeWorkout, placeFromText } from '../shared/kinds.js';
-import { el, clear, sanitizeText, pluralize, formatPrice } from '../shared/util.js';
-import { classify, learnFromCorrection, findSimilarCollection } from '../shared/categorizer.js';
-import { normalizeUrl, openableUrl } from '../shared/url.js';
+import { LIFESTYLE, kindInfo, kindForCollectionName, detailsForKind, recipeFromText, workoutFromText, looksLikeWorkout, placeFromText } from '../shared/kinds.js';
+import { el, clear, sanitizeText, pluralize } from '../shared/util.js';
+import { classify } from '../shared/categorizer.js';
+import { normalizeUrl } from '../shared/url.js';
 import { titleFromCaption } from '../instagram/post.js';
 import { enrichPosts, hasInstagramAccess, requestInstagramAccess } from '../instagram/enrich.js';
 import * as UI from './ui.js';
+import { runAiCleanup } from './aiCleanup.js';
 
-const selection = new Map(); // post url -> { selected, collectionId, defaultChoice, touched }
-const enrich = { running: false, stop: false, progress: null, lastResult: null, autoTried: false };
 
 function postTitle(post) {
   return titleFromCaption(post.caption, post.creator, post.type);
@@ -44,7 +43,6 @@ export function renderImport(ctx, view) {
     ctx.state.scan = res.ok ? res.scan : null;
     clear(page);
     draw(ctx, page);
-    maybeAutoEnrich(ctx);
   });
 }
 
@@ -75,12 +73,12 @@ function draw(ctx, page) {
 }
 
 function instructions(ctx) {
-  return UI.section('Import a Saved collection', 'Bring the posts you saved on Instagram into Keepsake as inspiration cards.', [
+  return UI.section('Import a Saved collection', 'Bring the posts you saved on Instagram into Keepsake: each one filed where it belongs.', [
     el('div', { class: 'steps' }, [
       stepNode(1, 'Open Instagram', 'Go to your profile → Saved, and open one collection (or “All posts”).'),
       stepNode(2, 'Click Keepsake', 'The popup recognizes the Saved collection and offers “Import this collection”.'),
       stepNode(3, 'Let it scroll', 'Keepsake scrolls the collection to load posts, then stops at the end, when nothing new appears, or at the safety limit. You can stop any time.'),
-      stepNode(4, 'Review here', 'Deselect anything you don’t want, adjust collections, and import.'),
+      stepNode(4, 'Import', 'One click: Keepsake reads the posts, files each one, and tells you where everything went.'),
     ]),
     el('div', { class: 'prose' }, [
       el('p', {}, [el('strong', {}, ['What Keepsake reads: ']), 'post links, thumbnails, captions and creator names visible in the collection you opened. ', el('strong', {}, ['What it never reads: ']), 'your login, cookies, messages, or any other page.']),
@@ -98,25 +96,143 @@ function clearBtn(ctx) {
   return el('button', { type: 'button', class: 'btn btn-quiet', onClick: async () => {
     await ctx.send({ type: MSG.IG_SCAN_CLEAR });
     ctx.state.scan = null;
-    selection.clear();
     ctx.render();
   } }, ['Discard scan']);
 }
 
+// --- the import: one button, then a progress dialog, then where everything went ----------------------
+// Already-saved posts are skipped (importing one twice is never useful). Posts are read (caption, creator,
+// location, links) when instagram.com access is granted, then filed: a Lifestyle view when the collection's
+// name or the caption says so, else the best collection, else Review.
+
+const run = { running: false, stop: false, dialog: null };
+
+function isImported(ctx, post, history, itemsById) {
+  const remembered = history[normalizeUrl(post.url)];
+  return (!!remembered && itemsById.has(remembered)) || ctx.state.items.some((i) => i.type === 'instagram' && i.sourceUrl === post.url);
+}
+
 async function reviewScreen(ctx, page, scan) {
-  const regular = ctx.regularCollections();
-  const context = { collections: ctx.state.collections, prefs: ctx.state.prefs, settings: ctx.state.settings };
   const history = (ctx.state.importHistory && ctx.state.importHistory.instagram) || {};
   const itemsById = new Map(ctx.state.items.map((i) => [i.id, i]));
-
   const igName = scan.collectionName || 'collection';
-  // A collection named for a Lifestyle view ("Restaurants") goes there: collections are for shopping.
   const nameKind = kindForCollectionName(igName);
-  const nameMatch = nameKind ? null : regular.find((c) => c.name.toLowerCase() === igName.toLowerCase()) || findSimilarCollection(igName, regular, 0.85);
-  const NONE = '__none'; // leave uncategorized, for Review
-  const lifestyle = LIFESTYLE().map((k) => ({ value: `kind:${k.value}`, label: k.plural, group: 'Lifestyle' }));
-  const shopping = regular.map((c) => ({ value: c.id, label: c.name, group: 'Collections' }));
-  // A post's own caption can say what it is (a recipe, a workout, a 📍 place) when the collection's name doesn't.
+  const already = scan.posts.filter((p) => isImported(ctx, p, history, itemsById)).length;
+  const todo = scan.posts.length - already;
+  const importBtn = el('button', { type: 'button', class: 'btn btn-primary', disabled: !todo || run.running, onClick: () => runImport(ctx, scan) }, [run.running ? 'Importing…' : `Import ${pluralize(todo, 'post', 'posts')}`]);
+  page.append(UI.section(`“${igName}”`, scan.username ? `@${scan.username} · ${pluralize(scan.posts.length, 'post', 'posts')} found` : `${pluralize(scan.posts.length, 'post', 'posts')} found`, [
+    el('p', {}, [
+      nameKind ? `“${igName}” sounds like ${kindInfo(nameKind).plural}, so the posts go there. ` : 'Keepsake reads each post (caption, creator, location, links) and files it: products into your collections; places, recipes and workouts into their Lifestyle views. Anything it isn’t sure about waits in Review. ',
+      already ? `${pluralize(already, 'post is', 'posts are')} already in Keepsake and will be skipped.` : '',
+    ]),
+    scan.reason === 'limit' ? el('p', { class: 'help' }, [`The scan stopped at the safety limit (${scan.posts.length}); scroll further on Instagram and scan again to get more.`]) : null,
+    el('p', { class: 'help' }, ['Reading the posts uses your own Instagram session, one post at a time with a short pause (about ', el('strong', {}, [`${Math.max(1, Math.ceil((todo * 2.3) / 60))} min`]), ' for these). Keep this tab open; you can keep using Keepsake meanwhile.']),
+    el('div', { class: 'actions-row' }, [importBtn, clearBtn(ctx)]),
+  ]));
+}
+
+// The progress dialog: a bar and what's happening; "Keep working in the background" hides it (the bar under
+// the header carries on), "Stop and import" files what's been read so far.
+function progressDialog(ctx, { title, total }) {
+  const status = el('p', { class: 'modal-text' }, ['Starting…']);
+  const fill = el('div', { class: 'progress-fill is-running', style: { width: '3%' } });
+  const bar = el('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Import progress', 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': '0' }, [fill]);
+  const note = el('p', { class: 'help' }, ['']);
+  let close = null;
+  let hidden = false;
+  const job = { id: `import-${Date.now()}`, label: title, total, done: 0, running: true, onStop: () => { run.stop = true; }, onShow: () => show() };
+  const show = () => {
+    hidden = false;
+    ctx.setLocalJob(null);
+    UI.openModal({
+      title, body: [status, bar, note], closeOnScrim: false, className: 'import-progress',
+      onOpen: (m) => { close = m.close; },
+      onClose: (v) => { if (v !== 'done') { hidden = true; ctx.setLocalJob(job); } },
+      actions: [
+        { label: 'Keep working in the background', quiet: true, onClick: (c) => c('hide') },
+        { label: 'Stop and import', onClick: () => { run.stop = true; status.textContent = 'Stopping after this post…'; return false; } },
+      ],
+    });
+  };
+  show();
+  return {
+    update(text, done, n = total, extra = '') {
+      status.textContent = text;
+      fill.style.width = `${Math.max(3, Math.round((done / Math.max(1, n)) * 100))}%`;
+      bar.setAttribute('aria-valuenow', String(done));
+      note.textContent = extra;
+      Object.assign(job, { label: text.replace(/…?\s*\d+ of \d+$/, '').replace(/…$/, ''), done, total: n });
+      if (hidden) ctx.setLocalJob(job);
+    },
+    finish() {
+      if (close) close('done');
+      ctx.setLocalJob(null);
+    },
+  };
+}
+
+async function runImport(ctx, scan) {
+  if (run.running) return;
+  const history = (ctx.state.importHistory && ctx.state.importHistory.instagram) || {};
+  const itemsById = new Map(ctx.state.items.map((i) => [i.id, i]));
+  const todo = scan.posts.filter((p) => !isImported(ctx, p, history, itemsById));
+  const skipped = scan.posts.length - todo.length;
+  if (!todo.length) return;
+  // Ask for instagram.com right away, while the click still counts as a user gesture.
+  const wantDetails = ctx.state.settings?.instagram?.readPostDetails !== false && todo.some((p) => !p.details);
+  let canRead = false;
+  if (wantDetails) {
+    canRead = (await hasInstagramAccess()) || (await requestInstagramAccess());
+    if (!canRead) UI.toast('Without instagram.com access, posts are imported with what the grid showed (no captions, locations or links).', { duration: 8000 });
+  }
+  run.running = true;
+  run.stop = false;
+  ctx.render({ keepScroll: true });
+  const igName = scan.collectionName || 'collection';
+  const ui = progressDialog(ctx, { title: `Importing “${igName}”`, total: todo.length });
+  let posts = todo;
+  let read = { done: 0, failed: 0, loginWalls: 0 };
+  try {
+    if (canRead) {
+      const settings = ctx.state.settings.instagram || {};
+      const result = await enrichPosts(todo, {
+        send: ctx.send,
+        delayMs: Math.max(500, Number(settings.readDelayMs) || 1500),
+        shouldStop: () => run.stop,
+        onProgress: (pr) => {
+          const left = Math.ceil(((todo.length - pr.done - pr.failed) * 2.3) / 60);
+          ui.update(`Reading post details… ${pr.done + pr.failed} of ${todo.length}`, pr.done + pr.failed, todo.length, left > 0 ? `About ${pluralize(left, 'minute', 'minutes')} left.` : '');
+        },
+      });
+      posts = result.posts;
+      read = result;
+      const byUrl = new Map(posts.map((p) => [p.url, p]));
+      await ctx.send({ type: MSG.IG_SCAN_SET_POSTS, posts: scan.posts.map((p) => byUrl.get(p.url) || p) });
+    }
+    ui.update('Filing posts…', todo.length, todo.length);
+    const summary = await importPosts(ctx, scan, posts);
+    summary.skipped += skipped;
+    summary.unread = canRead ? read.failed : 0;
+    summary.loginWalls = read.loginWalls || 0;
+    ui.finish();
+    await ctx.send({ type: MSG.IG_SCAN_CLEAR });
+    ctx.state.scan = null;
+    run.running = false;
+    await showImportSummary(ctx, summary, igName);
+  } catch (e) {
+    ui.finish();
+    run.running = false;
+    UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 8000 });
+    ctx.render({ keepScroll: true });
+  }
+}
+
+// Files each post and saves it. Returns where they went: [{ label, count, kind?, collectionId? }], plus
+// how many went to Review and how many were already saved.
+export async function importPosts(ctx, scan, posts) {
+  const context = { collections: ctx.state.collections, prefs: ctx.state.prefs, settings: ctx.state.settings };
+  const igName = scan.collectionName || 'collection';
+  const nameKind = kindForCollectionName(igName);
   const kindOfPost = (post) => {
     if (nameKind) return nameKind;
     const cap = post.caption || '';
@@ -125,312 +241,97 @@ async function reviewScreen(ctx, page, scan) {
     if (placeFromText(cap)) return 'place';
     return null;
   };
-
-  // Classify each post once; the Instagram collection name is a strong signal.
-  const rows = scan.posts.map((post) => {
+  const created = [];
+  const entries = [];
+  const places = new Map();
+  const newCollections = new Map();
+  let review = 0;
+  let skipped = 0;
+  for (const post of posts) {
+    if (await ctx.store.findByUrl(post.url)) {
+      skipped++;
+      continue;
+    }
     const product = productFor(post, scan);
-    const cls = classify(product, context);
-    const rememberedId = history[normalizeUrl(post.url)];
-    const alreadyImported = (!!rememberedId && itemsById.has(rememberedId)) || ctx.state.items.some((i) => i.type === 'instagram' && i.sourceUrl === post.url);
-    const postKind = kindOfPost(post);
-    const def = postKind ? `kind:${postKind}` : cls.isNew ? `new:${cls.taxonomyKey}` : cls.collectionId || NONE;
-    const existing = selection.get(post.url);
-    if (!existing) selection.set(post.url, { selected: !alreadyImported, collectionId: def, defaultChoice: def, touched: false });
-    else if (!existing.touched) Object.assign(existing, { collectionId: def, defaultChoice: def });
-    return { post, product, cls, alreadyImported, postKind };
-  });
+    const kind = kindOfPost(post);
+    let collectionId = null;
+    let cls = null;
+    let kindFields = {};
+    if (kind) {
+      const { details, title } = detailsForKind(kind, { ...product, url: post.url, type: 'instagram' });
+      kindFields = { kind, details, ...(title ? { title } : {}) };
+    } else {
+      cls = classify(product, context);
+      if (cls.isNew && cls.taxonomyKey) {
+        if (!newCollections.has(cls.taxonomyKey)) newCollections.set(cls.taxonomyKey, (await ctx.store.ensureCollectionForTaxonomy(cls.taxonomyKey))?.id || null);
+        collectionId = newCollections.get(cls.taxonomyKey);
+      } else collectionId = cls.collectionId || null;
+    }
+    const item = await ctx.store.addItem({
+      ...product,
+      ...kindFields,
+      type: 'instagram',
+      url: post.url,
+      sourceUrl: post.url,
+      canonicalUrl: post.url,
+      image: post.thumbnail || post.originalThumbnail || post.originalImage || '',
+      images: [post.thumbnail, post.originalImage, post.originalThumbnail].filter(Boolean),
+      imageAspect: 1,
+      collectionId,
+      confidence: kind ? 0.9 : cls.confidence,
+      categorizationSource: 'local',
+      categorizationReason: kind ? (nameKind ? `From your Instagram collection “${igName}”` : `Imported into ${kindInfo(kind).plural}`) : cls.reason,
+      needsReview: !kind && !collectionId,
+    });
+    created.push(item);
+    entries.push([post.url, item.id]);
+    const key = kind ? `kind:${kind}` : collectionId || 'review';
+    if (key === 'review') review++;
+    else places.set(key, (places.get(key) || 0) + 1);
+  }
+  await ctx.store.markImported(entries);
+  for (const item of created) {
+    if (!item.collectionId) continue;
+    const col = await ctx.store.getCollection(item.collectionId);
+    if (col && !col.coverImage && item.image) await ctx.store.updateCollection(col.id, { coverImage: item.image });
+  }
+  // Lifestyle saves: the worker fills in what the post didn't say (Lookups and Optional AI, if on).
+  for (const item of created) if (LIFESTYLE().some((k) => k.value === item.kind)) ctx.send({ type: MSG.FILL_ITEM, itemId: item.id });
+  const cols = await ctx.store.getCollections();
+  const where = [...places.entries()].map(([key, count]) => (key.startsWith('kind:')
+    ? { label: kindInfo(key.slice(5)).plural, count, kind: key.slice(5) }
+    : { label: cols.find((c) => c.id === key)?.name || 'A collection', count, collectionId: key })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  return { total: posts.length, imported: created.length, where, review, skipped };
+}
 
-  const counts = () => rows.filter((r) => selection.get(r.post.url).selected).length;
-  const head = el('div', { class: 'import-head' });
-  const summary = el('span', { class: 'muted' });
-  const updateSummary = () => { summary.textContent = `${counts()} of ${scan.posts.length} selected · ${rows.filter((r) => r.alreadyImported).length} already imported`; };
-  updateSummary();
-
-  const bulkSel = UI.selectInput({ value: '', options: [{ value: '', label: 'Put all selected in…' }, ...lifestyle, ...shopping, { value: NONE, label: 'Leave uncategorized (Review)' }], onChange: (v) => {
-    if (!v) return;
-    for (const r of rows) if (selection.get(r.post.url).selected) { Object.assign(selection.get(r.post.url), { collectionId: v, touched: true }); }
-    bulkSel.value = '';
-    grid.querySelectorAll('select[data-post]').forEach((s) => { if (selection.get(s.dataset.post).selected) s.value = v; });
-  }, label: 'Put all selected in' });
-
-  const importBtn = el('button', { type: 'button', class: 'btn btn-primary', onClick: () => doImport() }, [`Import ${pluralize(counts(), 'post', 'posts')}`]);
-  const refreshImportBtn = () => { importBtn.textContent = `Import ${pluralize(counts(), 'post', 'posts')}`; importBtn.disabled = counts() === 0; };
-  refreshImportBtn();
-
-  head.append(
-    el('div', {}, [
-      el('h2', { class: 'card-section-title' }, [`“${igName}”`, scan.username ? el('span', { class: 'muted small' }, [` · @${scan.username}`]) : null]),
-      summary,
-    ]),
-    el('div', { class: 'actions-row' }, [
-      el('button', { type: 'button', class: 'btn btn-sm', onClick: () => setAll(true) }, ['Select all']),
-      el('button', { type: 'button', class: 'btn btn-sm', onClick: () => setAll(false) }, ['Select none']),
-      el('button', { type: 'button', class: 'btn btn-sm', onClick: () => { for (const r of rows) selection.get(r.post.url).selected = !r.alreadyImported; syncChecks(); } }, ['Skip already imported']),
-      bulkSel,
-      clearBtn(ctx),
-      importBtn,
-    ]),
-  );
-  page.append(head);
-  page.append(detailsBanner(ctx, scan));
-  page.append(el('p', { class: 'help' }, [
-    nameKind ? `“${igName}” sounds like ${kindInfo(nameKind).plural}, so posts go there. ${nameKind === 'place' ? 'Each place is named from its caption’s 📍 line or its location tag, with the address and pin when the post has them; Lookups and Optional AI fill in the rest. ' : ''}`
-      : nameMatch ? `Your Instagram collection name matches your “${nameMatch.name}” collection, so posts default there. ` : `Keepsake uses the collection name “${igName}” plus each caption to suggest where each post goes; anything it can’t place goes to Review. `,
-    'Every post keeps a link back to the original. ',
-    scan.reason === 'limit' ? `The scan stopped at the safety limit (${scan.posts.length}); scroll further on Instagram and scan again to get more.` : '',
+async function showImportSummary(ctx, s, igName) {
+  const aiOn = !!ctx.state.settings?.ai?.on;
+  const rows = s.where.map((w) => el('li', { class: 'import-dest' }, [
+    el('span', { class: 'import-dest-name' }, [w.label]), el('span', { class: 'import-dest-count' }, [String(w.count)]),
   ]));
-
-  const grid = el('div', { class: 'import-grid' });
-  const cardMap = new Map();
-  for (const r of rows) {
-    const sel = selection.get(r.post.url);
-    const card = el('div', { class: `post-card ${sel.selected ? '' : 'deselected'} ${r.alreadyImported ? 'imported' : ''}` });
-    const cb = el('input', { type: 'checkbox', class: 'card-check', 'aria-label': `Import ${r.product.title}` });
-    cb.checked = sel.selected;
-    cb.addEventListener('change', () => {
-      sel.selected = cb.checked;
-      card.classList.toggle('deselected', !cb.checked);
-      updateSummary();
-      refreshImportBtn();
-    });
-    const options = [...lifestyle, ...shopping];
-    if (r.cls.isNew && r.cls.taxonomyKey) options.push({ value: `new:${r.cls.taxonomyKey}`, label: `${r.cls.collectionName} (new)`, group: 'Collections' });
-    options.push({ value: NONE, label: 'Leave uncategorized (Review)' });
-    const colSel = UI.selectInput({ value: sel.collectionId, options, onChange: (v) => { sel.collectionId = v; sel.touched = true; }, label: `Where ${r.product.title} goes` });
-    colSel.dataset.post = r.post.url;
-    if (colSel.value !== sel.collectionId) { colSel.value = NONE; sel.collectionId = NONE; }
-    const where = r.postKind === 'place' ? placeFromPost(r.post) : null;
-    const conf = r.postKind ? (where ? [where.name, where.details.address || where.details.locality].filter(Boolean).join(' · ') || kindInfo(r.postKind).label : nameKind ? `From “${igName}”` : kindInfo(r.postKind).label)
-      : r.cls.isInbox ? 'Not sure — leave uncategorized' : `${Math.round(r.cls.confidence * 100)}% · ${r.cls.reason}`;
-    card.append(
-      cb,
-      UI.pictureNode({ src: r.post.thumbnail || r.post.originalThumbnail, title: r.product.title }),
-      el('div', { class: 'post-body' }, [
-        r.alreadyImported ? el('span', { class: 'pill pill-warn' }, ['Already imported']) : null,
-        el('div', { class: 'post-caption' }, [r.product.title]),
-        el('div', { class: 'post-creator' }, [[r.post.creator ? `@${r.post.creator}` : '', r.post.type === 'reel' ? 'Reel' : '', r.post.details ? '' : r.post.detailsError ? 'details unavailable' : ''].filter(Boolean).join(' · ')]),
-        r.post.products && r.post.products.length ? el('div', { class: 'post-products' }, r.post.products.slice(0, 3).map((p) => el('span', { class: 'pill pill-ok', title: p.url || '' }, [p.name, p.price !== null && p.price !== undefined ? ` · ${formatPrice(p.price, p.currency || 'USD')}` : '']))) : null,
-        r.post.links && r.post.links.length ? el('div', { class: 'post-links' }, r.post.links.slice(0, 2).map((l) => el('a', { class: 'small', href: l.url, target: '_blank', rel: 'noopener noreferrer' }, [l.label || l.url]))) : null,
-        colSel,
-        el('div', { class: 'post-conf', title: r.cls.reason }, [conf]),
-        el('a', { class: 'small', href: openableUrl(r.post.url), target: '_blank', rel: 'noopener noreferrer' }, ['Open on Instagram']),
-      ]),
-    );
-    cardMap.set(r.post.url, { card, cb });
-    grid.append(card);
-  }
-  page.append(grid);
-
-  function setAll(on) {
-    for (const r of rows) selection.get(r.post.url).selected = on;
-    syncChecks();
-  }
-  function syncChecks() {
-    for (const r of rows) {
-      const { card, cb } = cardMap.get(r.post.url);
-      cb.checked = selection.get(r.post.url).selected;
-      card.classList.toggle('deselected', !cb.checked);
-    }
-    updateSummary();
-    refreshImportBtn();
-  }
-
-  async function doImport() {
-    const chosen = rows.filter((r) => selection.get(r.post.url).selected);
-    if (!chosen.length) return;
-    importBtn.disabled = true;
-    importBtn.textContent = 'Importing…';
-    const created = [];
-    const entries = [];
-    const collectionCache = new Map();
-    let skipped = 0;
-    let prefs = await ctx.store.getPrefs();
-    let learned = false;
-    try {
-      for (const r of chosen) {
-        const sel = selection.get(r.post.url);
-        const resolve = async (value) => {
-          if (typeof value !== 'string' || value === NONE) return null;
-          if (value.startsWith('new:')) {
-            if (!collectionCache.has(value)) collectionCache.set(value, (await ctx.store.ensureCollectionForTaxonomy(value.slice(4)))?.id || null);
-            return collectionCache.get(value);
-          }
-          return value;
-        };
-        const dupe = await ctx.store.findByUrl(r.post.url);
-        if (dupe) {
-          skipped++;
-          continue;
-        }
-        const userChose = sel.collectionId !== sel.defaultChoice;
-        const kind = typeof sel.collectionId === 'string' && sel.collectionId.startsWith('kind:') ? sel.collectionId.slice(5) : '';
-        const targetId = kind ? null : await resolve(sel.collectionId);
-        const isUncategorized = !targetId && !kind;
-        const base = { ...r.product, url: r.post.url };
-        // Into a Lifestyle view: that kind, with its details from the caption (and for a place, its
-        // location tag); the place's name becomes the title. Lookups and AI fill in the rest afterwards.
-        let kindFields = {};
-        if (kind) {
-          const { details, title } = detailsForKind(kind, { ...base, type: 'instagram' });
-          kindFields = { kind, details, ...(title ? { title } : {}) };
-        }
-        const item = await ctx.store.addItem({
-          ...r.product,
-          ...kindFields,
-          type: 'instagram',
-          url: r.post.url,
-          sourceUrl: r.post.url,
-          canonicalUrl: r.post.url,
-          image: r.post.thumbnail || r.post.originalThumbnail || r.post.originalImage || '',
-          images: [r.post.thumbnail, r.post.originalImage, r.post.originalThumbnail].filter(Boolean),
-          imageAspect: 1,
-          collectionId: targetId,
-          confidence: userChose ? 1 : r.cls.confidence,
-          categorizationSource: userChose ? 'manual' : 'local',
-          categorizationReason: userChose ? 'Chosen by you during import' : kind ? `Imported into ${kindInfo(kind).plural}` : r.cls.reason,
-          needsReview: !userChose && isUncategorized,
-        });
-        created.push(item);
-        entries.push([r.post.url, item.id]);
-        if (kind) continue;
-        if (userChose && !isUncategorized) {
-          // A correction during review is a lesson worth keeping.
-          prefs = learnFromCorrection(item, r.cls.isInbox ? null : r.cls.collectionId, targetId, prefs);
-          learned = true;
-        }
-      }
-      if (learned) await ctx.store.setPrefs(prefs);
-      await ctx.store.markImported(entries);
-      // Set covers for collections that lack one.
-      for (const item of created) {
-        if (!item.collectionId) continue;
-        const col = await ctx.store.getCollection(item.collectionId);
-        if (col && !col.coverImage && item.image) await ctx.store.updateCollection(col.id, { coverImage: item.image });
-      }
-      // Lifestyle saves: fill in what the post didn't say (a place's address and pin) with the
-      // Lookups and Optional AI you turned on. The worker works through them in the background.
-      for (const item of created) if (LIFESTYLE().some((k) => k.value === item.kind)) ctx.send({ type: MSG.FILL_ITEM, itemId: item.id });
-      await ctx.send({ type: MSG.IG_SCAN_CLEAR });
-      ctx.state.scan = null;
-      selection.clear();
-      UI.toast(`Imported ${pluralize(created.length, 'post', 'posts')}${skipped ? ` (${skipped} already saved)` : ''}.`, { duration: 6000 });
-      const kinds = [...new Set(created.map((i) => i.kind))];
-      ctx.navigate(kinds.length === 1 && LIFESTYLE().some((k) => k.value === kinds[0]) ? `#kind/${kinds[0]}` : created.length && created.every((i) => !i.collectionId && i.needsReview) ? '#review' : '#all');
-    } catch (e) {
-      UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 8000 });
-      importBtn.disabled = false;
-      refreshImportBtn();
-    }
-  }
-}
-
-
-// --- "Read post details" ---------------------------------------------------------------------------------
-
-function detailsBanner(ctx, scan) {
-  const box = el('div', { class: 'notice details-banner' });
-  const missing = scan.posts.filter((p) => !p.details);
-  const draw = () => {
-    UI.holdHeight(box);
-    clear(box);
-    if (enrich.running) {
-      const pr = enrich.progress || { done: 0, total: scan.posts.length, failed: 0 };
-      const bar = el('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(pr.total), 'aria-valuenow': String(pr.done + pr.failed) });
-      const fill = el('div', { class: 'progress-fill' });
-      fill.style.width = `${Math.round(((pr.done + pr.failed) / Math.max(1, pr.total)) * 100)}%`;
-      bar.append(fill);
-      box.append(
-        el('div', { class: 'row' }, [
-          el('strong', { class: 'grow' }, [`Reading post details… ${pr.done + pr.failed} of ${pr.total}`]),
-          el('button', { type: 'button', class: 'btn btn-sm', onClick: () => { enrich.stop = true; } }, ['Stop']),
-        ]),
-        bar,
-        el('div', { class: 'help' }, ['Keepsake opens each post’s page with your own Instagram session, one at a time with a short pause, and reads the caption, creator, links and any tagged products. Nothing is sent anywhere.']),
-      );
-      return;
-    }
-    if (!missing.length) {
-      const withLinks = scan.posts.filter((p) => (p.links && p.links.length) || (p.products && p.products.length)).length;
-      box.className = 'notice notice-ok details-banner';
-      box.append(el('div', {}, [el('strong', {}, ['Post details read. ']), `Captions and creators are filled in${withLinks ? `; ${pluralize(withLinks, 'post has', 'posts have')} product links or tags` : ''}.`]));
-      return;
-    }
-    const last = enrich.lastResult;
-    box.className = `notice ${last && last.failed && !last.done ? 'notice-warn' : ''} details-banner`;
-    // Native append() would print a null as the text "null": only the parts that apply.
-    box.append(...[
-      el('div', { class: 'row' }, [
-        el('div', { class: 'grow' }, [
-          el('strong', {}, [`${pluralize(missing.length, 'post is', 'posts are')} missing details. `]),
-          'Instagram’s grid only exposes thumbnails. Reading each post’s page fills in the caption (used as the title), creator, hashtags, links and any tagged products — about ',
-          el('strong', {}, [`${Math.ceil((missing.length * 2.3) / 60)} min`]), ' for this many posts.',
-        ]),
-        el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: () => startEnrichment(ctx, scan) }, ['Read post details']),
-      ]),
-      last && last.failed ? el('div', { class: 'help' }, [`${pluralize(last.failed, 'post', 'posts')} could not be read${last.loginWalls ? ' (Instagram showed a login page — make sure you are logged in, then try again)' : ''}. You can still import with what was found.`]) : null,
-      el('div', { class: 'help' }, ['Needs one-time permission for instagram.com so Keepsake can read post pages. You can revoke it under Settings → Instagram.']),
-    ].filter(Boolean));
-  };
-  draw();
-  box._redraw = draw;
-  return box;
-}
-
-async function startEnrichment(ctx, scan) {
-  if (enrich.running) return;
-  if (!(await hasInstagramAccess())) {
-    const ok = await requestInstagramAccess();
-    if (!ok) {
-      UI.toast('Keepsake needs permission for instagram.com to read post pages.', { kind: 'danger', duration: 6000 });
-      return;
-    }
-  }
-  enrich.running = true;
-  enrich.stop = false;
-  enrich.progress = { done: 0, total: scan.posts.length, failed: 0 };
-  const banner = document.querySelector('.details-banner');
-  if (banner && banner._redraw) banner._redraw();
-  const settings = ctx.state.settings.instagram || {};
-  let lastSave = Date.now();
-  try {
-    const result = await enrichPosts(scan.posts, {
-      send: ctx.send,
-      delayMs: Math.max(500, Number(settings.readDelayMs) || 1500),
-      shouldStop: () => enrich.stop,
-      onProgress: async (pr) => {
-        enrich.progress = pr;
-        const b = document.querySelector('.details-banner');
-        if (b && b._redraw) b._redraw();
-        // Persist partial progress so a reload keeps what was read.
-        if (Date.now() - lastSave > 5000) {
-          lastSave = Date.now();
-          const posts = scan.posts.map((p, i) => (i <= pr.current && pr.post && pr.post.url === p.url ? pr.post : p));
-          await ctx.send({ type: MSG.IG_SCAN_SET_POSTS, posts });
-        }
-      },
-    });
-    enrich.lastResult = result;
-    await ctx.send({ type: MSG.IG_SCAN_SET_POSTS, posts: result.posts });
-    ctx.state.scan = { ...scan, posts: result.posts };
-    UI.toast(result.stopped ? `Stopped after ${result.done} of ${result.posts.length} posts.` : `Read ${result.done} of ${result.posts.length} posts${result.failed ? ` (${result.failed} unavailable)` : ''}.`, { duration: 5000 });
-  } catch (e) {
-    UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 8000 });
-  } finally {
-    enrich.running = false;
-    enrich.stop = false;
-    ctx.render();
-  }
-}
-
-// Called by the dashboard when the review screen opens: read details
-// automatically when the user already granted instagram.com access.
-export async function maybeAutoEnrich(ctx) {
-  const scan = ctx.state.scan;
-  if (!scan || scan.status !== 'done' || !scan.posts?.length || enrich.running) return;
-  const key = `${scan.collectionUrl || ''}|${scan.posts.length}`;
-  if (enrich.autoTried === key) return;
-  if (ctx.state.settings?.instagram?.readPostDetails === false) return;
-  if (!scan.posts.some((p) => !p.details)) return;
-  enrich.autoTried = key;
-  if (await hasInstagramAccess()) startEnrichment(ctx, scan);
+  if (s.review) rows.push(el('li', { class: 'import-dest is-review' }, [el('span', { class: 'import-dest-name' }, ['Review: for you to sort', aiOn ? ' (or with AI)' : '']), el('span', { class: 'import-dest-count' }, [String(s.review)])]));
+  const hasPlaces = s.where.some((w) => w.kind === 'place') && (aiOn || !!ctx.state.settings?.lookups?.places);
+  const notes = [
+    s.skipped ? `${pluralize(s.skipped, 'post was', 'posts were')} already in Keepsake, so ${s.skipped === 1 ? 'it was' : 'they were'} skipped.` : '',
+    s.unread ? `${pluralize(s.unread, 'post', 'posts')} couldn’t be read${s.loginWalls ? ' (Instagram showed a login page)' : ''}, so ${s.unread === 1 ? 'it was' : 'they were'} imported with what the grid showed.` : '',
+    hasPlaces ? 'Places are being filled in (addresses and map pins) in the background, with the Lookups and AI you turned on.' : '',
+  ].filter(Boolean);
+  const choice = await UI.openModal({
+    title: `Imported ${pluralize(s.imported, 'post', 'posts')} from “${igName}”`,
+    className: 'import-summary',
+    body: [
+      el('ul', { class: 'import-dests', role: 'list' }, rows.length ? rows : [el('li', { class: 'help' }, ['Nothing new to import.'])]),
+      ...notes.map((n) => el('p', { class: 'help' }, [n])),
+    ],
+    actions: [
+      ...(s.review ? [{ label: 'Open Review', quiet: true, value: 'review', onClick: (c) => c('review') }] : []),
+      ...(s.review && aiOn ? [{ label: 'Sort Review with AI', onClick: (c) => c('ai') }] : []),
+      { label: 'Done', primary: true, onClick: (c) => c('home') },
+    ],
+  });
+  if (choice === 'review') ctx.navigate('#review');
+  else if (choice === 'ai') {
+    ctx.navigate('#review');
+    runAiCleanup(ctx, { scope: 'review' });
+  } else ctx.navigate('#home');
 }
