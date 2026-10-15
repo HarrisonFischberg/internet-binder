@@ -120,7 +120,9 @@ struct SaveDetailScreen: View {
                 .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
                 .frame(height: 280)
                 .overlay(alignment: .topTrailing) { Stamp(kind: "place", size: 44).padding(12) }
+                .accessibilityElement(children: .ignore)   // the map's street names aren't for VoiceOver
                 .accessibilityLabel("Map of \(current.title)")
+                .accessibilityHint("Use Directions below to go there.")
             }
             .padding(8).background(t.paper).resting()
             .rotationEffect(.degrees(-0.6))

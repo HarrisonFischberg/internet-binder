@@ -175,7 +175,7 @@ Share Sheet → Library → open the save, in the chosen direction (D14), on the
 - **Recorded sounds:** Sound uses a system tick for now.
 
 ## M3.6 Release candidate · ⏸ review
-- **Committed** on `m3-ios` (not pushed): `8543187` (Chrome rules shared), `64eb0c7` (M3.0–M3.5).
+- **Committed** on `m3-ios` (not pushed): `8543187` (Chrome rules shared), `64eb0c7` (M3.0–M3.5), `ece1829` (M3.6 RC).
 - **On your iPhone**: identifiers, App Group and signing registered through Xcode automatic signing on
   team KTV2G3Z883 (app, `.share`, `.widgets`, `group.com.harrisonfischberg.keepsake`). Release build
   installed and launched on Hphone (iPhone 17 Pro). The iCloud container is **not** registered yet: no
@@ -192,6 +192,9 @@ Share Sheet → Library → open the save, in the chosen direction (D14), on the
 - **App Store screenshots** (Postcard, light and dark, full resolution): `appstore/iphone-6.9/` and
   `appstore/ipad-13/`.
 - **Parity**: `parity.md`: **81% weighted** against `features.csv` (must 22/23).
+- **Accessibility audit**: gate passing (labels, hit areas, traits, reachable text); heuristic findings
+  reviewed in `accessibility.md`. **Widget check-in**: "Done today" on the Workout goal widget (App
+  Intent), tested through the snapshot (`swift test` 29/29).
 - **Privacy**: `privacy-label.md` (proposed "Data Not Collected"), `ios/PRIVACY-iOS.md`, privacy
   manifests in the app, Share Extension and widgets.
 
