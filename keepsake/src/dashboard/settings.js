@@ -8,7 +8,6 @@ import { emptyPrefs } from '../shared/categorizer.js';
 import { PROVIDERS, providerConfig, originFor, describePayload, analyzePost, testConnection, findProductOnline, supportsWebLookup } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
-import { cleanupSection } from './aiCleanup.js';
 import { hasInstagramAccess, revokeInstagramAccess } from '../instagram/enrich.js';
 
 const ALL_SITES = '*://*/*';
@@ -511,9 +510,13 @@ export function renderAI(ctx, view) {
     };
 
     box.append(UI.section('Optional AI', '', [
-      UI.settingRow('Use AI', UI.switchInput({ checked: ai.on, onChange: async (v, input) => { if (!(await setAiOn(v))) input.checked = !v; }, label: 'Use AI' }), 'Instant saves, “Fix with AI” and “Find products”, all using the provider above.'),
+      UI.settingRow('Use AI', UI.switchInput({ checked: ai.on, onChange: async (v, input) => { if (!(await setAiOn(v))) input.checked = !v; }, label: 'Use AI' }), 'Instant saves, “Check with AI” and “Find products”, all using the provider above.'),
     ]));
-    if (ai.on) box.append(cleanupSection(ctx));
+    // Checking saves happens where they are: Check with AI at the top of the Library, a collection or a
+    // Lifestyle view, and Fix all with AI in Review.
+    if (ai.on) box.append(UI.section('Check with AI', 'Use “Check with AI” at the top of the Library, a collection or a Lifestyle view (and “Fix all with AI” in Review) to have your provider check those saves. Every change is logged and can be undone.', [
+      el('div', { class: 'actions-row' }, [el('button', { type: 'button', class: 'btn', onClick: () => ctx.navigate('#ailog') }, ['AI change log'])]),
+    ]));
   };
   draw();
   page.append(box);

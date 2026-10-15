@@ -3,7 +3,7 @@
 // helpers (opening tabs, refreshing floating buttons). No network access.
 
 import { createStore, chromeBackend, idbBackend, TRASH_DAYS, applyLook } from '../shared/storage.js';
-import { MSG } from '../shared/messages.js';
+import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
@@ -48,6 +48,7 @@ const state = {
   selected: new Set(),
   shown: 120,
   scan: null,
+  fillJob: null, // the background check running now or last (session storage: keepsake_fillJob)
 };
 
 const send = (msg) => new Promise((resolve) => {
@@ -100,7 +101,20 @@ async function boot() {
     if (changes.keepsake_settings) applyTheme();
     render({ keepScroll: true });
   }, 150));
+  try {
+    state.fillJob = (await chrome.storage.session.get(SESSION_KEYS.fillJob))?.[SESSION_KEYS.fillJob] || null;
+  } catch {
+    state.fillJob = null;
+  }
+  renderJobBar();
   chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'session' && changes[SESSION_KEYS.fillJob]) {
+      const was = state.fillJob;
+      state.fillJob = changes[SESSION_KEYS.fillJob].newValue || null;
+      renderJobBar();
+      // Finished: say so once, and take the bar away after a while.
+      if (was?.running && state.fillJob && !state.fillJob.running) setTimeout(renderJobBar, JOB_SHOWN_MS + 200);
+    }
     if (area === 'session' && changes.keepsake_igScan && state.route.name === 'import') {
       state.scan = changes.keepsake_igScan.newValue || null;
       render({ keepScroll: true });
@@ -180,6 +194,7 @@ function bindChrome() {
     $('searchInput').focus();
   });
   $('selectToggle').addEventListener('click', () => (state.selecting ? exitSelection(true) : enterSelection()));
+  $('aiCheck').addEventListener('click', () => checkWithAI());
   $('themeToggle').addEventListener('click', async () => {
     const order = ['system', 'light', 'dark'];
     const cur = state.settings?.theme || 'system';
@@ -567,6 +582,79 @@ function renderToolbar() {
     $('selectToggle').textContent = state.selecting ? 'Done' : 'Select';
     $('bulkAi').classList.toggle('hidden', !state.settings?.ai?.on);
   }
+  // Check with AI, up front where your saves are (Library, a collection, a Lifestyle view), when AI is on.
+  const aiHere = !!state.settings?.ai?.on && ['all', 'c', 'kind'].includes(r.name);
+  $('aiCheck').classList.toggle('hidden', !aiHere);
+  if (aiHere) {
+    $('aiCheck').title = r.name === 'kind'
+      ? (r.id === 'place' ? 'Have your AI provider name each place in Places review and say where it is' : `Have your AI provider fill in what’s missing in your ${kindInfo(r.id).plural.toLowerCase()}`)
+      : `Have your AI provider check ${r.name === 'c' ? 'this collection' : 'your shopping saves'}: tidy titles, confirm prices and file them. Every change can be undone.`;
+  }
+}
+
+// --- background checks (fill-in batches) ----------------------------------------------------------
+// A batch runs in the background worker, one save at a time; its progress shows in a bar under the header
+// on every page, with Stop. When it's done the bar says what changed, then goes away.
+const JOB_SHOWN_MS = 15000;
+const jobDismissed = new Set();
+function renderJobBar() {
+  const bar = $('jobbar');
+  if (!bar) return;
+  const job = state.fillJob;
+  const recent = job && job.finishedAt && Date.now() - Date.parse(job.finishedAt) < JOB_SHOWN_MS;
+  const show = !!job && (job.running || recent) && !jobDismissed.has(job.id);
+  bar.classList.toggle('hidden', !show);
+  clear(bar);
+  if (!show) return;
+  const done = Math.min(job.done, job.total);
+  const pct = job.total ? Math.round((done / job.total) * 100) : 100;
+  const head = job.running ? `${job.label || 'Checking with AI'}… ${done} of ${job.total}` : `${job.stopped ? 'Stopped' : 'Done'}: ${done} of ${job.total} checked`;
+  const extra = [job.changed ? `${pluralize(job.changed, 'save', 'saves')} updated` : (job.running ? '' : 'nothing new found'), job.ready ? `${pluralize(job.ready, 'place', 'places')} moved to your list` : ''].filter(Boolean).join(' · ');
+  bar.append(
+    el('div', { class: 'jobbar-text' }, [el('strong', {}, [head]), extra ? el('span', { class: 'muted' }, [` · ${extra}`]) : null]),
+    el('div', { class: 'progress jobbar-progress', role: 'progressbar', 'aria-label': job.label || 'Progress', 'aria-valuemin': '0', 'aria-valuemax': String(job.total), 'aria-valuenow': String(done) }, [
+      el('div', { class: `progress-fill ${job.running ? 'is-running' : ''}`, style: { width: `${Math.max(job.running ? 3 : 0, pct)}%` } }),
+    ]),
+    job.running
+      ? el('button', { type: 'button', class: 'btn btn-sm', onClick: (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Stopping…'; send({ type: MSG.FILL_STOP }); } }, ['Stop'])
+      : el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => { jobDismissed.add(job.id); renderJobBar(); } }, ['Dismiss']),
+  );
+}
+
+async function startFillJob(ids, opts) {
+  if (!ids.length) {
+    UI.toast('Nothing to check here.');
+    return;
+  }
+  const res = await send({ type: MSG.FILL_BATCH, itemIds: ids, ...opts });
+  if (!res?.ok) {
+    UI.toast(res?.error || 'The check couldn’t start.', { kind: 'danger' });
+    return;
+  }
+  state.fillJob = res.job;
+  renderJobBar();
+}
+
+// The header's Check with AI: Lifestyle views fill in what's missing (Places: names and states for the
+// places in review); collections and the Library get the shopping check (titles, prices, collections).
+function checkWithAI() {
+  const r = state.route;
+  if (r.name === 'kind') {
+    const items = state.items.filter((i) => kindOf(i) === r.id);
+    if (r.id === 'place') {
+      placesViewChoice = 'review';
+      renderView({ keepScroll: true });
+      return fixPlaces(items);
+    }
+    return startFillJob(items.map((i) => i.id), { label: `Checking ${kindInfo(r.id).plural.toLowerCase()} with AI`, kind: r.id });
+  }
+  return runAiCleanup(ctx, { scope: r.name === 'c' ? r.id : 'all' });
+}
+
+// Places review's fix: the places waiting there, and every place from Instagram (its caption read again).
+function fixPlaces(all) {
+  const ids = new Set(all.filter((i) => placeReviewReasons(i).length || i.type === 'instagram').map((i) => i.id));
+  return startFillJob([...ids], { review: true, kind: 'place', label: state.settings?.ai?.on ? 'Fixing places with AI' : 'Reading posts again' });
 }
 
 function renderView({ keepScroll = false } = {}) {
@@ -1516,13 +1604,8 @@ function renderPlacesReview(view, items, all = items) {
     return;
   }
   const aiOn = !!state.settings?.ai?.on;
-  const fixAll = async (btn) => {
-    btn.disabled = true;
-    // These, and every place from Instagram on the list too: its caption is read again with today's rules.
-    const ids = new Set([...items, ...all.filter((i) => i.type === 'instagram')].map((i) => i.id));
-    for (const id of ids) send({ type: MSG.FILL_ITEM, itemId: id, review: true });
-    UI.toast(aiOn ? `Asking your AI provider about ${pluralize(items.length, 'place', 'places')}. They move to your list as they’re named.` : `Reading ${pluralize(items.length, 'post', 'posts')} again…`, { duration: 6000 });
-  };
+  const fixAll = () => fixPlaces(all);
+  const running = !!state.fillJob?.running;
   box.append(el('div', { class: 'place-review-bar' }, [
     el('div', { class: 'grow' }, [
       el('p', {}, [`${pluralize(items.length, 'place needs', 'places need')} a name or a state before ${items.length === 1 ? 'it goes' : 'they go'} on your list.`]),
@@ -1530,7 +1613,7 @@ function renderPlacesReview(view, items, all = items) {
         ? 'Fix with AI sends each one’s title, caption and location tag to your AI provider, which names the place and says where it is; Lookups then add the address and pin. A post about several places (a top-10 list) stays here: open it to move it or delete it.'
         : 'Read again checks the caption of every place you saved from Instagram with Keepsake’s latest rules, on your device. To have places named from their posts, turn on Optional AI in Settings. Or open one and fill in its name and address.']),
     ]),
-    el('button', { type: 'button', class: 'btn btn-primary', onClick: (e) => fixAll(e.currentTarget) }, [aiOn ? `Fix ${items.length} with AI` : 'Read again']),
+    el('button', { type: 'button', class: 'btn btn-primary', disabled: running, onClick: () => fixAll() }, [running ? 'Working…' : aiOn ? `Fix ${items.length} with AI` : 'Read again']),
   ]));
   const why = { 'no place name': 'No place name', 'no state': 'No state' };
   const sorted = [...items].sort((a, b) => placeReviewReasons(a).length - placeReviewReasons(b).length || a.title.localeCompare(b.title));

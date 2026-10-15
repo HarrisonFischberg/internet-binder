@@ -538,3 +538,34 @@ test('Places review: the caption is read again first; then your AI provider name
   const rb = await S.getItem(b.id);
   assert.deepEqual([rb.title, rb.details.address, rb.details.locality, rb.details.region], ['Example Tavern', '54 Pearl St', 'New York', 'NY']);
 });
+
+test('a fill-in batch runs one save at a time, keeps its progress in session storage, counts places that leave review, and stops', async () => {
+  const st = F.local.keepsake_settings;
+  F.local.keepsake_settings = { ...st, ai: { ...st.ai, on: false } };
+  globalThis.fetch = async () => { throw new Error('no network'); };
+  const mk = (n, caption) => S.addItem({ type: 'instagram', kind: 'place', title: caption.split(' 📍')[0], url: `https://www.instagram.com/p/BATCH${n}/`, details: { source: 'page' }, instagram: { caption } });
+  const a = await mk(1, 'Best slice 📍Example Pizza, 7 Carmine St, New York, NY');
+  const b = await mk(2, 'Just vibes');
+  const res = await F.send({ type: MSG.FILL_BATCH, itemIds: [a.id, b.id], review: true, label: 'Reading posts again', kind: 'place' }, popup);
+  assert.equal(res.ok, true);
+  assert.deepEqual([res.job.total, res.job.running], [2, true]);
+  const busy = await F.send({ type: MSG.FILL_BATCH, itemIds: [a.id] }, popup);
+  assert.equal(busy.ok, false, 'one batch at a time');
+  for (let i = 0; i < 80 && F.session.keepsake_fillJob?.running; i++) await new Promise((r) => setTimeout(r, 25));
+  const job = F.session.keepsake_fillJob;
+  assert.deepEqual([job.done, job.total, job.running, job.ready, job.changed], [2, 2, false, 1, 1], 'Example Pizza left review; the other found nothing');
+  assert.equal((await S.getItem(a.id)).title, 'Example Pizza');
+  // Stop: the batch ends after the save it's on.
+  const ids = [];
+  for (let n = 3; n < 13; n++) ids.push((await mk(n, `Post ${n}`)).id);
+  await F.send({ type: MSG.FILL_BATCH, itemIds: ids, review: true }, popup);
+  await F.send({ type: MSG.FILL_STOP }, popup);
+  for (let i = 0; i < 80 && F.session.keepsake_fillJob?.running; i++) await new Promise((r) => setTimeout(r, 25));
+  assert.equal(F.session.keepsake_fillJob.stopped, true);
+  assert.ok(F.session.keepsake_fillJob.done < ids.length, 'stopped early');
+});
+
+test('a fill-in batch can’t be started from a web page', async () => {
+  const r = await F.send({ type: MSG.FILL_BATCH, itemIds: ['x'] }, pageTab);
+  assert.match(r.error, /Not allowed/);
+});

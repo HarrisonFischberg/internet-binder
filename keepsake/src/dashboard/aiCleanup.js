@@ -10,7 +10,7 @@
 import { el, clear, formatPrice, parsePrice, pluralize, uid, nowIso } from '../shared/util.js';
 import { providerConfig, originFor, cleanupWithAI, CLEANUP_BATCH } from '../ai/provider.js';
 import * as UI from './ui.js';
-import { needsCollection } from '../shared/kinds.js';
+import { needsCollection, hasOwnView, kindOf } from '../shared/kinds.js';
 
 const ALL_SITES = '*://*/*';
 // Moving an item that is already in a collection needs more certainty than
@@ -35,7 +35,8 @@ async function requestOrigins(origins) {
 }
 
 function scopeItems(ctx, scope) {
-  const live = ctx.state.items.filter((i) => !i.purchased);
+  // Shopping saves only: Lifestyle saves (places, recipes…) are checked from their own view.
+  const live = ctx.state.items.filter((i) => !i.purchased && !hasOwnView(kindOf(i)));
   if (scope === 'review') return live.filter(needsCollection);
   if (scope === 'all') return live;
   return live.filter((i) => i.collectionId === scope);

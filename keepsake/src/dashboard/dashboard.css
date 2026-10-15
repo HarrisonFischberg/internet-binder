@@ -472,6 +472,42 @@ a.sidebar-brand:hover .brand-name {
   flex-wrap: wrap;
 }
 
+.jobbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 28px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.jobbar .jobbar-progress {
+  grid-column: 1;
+  margin: 0;
+}
+
+.jobbar .btn {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.progress-fill.is-running {
+  background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  background-size: 200% 100%;
+  animation: progress-shine 1.4s linear infinite;
+}
+
+@keyframes progress-shine {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill.is-running { animation: none; }
+}
+
 .view {
   flex: 1 1 auto;
   min-height: 0;

@@ -399,6 +399,41 @@ function queueFill(id, opts = {}) {
   return fillQueue;
 }
 
+// A batch you started (Fix with AI in Places review, Check with AI in a Lifestyle view): one save at a time,
+// its progress kept in session storage so every open dashboard shows it, and stoppable between saves.
+let fillJob = null;
+async function publishFillJob() {
+  try {
+    await chrome.storage.session.set({ [SESSION_KEYS.fillJob]: fillJob });
+  } catch {
+    /* no session storage: the batch still runs */
+  }
+}
+const fillState = (i) => (i ? JSON.stringify([i.title, i.details]) : '');
+async function startFillBatch(ids, { review = false, label = '', kind = '' } = {}) {
+  if (fillJob?.running) return { ok: false, error: 'A check is already running.', job: fillJob };
+  const job = { id: uid(), label: sanitizeText(label, 80), kind: sanitizeText(kind, 20), total: ids.length, done: 0, ready: 0, changed: 0, running: true, stopped: false, startedAt: nowIso(), finishedAt: '' };
+  fillJob = job;
+  await publishFillJob();
+  (async () => {
+    for (const id of ids) {
+      if (job.stopped) break;
+      const before = await store.getItem(id);
+      await queueFill(id, { review });
+      const after = await store.getItem(id);
+      if (before && after && fillState(before) !== fillState(after)) job.changed++;
+      // A place that was waiting in Places review and now has its name and state.
+      if (before && after && kindOf(after) === 'place' && placeReviewReasons(before).length && !placeReviewReasons(after).length) job.ready++;
+      job.done++;
+      await publishFillJob();
+    }
+    job.running = false;
+    job.finishedAt = nowIso();
+    await publishFillJob();
+  })();
+  return { ok: true, job };
+}
+
 async function lookupAllowed(settings, which) {
   if (!settings.lookups?.[which]) return false;
   try {
@@ -875,6 +910,15 @@ async function handleMessage(msg, sender) {
     }
     case MSG.FILL_ITEM: {
       queueFill(msg.itemId, { review: !!msg.review });
+      return { ok: true };
+    }
+    case MSG.FILL_BATCH: {
+      if (!fromExtensionPage) throw new Error('Not allowed.');
+      const ids = (Array.isArray(msg.itemIds) ? msg.itemIds : []).filter((x) => typeof x === 'string').slice(0, 5000);
+      return startFillBatch([...new Set(ids)], { review: !!msg.review, label: msg.label, kind: msg.kind });
+    }
+    case MSG.FILL_STOP: {
+      if (fillJob?.running) fillJob.stopped = true;
       return { ok: true };
     }
     case MSG.FILL_KIND: {

@@ -20,8 +20,12 @@ export const MSG = {
   PAGE_TOAST: 'keepsake:page-toast',
   FILL_ITEM: 'keepsake:fill-item', // extension pages -> background { itemId }: fill in a Lifestyle save (AI if on, lookups if on)
   FILL_KIND: 'keepsake:fill-kind', // extension pages -> background { kind }: the same for every save of that kind
+  FILL_BATCH: 'keepsake:fill-batch', // extension pages -> background { itemIds, review, label } -> { ok, job }: fill in these, one at a time, with progress
+  FILL_STOP: 'keepsake:fill-stop', // extension pages -> background: stop the batch after the current save
 };
 
 export const SESSION_KEYS = {
   igScan: 'keepsake_igScan',
+  // The fill-in batch running now or last: { id, label, kind, total, done, ready, changed, running, stopped }.
+  fillJob: 'keepsake_fillJob',
 };

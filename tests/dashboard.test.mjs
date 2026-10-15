@@ -690,3 +690,36 @@ test('Instagram import: the “missing details” banner never shows the word nu
     chrome.runtime.sendMessage = realSend;
   }
 });
+
+test('background checks: a progress bar under the header with Stop, then what changed; Check with AI only where saves are, with AI on', async () => {
+  const bar = () => window.document.getElementById('jobbar');
+  await chrome.storage.session.set({ keepsake_fillJob: { id: 'job1', label: 'Fixing places with AI', total: 52, done: 12, ready: 7, changed: 9, running: true, stopped: false, finishedAt: '' } });
+  await settle();
+  assert.ok(!bar().classList.contains('hidden'));
+  assert.match(bar().textContent, /Fixing places with AI… 12 of 52/);
+  assert.match(bar().textContent, /7 places moved to your list/);
+  assert.equal(bar().querySelector('[role=progressbar]').getAttribute('aria-valuenow'), '12');
+  assert.ok([...bar().querySelectorAll('button')].some((b) => b.textContent === 'Stop'));
+  await chrome.storage.session.set({ keepsake_fillJob: { id: 'job1', label: 'Fixing places with AI', total: 52, done: 52, ready: 31, changed: 40, running: false, stopped: false, finishedAt: new Date().toISOString() } });
+  await settle();
+  assert.match(bar().textContent, /Done: 52 of 52 checked · 40 saves updated · 31 places moved to your list/);
+  [...bar().querySelectorAll('button')].find((b) => b.textContent === 'Dismiss').click();
+  assert.ok(bar().classList.contains('hidden'));
+
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const aiCheck = () => window.document.getElementById('aiCheck');
+  await go('#kind/place');
+  assert.ok(aiCheck().classList.contains('hidden'), 'not without AI');
+  await store.updateSettings({ ai: { on: true } });
+  await afterChange();
+  await go('#kind/place');
+  assert.ok(!aiCheck().classList.contains('hidden'));
+  await go('#settings');
+  assert.ok(aiCheck().classList.contains('hidden'), 'not on Settings');
+  await go('#ai');
+  assert.doesNotMatch(view().textContent, /Check & fix/, 'the check left Settings');
+  assert.match(view().textContent, /Check with AI/);
+  await store.updateSettings({ ai: { on: false } });
+  await afterChange();
+});
