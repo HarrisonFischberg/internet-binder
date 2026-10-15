@@ -2265,7 +2265,7 @@ async function openItem(id) {
     const box = el('div', { class: 'recipe-panel' });
     const sourceLabel = { page: 'From the page', 'maps-link': 'From a maps link', you: 'Added by you' }[startPlace.source] || '';
     const f = placeFields;
-    box.append(
+    box.append(...[
       el('div', { class: 'recipe-head' }, [el('h3', {}, ['Place']), sourceLabel ? el('span', { class: 'recipe-facts' }, [sourceLabel]) : null]),
       // An Instagram post's tagged location is usually the place's name.
       item.instagram?.location && titleInput.value.trim() !== item.instagram.location
@@ -2277,7 +2277,7 @@ async function openItem(id) {
       el('div', { class: 'price-inline' }, [f.cuisine, f.priceRange]),
       f.phone,
       el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Opening hours (one line each)']), placeHours]),
-    );
+    ].filter(Boolean)); // native append() would print a null as "null"
     return box;
   }
 

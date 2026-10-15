@@ -356,7 +356,8 @@ function detailsBanner(ctx, scan) {
     }
     const last = enrich.lastResult;
     box.className = `notice ${last && last.failed && !last.done ? 'notice-warn' : ''} details-banner`;
-    box.append(
+    // Native append() would print a null as the text "null": only the parts that apply.
+    box.append(...[
       el('div', { class: 'row' }, [
         el('div', { class: 'grow' }, [
           el('strong', {}, [`${pluralize(missing.length, 'post is', 'posts are')} missing details. `]),
@@ -367,7 +368,7 @@ function detailsBanner(ctx, scan) {
       ]),
       last && last.failed ? el('div', { class: 'help' }, [`${pluralize(last.failed, 'post', 'posts')} could not be read${last.loginWalls ? ' (Instagram showed a login page — make sure you are logged in, then try again)' : ''}. You can still import with what was found.`]) : null,
       el('div', { class: 'help' }, ['Needs one-time permission for instagram.com so Keepsake can read post pages. You can revoke it under Settings → Instagram.']),
-    );
+    ].filter(Boolean));
   };
   draw();
   box._redraw = draw;

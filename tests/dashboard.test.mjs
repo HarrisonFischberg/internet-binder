@@ -663,3 +663,18 @@ test('Instagram import: a “Restaurants” collection goes to Places, named and
     chrome.runtime.sendMessage = realSend;
   }
 });
+
+test('Instagram import: the “missing details” banner never shows the word null', async () => {
+  const scan = { status: 'done', collectionName: 'Restaurants', collectionUrl: 'https://www.instagram.com/me/saved/r/2/', posts: [{ url: 'https://www.instagram.com/p/NODETAIL1/', type: 'post', creator: '', thumbnail: '', details: false, caption: '' }] };
+  const realSend = chrome.runtime.sendMessage;
+  chrome.runtime.sendMessage = (msg, cb) => { cb && cb(msg.type === 'keepsake:ig-state' ? { ok: true, scan } : { ok: true }); };
+  try {
+    await go('#import');
+    await afterChange();
+    const banner = view().querySelector('.details-banner');
+    assert.match(banner.textContent, /missing details/);
+    assert.doesNotMatch(banner.textContent, /\bnull\b/);
+  } finally {
+    chrome.runtime.sendMessage = realSend;
+  }
+});
