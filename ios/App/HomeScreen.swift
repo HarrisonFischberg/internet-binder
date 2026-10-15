@@ -8,6 +8,8 @@ struct HomeScreen: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @State private var settings = false
+    /// Recent shelf cards grow with Dynamic Type so their text never truncates.
+    @ScaledMetric(relativeTo: .headline) private var shelfWidth: CGFloat = 170
     @Environment(\.horizontalSizeClass) private var size
 
     private var lifestyle: [(kind: String, count: Int)] {
@@ -87,7 +89,7 @@ struct HomeScreen: View {
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(model.saves.prefix(8)) { save in
                         NavigationLink(value: save) {
-                            SaveObject(save).frame(width: 170).matchedTransitionSource(id: save.id, in: zoom)
+                            SaveObject(save).frame(width: min(shelfWidth, 320)).matchedTransitionSource(id: save.id, in: zoom)
                         }
                         .buttonStyle(PressStyle())
                     }
@@ -110,7 +112,7 @@ struct HomeScreen: View {
                             Stamp(kind: entry.kind, size: 34)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(k.plural).font(KSFont.name(.headline)).foregroundStyle(t.ink)
-                                    .lineLimit(2).minimumScaleFactor(0.85)
+                                    .lineLimit(3)
                                 Text("\(entry.count)").font(.subheadline).foregroundStyle(t.inkMuted)
                             }
                             Spacer(minLength: 0)

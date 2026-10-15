@@ -456,9 +456,25 @@ struct NetworkTests {
 /// (replica/tools/make_test_library.mjs makes one).
 @Suite("Performance at 5,000 saves")
 struct PerformanceTests {
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["KEEPSAKE_PERF_FILE"] != nil))
+    /// A Chrome-shaped export of `n` products (like make_test_library.mjs), for devices that can't read a Mac file.
+    static func syntheticExport(_ n: Int) throws -> URL {
+        var items: [String: Any] = [:]
+        let titles = ["Two-person ultralight tent", "Noise-cancelling headphones", "Enameled Dutch oven", "Waxed field jacket", "Ceramic bedside lamp", "Burr coffee grinder"]
+        for i in 0..<n {
+            let id = "perf-\(i)"
+            items[id] = ["id": id, "title": "\(titles[i % titles.count]) #\(i + 1)", "url": "https://shop\(i % 40).example.com/p/\(i + 1)",
+                         "price": Double(i % 300) + 9.99, "currency": "USD", "retailer": "Test Shop \(i % 40)", "kind": "product",
+                         "createdAt": ISO8601DateFormatter().string(from: Date(timeIntervalSinceNow: Double(-i) * 3600))]
+        }
+        let data = try JSONSerialization.data(withJSONObject: ["format": "keepsake-export", "schemaVersion": 3, "collections": [:], "items": items])
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("perf-\(n).json")
+        try data.write(to: url)
+        return url
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["KEEPSAKE_PERF_FILE"] != nil || ProcessInfo.processInfo.environment["KEEPSAKE_PERF"] != nil))
     func libraryOpensFast() async throws {
-        let file = URL(fileURLWithPath: ProcessInfo.processInfo.environment["KEEPSAKE_PERF_FILE"]!)
+        let file = try ProcessInfo.processInfo.environment["KEEPSAKE_PERF_FILE"].map { URL(fileURLWithPath: $0) } ?? Self.syntheticExport(5000)
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-perf-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let path = dir.appendingPathComponent("library.sqlite").path
@@ -477,5 +493,26 @@ struct PerformanceTests {
         print("PERF import \(importTime) · open \(openTime) · first read of \(count) saves \(readTime) · search \(searchTime)")
         #expect(count == 5000)
         #expect(openTime + readTime < .milliseconds(400), "usable Library under 400 ms")
+    }
+}
+
+@Suite("Widget snapshot")
+struct WidgetSnapshotTests {
+    @Test func checkInShowsInTheSnapshot() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-widget-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+        _ = try await lib.importExport(try fixture("chrome-export"), replace: true)
+        let workout = try #require(try lib.saves().first { $0.title == "Push-up ladder" })
+        let goalId = try await lib.createGoal(itemId: workout.id, perWeek: 3, weeks: 4)
+        func snapshot() async throws -> WidgetSnapshot {
+            try JSONDecoder().decode(WidgetSnapshot.self, from: Data(try await lib.core.callJSON("views.widgetSnapshot").utf8))
+        }
+        #expect(try await snapshot().goals.first { $0.goalId == goalId }?.summary == "0 of 3 this week · week 1 of 4")
+        try await lib.checkIn(goalId: goalId)   // what the widget's Done today button runs
+        let goal = try #require(try await snapshot().goals.first { $0.goalId == goalId })
+        #expect(goal.summary == "1 of 3 this week · week 1 of 4")
+        #expect(goal.weeks.first?.count == 1)
+        #expect(try await snapshot().count == 11)
     }
 }

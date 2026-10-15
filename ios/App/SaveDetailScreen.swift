@@ -15,6 +15,8 @@ struct SaveDetailScreen: View {
     @State private var checked: Set<Int> = []
     @State private var cooking = false
     @State private var goalSheet = false
+    @State private var editing = false
+    @State private var destinations: [Destination] = []
 
     /// The latest copy (a stamp or an edit updates it in place).
     private var current: Save { model.saves.first { $0.id == save.id } ?? save }
@@ -40,9 +42,32 @@ struct SaveDetailScreen: View {
             actions
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)   // one primary action on this screen: no tabs competing with it
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
+                    Button("Edit", systemImage: "pencil") { editing = true }
+                    Menu("Move to…", systemImage: "folder") {
+                        ForEach(destinations) { d in
+                            Button(d.label) {
+                                Task {
+                                    let name = (try? await model.library?.put([current.id], in: d.value, learn: "strong")) ?? d.label
+                                    Haptic.dropped()
+                                    model.refresh()
+                                    model.show("Moved to \(name)")
+                                }
+                            }
+                        }
+                    }
+                    if current.kind == "product" {
+                        Button(current.purchased == true ? "Not purchased" : "Mark purchased", systemImage: "bag.badge.checkmark") {
+                            Task {
+                                try? await model.library?.update(current.id, ["purchased": !(current.purchased ?? false)])
+                                Haptic.stamped()
+                                model.refresh()
+                            }
+                        }
+                    }
                     if let url = current.url.flatMap(URL.init(string:)) { ShareLink(item: url) }
                     Button("Move to Trash", systemImage: "trash", role: .destructive) {
                         Task { await model.trash(current); dismiss() }
@@ -51,7 +76,11 @@ struct SaveDetailScreen: View {
                 .accessibilityLabel("More")
             }
         }
-        .task { try? await model.library?.core.call("store.markOpened", [save.id]) }
+        .task {
+            try? await model.library?.core.call("store.markOpened", [save.id])
+            destinations = (try? await model.library?.destinations()) ?? []
+        }
+        .sheet(isPresented: $editing) { EditSaveSheet(save: current) }
         .task(id: "\(current.status ?? "")\(current.title)") { await reload() }
         .fullScreenCover(isPresented: $cooking) {
             CookingView(save: current, steps: d?["steps"]?.array?.compactMap(\.string) ?? [],
@@ -283,5 +312,39 @@ struct SaveDetailScreen: View {
         switch current.kind {
         case "video": "Watch"; case "article": "Read"; case "product": "Visit shop"; default: "Open"
         }
+    }
+}
+
+/// Edit a save's title and note by hand. Edited fields are yours: AI and Lookups leave them alone.
+struct EditSaveSheet: View {
+    let save: Save
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var note = ""
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Title") { TextField("Title", text: $title, axis: .vertical) }
+                Section("Note") { TextField("A note for yourself", text: $note, axis: .vertical).lineLimit(3...8) }
+            }
+            .navigationTitle("Edit").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            try? await model.library?.update(save.id, ["title": title, "note": note])
+                            model.refresh()
+                            Haptic.settled()
+                            dismiss()
+                        }
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .onAppear { title = save.title; note = save.note ?? "" }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

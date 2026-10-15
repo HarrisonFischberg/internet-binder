@@ -25,7 +25,7 @@ final class LibraryModel {
     private(set) var loaded = false
     var toast: Toast?
     /// Theme, density, cards, haptics and sound (Settings → Appearance), shared with the extensions.
-    var appearance = Appearance.load() {
+    var appearance = LibraryModel.startingAppearance() {
         didSet {
             appearance.save()
             WidgetCenter.shared.reloadAllTimelines()
@@ -42,6 +42,15 @@ final class LibraryModel {
         let text: String
         var undo: (@MainActor () async -> Void)?
         static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
+    }
+
+    /// The saved appearance; in Debug, -ksTheme <id> overrides it (screenshots of every theme).
+    static func startingAppearance() -> Appearance {
+        var a = Appearance.load()
+        #if DEBUG
+        if let theme = UserDefaults.standard.string(forKey: "ksTheme") { a.theme = theme }
+        #endif
+        return a
     }
 
     init() {
@@ -67,6 +76,11 @@ final class LibraryModel {
                 if let path = UserDefaults.standard.string(forKey: "importOnLaunch"), (try? library.saves().isEmpty) == true {
                     _ = try? await library.importExport(try Data(contentsOf: URL(fileURLWithPath: path)), replace: true)
                 }
+                // Performance runs on a device: -seedPerf 5000 fills an empty library with that many products.
+                let seed = UserDefaults.standard.integer(forKey: "seedPerf")
+                if seed > 0, (try? library.saves().isEmpty) == true {
+                    _ = try? await library.importExport(Self.syntheticExport(seed), replace: true)
+                }
                 #endif
                 finishSaves()
             } catch {
@@ -84,6 +98,21 @@ final class LibraryModel {
             problem = error.localizedDescription
         }
     }
+
+    #if DEBUG
+    static func syntheticExport(_ n: Int) -> Data {
+        let titles = ["Two-person ultralight tent", "Noise-cancelling headphones", "Enameled Dutch oven", "Waxed field jacket", "Ceramic bedside lamp", "Burr coffee grinder"]
+        var items: [String: Any] = [:]
+        let iso = ISO8601DateFormatter()
+        for i in 0..<n {
+            let id = "perf-\(i)"
+            items[id] = ["id": id, "title": "\(titles[i % titles.count]) #\(i + 1)", "url": "https://shop\(i % 40).example.com/p/\(i + 1)",
+                         "price": Double(i % 300) + 9.99, "currency": "USD", "retailer": "Test Shop \(i % 40)", "kind": "product",
+                         "createdAt": iso.string(from: Date(timeIntervalSinceNow: Double(-i) * 3600))]
+        }
+        return (try? JSONSerialization.data(withJSONObject: ["format": "keepsake-export", "schemaVersion": 3, "collections": [:], "items": items])) ?? Data()
+    }
+    #endif
 
     /// Picks up saves made in the Share Extension while the app was in the background.
     func refresh() {

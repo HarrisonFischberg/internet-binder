@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
 import KeepsakeKit
 import KeepsakeUI
 
@@ -69,9 +70,23 @@ struct GoalWidgetView: View {
         }
     }
 
+    private func doneToday(_ goal: WidgetSnapshot.Goal, compact: Bool) -> some View {
+        Button(intent: CheckInIntent(goalId: goal.goalId)) {
+            Label("Done today", systemImage: "checkmark")
+                .labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
+                .font(.caption.weight(.semibold))
+        }
+        .tint(KindStyle("workout").color)
+        .accessibilityLabel("Done today")
+    }
+
     private func small(_ goal: WidgetSnapshot.Goal) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            ring(goal, size: 40)
+            HStack(alignment: .top) {
+                ring(goal, size: 40)
+                Spacer()
+                doneToday(goal, compact: true)
+            }
             Text(goal.title).font(KSFont.name(.subheadline)).foregroundStyle(t.ink).lineLimit(2)
             Text(goal.summary).font(.caption2).foregroundStyle(t.inkMuted).lineLimit(2)
         }
@@ -86,6 +101,7 @@ struct GoalWidgetView: View {
                 Text(goal.summary).font(.caption).foregroundStyle(t.inkMuted).lineLimit(2)
                 strip(goal)
             }
+            doneToday(goal, compact: false)
         }
     }
 }
@@ -137,4 +153,11 @@ struct KeepsakeWidgets: WidgetBundle {
         GoalWidget()
         LatestWidget()
     }
+}
+
+/// Type-erased label style, so one button can show icon only or icon and title.
+struct AnyLabelStyle: LabelStyle {
+    private let make: (Configuration) -> AnyView
+    init<S: LabelStyle>(_ style: S) { make = { AnyView(style.makeBody(configuration: $0)) } }
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
 }

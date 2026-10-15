@@ -9,8 +9,8 @@
 | M3.2 Vertical slice | **done, approved** |
 | M3.3 Lifestyle | **done** (below) |
 | M3.4 Collections, Review, search, AI, Lookups, export | **done** (below) |
-| M3.5 Personalisation, widgets, iPad, accessibility, performance | ⏸ **done, waiting for your review** (below) |
-| M3.6 Release candidate | next, after review |
+| M3.5 Personalisation, widgets, iPad, accessibility, performance | **done, approved** |
+| M3.6 Release candidate | ⏸ **done, waiting for your review** (below). No TestFlight or App Store without your approval |
 
 ## M3.0 Design (done)
 - `design-principles.md`, three directions as static SwiftUI prototypes (`ios/Prototypes/`), 24
@@ -173,6 +173,27 @@ Share Sheet → Library → open the save, in the chosen direction (D14), on the
 - **Interactive widget check-in** (Done today from the widget) via App Intents.
 - **A full VoiceOver walk-through by hand** and screenshots of every screen in every theme (M3.6).
 - **Recorded sounds:** Sound uses a system tick for now.
+
+## M3.6 Release candidate · ⏸ review
+- **Committed** on `m3-ios` (not pushed): `8543187` (Chrome rules shared), `64eb0c7` (M3.0–M3.5).
+- **On your iPhone**: identifiers, App Group and signing registered through Xcode automatic signing on
+  team KTV2G3Z883 (app, `.share`, `.widgets`, `group.com.harrisonfischberg.keepsake`). Release build
+  installed and launched on Hphone (iPhone 17 Pro). The iCloud container is **not** registered yet: no
+  target uses it until the CloudKit experiments.
+- **Real-device launch** (Instruments App Launch, Release): process start to first frame **≈ 225 ms**
+  (UIKit init 14 ms, scene 47 ms, first frame 95 ms). Target < 400 ms. Scroll timing on the device
+  couldn't run: the phone refuses Xcode's UI-test runner ("Root install style is not supported");
+  scrolling is for you to judge live.
+- **Gaps closed from the parity check**: Edit (title, note), Move to… from a save, Mark purchased,
+  Trash with Restore; the save's own screen hides the tab bar (one primary action).
+- **Screenshots, every main screen × every theme × light/dark**: `screens/rc/` (42: home, review,
+  library, recipe, cooking, places, place × Postcard/Linen/Ink × light/dark), made by
+  `UITests/ScreenshotTests.swift`.
+- **App Store screenshots** (Postcard, light and dark, full resolution): `appstore/iphone-6.9/` and
+  `appstore/ipad-13/`.
+- **Parity**: `parity.md`: **81% weighted** against `features.csv` (must 22/23).
+- **Privacy**: `privacy-label.md` (proposed "Data Not Collected"), `ios/PRIVACY-iOS.md`, privacy
+  manifests in the app, Share Extension and widgets.
 
 ## Open questions for you
 - None blocking. Next review stop is M3.5.

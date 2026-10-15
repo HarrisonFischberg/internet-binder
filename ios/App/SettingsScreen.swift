@@ -32,6 +32,7 @@ struct SettingsScreen: View {
                     NavigationLink("Change log") { ChangeLogScreen() }
                 } footer: { Text("Every change AI made, with Undo.") }
                 Section("Your library") {
+                    NavigationLink("Trash") { TrashScreen() }
                     Button("Export library", systemImage: "square.and.arrow.up") { Task { await export() } }
                     Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
                 }
@@ -265,4 +266,32 @@ struct ExportDocument: FileDocument {
     init(data: Data) { self.data = data }
     init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
+}
+
+/// The Trash: deleted saves wait 30 days (Chrome's rule), restorable until then.
+struct TrashScreen: View {
+    @Environment(LibraryModel.self) private var model
+    @State private var trashed: [Save] = []
+    var body: some View {
+        List {
+            if trashed.isEmpty { Text("The Trash is empty.").foregroundStyle(.secondary) }
+            ForEach(trashed) { s in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(s.title).font(.headline)
+                        Text(KindStyle(s.kind).label).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Restore") {
+                        Task { try? await model.library?.restore([s.id]); model.refresh(); await load() }
+                    }
+                    .buttonStyle(.bordered).frame(minHeight: 44)
+                    .accessibilityLabel("Restore \(s.title)")
+                }
+            }
+        }
+        .navigationTitle("Trash")
+        .task { await load() }
+    }
+    private func load() async { trashed = (try? model.library?.saves(trash: true)) ?? [] }
 }

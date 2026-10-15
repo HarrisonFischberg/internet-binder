@@ -96,7 +96,7 @@ public struct SaveObject: View {
     private func caption(lines: Int = 3) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(save.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(lines)
-            if !fact.isEmpty { Text(fact).font(KSFont.fact).foregroundStyle(t.inkMuted).lineLimit(2) }
+            if !fact.isEmpty { Text(fact).font(KSFont.fact).foregroundStyle(t.inkMuted).lineLimit(3) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -210,7 +210,7 @@ public struct SaveObject: View {
     private var clipping: some View {
         VStack(alignment: .leading, spacing: 7) {
             if let site = save.details?["siteName"]?.string ?? save.host, !site.isEmpty {
-                Text(site.uppercased()).font(.caption2.weight(.bold)).tracking(1.6).foregroundStyle(kind.color).lineLimit(1)
+                Text(site.uppercased()).font(.caption2.weight(.bold)).tracking(1.6).foregroundStyle(kind.color).lineLimit(2)
             }
             Text(save.title).font(KSFont.name(.title3)).foregroundStyle(t.ink).lineLimit(4)
             if let d = save.description, !d.isEmpty { Text(d).font(.system(.footnote, design: .serif)).foregroundStyle(t.inkMuted).lineLimit(3) }

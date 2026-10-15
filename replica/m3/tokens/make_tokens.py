@@ -41,7 +41,8 @@ def ratio(a, b):
 PAIRS = [("ink", "table", 4.5), ("ink", "paper", 4.5), ("ink", "well", 4.5),
          ("ink-muted", "table", 4.5), ("ink-muted", "paper", 4.5), ("ink-muted", "well", 3.0),
          ("on-accent", "accent", 4.5), ("accent", "paper", 4.5), ("accent", "table", 3.0),
-         ("stamp", "paper", 4.5)] + [(f"kind-{k}", "paper", 4.5) for k in KIND] + [(f"kind-{k}", "table", 3.0) for k in KIND]
+         ("stamp", "paper", 4.5)] + [(f"kind-{k}", "paper", 4.5) for k in KIND] + [(f"kind-{k}", "table", 4.5) for k in KIND]
+SHIPPED = ("postcard", "linen", "ink")   # the M3.0 prototype directions (cabinet, daylight) keep the old 3:1 for kind-on-table
 
 fails = 0
 out = pathlib.Path(__file__).parent
@@ -51,6 +52,7 @@ for d in ("postcard", "cabinet", "daylight", "linen", "ink"):
         (out / f"{d}.{m}.json").write_text(json.dumps({"direction": d, "mode": m, "color": col, "radius": SHAPE[d], "type": TYPE[d]}, indent=1) + "\n")
         lines = []
         for fg, bg, need in PAIRS:
+            if d not in SHIPPED and fg.startswith("kind-") and bg == "table": need = 3.0
             r = ratio(col[fg], col[bg]); ok = r >= need; fails += not ok
             lines.append(f"{'ok  ' if ok else 'FAIL'} {r:5.2f} (≥{need}) {fg} on {bg}")
         (out / f"{d}.{m}.contrast.txt").write_text("\n".join(lines) + "\n")

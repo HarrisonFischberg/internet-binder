@@ -77,15 +77,18 @@ public struct HoldToStamp: View {
     @State private var ticks = 0
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
+    /// Grows with Dynamic Type, so its label never clips.
+    @ScaledMetric(relativeTo: .caption2) private var size: CGFloat = 60
     public init(_ label: String, done: Bool, action: @escaping () -> Void) { self.label = label; self.done = done; self.action = action }
 
     public var body: some View {
         VStack(spacing: 2) {
             Image(systemName: done ? "checkmark.seal.fill" : "seal").font(.title3.weight(.semibold))
-            Text(label).font(.caption2.weight(.semibold))
+            Text(label).font(.caption2.weight(.semibold)).lineLimit(2).multilineTextAlignment(.center)
         }
         .foregroundStyle(t.stamp)
-        .frame(width: 60, height: 60)
+        .padding(6)
+        .frame(width: max(60, size), height: max(60, size))
         .background(Circle().fill(t.paper))
         .overlay(Circle().strokeBorder(t.stamp.opacity(0.45), style: StrokeStyle(lineWidth: 1.5, dash: done ? [] : [3, 3])))
         .overlay(Circle().trim(from: 0, to: progress).stroke(t.stamp, style: StrokeStyle(lineWidth: 3, lineCap: .round)).rotationEffect(.degrees(-90)).padding(1.5))
