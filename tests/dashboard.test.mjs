@@ -662,7 +662,7 @@ test('Instagram import: one button; a “Restaurants” collection goes to Place
     assert.ok(summary, 'the summary dialog');
     assert.match(summary.textContent, /Imported 3 posts from “Restaurants”/);
     assert.deepEqual([...summary.querySelectorAll('.import-dest')].map((r) => r.textContent), ['Places3']);
-    assert.match(summary.textContent, /being filled in/);
+    assert.doesNotMatch(summary.textContent, /being filled in/, 'no promise of a fill-in with Lookups and AI off');
     const saved = await Promise.all(scan.posts.map((p) => store.findByUrl(p.url)));
     assert.deepEqual(saved.map((i) => [i.kind, i.title, i.collectionId, i.needsReview]), [
       ['place', 'Example Pizza', null, false], ['place', 'Example Trattoria', null, false], ['place', 'so good', null, false]]);
