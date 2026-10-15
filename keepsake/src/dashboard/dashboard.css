@@ -4306,6 +4306,13 @@ body.modal-open {
   cursor: pointer;
 }
 
+.map-pin.is-approx {
+  /* On the right street, not at the door: a hollow ring. */
+  background: transparent;
+  border: 3px solid var(--c-kind-place);
+  box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
 .map-pin.is-done {
   opacity: 0.6;
 }

@@ -405,6 +405,15 @@ const coord = (v, max) => {
 };
 
 // schema.org Restaurant, LocalBusiness, TouristAttraction… -> place details.
+// A street as some listings write it: "Rogers Ave, 570" is "570 Rogers Ave"; "108/ San Pedro St." is
+// "108 San Pedro St.". Anything else is left as written.
+export function tidyStreet(s) {
+  const t = String(s || '').trim();
+  const flipped = t.match(/^([\p{L}][\p{L}\p{N} .'-]{2,60}),\s*(\d{1,6}[a-z]?)$/u);
+  if (flipped && STREET.test(flipped[1])) return `${flipped[2]} ${flipped[1]}`;
+  return t.replace(/^(\d{1,6}[a-z]?)\/\s+(?=\p{L})/u, '$1 ');
+}
+
 export function placeFromSchema(node) {
   if (!node || typeof node !== 'object') return null;
   const a = Array.isArray(node.address) ? node.address[0] : node.address;
@@ -412,7 +421,7 @@ export function placeFromSchema(node) {
   const geo = Array.isArray(node.geo) ? node.geo[0] : node.geo || {};
   const types = (Array.isArray(node['@type']) ? node['@type'] : [node['@type']]).map((t) => String(t || ''));
   const out = {
-    address: clean(addr.streetAddress, 200),
+    address: tidyStreet(clean(addr.streetAddress, 200)),
     locality: clean(addr.addressLocality, 80),
     region: clean(addr.addressRegion, 80),
     postalCode: clean(addr.postalCode, 20),
@@ -969,7 +978,8 @@ const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI'];
 function cleanLookup(v) {
   if (!v || typeof v !== 'object' || !LOOKUP_SOURCES.includes(v.source)) return undefined;
   const url = typeof v.url === 'string' && /^https:\/\//.test(v.url) ? v.url.slice(0, 300) : '';
-  return { source: v.source, url };
+  // approximate: the pin is the street's, not the door's (the lookup knew the street but not the number).
+  return { source: v.source, url, ...(v.approximate === true ? { approximate: true } : {}) };
 }
 
 export function sanitizeDetails(kind, details) {

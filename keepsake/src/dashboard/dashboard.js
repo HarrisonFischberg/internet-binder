@@ -1399,7 +1399,8 @@ function lookupLink(d) {
   const l = d.lookup;
   if (!l || !l.source) return null;
   if (l.source === 'AI') return el('span', { class: 'lookup-src' }, [' · Named by your AI provider']);
-  return el('span', { class: 'lookup-src' }, [' · Details from ', l.url ? el('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, [l.source, ' ↗']) : l.source]);
+  return el('span', { class: 'lookup-src' }, [' · Details from ', l.url ? el('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, [l.source, ' ↗']) : l.source,
+    l.approximate ? ' · the pin is on the street, not at the door' : '']);
 }
 
 // A film, show or book: the poster or cover, the few facts, and a way to it.
@@ -1698,7 +1699,8 @@ function renderPlacesMap(view, items) {
     const bounds = new maplibregl.LngLatBounds();
     for (const item of pinned) {
       const d = item.details;
-      const dot = el('button', { type: 'button', class: `map-pin ${item.status === 'done' ? 'is-done' : ''}`, 'aria-label': item.title });
+      const approx = !!d.lookup?.approximate;
+      const dot = el('button', { type: 'button', class: `map-pin ${item.status === 'done' ? 'is-done' : ''} ${approx ? 'is-approx' : ''}`, 'aria-label': approx ? `${item.title} (approximate)` : item.title, title: approx ? 'Approximate: on the right street, not at the door' : '' });
       const links = mapsLinks(item.title, d);
       const pop = el('div', { class: 'map-pop' }, [
         el('strong', {}, [item.title]),

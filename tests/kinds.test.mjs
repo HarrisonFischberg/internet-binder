@@ -481,3 +481,9 @@ test('moving an imported Instagram post into Places: named from its location tag
   const noTag = kindChangePatch({ ...post, instagram: { caption: 'Best slice in the city' } }, 'place');
   assert.equal(noTag.title, undefined, 'nothing names it: the caption title stays until AI names it');
 });
+
+test('tidyStreet: a number written after the street, or with a slash, is put where it belongs', async () => {
+  const { tidyStreet, sanitizeDetails } = await import('../keepsake/src/shared/kinds.js');
+  assert.deepEqual(['Rogers Ave, 570', '108/ San Pedro St.', '23 Cleveland Place', 'Suite 4, 12'].map(tidyStreet), ['570 Rogers Ave', '108 San Pedro St.', '23 Cleveland Place', 'Suite 4, 12']);
+  assert.deepEqual(sanitizeDetails('place', { lookup: { source: 'OpenStreetMap', url: 'https://www.openstreetmap.org/way/9', approximate: true } }).lookup, { source: 'OpenStreetMap', url: 'https://www.openstreetmap.org/way/9', approximate: true });
+});

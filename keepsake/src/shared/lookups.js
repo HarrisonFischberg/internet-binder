@@ -105,6 +105,8 @@ export async function lookupPlace({ name, locality = '', address = '', region = 
   }
   if (!hit) return null;
   const a = hit.address || {};
+  // Found by its street but OpenStreetMap doesn't have the house number: the pin is somewhere on the street.
+  const approximate = byAddress && /^\d/.test(String(address).trim()) && !a.house_number;
   const lat = Number(hit.lat);
   const lng = Number(hit.lon);
   return {
@@ -112,7 +114,9 @@ export async function lookupPlace({ name, locality = '', address = '', region = 
     lat: Number.isFinite(lat) ? lat : null,
     lng: Number.isFinite(lng) ? lng : null,
     category: byAddress ? '' : String(hit.type || '').replace(/_/g, ' '),
-    lookup: { source: 'OpenStreetMap', url: hit.osm_type && hit.osm_id ? `https://www.openstreetmap.org/${hit.osm_type}/${hit.osm_id}` : '' },
+    // The address you gave, not the street's: OpenStreetMap only knew the street.
+    ...(approximate ? { address: String(address).trim() } : {}),
+    lookup: { source: 'OpenStreetMap', url: hit.osm_type && hit.osm_id ? `https://www.openstreetmap.org/${hit.osm_type}/${hit.osm_id}` : '', ...(approximate ? { approximate: true } : {}) },
   };
 }
 

@@ -111,3 +111,12 @@ test('places: a street written with its direction short ("S. Lumpkin St.") match
   const fetchFn = async (url) => ({ ok: true, json: async () => (/Example%20Baking/.test(url) ? [] : body) });
   assert.equal((await lookupPlace({ name: 'Example Baking', address: '1625 S. Lumpkin St.', locality: 'Athens', region: 'GA' }, fetchFn)).address, '1625 South Lumpkin Street');
 });
+
+test('places: a pin OpenStreetMap only knows the street for is marked approximate, and keeps the address you gave', async () => {
+  const street = [{ lat: '40.7997', lon: '-73.9356', type: 'secondary', osm_type: 'way', osm_id: 9, address: { road: '2nd Avenue', suburb: 'Manhattan', city: 'City of New York', 'ISO3166-2-lvl4': 'US-NY' } }];
+  const p = await lookupPlace({ name: 'Example Donuts', address: '2309 2nd avenue', locality: 'New York', region: 'NY' }, fake([[/nominatim/, (u) => (/Example/.test(decodeURIComponent(u)) ? [] : street)]]));
+  assert.deepEqual([p.lat, p.address, p.lookup.approximate], [40.7997, '2309 2nd avenue', true]);
+  const door = [{ ...street[0], address: { ...street[0].address, house_number: '2309' } }];
+  const q = await lookupPlace({ name: 'Example Donuts', address: '2309 2nd avenue', locality: 'New York', region: 'NY' }, fake([[/nominatim/, (u) => (/Example/.test(decodeURIComponent(u)) ? [] : door)]]));
+  assert.equal(q.lookup.approximate, undefined);
+});
