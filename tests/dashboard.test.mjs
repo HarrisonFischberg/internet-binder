@@ -723,3 +723,24 @@ test('background checks: a progress bar under the header with Stop, then what ch
   await store.updateSettings({ ai: { on: false } });
   await afterChange();
 });
+
+test('Places review: Fix sends exactly the places waiting there, so the progress total matches the tab’s count', async () => {
+  const sent = [];
+  const realSend = chrome.runtime.sendMessage;
+  chrome.runtime.sendMessage = (msg, cb) => { sent.push(msg); cb && cb(msg.type === 'keepsake:fill-batch' ? { ok: true, job: { id: 'j2', total: msg.itemIds.length, done: 0, running: true } } : { ok: true }); };
+  try {
+    await go('#kind/place');
+    [...view().querySelectorAll('.library-tab')].find((b) => /^Places review/.test(b.textContent)).click();
+    await afterChange();
+    const count = Number((view().querySelector('.library-tab.on').textContent.match(/· (\d+)/) || [])[1]);
+    assert.ok(count > 0);
+    [...view().querySelectorAll('.place-review-bar button')][0].click();
+    await settle();
+    const batch = sent.find((m) => m.type === 'keepsake:fill-batch');
+    assert.equal(batch.itemIds.length, count, 'the batch is the review list, nothing more');
+    assert.match(window.document.getElementById('jobbar').textContent, new RegExp(`0 of ${count}`));
+  } finally {
+    chrome.runtime.sendMessage = realSend;
+    await chrome.storage.session.set({ keepsake_fillJob: null });
+  }
+});

@@ -651,10 +651,10 @@ function checkWithAI() {
   return runAiCleanup(ctx, { scope: r.name === 'c' ? r.id : 'all' });
 }
 
-// Places review's fix: the places waiting there, and every place from Instagram (its caption read again).
+// Places review's fix: exactly the places waiting there (the count on the tab is the batch's total).
 function fixPlaces(all) {
-  const ids = new Set(all.filter((i) => placeReviewReasons(i).length || i.type === 'instagram').map((i) => i.id));
-  return startFillJob([...ids], { review: true, kind: 'place', label: state.settings?.ai?.on ? 'Fixing places with AI' : 'Reading posts again' });
+  const ids = all.filter((i) => placeReviewReasons(i).length).map((i) => i.id);
+  return startFillJob(ids, { review: true, kind: 'place', label: state.settings?.ai?.on ? 'Fixing places with AI' : 'Reading posts again' });
 }
 
 function renderView({ keepScroll = false } = {}) {
@@ -1611,7 +1611,7 @@ function renderPlacesReview(view, items, all = items) {
       el('p', {}, [`${pluralize(items.length, 'place needs', 'places need')} a name or a state before ${items.length === 1 ? 'it goes' : 'they go'} on your list.`]),
       el('p', { class: 'help' }, [aiOn
         ? 'Fix with AI sends each one’s title, caption and location tag to your AI provider, which names the place and says where it is; Lookups then add the address and pin. A post about several places (a top-10 list) stays here: open it to move it or delete it.'
-        : 'Read again checks the caption of every place you saved from Instagram with Keepsake’s latest rules, on your device. To have places named from their posts, turn on Optional AI in Settings. Or open one and fill in its name and address.']),
+        : 'Read again checks each of these posts’ captions with Keepsake’s latest rules, on your device. To have places named from their posts, turn on Optional AI in Settings. Or open one and fill in its name and address.']),
     ]),
     el('button', { type: 'button', class: 'btn btn-primary', disabled: running, onClick: () => fixAll() }, [running ? 'Working…' : aiOn ? `Fix ${items.length} with AI` : 'Read again']),
   ]));
