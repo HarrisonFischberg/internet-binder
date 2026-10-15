@@ -17,9 +17,9 @@ test('sameName: tidied, contained or mostly the same words; not just one shared 
 
 test('places: only a result with the same name is used, and only its own fields', async () => {
   const nominatim = [{ name: 'Peter Pan Donut & Pastry Shop', lat: '40.7260665', lon: '-73.9522298', type: 'bakery', osm_type: 'node', osm_id: 2842886515,
-    address: { house_number: '727', road: 'Manhattan Avenue', suburb: 'Greenpoint', city: 'New York', postcode: '11222', country: 'United States' } }];
+    address: { house_number: '727', road: 'Manhattan Avenue', suburb: 'Greenpoint', city: 'New York', state: 'New York', 'ISO3166-2-lvl4': 'US-NY', postcode: '11222', country: 'United States' } }];
   const p = await lookupPlace({ name: 'Peter Pan Donut & Pastry Shop', locality: 'Greenpoint' }, fake([[/nominatim\.openstreetmap\.org\/search/, () => nominatim]]));
-  assert.deepEqual([p.address, p.locality, p.region, p.lat, p.lng, p.category, p.lookup.source], ['727 Manhattan Avenue', 'Greenpoint', 'New York', 40.7260665, -73.9522298, 'bakery', 'OpenStreetMap']);
+  assert.deepEqual([p.address, p.locality, p.region, p.lat, p.lng, p.category, p.lookup.source], ['727 Manhattan Avenue', 'New York', 'NY', 40.7260665, -73.9522298, 'bakery', 'OpenStreetMap'], 'the city, and the state as its code');
   const none = await lookupPlace({ name: 'Peter Pan Donut & Pastry Shop' }, fake([[/nominatim/, () => [{ name: 'Peter Luger Steak House', lat: '1', lon: '2', address: {} }]]]));
   assert.equal(none, null, 'a different place is never used');
 });
@@ -87,9 +87,9 @@ test('places: a pin with no street address gets the address at that pin', async 
   const { lookupAddressAt } = await import('../keepsake/src/shared/lookups.js');
   const a = await lookupAddressAt({ lat: 47.6152, lng: -122.3411 }, async (url) => {
     assert.match(url, /nominatim\.openstreetmap\.org\/reverse\?.*lat=47\.6152&lon=-122\.3411/);
-    return { ok: true, json: async () => ({ osm_type: 'way', osm_id: 7, address: { house_number: '2124', road: '5th Avenue', neighbourhood: 'Belltown', city: 'Seattle', postcode: '98121', country: 'United States' } }) };
+    return { ok: true, json: async () => ({ osm_type: 'way', osm_id: 7, address: { house_number: '2124', road: '5th Avenue', neighbourhood: 'Belltown', city: 'Seattle', state: 'Washington', 'ISO3166-2-lvl4': 'US-WA', postcode: '98121', country: 'United States' } }) };
   });
-  assert.deepEqual([a.address, a.locality, a.region, a.postalCode], ['2124 5th Avenue', 'Belltown', 'Seattle', '98121']);
+  assert.deepEqual([a.address, a.locality, a.region, a.postalCode], ['2124 5th Avenue', 'Seattle', 'WA', '98121']);
   assert.equal(await lookupAddressAt({ lat: NaN, lng: 1 }, async () => { throw new Error('no'); }), null);
 });
 

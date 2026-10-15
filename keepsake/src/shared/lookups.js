@@ -68,6 +68,19 @@ function inArea(locality, region, a = {}) {
 // name alone can't tell which one you saved.
 const apart = (x, y) => Math.hypot(Number(x.lat) - Number(y.lat), (Number(x.lon) - Number(y.lon)) * Math.cos((Number(x.lat) * Math.PI) / 180)) > 0.003;
 
+// An OpenStreetMap address as a place's fields: the street, the city (or town), and the state as its code
+// ("NY", from ISO 3166-2 "US-NY") so places group by state. Outside the US, the region's name.
+function areaOf(a = {}) {
+  const iso = String(a['ISO3166-2-lvl4'] || '');
+  return {
+    address: [a.house_number, a.road].filter(Boolean).join(' '),
+    locality: a.city || a.town || a.village || a.hamlet || a.municipality || a.suburb || '',
+    region: /^US-[A-Z]{2}$/.test(iso) ? iso.slice(3) : a.state || '',
+    postalCode: a.postcode || '',
+    country: a.country || '',
+  };
+}
+
 // waitTurn: called before each request, so the caller can keep to OpenStreetMap's one request a second.
 export async function lookupPlace({ name, locality = '', address = '', region = '' }, fetchFn, waitTurn = async () => {}) {
   if (!name && !address) return null;
@@ -95,11 +108,7 @@ export async function lookupPlace({ name, locality = '', address = '', region = 
   const lat = Number(hit.lat);
   const lng = Number(hit.lon);
   return {
-    address: [a.house_number, a.road].filter(Boolean).join(' '),
-    locality: a.suburb || a.neighbourhood || a.city_district || a.city || a.town || a.village || '',
-    region: a.city && (a.suburb || a.neighbourhood) ? a.city : a.state || '',
-    postalCode: a.postcode || '',
-    country: a.country || '',
+    ...areaOf(a),
     lat: Number.isFinite(lat) ? lat : null,
     lng: Number.isFinite(lng) ? lng : null,
     category: byAddress ? '' : String(hit.type || '').replace(/_/g, ' '),
@@ -115,11 +124,7 @@ export async function lookupAddressAt({ lat, lng }, fetchFn, waitTurn = async ()
   const a = r?.address || {};
   if (!a.road) return null;
   return {
-    address: [a.house_number, a.road].filter(Boolean).join(' '),
-    locality: a.suburb || a.neighbourhood || a.city_district || a.city || a.town || a.village || '',
-    region: a.city && (a.suburb || a.neighbourhood) ? a.city : a.state || '',
-    postalCode: a.postcode || '',
-    country: a.country || '',
+    ...areaOf(a),
     lookup: { source: 'OpenStreetMap', url: r.osm_type && r.osm_id ? `https://www.openstreetmap.org/${r.osm_type}/${r.osm_id}` : '' },
   };
 }

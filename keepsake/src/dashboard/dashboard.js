@@ -11,6 +11,7 @@ import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parse
 import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { searchItems } from '../shared/search.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
+import { placeState, placeReviewReasons } from '../shared/places.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
@@ -1471,19 +1472,74 @@ const PLACES_VIEW_KEY = 'keepsake.places.view';
 let placesViewChoice = null;
 function placesView() {
   if (placesViewChoice) return placesViewChoice;
-  try { return localStorage.getItem(PLACES_VIEW_KEY) === 'map' ? 'map' : 'list'; } catch { return 'list'; }
+  try { const v = localStorage.getItem(PLACES_VIEW_KEY); return v === 'map' || v === 'review' ? v : 'list'; } catch { return 'list'; }
 }
 
+// Places: the list (by state, then city) and the map show places that are ready: named, with a state.
+// The rest wait in Places review, where your AI provider (or you) can name them and say where they are.
 function renderPlaces(view, items) {
+  const review = items.filter((i) => placeReviewReasons(i).length);
+  const ready = items.filter((i) => !placeReviewReasons(i).length);
   const current = placesView();
   const seg = (value, label) => el('button', { type: 'button', class: `library-tab ${current === value ? 'on' : ''}`, role: 'tab', 'aria-selected': current === value ? 'true' : 'false', onClick: () => {
     placesViewChoice = value;
     try { localStorage.setItem(PLACES_VIEW_KEY, value); } catch { /* this page only */ }
     renderView({ keepScroll: true });
   } }, [label]);
-  view.append(el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Places view' }, [seg('list', 'List'), seg('map', 'Map')]));
-  if (current === 'map') renderPlacesMap(view, items);
-  else renderPlaceList(view, items);
+  view.append(el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Places view' }, [seg('list', 'List'), seg('map', 'Map'), seg('review', review.length ? `Places review · ${review.length}` : 'Places review')]));
+  if (current === 'map') renderPlacesMap(view, ready);
+  else if (current === 'review') renderPlacesReview(view, review, items);
+  else renderPlaceList(view, ready, review.length);
+}
+
+// One row of a place list: its picture, name, what it is and where, and Open in Maps.
+function placeRow(item, meta) {
+  const d = item.details || {};
+  return el('li', { class: `place-row ${item.status === 'done' ? 'is-done' : ''}` }, [
+    el('button', { type: 'button', class: 'place-row-hit', onClick: () => openSave(item.id) }, [
+      UI.pictureNode({ src: item.image, aspect: 1, title: item.title, className: 'place-thumb' }),
+      el('span', { class: 'place-row-text' }, [
+        el('span', { class: 'place-row-title' }, [item.title]),
+        el('span', { class: 'place-row-meta' }, [meta ?? ([d.cuisine || d.category, d.priceRange, d.address].filter(Boolean).join(' · ') || item.retailer || item.host || '')]),
+      ]),
+    ]),
+    item.status === 'done' ? el('span', { class: 'badge' }, ['Been']) : null,
+    mapsMenuButton(item, { small: true }),
+  ]);
+}
+
+function renderPlacesReview(view, items, all = items) {
+  const box = el('div', { class: 'place-list' });
+  if (!items.length) {
+    box.append(UI.emptyState({ title: 'Nothing to review', message: 'Every place has a name and a state, so they’re all on your list.' }));
+    view.append(box);
+    return;
+  }
+  const aiOn = !!state.settings?.ai?.on;
+  const fixAll = async (btn) => {
+    btn.disabled = true;
+    // These, and every place from Instagram on the list too: its caption is read again with today's rules.
+    const ids = new Set([...items, ...all.filter((i) => i.type === 'instagram')].map((i) => i.id));
+    for (const id of ids) send({ type: MSG.FILL_ITEM, itemId: id, review: true });
+    UI.toast(aiOn ? `Asking your AI provider about ${pluralize(items.length, 'place', 'places')}. They move to your list as they’re named.` : `Reading ${pluralize(items.length, 'post', 'posts')} again…`, { duration: 6000 });
+  };
+  box.append(el('div', { class: 'place-review-bar' }, [
+    el('div', { class: 'grow' }, [
+      el('p', {}, [`${pluralize(items.length, 'place needs', 'places need')} a name or a state before ${items.length === 1 ? 'it goes' : 'they go'} on your list.`]),
+      el('p', { class: 'help' }, [aiOn
+        ? 'Fix with AI sends each one’s title, caption and location tag to your AI provider, which names the place and says where it is; Lookups then add the address and pin. A post about several places (a top-10 list) stays here: open it to move it or delete it.'
+        : 'Read again checks the caption of every place you saved from Instagram with Keepsake’s latest rules, on your device. To have places named from their posts, turn on Optional AI in Settings. Or open one and fill in its name and address.']),
+    ]),
+    el('button', { type: 'button', class: 'btn btn-primary', onClick: (e) => fixAll(e.currentTarget) }, [aiOn ? `Fix ${items.length} with AI` : 'Read again']),
+  ]));
+  const why = { 'no place name': 'No place name', 'no state': 'No state' };
+  const sorted = [...items].sort((a, b) => placeReviewReasons(a).length - placeReviewReasons(b).length || a.title.localeCompare(b.title));
+  box.append(el('ul', { class: 'place-rows', role: 'list' }, sorted.map((item) => {
+    const reasons = placeReviewReasons(item).map((r) => why[r] || r).join(' · ');
+    const st = placeState(item);
+    return placeRow(item, [reasons, st ? `in ${st.name}` : '', item.details?.address || item.details?.locality || ''].filter(Boolean).join(' · '));
+  })));
+  view.append(box);
 }
 
 let maplibreLoading = null;
@@ -1565,34 +1621,30 @@ function renderPlacesMap(view, items) {
   });
 }
 
-function renderPlaceList(view, items) {
-  const groups = new Map();
+function renderPlaceList(view, items, waiting = 0) {
+  const states = new Map(); // state name -> Map(city -> places)
   for (const item of items) {
-    const city = item.details?.locality || 'Somewhere else';
-    if (!groups.has(city)) groups.set(city, []);
-    groups.get(city).push(item);
+    const st = placeState(item)?.name || 'Somewhere';
+    const city = String(item.details?.locality || '').trim();
+    if (!states.has(st)) states.set(st, new Map());
+    const cities = states.get(st);
+    if (!cities.has(city)) cities.set(city, []);
+    cities.get(city).push(item);
   }
-  const cities = [...groups.keys()].sort((a, b) => (a === 'Somewhere else') - (b === 'Somewhere else') || a.localeCompare(b));
   const box = el('div', { class: 'place-list' });
-  for (const city of cities) {
-    const list = groups.get(city).sort((a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title));
-    box.append(el('section', { class: 'place-group', 'aria-label': city }, [
-      el('h2', { class: 'place-city' }, [city, el('span', { class: 'count' }, [String(list.length)])]),
-      el('ul', { class: 'place-rows', role: 'list' }, list.map((item) => {
-        const d = item.details || {};
-        return el('li', { class: `place-row ${item.status === 'done' ? 'is-done' : ''}` }, [
-          el('button', { type: 'button', class: 'place-row-hit', onClick: () => openSave(item.id) }, [
-            UI.pictureNode({ src: item.image, aspect: 1, title: item.title, className: 'place-thumb' }),
-            el('span', { class: 'place-row-text' }, [
-              el('span', { class: 'place-row-title' }, [item.title]),
-              el('span', { class: 'place-row-meta' }, [[d.cuisine || d.category, d.priceRange, d.address].filter(Boolean).join(' · ') || item.retailer || item.host || '']),
-            ]),
-          ]),
-          item.status === 'done' ? el('span', { class: 'badge' }, ['Been']) : null,
-          mapsMenuButton(item, { small: true }),
-        ]);
-      })),
-    ]));
+  if (!items.length) box.append(UI.emptyState({ title: 'No places on your list yet', message: waiting ? `${pluralize(waiting, 'place is', 'places are')} waiting in Places review for a name or a state.` : 'Save a restaurant, café or anywhere you want to go and it shows up here, by state and city.' }));
+  const byName = (a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title);
+  for (const st of [...states.keys()].sort((a, b) => a.localeCompare(b))) {
+    const cities = states.get(st);
+    const total = [...cities.values()].reduce((n, l) => n + l.length, 0);
+    const section = el('section', { class: 'place-group', 'aria-label': st }, [el('h2', { class: 'place-city' }, [st, el('span', { class: 'count' }, [String(total)])])]);
+    // Cities A to Z; places with no city last, under the state itself.
+    for (const city of [...cities.keys()].sort((a, b) => (!a) - (!b) || a.localeCompare(b))) {
+      const list = cities.get(city).sort(byName);
+      if (cities.size > 1 || city) section.append(el('h3', { class: 'place-subcity' }, [city || `Elsewhere in ${st}`, el('span', { class: 'count' }, [String(list.length)])]));
+      section.append(el('ul', { class: 'place-rows', role: 'list' }, list.map((item) => placeRow(item))));
+    }
+    box.append(section);
   }
   view.append(box);
 }

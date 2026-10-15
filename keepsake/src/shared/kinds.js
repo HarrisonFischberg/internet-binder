@@ -472,40 +472,71 @@ export function placeFromMapsUrl(url) {
 //   "📍 Randy’s Donuts 186 Bleecker St, New York, NY"          (the same, line breaks lost)
 //   "Location: Joe's Pizza, NYC. Best slice in town"         -> name, area (the next sentence dropped)
 const STREET = /\b(?:st|street|ave|avenue|av|rd|road|blvd|boulevard|ln|lane|dr|drive|way|pl|place|sq|square|ct|court|pkwy|parkway|hwy|highway|broadway|bowery)\b\.?/i;
-const looksLikeAddress = (s) => /^\d{1,6}[a-z]?(?:-\d+)?\s+\S/i.test(s) && STREET.test(s);
+export const looksLikeAddress = (s) => /^\d{1,6}[a-z]?(?:-\d+)?\s+\S/i.test(s) && STREET.test(s);
 export function placeFromText(text) {
-  const lines = String(text || '').replace(/\r/g, '').split(/\n+|(?=📍)/u);
+  const src = String(text || '').replace(/\r/g, '');
+  // Three or more 📍 is a post about several places (a list, a round-up), not one place.
+  if ((src.match(/📍|📌/gu) || []).length >= 3) return null;
+  const lines = src.split(/\n+|(?=📍)/u);
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    const m = raw.match(/(?:📍|📌|🗺️?|\b(?:location|address|where|find (?:it|them|us) at|spot)\s*[:：-])\s*([^\n#@]{2,160})/iu);
+    const m = raw.match(/(?:📍|📌|🗺️?|\b(?:location|address|where|find (?:it|them|us) at|spot)\s*[:：-])\s*([^\n]{2,220})/iu);
     if (!m) continue;
-    let s = m[1].replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, ' ').replace(/\s+/g, ' ').trim().replace(/[.,;:!]+$/, '');
+    let s = m[1];
+    // The place's own @handle, written with it ("📍 @shalomjapan, Brooklyn", "Roosevelt Bagel Factory (@rooseveltbagelfactory)").
+    const leading = (s.match(/^\s*@([A-Za-z0-9._]{2,30})/) || [])[1] || '';
+    const own = leading || (s.match(/\(\s*@([A-Za-z0-9._]{2,30})\s*\)/) || [])[1] || '';
+    s = s.replace(/\(\s*@[A-Za-z0-9._]+\s*\)/g, ' ').replace(/^\s*@[A-Za-z0-9._]+\s*,?\s*/, '');
+    // A later @handle is a mention or a photo credit ("📍228 DeKalb Ave, Fort Greene 🎥: @…"): it ends the place.
+    s = s.split(/\s(?:🎥|📸)?:?\s*@[A-Za-z0-9._]/u)[0];
+    // A leading hashtag is the area ("📍 #Greenpoint 29 Greenpoint Ave, Brooklyn").
+    s = s.replace(/^\s*#[\p{L}\p{N}_]{2,30}\s+/u, '');
+    // It ends at a later hashtag, a phone, a divider or an ordering note.
+    s = s.split(/\s#[\p{L}\p{N}_]|📲|☎️?|📞|—{2,}|-{3,}|\s\.\s\.|\s•|\bpre[- ]?order\b|\bwebsite\b|\bphone\b/iu)[0];
+    s = s.replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}️‍]/gu, ' ').replace(/\s+/g, ' ').trim().replace(/[.,;:!]+$/, '');
     // Stop at the next sentence ("📍 Joe's Pizza, NYC. Best slice in town").
     s = s.split(/(?<=\b[\p{L}\p{N}']{3,})[.!]\s+(?=\p{Lu})|\s+[-–—]\s+(?=[a-z])/u)[0].trim();
+    // "Name in Carteret, NJ" and "Sonny's (Hollywood, Los Angeles)": the place, then where it is.
+    s = s.replace(/\s+in\s+(?=\p{Lu})/u, ', ').replace(/\s*\(([^()]{2,60})\)?\s*$/, (_, area) => `, ${area.split(/\s*,\s*/).pop()}`).replace(/\s*\(([^()]{2,60})\)/, ', $1');
+    // A label before the address ("Cedar Park/North Austin Location : 10900 …") isn't the name.
+    s = s.replace(/^[^:\d]{0,50}\blocations?\s*:\s*/i, '');
     // The address on the next line ("📍 Randy's Donuts" / "186 Bleecker St, New York, NY").
     const next = (lines[i + 1] || '').trim();
-    if (!/,/.test(s) && looksLikeAddress(next)) s = `${s}, ${next.replace(/[.;!]+$/, '')}`;
+    if (!/,/.test(s) && !/\d/.test(s) && looksLikeAddress(next)) s = `${s}, ${next.replace(/[.;!]+$/, '')}`;
     if (!s || s.length < 2 || /^https?:/i.test(s)) continue;
     let parts = s.split(/\s*(?:,|\||·|–|—)\s*/).map((x) => x.replace(/(?:\s*\.)+$/, '').trim()).filter(Boolean);
+    // "📍 @shalomjapan, Brooklyn": the handle is the name, what follows is where.
+    if (leading && !looksLikeAddress(parts[0] || '')) parts = [nameFromHandle(leading), ...parts];
     // A name glued to its street number ("Randy's Donuts 186 Bleecker St").
     const glued = parts[0].match(/^(.+?\D)\s+(\d{1,6}[a-z]?\s+.+)$/i);
     if (glued && looksLikeAddress(glued[2])) parts = [glued[1], glued[2], ...parts.slice(1)];
-    // Only an address ("Address: 23 Cleveland Place, New York, NY"): no name here; the place's @handle
-    // nearby (the same line or the one before) names it, if there is one.
+    // Only an address ("Address: 23 Cleveland Place, New York, NY"): the place's @handle names it, written
+    // with it or just before (not "Follow @…" or a photo credit).
     const addressOnly = looksLikeAddress(parts[0]);
-    const near = `${lines[i - 1] || ''} ${raw.slice(0, m.index)}`;
-    const handle = addressOnly ? ((near.match(/@([A-Za-z0-9._]{2,30})/g) || []).pop() || '').slice(1) : '';
-    const name = addressOnly ? nameFromHandle(handle) : clean(parts[0], 120);
-    if (!name && !addressOnly) continue;
+    const near = `${(lines[i - 1] || '').slice(-120)} ${raw.slice(Math.max(0, m.index - 120), m.index)}`;
+    const handles = [...near.matchAll(/(?<!(?:follow|by|via|credit|cc|📸|🎥)[:\s]{1,3})@([A-Za-z0-9._]{2,30})/giu)].map((x) => x[1]);
+    const handle = own || (addressOnly ? handles.pop() || '' : '');
+    let name = addressOnly ? nameFromHandle(handle) : clean(parts[0], 120);
+    // Phrases that aren't a place's name ("This spot is closed", "3 Locations").
+    if (/^(?:this|that|the)\s+(?:spot|place|restaurant|shop|cafe|location)\b|^\d+\s+locations?\b|^(?:closed|permanently closed|new location)\b/i.test(name)) name = '';
+    if (!name && !addressOnly && !own) continue;
+    if (!name && own) name = nameFromHandle(own);
     const rest = addressOnly ? parts : parts.slice(1);
     const at = rest.findIndex(looksLikeAddress);
-    const address = at >= 0 ? clean(rest[at], 200) : '';
-    const after = at >= 0 ? rest.slice(at + 1) : rest;
-    const locality = clean(after[0] || '', 80);
-    const region = clean(after[1] || '', 60);
-    return { name, address, locality: locality !== name ? locality : '', region, ...(handle ? { handle } : {}) };
+    const where = at >= 0 ? addressFromLine(rest.slice(at).join(', ')) : null;
+    const after = at >= 0 ? [] : rest;
+    const locality = where ? where.locality : clean(after[0] || '', 80);
+    const regionRaw = where ? where.region : clean(after[1] || '', 60);
+    let region = /^[\p{L} .'-]{2,40}$/u.test(regionRaw) ? regionRaw : '';
+    let city = locality !== name && /^[\p{L} .'-]{2,40}$/u.test(locality) ? locality : '';
+    // "Sonny's, Hollywood, Los Angeles": a second area that isn't a state is the city.
+    if (region && !STATE_POSTAL.test(region) && !COUNTRY.test(region) && !new RegExp(`^(?:${US_STATE})$`, 'i').test(region)) [city, region] = [region, ''];
+    return { name, address: where ? where.address : '', locality: city, region, ...(where?.postalCode ? { postalCode: where.postalCode } : {}), ...(handle ? { handle } : {}) };
   }
-  return null;
+  // No marker: an address written anywhere ("…cinnamon rolls 16051 dessau rd suite f Pflugerville, TX,78660").
+  const any = src.match(new RegExp(`\\b\\d{2,6}[a-z]?\\s+(?:[\\p{L}\\p{N}.'-]+\\s){0,5}?(?:st|street|ave|avenue|rd|road|blvd|boulevard|ln|lane|dr|drive|way|pl|place|pkwy|parkway|hwy|highway)\\b\\.?(?:\\s+(?:suite|ste|apt|unit|#)\\.?\\s*[\\w-]{1,6})?[\\s,]+[\\p{L} .'-]{2,30},\\s*(?:${US_STATE})\\b(?:,?\\s*\\d{5})?`, 'iu'));
+  const where = any ? addressFromLine(any[0]) : null;
+  return where?.address ? { name: '', address: where.address, locality: where.locality, region: where.region, postalCode: where.postalCode } : null;
 }
 
 // "homies_nyc" -> "Homies NYC", "joes.pizza" -> "Joes Pizza": an account name read as words (short words
@@ -534,22 +565,38 @@ const PHONE = /(?:\+\d{1,3}[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}/;
 // States, Idaho", or just the area ("Oklahoma City, OK, United States"). Null when it's neither.
 export function addressFromLine(line) {
   const s = String(line || '').replace(/\s+/g, ' ').trim().replace(/[.;]+$/, '');
-  if (!s || s.length > 140 || /[·|]/.test(s)) return null;
+  if (!s || s.length > 160 || /[·|]/.test(s)) return null;
   const parts = s.split(/\s*,\s*/).filter(Boolean);
   let address = '';
   if (looksLikeAddress(parts[0])) {
-    // The street ends at its last street word before any city ("2309 2nd avenue New York").
+    // The street ends at its last street word before any city ("2309 2nd avenue New York"), plus a suite
+    // or floor after it ("…lakeline mall drive suite 300", "…10th St. 2nd floor").
     const words = parts[0].split(' ');
     let at = -1;
     words.forEach((w, i) => { if (i > 0 && i < 7 && STREET.test(w)) at = i; });
+    for (;;) {
+      const rest = words.slice(at + 1).join(' ');
+      const unit = rest.match(/^(?:(?:suite|ste|apt|unit|fl|floor|#)\.?\s*[\w-]{1,6}|\d+(?:st|nd|rd|th)\s+(?:floor|fl)\.?)(?=\s|$)/i);
+      if (!unit) break;
+      at += unit[0].split(' ').length;
+    }
     address = words.slice(0, at + 1).join(' ');
     const city = words.slice(at + 1).join(' ');
     parts.splice(0, 1, ...(city ? [city] : []));
   } else if (!(parts.length >= 2 && (parts.some((p) => COUNTRY.test(p)) || STATE_POSTAL.test(parts[1])))) return null;
+  // "Philadelphia PA 19147" (no commas): the city, then its state and ZIP.
+  if (parts.length === 1) {
+    const m = parts[0].match(new RegExp(`^(.*?)\\s*\\b(${US_STATE})(?:\\s+(\\d{5}(?:-\\d{4})?))?$`));
+    if (m && STATE_POSTAL.test(m[2])) parts.splice(0, 1, ...[m[1], [m[2], m[3]].filter(Boolean).join(' ')].filter(Boolean));
+  }
+  // "Austin, TX, 78717": a ZIP on its own goes with the state.
+  if (parts.length >= 3 && /^\d{5}(?:-\d{4})?$/.test(parts[parts.length - 1]) && STATE_POSTAL.test(parts[parts.length - 2])) parts.splice(-2, 2, `${parts[parts.length - 2]} ${parts[parts.length - 1]}`);
   if (parts.some((p) => !/^[\p{L}\p{N} .'-]{2,40}$/u.test(p))) return address ? { address: clean(address, 200), locality: '', region: '', postalCode: '', country: '' } : null;
   // "…, ID, United States, Idaho": the country, and the state's name after it, are dropped.
   const c = parts.findIndex((p) => COUNTRY.test(p));
   const country = c >= 0 ? parts.splice(c)[0] : '';
+  // Only a state after the street ("…2nd floor NY"): no city.
+  if (parts.length === 1 && STATE_POSTAL.test(parts[0]) && address) parts.unshift('');
   const [locality = '', regionPostal = ''] = parts;
   const rp = regionPostal.match(/^(.*?)(?:\s+(\d{5}(?:-\d{4})?))?$/);
   return { address: clean(address, 200), locality: clean(locality, 80), region: clean(rp[1] || '', 60), postalCode: rp[2] || '', country: clean(country, 60) };

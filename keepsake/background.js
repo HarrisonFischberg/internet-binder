@@ -14,6 +14,7 @@ import { parsePostBundle } from './src/instagram/post.js';
 import { LOOKUP_SOURCES, lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './src/shared/lookups.js';
 import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
+import { placeNamed, placeReviewReasons, stateCode } from './src/shared/places.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 const CONTENT_SCRIPT_ID = 'keepsake-floating';
@@ -393,8 +394,8 @@ async function saveProduct(rawProduct, { collectionId = null, force = false, sou
 let fillQueue = Promise.resolve();
 let lastNominatim = 0;
 const FILLED_KINDS = ['place', 'media', 'book', 'recipe', 'workout'];
-function queueFill(id) {
-  fillQueue = fillQueue.then(() => fillKind(id)).catch(() => {});
+function queueFill(id, opts = {}) {
+  fillQueue = fillQueue.then(() => fillKind(id, opts)).catch(() => {});
   return fillQueue;
 }
 
@@ -407,18 +408,40 @@ async function lookupAllowed(settings, which) {
   }
 }
 
-async function fillKind(id) {
+// review: from Places review: a place that isn't named or has no state goes to your AI provider even
+// when it has a title.
+async function fillKind(id, { review = false } = {}) {
   let item = await store.getItem(id);
   if (!item || item.deletedAt) return;
   const kind = kindOf(item);
   if (!FILLED_KINDS.includes(kind)) return;
   const settings = await store.getSettings();
   const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
+  // An Instagram place: its caption read again with today's rules first (nothing sent anywhere). Normally
+  // that only fills what's missing. From Places review (you asked), what an older reading wrote is replaced:
+  // its name, street, city and state, never what you typed yourself; a new street drops the old pin.
+  if (kind === 'place' && item.type === 'instagram') {
+    const fresh = detailsForKind('place', { ...item, kind: 'link', details: {} });
+    const yours = new Set(item.userFields || []);
+    const old = item.details || {};
+    let details = fillMissing(old, fresh.details);
+    if (review && !yours.has('details') && old.source !== 'you') {
+      details = { ...old };
+      for (const k of ['address', 'locality', 'region', 'postalCode']) if (fresh.details[k]) details[k] = fresh.details[k];
+      if (fresh.details.address && fresh.details.address !== old.address) Object.assign(details, { lat: null, lng: null, lookup: null });
+    }
+    const patch = {};
+    if (JSON.stringify(details) !== JSON.stringify(old)) patch.details = details;
+    const rename = review ? fresh.title && fresh.title !== item.title : fresh.title && fresh.title !== item.title && !placeNamed(item);
+    if (rename && !yours.has('title')) patch.title = fresh.title;
+    if (Object.keys(patch).length) item = await store.updateItem(id, patch, { by: 'kind' });
+  }
   let d = item.details || {};
   // A post with no name for its place (its title is the caption's), or an imported post that says nothing
   // about where it is: your provider names it and its city, so the lookup can find it.
   const unknownPlace = kind === 'place' && item.type === 'instagram' && !d.address && d.lat == null && !d.locality;
-  const unnamed = (genericTitle(item.title) || unknownPlace) && !(item.userFields || []).includes('title');
+  const inReview = review && kind === 'place' && placeReviewReasons(item).length > 0;
+  const unnamed = (genericTitle(item.title) || unknownPlace || inReview) && !(item.userFields || []).includes('title');
   if (key && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length) || (kind === 'recipe' && !d.ingredients?.length))) {
     try {
       let patch = null;
@@ -427,7 +450,7 @@ async function fillKind(id) {
         patch = { details: { ...d, ...r } };
       } else {
         const r = await identifyForKind(kind, item, settings, key);
-        if (r && kind === 'place') patch = { title: r.name, details: { ...d, locality: d.locality || r.locality } };
+        if (r && kind === 'place') patch = { title: r.name, details: { ...d, locality: d.locality || r.locality, address: d.address || r.address || '', region: d.region || stateCode(r.state) || r.state || '' } };
         else if (r && kind === 'media') patch = { title: r.title, details: { ...d, year: d.year || r.year, format: r.format || d.format } };
         else if (r && kind === 'book') patch = { title: r.title, details: { ...d, author: d.author || r.author } };
         else if (r && kind === 'workout') patch = { details: { ...d, exercises: r.exercises, durationMinutes: d.durationMinutes || r.durationMinutes, source: 'ai' } };
@@ -851,7 +874,7 @@ async function handleMessage(msg, sender) {
       return { ok: true, item: await store.getItem(item.id) };
     }
     case MSG.FILL_ITEM: {
-      queueFill(msg.itemId);
+      queueFill(msg.itemId, { review: !!msg.review });
       return { ok: true };
     }
     case MSG.FILL_KIND: {

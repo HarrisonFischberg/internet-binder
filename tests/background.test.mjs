@@ -514,3 +514,27 @@ test('fill-in with AI on: an imported Instagram place that says nothing about wh
   await new Promise((r) => setTimeout(r, 300));
   assert.equal(asked, '');
 });
+
+test('Places review: the caption is read again first; then your AI provider names the place and its state', async () => {
+  // Read again (AI off): the address in the caption fills the place in, with nothing sent anywhere.
+  const st = F.local.keepsake_settings;
+  F.local.keepsake_settings = { ...st, ai: { ...st.ai, on: false } };
+  let calls = 0;
+  globalThis.fetch = async () => { calls++; throw new Error('no network'); };
+  const a = await S.addItem({ type: 'instagram', kind: 'place', title: 'Our famous stuffed rolls', url: 'https://www.instagram.com/p/REVIEW1/', details: { source: 'page' },
+    instagram: { caption: 'Our famous stuffed rolls 16051 dessau rd suite f Pflugerville, TX,78660 📍' } });
+  await F.send({ type: MSG.FILL_ITEM, itemId: a.id, review: true }, popup);
+  for (let i = 0; i < 40 && !(await S.getItem(a.id)).details.address; i++) await new Promise((r) => setTimeout(r, 25));
+  const ra = await S.getItem(a.id);
+  assert.deepEqual([ra.details.address, ra.details.locality, ra.details.region, ra.details.postalCode], ['16051 dessau rd suite f', 'Pflugerville', 'TX', '78660']);
+  assert.equal(calls, 0, 'nothing sent');
+  // Fix with AI: a titled post that names no place gets the place, its city and its state.
+  await aiOn();
+  globalThis.fetch = aiReply({ name: 'Example Tavern', address: '54 Pearl St', city: 'New York', state: 'New York' });
+  const b = await S.addItem({ type: 'instagram', kind: 'place', title: 'Tucked into Manhattan is a place', url: 'https://www.instagram.com/p/REVIEW2/', details: { source: 'page' },
+    instagram: { caption: 'Tucked into Manhattan is a place that feels like another era. Example Tavern is more than a historic spot.' } });
+  await F.send({ type: MSG.FILL_ITEM, itemId: b.id, review: true }, popup);
+  for (let i = 0; i < 60 && (await S.getItem(b.id)).title !== 'Example Tavern'; i++) await new Promise((r) => setTimeout(r, 50));
+  const rb = await S.getItem(b.id);
+  assert.deepEqual([rb.title, rb.details.address, rb.details.locality, rb.details.region], ['Example Tavern', '54 Pearl St', 'New York', 'NY']);
+});

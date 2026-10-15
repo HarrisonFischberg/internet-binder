@@ -239,17 +239,29 @@ test('switching an Instagram save to Workout fills in the exercises its caption 
   assert.equal(saved.details.source, 'caption', 'kept as found, so labelled as from the caption');
 });
 
-test('places: a list grouped by city, the place view with maps links, Been, and editing the address drops the pin', async () => {
+test('places: a list by state (or country) and city, Places review for the rest, the place view with maps links, Been, and editing the address drops the pin', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
-  const a = await store.addItem({ title: 'Little Kitchen', url: 'https://eat.example/lk', kind: 'place', details: { address: '12 Mill Lane', locality: 'Bristol', lat: 51.45, lng: -2.59, cuisine: 'Georgian', hours: ['Tue–Sat 17:00–22:00'], source: 'page' } });
-  await store.addItem({ title: 'Harbour Café', url: 'https://eat.example/hc', kind: 'place', details: { locality: 'Bath', source: 'page' } });
+  const a = await store.addItem({ title: 'Little Kitchen', url: 'https://eat.example/lk', kind: 'place', details: { address: '12 Mill Lane', locality: 'Bristol', country: 'United Kingdom', lat: 51.45, lng: -2.59, cuisine: 'Georgian', hours: ['Tue–Sat 17:00–22:00'], source: 'page' } });
+  await store.addItem({ title: 'Harbour Café', url: 'https://eat.example/hc', kind: 'place', details: { locality: 'Bath', country: 'United Kingdom', source: 'page' } });
+  await store.addItem({ title: 'Example Deli', url: 'https://eat.example/ed', kind: 'place', details: { address: '5 Main St', locality: 'Austin', region: 'TX 78701', source: 'page' } });
   await store.addItem({ title: 'Somewhere', url: 'https://eat.example/s', kind: 'place', details: {} });
   await afterChange();
   assert.match(window.document.getElementById('navKinds').textContent, /Places/);
   await go('#kind/place');
-  const cities = [...view().querySelectorAll('.place-city')].map((h) => h.firstChild.textContent);
-  assert.deepEqual(cities, ['Bath', 'Bristol', 'Seattle', 'Somewhere else'], 'Seattle: the sample places loaded earlier');
+  const heads = (sel) => [...view().querySelectorAll(sel)].map((h) => h.firstChild.textContent);
+  assert.deepEqual(heads('.place-city'), ['Texas', 'United Kingdom', 'Washington'], 'by state or country; Washington: the sample places in Seattle');
+  assert.deepEqual(heads('.place-subcity').filter((c) => ['Austin', 'Bath', 'Bristol'].includes(c)), ['Austin', 'Bath', 'Bristol'], 'then by city');
+  assert.ok(!view().textContent.includes('Somewhere'), 'a place with no name or state is not on the list');
+  const tab = [...view().querySelectorAll('.library-tab')].find((b) => /^Places review/.test(b.textContent));
+  assert.match(tab.textContent, /Places review · \d+/);
+  tab.click();
+  await afterChange();
+  assert.match(view().textContent, /Somewhere/);
+  assert.match(view().textContent, /No state/);
+  assert.ok([...view().querySelectorAll('button')].some((b) => /^(?:Fix \d+ with AI|Read again)$/.test(b.textContent)));
+  [...view().querySelectorAll('.library-tab')].find((b) => b.textContent === 'List').click();
+  await afterChange();
   assert.ok(!view().querySelector('.grid'), 'a list, not the grid');
   const row = [...view().querySelectorAll('.place-row')].find((r) => r.textContent.includes('Little Kitchen'));
   assert.match(row.textContent, /Georgian · 12 Mill Lane/);
@@ -262,7 +274,7 @@ test('places: a list grouped by city, the place view with maps links, Been, and 
   assert.match(pv.querySelector('address').textContent, /12 Mill Lane, Bristol/);
   assert.match(pv.textContent, /Tue–Sat 17:00–22:00/);
   const google = [...window.document.querySelectorAll('.modal-place a')].find((x) => x.textContent.includes('Google Maps'));
-  assert.equal(new URL(google.href).searchParams.get('query'), 'Little Kitchen, 12 Mill Lane, Bristol');
+  assert.equal(new URL(google.href).searchParams.get('query'), 'Little Kitchen, 12 Mill Lane, Bristol, United Kingdom');
   [...window.document.querySelectorAll('.modal-place button')].find((b) => b.textContent === 'Mark been').click();
   await afterChange();
   assert.equal((await store.getItem(a.id)).status, 'done');
