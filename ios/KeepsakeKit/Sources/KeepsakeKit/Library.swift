@@ -46,6 +46,9 @@ public struct SaveCollection: Identifiable, Hashable, Sendable, Decodable {
     public let name: String
     public let pinned: Bool?
     public let sortOrder: Double?
+    /// Words that file a save here (the categorizer reads them).
+    public let keywords: [String]?
+    public let description: String?
 }
 
 /// The library for the app, the Share Extension and the widgets.

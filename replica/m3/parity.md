@@ -4,16 +4,11 @@ Date: 2026-10-15. Against `replica/features.csv`, weighted must 3, should 2, cou
 Rows the brief excludes on iOS (n/a: Chrome-only capture, Instagram bulk import, social, paywall,
 price tracking, M4 sync, meal planning) are left out of the score.
 
-**Weighted parity: 81%** (83 of 102).
-By priority: must 22/23 · should 8/11 · could 1/11
+**Weighted parity: 88%** (90 of 102).
+By priority: must 23/23 · should 10/11 · could 1/11
 
 ## Still missing (must and should)
-- Save screenshots and photos with text extraction (should)
-- Saved record survives the source post being deleted (must)
-- User-defined collections with keywords (must)
 - Smart collections filled by rule or tag (should)
-- Bulk select move archive delete (should)
-- Filters by kind status source and place (should)
 
 ## Every feature
 | feature | priority | iOS | how / why |
@@ -22,12 +17,12 @@ By priority: must 22/23 · should 8/11 · could 1/11
 | Right-click save of page image link or selection | should | n/a | no right-click on iPhone |
 | On-page save buttons on product cards | could | n/a | Chrome only |
 | Save from any iOS app via the share sheet | must | yes | Share Extension; Safari reads the page with Chrome's extract.js |
-| Save screenshots and photos with text extraction | should | no | the Share Extension accepts an image but keeps only its link/text; no on-device text reading yet |
+| Save screenshots and photos with text extraction | should | yes | share a screenshot or photo: its text is read on the device (Vision) and a small copy kept |
 | Save straight into a chosen collection at capture time | must | yes | destination slip on the share card |
 | Bulk import existing Instagram saved collections | should | n/a | stays in Chrome by decision (PROMPT.md) |
 | Bulk import TikTok and Pinterest saves | could | no |  |
 | Import products from all open tabs | could | n/a | Chrome only |
-| Saved record survives the source post being deleted | must | partial | text and details kept; pictures load from the site unless Chrome stored a thumbnail |
+| Saved record survives the source post being deleted | must | yes | text and details kept; a small local copy of each picture is kept when first shown |
 | Original source URL always kept and openable | must | yes | Open/Watch/Read/Visit shop; Share |
 | Practical details enrichment (address hours price ingredients) | should | yes | page reading on save; Lookups and AI when turned on |
 | Personal notes on a save | must | yes | note on the share card and in Edit |
@@ -36,13 +31,13 @@ By priority: must 22/23 · should 8/11 · could 1/11
 | Automatic categorization into collections | must | yes | Chrome's categorizer in JavaScriptCore |
 | Uncertain saves wait for review instead of guessing | must | yes | Review, banner and badge |
 | Correct a wrong category directly and teach it | must | yes | Review filing and Move to… learn strongly |
-| User-defined collections with keywords | must | partial | create collections; keywords come from Chrome imports, no keyword editor yet |
+| User-defined collections with keywords | must | yes | create, rename, keywords, pin, delete (saves go back to Review) |
 | Nested collections or folders | could | no |  |
 | Smart collections filled by rule or tag | should | no |  |
-| Bulk select move archive delete | should | partial | drag several onto a collection on iPad is single-item today; no multi-select |
+| Bulk select move archive delete | should | yes | Select mode: move or trash several at once; drag onto the iPad sidebar |
 | Content kinds beyond products (place recipe video article workout film-show book) | must | yes | every kind with its own object and view |
 | Search across all saved text | must | yes | Chrome's ranking and typo correction |
-| Filters by kind status source and place | should | partial | kind and Review; no status/source filter yet |
+| Filters by kind status source and place | should | yes | kind, Review, status (To do, Done, Purchased) and source site; Places by state |
 | Natural-language ask over your own saves | could | no |  |
 | Resurface saves by context or a periodic recap | should | yes | Come back to |
 | Home screen widget for capture or rediscovery | could | yes | Latest save; Workout goal |

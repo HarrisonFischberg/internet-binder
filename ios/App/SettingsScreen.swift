@@ -221,7 +221,7 @@ struct PrivacyScreen: View {
                 Text("Your AI key is kept in the Keychain on this device and never exported.")
             }
             Section("When Keepsake uses the network") {
-                Text("Pictures of your saves load from the sites they came from, as a web page loads them.")
+                Text("Pictures of your saves load from the sites they came from, as a web page loads them. A small copy is kept on this iPhone so the picture stays if the site removes it.")
                 Text("Maps are drawn by Apple Maps. Directions open Apple Maps with the place's name and address.")
                 Text("Optional AI and each Lookup: only when you turn them on, and only what their switch says.")
                 Text("Sharing from Safari: Keepsake reads the page you shared, on this iPhone.")
@@ -246,6 +246,7 @@ struct EraseSheet: View {
                 Button("Erase everything", role: .destructive) {
                     Task {
                         try? await model.library?.eraseEverything()
+                        ThumbnailStore.shared.removeAll()
                         model.refresh()
                         Haptic.trashed()
                         dismiss()

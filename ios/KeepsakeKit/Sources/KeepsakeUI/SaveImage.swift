@@ -11,6 +11,7 @@ public struct SaveImage: View {
     var symbolSize: CGFloat = 30
     var showsSymbol = true
     @Environment(\.ks) private var t
+    @State private var kept: UIImage?
     public init(_ save: Save, symbolSize: CGFloat = 30, showsSymbol: Bool = true) { self.save = save; self.symbolSize = symbolSize; self.showsSymbol = showsSymbol }
 
     public var body: some View {
@@ -18,8 +19,14 @@ public struct SaveImage: View {
         if let local = Self.dataImage(save.image) {
             Image(uiImage: local).resizable().scaledToFill()
         } else if let s = save.image, let url = URL(string: s), url.scheme == "https" || url.scheme == "http" {
-            AsyncImage(url: url, transaction: Transaction(animation: KSMotion.quiet)) { phase in
-                if let image = phase.image { image.resizable().scaledToFill() } else { tile(kind) }
+            // The local copy if there is one (so the picture outlives its site), else the site's, kept as it loads.
+            ZStack {
+                if let kept { Image(uiImage: kept).resizable().scaledToFill().transition(.opacity) } else { tile(kind) }
+            }
+            .task(id: save.id) {
+                if let img = ThumbnailStore.shared.cached(save.id) { kept = img; return }
+                let img = await ThumbnailStore.shared.load(save.id, from: url)
+                withAnimation(KSMotion.quiet) { kept = img }
             }
         } else {
             tile(kind)

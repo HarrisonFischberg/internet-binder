@@ -45,4 +45,33 @@ final class OrganiseTests: XCTestCase {
         app.buttons["Collections"].tap()
         XCTAssertTrue(app.staticTexts["For things to buy"].waitForExistence(timeout: 5))
     }
+
+    func card(_ app: XCUIApplication, _ title: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+    }
+
+    func testSelectSeveralAndMove() {
+        let app = launch()
+        app.tabBars.buttons["Library"].tap()
+        app.buttons["More"].tap()
+        app.buttons["Select"].tap()
+        card(app, "Push-up ladder").tap()
+        card(app, "The case for slow cities").tap()
+        app.buttons["Move to…"].tap()
+        app.buttons["Clothing"].tap()
+        XCTAssertTrue(app.staticTexts["Moved 2 saves to Clothing"].waitForExistence(timeout: 5))
+    }
+
+    func testFilterPurchased() {
+        let app = launch()
+        app.tabBars.buttons["Library"].tap()
+        let filter = app.buttons["Filter"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 5))
+        filter.tap()
+        app.buttons["Purchased"].tap()
+        XCTAssertTrue(card(app, "Linen apron").waitForExistence(timeout: 3))
+        XCTAssertFalse(card(app, "Café Azulejo").exists)
+        app.buttons["Remove filter Purchased"].tap()
+        XCTAssertTrue(card(app, "Push-up ladder").waitForExistence(timeout: 3))
+    }
 }

@@ -52,7 +52,11 @@ final class ShareState {
         do {
             let library = try Library()
             self.library = library
-            let product = shared.page ?? Library.sharedProduct(url: shared.url, title: shared.title, text: shared.text)
+            var product = shared.page ?? Library.sharedProduct(url: shared.url, title: shared.title, text: shared.text)
+            // A screenshot or photo with no link: its picture and the text read from it, on this device.
+            if shared.page == nil, shared.url == nil, let image = shared.image {
+                product = await ImageCapture.product(from: image)
+            }
             let result = try await library.capture(product: product)
             if let dup = result.duplicateOf {
                 save = dup
@@ -114,6 +118,7 @@ final class ShareState {
 /// a title and any text from another app.
 struct SharedContent {
     var page: [String: Any]?
+    var image: UIImage?
     var url: String?
     var title: String?
     var text: String?
@@ -135,6 +140,11 @@ struct SharedContent {
                 } else if out.url == nil, provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
                           let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
                     out.url = url.absoluteString
+                } else if out.image == nil, provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
+                          let item = try? await provider.loadItem(forTypeIdentifier: UTType.image.identifier) {
+                    if let img = item as? UIImage { out.image = img }
+                    else if let u = item as? URL, let data = try? Data(contentsOf: u) { out.image = UIImage(data: data) }
+                    else if let data = item as? Data { out.image = UIImage(data: data) }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
                           let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String {
                     // Many apps share a link inside text ("Look at this https://…").

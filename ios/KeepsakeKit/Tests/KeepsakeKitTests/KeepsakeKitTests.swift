@@ -516,3 +516,33 @@ struct WidgetSnapshotTests {
         #expect(try await snapshot().count == 11)
     }
 }
+
+@Suite("Collections")
+struct CollectionTests {
+    func library() throws -> Library {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-col-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+    }
+
+    @Test func keywordsFileNewSaves() async throws {
+        let lib = try library()
+        let col = try await lib.createCollection(named: "Cookware")
+        try await lib.updateCollection(col.id, ["keywords": ["skillet", "saucepan"]])
+        let page: [String: Any] = ["url": "https://shop.example.com/p/9", "title": "Cast iron skillet 26 cm", "price": "$45.00", "schemaTypes": ["Product"]]
+        let saved = try #require(try await lib.capture(product: page).save)
+        #expect(saved.collectionId == col.id, "the keyword files it")
+    }
+
+    @Test func deletingSendsSavesToReview() async throws {
+        let lib = try library()
+        let col = try await lib.createCollection(named: "Gifts")
+        let s = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/gift", title: "A gift", text: nil)).save)
+        try await lib.put([s.id], in: col.id)
+        try await lib.deleteCollection(col.id)
+        let after = try #require(try lib.save(s.id))
+        #expect(after.collectionId == nil)
+        #expect(after.needsCollection)
+        #expect(try lib.collections().contains { $0.id == col.id } == false)
+    }
+}

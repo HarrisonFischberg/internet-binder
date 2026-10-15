@@ -10,6 +10,8 @@ Everything here matches the Chrome extension's promises; the differences are the
 - Your AI key: in this device's Keychain, available after first unlock, never synced, never exported.
 - The AI change log: on this device, excluded from exports (as in Chrome).
 - A snapshot for widgets (active goals, your latest save's title): in the App Group.
+- Small copies (≤ 640 px) of your saves' pictures, made when a picture is first shown, so it stays if
+  the site removes it: in the App Group. Not exported; erased with everything else.
 
 ## When Keepsake uses the network
 Keepsake has no server, no account, no analytics and no advertising. It contacts:
@@ -24,6 +26,9 @@ Keepsake has no server, no account, no analytics and no advertising. It contacts
 Any other request is refused by the app itself (an allowlist built from your settings).
 
 ## Sharing into Keepsake
+When you share a screenshot or photo, its text is read on this device (Apple's Vision) and a small copy
+of the picture is kept with the save. Nothing is sent anywhere.
+
 When you share a page from Safari, Keepsake reads that page in Safari to save its title, picture and
 details (the same reader as Chrome's toolbar button). Nothing is sent anywhere.
 

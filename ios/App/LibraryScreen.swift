@@ -16,18 +16,41 @@ struct LibraryScreen: View {
     @State private var query = ""
     @State private var results: SearchResult?
     @State private var importing = false
+    @State private var status: String?          // "todo", "done", "purchased"
+    @State private var source: String?          // a site (host)
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
+    @State private var destinations: [Destination] = []
     @FocusState private var searching: Bool
 
     enum Filter: Hashable { case all, review, kind(String) }
 
     private var shown: [Save] {
         if let results, !query.trimmingCharacters(in: .whitespaces).isEmpty { return results.items }
+        var list: [Save]
         switch filter {
-        case .all: return model.saves
-        case .review: return model.saves.filter { $0.needsCollection && $0.purchased != true }
-        case .kind(let k): return model.saves.filter { $0.kind == k }
+        case .all: list = model.saves
+        case .review: list = model.saves.filter { $0.needsCollection && $0.purchased != true }
+        case .kind(let k): list = model.saves.filter { $0.kind == k }
         }
+        switch status {
+        case "todo": list = list.filter { $0.status != "done" && $0.purchased != true }
+        case "done": list = list.filter { $0.status == "done" }
+        case "purchased": list = list.filter { $0.purchased == true }
+        default: break
+        }
+        if let source { list = list.filter { $0.host == source } }
+        return list
     }
+
+    /// The sites you save from most, for the Source filter.
+    private var topSources: [String] {
+        var counts: [String: Int] = [:]
+        for s in model.saves { if let h = s.host, !h.isEmpty { counts[h, default: 0] += 1 } }
+        return counts.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }.prefix(12).map(\.key)
+    }
+
+    private let statusNames = ["todo": "To do", "done": "Done", "purchased": "Purchased"]
 
     /// Kinds the library has, in Chrome's menu order.
     private var kinds: [String] {
@@ -49,7 +72,7 @@ struct LibraryScreen: View {
             }
             .scrollDismissesKeyboard(.immediately)
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
-            dock
+            if selecting { selectionBar } else { dock }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { DispatchQueue.main.async { Perf.done("Library on screen") } }
@@ -77,6 +100,10 @@ struct LibraryScreen: View {
             }
             Spacer()
             Menu {
+                Button(selecting ? "Done selecting" : "Select", systemImage: "checkmark.circle") {
+                    selecting.toggle()
+                    selected = []
+                }
                 Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
             } label: {
                 Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(t.ink)
@@ -99,6 +126,28 @@ struct LibraryScreen: View {
                 ForEach(kinds, id: \.self) { k in
                     let s = KindStyle(k)
                     Chip(plural(k), symbol: s.symbol, tint: s.color, selected: filter == .kind(k)) { set(.kind(k)) }
+                }
+                if let status {
+                    Chip("\(statusNames[status] ?? status)  ✕", selected: true) { self.status = nil }
+                        .accessibilityLabel("Remove filter \(statusNames[status] ?? status)")
+                }
+                if let source {
+                    Chip("\(source)  ✕", selected: true) { self.source = nil }
+                        .accessibilityLabel("Remove filter \(source)")
+                }
+                Menu {
+                    Picker("Status", selection: $status) {
+                        Text("Any status").tag(String?.none)
+                        ForEach(["todo", "done", "purchased"], id: \.self) { Text(statusNames[$0]!).tag(String?.some($0)) }
+                    }
+                    Picker("Source", selection: $source) {
+                        Text("Any site").tag(String?.none)
+                        ForEach(topSources, id: \.self) { Text($0).tag(String?.some($0)) }
+                    }
+                } label: {
+                    Label("Filter", systemImage: "line.3.horizontal.decrease").font(.subheadline.weight(.medium)).foregroundStyle(t.ink)
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                        .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
                 }
             }
             .padding(.horizontal, 18)
@@ -134,6 +183,23 @@ struct LibraryScreen: View {
                 Text("Showing results for “\(results.query)”").font(KSFont.note).foregroundStyle(t.inkMuted)
             }
             Masonry(shown, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: appearance.density == "compact" ? 105 : 170) { save in
+                if selecting {
+                    let on = selected.contains(save.id)
+                    Button {
+                        Haptic.checked()
+                        if on { selected.remove(save.id) } else { selected.insert(save.id) }
+                    } label: {
+                        SaveObject(save)
+                            .overlay(alignment: .topTrailing) {
+                                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                    .font(.title2).foregroundStyle(on ? t.accent : t.inkMuted)
+                                    .background(Circle().fill(t.paper)).padding(8)
+                            }
+                            .opacity(on ? 1 : 0.85)
+                    }
+                    .buttonStyle(PressStyle())
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                } else {
                 NavigationLink(value: save) {
                     SaveObject(save).matchedTransitionSource(id: save.id, in: zoom)
                 }
@@ -147,8 +213,56 @@ struct LibraryScreen: View {
                 .contextMenu {
                     Button("Move to Trash", systemImage: "trash", role: .destructive) { Task { await model.trash(save) } }
                 }
+                }
             }
         }
+    }
+
+    /// Select mode: move or trash several saves at once.
+    private var selectionBar: some View {
+        HStack(spacing: 10) {
+            Menu {
+                ForEach(destinations) { d in
+                    Button(d.label) {
+                        let ids = Array(selected)
+                        Task {
+                            let name = (try? await model.library?.put(ids, in: d.value)) ?? d.label
+                            Haptic.dropped()
+                            model.refresh()
+                            model.show(ids.count == 1 ? "Moved to \(name)" : "Moved \(ids.count) saves to \(name)")
+                            selected = []
+                            selecting = false
+                        }
+                    }
+                }
+            } label: {
+                Label("Move to…", systemImage: "folder").font(.headline).foregroundStyle(t.onAccent)
+                    .frame(maxWidth: .infinity, minHeight: 54).background(t.accent, in: Capsule())
+            }
+            .disabled(selected.isEmpty)
+            Button {
+                let ids = Array(selected)
+                Task {
+                    try? await model.library?.trash(ids)
+                    Haptic.trashed()
+                    model.refresh()
+                    model.show(ids.count == 1 ? "Moved to Trash" : "Moved \(ids.count) saves to Trash") {
+                        try? await model.library?.restore(ids)
+                        model.refresh()
+                    }
+                    selected = []
+                    selecting = false
+                }
+            } label: {
+                Image(systemName: "trash").font(.headline).foregroundStyle(t.stamp)
+                    .frame(width: 54, height: 54).background(t.paper, in: Circle()).overlay(Circle().strokeBorder(t.rule))
+            }
+            .disabled(selected.isEmpty)
+            .accessibilityLabel("Move \(selected.count) to Trash")
+        }
+        .padding(.horizontal, 16).padding(.bottom, 6)
+        .background(alignment: .bottom) { BottomScrim() }
+        .task { destinations = (try? await model.library?.destinations()) ?? [] }
     }
 
     private var dock: some View {

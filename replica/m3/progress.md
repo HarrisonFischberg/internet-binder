@@ -10,7 +10,7 @@
 | M3.3 Lifestyle | **done** (below) |
 | M3.4 Collections, Review, search, AI, Lookups, export | **done** (below) |
 | M3.5 Personalisation, widgets, iPad, accessibility, performance | **done, approved** |
-| M3.6 Release candidate | ⏸ **done, waiting for your review** (below). No TestFlight or App Store without your approval |
+| M3.6 Release candidate | ⏸ **done; owner testing on iPhone (2026-10-15)**. No push, TestFlight or App Store until the owner says so |
 
 ## M3.0 Design (done)
 - `design-principles.md`, three directions as static SwiftUI prototypes (`ios/Prototypes/`), 24

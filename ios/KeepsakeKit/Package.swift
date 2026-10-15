@@ -21,7 +21,7 @@ let package = Package(
         .target(name: "KeepsakeUI", dependencies: ["KeepsakeKit"]),
         .testTarget(
             name: "KeepsakeKitTests",
-            dependencies: ["KeepsakeKit"],
+            dependencies: ["KeepsakeKit", "KeepsakeUI"],
             resources: [.copy("Fixtures")]
         ),
     ]

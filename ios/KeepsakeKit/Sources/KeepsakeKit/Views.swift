@@ -139,6 +139,12 @@ extension Library {
         return try await core.call("store.createCollection", [["name": name]], as: Created.self).collection
     }
 
+    /// Renames a collection, changes its keywords (what files saves there) or pins it.
+    public func updateCollection(_ id: String, _ patch: [String: Any]) async throws { try await core.call("store.updateCollection", [id, patch]) }
+
+    /// Deletes a collection; its saves go back to Review (Chrome's rule).
+    public func deleteCollection(_ id: String) async throws { try await core.call("store.deleteCollection", [id]) }
+
     /// "3× a week for 4 weeks".
     @discardableResult
     public func createGoal(itemId: String, perWeek: Int, weeks: Int) async throws -> String {
