@@ -1,0 +1,33 @@
+{
+ "direction": "ink",
+ "mode": "light",
+ "color": {
+  "table": "#F4F4F2",
+  "paper": "#FFFFFF",
+  "well": "#EAEAE7",
+  "ink": "#111111",
+  "ink-muted": "#5A5A5A",
+  "accent": "#111111",
+  "on-accent": "#FFFFFF",
+  "stamp": "#A8342A",
+  "kind-place": "#A8342A",
+  "kind-recipe": "#4A6E12",
+  "kind-film": "#4F3DBF",
+  "kind-book": "#7E4519",
+  "kind-product": "#8C5300",
+  "kind-video": "#8E1D9C",
+  "kind-article": "#1D5AA8",
+  "kind-workout": "#0C6E69"
+ },
+ "radius": {
+  "card": 2,
+  "control": 4,
+  "sheet": 4
+ },
+ "type": {
+  "display": "New York regular",
+  "title": "New York medium",
+  "label": "SF Pro medium",
+  "body": "SF Pro"
+ }
+}

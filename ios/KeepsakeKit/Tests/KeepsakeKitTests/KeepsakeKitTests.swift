@@ -1,0 +1,481 @@
+import Testing
+import Foundation
+import CryptoKit
+@testable import KeepsakeKit
+
+func fixture(_ name: String) throws -> Data {
+    let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")!
+    return try Data(contentsOf: url)
+}
+
+func json(_ data: Data) throws -> [String: Any] {
+    try JSONSerialization.jsonObject(with: data) as! [String: Any]
+}
+
+func tempDatabase(secrets: SecretStore = MemorySecrets()) throws -> RecordDatabase {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-tests-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return try RecordDatabase(path: dir.appendingPathComponent("library.sqlite").path, secrets: secrets)
+}
+
+/// Records compared field by field, ignoring the time of the write (set by every import, on both platforms).
+func comparable(_ records: [String: Any]) -> NSDictionary {
+    var out: [String: Any] = [:]
+    for (id, r) in records {
+        var rec = r as! [String: Any]
+        rec.removeValue(forKey: "updatedAt")
+        out[id] = rec
+    }
+    return out as NSDictionary
+}
+
+func byId(_ list: Any?) -> [String: Any] {
+    Dictionary(uniqueKeysWithValues: ((list as? [[String: Any]]) ?? []).map { ($0["id"] as! String, $0 as Any) })
+}
+
+@Suite("Sealer matches WebCrypto")
+struct SealerTests {
+    @Test func vectors() throws {
+        let file = try json(fixture("sealer-vectors"))
+        for v in file["vectors"] as! [[String: String]] {
+            let phone = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: Data(hex: v["phonePrivate"]!)!)
+            let chrome = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: Data(hex: v["chromePrivate"]!)!)
+            #expect(phone.publicKey.rawRepresentation.hex == v["phonePublic"])
+            #expect(chrome.publicKey.rawRepresentation.hex == v["chromePublic"])
+
+            let code = try #require(Sealer.PairingCode(v["pairingCode"]!))
+            #expect(code.mailboxId.hex == v["mailboxId"])
+            #expect(code.text == v["pairingCode"])
+
+            let sealer = try Sealer(privateKey: phone, peerPublicKey: code.publicKey, mailboxId: code.mailboxId)
+            #expect(sealer.key.withUnsafeBytes { Data($0) }.hex == v["key"], "\(v["name"]!): key")
+            let chromeSide = try Sealer(privateKey: chrome, peerPublicKey: phone.publicKey, mailboxId: code.mailboxId)
+            #expect(chromeSide.key == sealer.key)
+
+            let nonce = try AES.GCM.Nonce(data: Data(hex: v["nonce"]!)!)
+            let sealed = try sealer.seal(Data(v["plaintext"]!.utf8), recordName: v["recordName"]!, nonce: nonce)
+            #expect(sealed.hex == v["sealed"], "\(v["name"]!): sealed bytes")
+            let opened = try chromeSide.open(Data(hex: v["sealed"]!)!, recordName: v["recordName"]!)
+            #expect(String(decoding: opened, as: UTF8.self) == v["plaintext"])
+            #expect(throws: (any Error).self) { try sealer.open(sealed, recordName: "another-record") }
+        }
+    }
+
+    @Test func rejectsBadPairingCodes() {
+        #expect(Sealer.PairingCode("keepsake-pair:v2:AAAA:BBBB") == nil)
+        #expect(Sealer.PairingCode("hello") == nil)
+        #expect(Sealer.PairingCode("keepsake-pair:v1:AAECAwQFBgcICQoLDA0ODw:short") == nil)
+    }
+}
+
+@Suite("Chrome export, both ways")
+struct ImportExportTests {
+    @Test func importMatchesChrome() async throws {
+        let db = try tempDatabase()
+        let core = try KeepsakeCore(database: db)
+        try await core.call("store.init")
+        let export = try json(fixture("chrome-export"))
+        try await core.call("store.importJSON", [export, ["mode": "replace"]])
+        let mine = try await core.call("store.exportJSON") as! [String: Any]
+        let chrome = try json(fixture("chrome-reimport"))
+
+        #expect(mine["format"] as? String == "keepsake-export")
+        #expect(mine["schemaVersion"] as? Int == chrome["schemaVersion"] as? Int)
+        #expect(comparable(mine["items"] as! [String: Any]) == comparable(chrome["items"] as! [String: Any]))
+        #expect(comparable(mine["collections"] as! [String: Any]) == comparable(chrome["collections"] as! [String: Any]))
+        #expect(comparable(byId(mine["goals"])) == comparable(byId(chrome["goals"])))
+        #expect(comparable(byId(mine["checkins"])) == comparable(byId(chrome["checkins"])))
+        #expect((mine["prefs"] as! NSDictionary) == (chrome["prefs"] as! NSDictionary))
+        #expect((mine["importHistory"] as! NSDictionary) == (chrome["importHistory"] as! NSDictionary))
+    }
+
+    @Test func exportReimportsLosslessly() async throws {
+        let a = try KeepsakeCore(database: try tempDatabase())
+        try await a.call("store.init")
+        try await a.call("store.importJSON", [try json(fixture("chrome-export")), ["mode": "replace"]])
+        let first = try await a.callJSON("store.exportJSON")
+
+        let b = try KeepsakeCore(database: try tempDatabase())
+        try await b.call("store.init")
+        try await b.callJSON("store.importJSON", argsJSON: "[\(first), {\"mode\":\"replace\"}]")
+        let second = try json(Data(try await b.callJSON("store.exportJSON").utf8))
+        let original = try json(Data(first.utf8))
+        #expect(comparable(second["items"] as! [String: Any]) == comparable(original["items"] as! [String: Any]))
+        #expect(comparable(byId(second["goals"])) == comparable(byId(original["goals"])))
+    }
+
+    @Test func storesRecordsWithQueryableColumns() async throws {
+        let db = try tempDatabase()
+        let core = try KeepsakeCore(database: db)
+        try await core.call("store.init")
+        try await core.call("store.importJSON", [try json(fixture("chrome-export")), ["mode": "replace"]])
+        let (total, trashed, places) = try await db.pool.read { d in
+            (try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM item")!,
+             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM item WHERE deletedAt IS NOT NULL")!,
+             try Int.fetchOne(d, sql: "SELECT COUNT(*) FROM item WHERE kind = 'place'")!)
+        }
+        #expect(total == 12)
+        #expect(trashed == 1)
+        #expect(places == 2)
+        let changes = try db.changes()
+        #expect(changes.contains { $0.store == "items" && $0.op == "put" })
+        #expect(Set(changes.map { "\($0.store)/\($0.key)" }).count == changes.count, "outbox collapses to one change per record")
+    }
+
+    @Test func rejectsWhatChromeRejects() async throws {
+        let core = try KeepsakeCore(database: try tempDatabase())
+        try await core.call("store.init")
+        await #expect(throws: CoreError.failed("This file is not a Keepsake export (missing format marker).")) {
+            try await core.call("store.importJSON", [["items": [:]]])
+        }
+        await #expect(throws: CoreError.self) {
+            try await core.call("store.importJSON", [["format": "keepsake-export", "schemaVersion": 99]])
+        }
+    }
+}
+
+@Suite("Shared rules in JavaScriptCore")
+struct RulesTests {
+    @Test func goldenClassification() async throws {
+        let core = try KeepsakeCore(database: try tempDatabase())
+        let export = try json(fixture("chrome-export"))
+        let collections = Array((export["collections"] as! [String: Any]).values)
+        let golden = try JSONSerialization.jsonObject(with: try fixture("golden-classify")) as! [[String: Any]]
+        let prefs = try await core.call("KeepsakeCore.categorizer.emptyPrefs")
+        for g in golden {
+            let input = g["input"] as! [String: Any]
+            let kind = try await core.call("KeepsakeCore.kinds.kindOf", [input])
+            #expect((kind as? String) == (g["kindOf"] as? String), "kindOf \(input["url"]!)")
+            let key = try await core.call("KeepsakeCore.url.normalizeUrl", [input["url"]!])
+            #expect((key as? String) == (g["urlKey"] as? String))
+            let c = try await core.call("KeepsakeCore.categorizer.classify", [input, ["collections": collections, "prefs": prefs]])
+            #expect((c as! NSDictionary) == (g["classify"] as! NSDictionary), "classify \(input["title"]!)")
+        }
+    }
+}
+
+@Suite("Settings and secrets")
+struct SettingsTests {
+    @Test func secretNeverReachesSQLiteOrExport() async throws {
+        let secrets = MemorySecrets()
+        let db = try tempDatabase(secrets: secrets)
+        let core = try KeepsakeCore(database: db)
+        try await core.call("store.init")
+        try await core.call("store.setSecret", ["aiApiKey", "sk-test-not-real"])
+        #expect(secrets.read()?.contains("sk-test-not-real") == true)
+        let inSQLite = try await db.pool.read { d in try String.fetchAll(d, sql: "SELECT value FROM setting") }.joined()
+        #expect(!inSQLite.contains("sk-test-not-real"))
+        let export = try await core.callJSON("store.exportJSON")
+        #expect(!export.contains("sk-test-not-real"))
+        let back = try await core.call("store.getSecret", ["aiApiKey"])
+        #expect((back as? String) == "sk-test-not-real")
+    }
+}
+
+@Suite("Two processes, one library")
+struct SharedLibraryTests {
+    @Test func appAndExtensionSeeEachOthersSaves() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-shared-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("library.sqlite").path
+        let app = try KeepsakeCore(database: try RecordDatabase(path: path, secrets: MemorySecrets()))
+        let ext = try KeepsakeCore(database: try RecordDatabase(path: path, secrets: MemorySecrets()))
+        try await app.call("store.init")
+        try await ext.call("store.init")
+        async let a: Any = app.call("store.addItem", [["title": "From the app", "url": "https://example.com/a"]])
+        async let b: Any = ext.call("store.addItem", [["title": "From the share sheet", "url": "https://example.com/b"]])
+        _ = try await (a, b)
+        let items = try await app.call("store.getItems") as! [[String: Any]]
+        #expect(Set(items.compactMap { $0["title"] as? String }).isSuperset(of: ["From the app", "From the share sheet"]))
+    }
+
+    @Test func concurrentUpdatesDontLoseWrites() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-cas-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("library.sqlite").path
+        let app = try KeepsakeCore(database: try RecordDatabase(path: path, secrets: MemorySecrets()))
+        let ext = try KeepsakeCore(database: try RecordDatabase(path: path, secrets: MemorySecrets()))
+        try await app.call("store.init")
+        // Both processes record imports at once: each is a read-modify-write of one kv record.
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for i in 0..<40 {
+                let core = i % 2 == 0 ? app : ext
+                group.addTask { try await core.call("store.markImported", [[["https://www.instagram.com/p/post\(i)/", "item\(i)"]]]) }
+            }
+            try await group.waitForAll()
+        }
+        let history = try await app.call("store.getImportHistory") as! [String: Any]
+        #expect((history["instagram"] as! [String: Any]).count == 40, "no write lost")
+    }
+}
+
+@Suite("Capture follows Chrome's rules")
+struct CaptureTests {
+    func library() throws -> Library {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-capture-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+    }
+
+    @Test func bareLinkStaysALink() async throws {
+        let r = try await library().capture(product: Library.sharedProduct(url: "https://example.com/", title: "Example Domain", text: nil))
+        #expect(r.save?.kind == "link")
+    }
+
+    @Test func addressDecidesTheKind() async throws {
+        let lib = try library()
+        #expect(try await lib.capture(product: Library.sharedProduct(url: "https://www.youtube.com/watch?v=abcdefghijk", title: "Dumplings", text: nil)).save?.kind == "video")
+        #expect(try await lib.capture(product: Library.sharedProduct(url: "https://letterboxd.com/film/the-long-summer/", title: "The Long Summer", text: nil)).save?.kind == "media")
+        #expect(try await lib.capture(product: Library.sharedProduct(url: "https://maps.apple.com/?q=Ramen%20Kiri&ll=35.6595,139.7005", title: "Maps", text: nil)).save?.kind == "place")
+    }
+
+    @Test func pageDataMakesAProduct() async throws {
+        let page: [String: Any] = ["url": "https://shop.example.com/p/1", "title": "Burr coffee grinder", "price": "$129.00", "schemaTypes": ["Product"], "image": "https://shop.example.com/g.jpg"]
+        let r = try await library().capture(product: page)
+        #expect(r.save?.kind == "product")
+        #expect(r.save?.price == 129)
+    }
+
+    @Test func sameLinkTwiceIsADuplicate() async throws {
+        let lib = try library()
+        let p = Library.sharedProduct(url: "https://example.com/a?utm_source=x", title: "A", text: nil)
+        let first = try await lib.capture(product: p)
+        let again = try await lib.capture(product: Library.sharedProduct(url: "https://example.com/a", title: "A", text: nil))
+        #expect(again.duplicateOf?.id == first.save?.id)
+    }
+}
+
+@Suite("Screens list what Chrome lists")
+struct ViewsTests {
+    func imported() async throws -> Library {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-views-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+        _ = try await lib.importExport(try fixture("chrome-export"), replace: true)
+        return lib
+    }
+
+    var expected: [String: Any] { get throws { try json(fixture("views-expected")) } }
+
+    @Test func reviewQueue() async throws {
+        let lib = try await imported()
+        #expect(try await lib.review().map(\.id) == (try expected["review"] as! [String]))
+    }
+
+    @Test func searchRanksAndCorrectsLikeChrome() async throws {
+        let lib = try await imported()
+        for (query, raw) in try expected["search"] as! [String: [String: Any]] {
+            let r = try await lib.search(query)
+            #expect(r.items.map(\.id) == raw["ids"] as! [String], "results for \(query)")
+            #expect(r.query == raw["query"] as? String, "query for \(query)")
+            #expect(r.corrected == raw["corrected"] as? Bool, "corrected for \(query)")
+        }
+    }
+
+    @Test func placesByStateAndReview() async throws {
+        let lib = try await imported()
+        let view = try await lib.places()
+        let want = try expected["places"] as! [[String: Any]]
+        let waiting = Set(want.filter { !($0["reasons"] as! [String]).isEmpty }.map { $0["id"] as! String })
+        #expect(Set(view.review.map(\.item.id)) == waiting)
+        for w in view.review {
+            let reasons = want.first { $0["id"] as? String == w.item.id }!["reasons"] as! [String]
+            #expect(w.reasons == reasons)
+        }
+        let listed = view.groups.flatMap { g in g.cities.flatMap { c in c.items.map { ($0.id, g.state) } } }
+        for (id, state) in listed {
+            let s = want.first { $0["id"] as? String == id }!["state"] as? String
+            #expect(state == (s ?? "Somewhere"))
+        }
+        #expect(listed.count + view.review.count == want.count)
+    }
+
+    @Test func goalsAndCheckIns() async throws {
+        let lib = try await imported()
+        let workout = try #require(try await lib.saves(ofKind: "recipe").first { $0.title == "Morning mobility" })
+        let before = try await lib.goals(for: workout.id)
+        #expect(before.count == 1)
+        let goalId = try await lib.createGoal(itemId: workout.id, perWeek: 2, weeks: 3)
+        let checkin = try await lib.checkIn(goalId: goalId, sets: 3, reps: 10)
+        var mine = try #require(try await lib.goals(for: workout.id).first { $0.goal.id == goalId })
+        #expect(mine.progress.strip?.count == 3)
+        #expect(mine.progress.summary == "1 of 2 this week · week 1 of 3")
+        #expect(mine.progress.ring == 0.5)
+        try await lib.undoCheckIn(checkin)
+        mine = try #require(try await lib.goals(for: workout.id).first { $0.goal.id == goalId })
+        #expect(mine.progress.summary == "0 of 2 this week · week 1 of 3")
+    }
+
+    @Test func editsAreProtectedAndMovesLearn() async throws {
+        let lib = try await imported()
+        let save = try #require(try await lib.review().first)
+        let col = try await lib.createCollection(named: "Kitchen")
+        try await lib.move([save.id], to: col.id)
+        #expect(try await lib.saves(inCollection: col.id).map(\.id) == [save.id])
+        #expect(try await lib.review().contains { $0.id == save.id } == false)
+        try await lib.update(save.id, ["title": "Blue Dutch oven"])
+        let raw = try #require(try lib.database.get("items", save.id))
+        let rec = try json(Data(raw.utf8))
+        #expect((rec["userFields"] as? [String])?.contains("title") == true)
+        let prefs = try await lib.core.call("store.getPrefs") as! [String: Any]
+        #expect(!(prefs["learnedKeywords"] as? [String: Any] ?? [:]).isEmpty, "moving out of Review teaches the categorizer")
+    }
+}
+
+@Suite("Card facts")
+struct FactTests {
+    @Test func everySaveGetsChromesKeyFact() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-facts-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+        _ = try await lib.importExport(try fixture("chrome-export"), replace: true)
+        let saves = try lib.saves()
+        let recipe = try #require(saves.first { $0.title == "Brown butter pasta with sage" })
+        #expect(recipe.fact == "3 ingredients")
+        let facts = try json(fixture("views-expected"))["facts"] as! [String: String]
+        for save in saves { #expect(save.fact == facts[save.id], "fact of \(save.title)") }
+        #expect(try await lib.review().allSatisfy { $0.fact != nil })
+        // Rows written without a fact (older libraries) are filled in when the library opens.
+        try await lib.database.pool.write { try $0.execute(sql: "UPDATE item SET fact = NULL") }
+        let reopened = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+        try await reopened.prepare()
+        #expect(try reopened.saves().first { $0.id == recipe.id }?.fact == "3 ingredients")
+    }
+}
+
+@Suite("Where saves go")
+struct DestinationTests {
+    func library() throws -> Library {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-dest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+    }
+
+    @Test func lifestyleFirstThenCollections() async throws {
+        let lib = try library()
+        let d = try await lib.destinations()
+        let firstCollection = try #require(d.firstIndex { $0.group == "collection" })
+        #expect(d[..<firstCollection].allSatisfy { $0.group == "lifestyle" })
+        #expect(d.contains { $0.value == "kind:place" && $0.label == "Places" })
+    }
+
+    @Test func intoAPlaceThenIntoACollection() async throws {
+        let lib = try library()
+        let saved = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/spot", title: "Café Lumen", text: "Best flat white 📍 Café Lumen, Lisbon")).save)
+        #expect(try await lib.put([saved.id], in: "kind:place") == "Places")
+        #expect(try lib.saves().first { $0.id == saved.id }?.kind == "place")
+        let col = try await lib.createCollection(named: "Gifts")
+        #expect(try await lib.put([saved.id], in: col.id) == "Gifts")
+        let after = try #require(try lib.saves().first { $0.id == saved.id })
+        #expect(after.kind == "link")
+        #expect(after.collectionId == col.id)
+    }
+
+    @Test func undoRemovesOutright() async throws {
+        let lib = try library()
+        let saved = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/oops", title: "Oops", text: nil)).save)
+        try await lib.undoSave(saved.id)
+        #expect(try lib.saves().isEmpty)
+        #expect(try lib.saves(trash: true).isEmpty)
+    }
+}
+
+/// Records requests and answers like OpenStreetMap; anything else gets a 404.
+final class FakeNetwork: NetworkTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _requests: [URLRequest] = []
+    var requests: [URLRequest] { lock.withLock { _requests } }
+    func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
+        lock.withLock { _requests.append(request) }
+        if request.url?.host() == "nominatim.openstreetmap.org" {
+            let body = #"[{"lat":"38.7139","lon":"-9.1394","name":"Café Lumen","display_name":"Café Lumen, Rua Augusta, Lisboa","type":"cafe","osm_type":"node","osm_id":1,"address":{"road":"Rua Augusta","house_number":"12","city":"Lisbon","state":"Lisboa","country":"Portugal"}}]"#
+            return (200, Data(body.utf8))
+        }
+        return (404, Data())
+    }
+}
+
+@Suite("Network only where you turned it on")
+struct NetworkTests {
+    func library(_ net: FakeNetwork) throws -> Library {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-net-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets(), transport: net)
+    }
+
+    func place(_ lib: Library) async throws -> Save {
+        let s = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/lumen", title: "Café Lumen", text: nil)).save)
+        try await lib.put([s.id], in: "kind:place")
+        try await lib.update(s.id, ["title": "Café Lumen", "details": ["locality": "Lisbon"]])
+        return s
+    }
+
+    @Test func nothingLeavesWhenEverythingIsOff() async throws {
+        let net = FakeNetwork()
+        let lib = try library(net)
+        _ = try await place(lib)
+        try await lib.finishSaves()
+        #expect(net.requests.isEmpty)
+    }
+
+    @Test func placesLookupFillsThePin() async throws {
+        let net = FakeNetwork()
+        let lib = try library(net)
+        let s = try await place(lib)
+        try await lib.updateSettings(["lookups": ["places": true]])
+        try await lib.finishSaves()
+        #expect(net.requests.allSatisfy { $0.url?.host() == "nominatim.openstreetmap.org" })
+        #expect(net.requests.allSatisfy { $0.value(forHTTPHeaderField: "Cookie") == nil })
+        #expect(!net.requests.isEmpty)
+        let after = try #require(try lib.save(s.id))
+        #expect(after.details?["lat"]?.number == 38.7139)
+        #expect(after.details?["address"]?.string == "12 Rua Augusta")
+        // Filled once: a second run sends nothing.
+        let count = net.requests.count
+        try await lib.finishSaves()
+        #expect(net.requests.count == count)
+    }
+
+    @Test func allowlistFollowsSettings() {
+        #expect(NetworkPolicy.allowedHosts(settings: [:], hasAIKey: true).isEmpty)
+        #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true, "provider": "anthropic"]], hasAIKey: false).isEmpty, "no key, no AI")
+        #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true, "provider": "anthropic"]], hasAIKey: true) == ["api.anthropic.com"])
+        #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true, "baseUrl": "http://insecure.example"]], hasAIKey: true).isEmpty, "https only")
+        #expect(NetworkPolicy.allowedHosts(settings: ["lookups": ["media": true, "books": false]], hasAIKey: false) == ["www.wikidata.org"])
+    }
+
+    @Test func aiWithoutPermissionIsRefused() async throws {
+        let net = FakeNetwork()
+        let lib = try library(net)
+        await #expect(throws: CoreError.self) { try await lib.testAI() }
+        #expect(net.requests.isEmpty)
+    }
+}
+
+/// Timing at 5,000 saves. Runs only with KEEPSAKE_PERF_FILE pointing at a Chrome export
+/// (replica/tools/make_test_library.mjs makes one).
+@Suite("Performance at 5,000 saves")
+struct PerformanceTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["KEEPSAKE_PERF_FILE"] != nil))
+    func libraryOpensFast() async throws {
+        let file = URL(fileURLWithPath: ProcessInfo.processInfo.environment["KEEPSAKE_PERF_FILE"]!)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-perf-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("library.sqlite").path
+        var lib: Library? = try Library(path: path, secrets: MemorySecrets())
+        let clock = ContinuousClock()
+        let importTime = try await clock.measure { _ = try await lib!.importExport(try Data(contentsOf: file), replace: true) }
+        lib = nil
+        // A cold open: a new Library on the same file, then the Library screen's first read.
+        var reopened: Library!
+        let openTime = try clock.measure { reopened = try Library(path: path, secrets: MemorySecrets()) }
+        var count = 0
+        let readTime = try clock.measure { count = try reopened.saves().count }
+        let prepareTime = try await clock.measure { try await reopened.prepare() }
+        print("PERF store start (JavaScriptCore + init) \(prepareTime)")
+        let searchTime = try await clock.measure { _ = try await reopened.search("dutch oven") }
+        print("PERF import \(importTime) · open \(openTime) · first read of \(count) saves \(readTime) · search \(searchTime)")
+        #expect(count == 5000)
+        #expect(openTime + readTime < .milliseconds(400), "usable Library under 400 ms")
+    }
+}

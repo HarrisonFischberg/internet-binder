@@ -1,0 +1,65 @@
+{
+ "review": [
+  "7c37e999-2f40-43b1-b8cd-09af3060bf23"
+ ],
+ "search": {
+  "dutch oven": {
+   "ids": [
+    "7c37e999-2f40-43b1-b8cd-09af3060bf23"
+   ],
+   "query": "dutch oven",
+   "corrected": false
+  },
+  "dutch ovn": {
+   "ids": [],
+   "query": "dutch ovn",
+   "corrected": false
+  },
+  "pasta": {
+   "ids": [
+    "a4768916-f0ed-452d-89d7-6a1700eb90d8"
+   ],
+   "query": "pasta",
+   "corrected": false
+  },
+  "lisbon": {
+   "ids": [
+    "0b831920-409f-4633-9a68-f509e286ca06"
+   ],
+   "query": "lisboa",
+   "corrected": true
+  },
+  "nothing like this at all": {
+   "ids": [],
+   "query": "nothing like this at all",
+   "corrected": false
+  }
+ },
+ "facts": {
+  "e7e35720-540a-4eb8-ba72-b38519b4d4a5": "2 exercises",
+  "131fda6b-113b-4bdd-af5e-e451feb3c02d": "$48.00",
+  "19a286e6-657a-4373-b3bd-f1fce6d28caf": "",
+  "f51bb9a9-48a1-42ac-bece-f22cd3259f03": "M. Ilves · 2019",
+  "84ad49d6-78df-47c5-aab0-e17a846cc9b6": "1998 · Film",
+  "9d5f0095-4833-47c4-b86c-e0876aeb5a48": "Longform",
+  "89b3913b-fe6a-4cd7-a0e2-b8e2dd4f6010": "Mia Chen · 8:00",
+  "ffcf26a5-98a8-45c2-b625-e116e3d3f8c6": "3 ingredients",
+  "a4768916-f0ed-452d-89d7-6a1700eb90d8": "3 ingredients",
+  "0b831920-409f-4633-9a68-f509e286ca06": "Café",
+  "7c37e999-2f40-43b1-b8cd-09af3060bf23": "$89.50"
+ },
+ "places": [
+  {
+   "id": "19a286e6-657a-4373-b3bd-f1fce6d28caf",
+   "reasons": [
+    "no state"
+   ],
+   "state": null
+  },
+  {
+   "id": "0b831920-409f-4633-9a68-f509e286ca06",
+   "reasons": [],
+   "state": "Portugal"
+  }
+ ]
+}

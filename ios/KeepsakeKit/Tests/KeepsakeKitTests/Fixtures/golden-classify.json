@@ -1,0 +1,295 @@
+[
+ {
+  "input": {
+   "title": "Dutch oven (the blue one)",
+   "url": "https://shop.example.com/p/dutch-oven",
+   "price": 89.5,
+   "retailer": "Example Shop"
+  },
+  "kindOf": "product",
+  "urlKey": "shop.example.com/p/dutch-oven",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Kitchen",
+   "taxonomyKey": "kitchen",
+   "confidence": 0.75,
+   "reason": "“dutch oven” in title",
+   "isNew": true,
+   "isInbox": false,
+   "alternatives": [
+    {
+     "collectionId": null,
+     "collectionName": "Kitchen",
+     "taxonomyKey": "kitchen",
+     "score": 9,
+     "isNew": true
+    }
+   ]
+  }
+ },
+ {
+  "input": {
+   "title": "Café Azulejo",
+   "url": "https://www.instagram.com/p/AbCdEf12345/",
+   "price": null,
+   "retailer": "Instagram"
+  },
+  "kindOf": "product",
+  "urlKey": "instagram.com/p/AbCdEf12345",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ },
+ {
+  "input": {
+   "title": "Brown butter pasta with sage",
+   "url": "https://recipes.example.org/brown-butter-pasta",
+   "price": null,
+   "retailer": "Example"
+  },
+  "kindOf": "product",
+  "urlKey": "recipes.example.org/brown-butter-pasta",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ },
+ {
+  "input": {
+   "title": "Morning mobility",
+   "url": "https://www.instagram.com/reel/XyZ987abcde/",
+   "price": null,
+   "retailer": "Instagram"
+  },
+  "kindOf": "product",
+  "urlKey": "instagram.com/reel/XyZ987abcde",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0.5,
+   "reason": "Low confidence (50%) for “Fitness & Wellness”: “mobility” in title",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": [
+    {
+     "collectionId": null,
+     "collectionName": "Fitness & Wellness",
+     "taxonomyKey": "fitness",
+     "score": 3,
+     "isNew": true
+    }
+   ],
+   "suggested": {
+    "collectionId": null,
+    "collectionName": "Fitness & Wellness",
+    "taxonomyKey": "fitness",
+    "score": 3,
+    "isNew": true
+   }
+  }
+ },
+ {
+  "input": {
+   "title": "How to fold dumplings, three ways",
+   "url": "https://www.youtube.com/watch?v=abcdefghijk",
+   "price": null,
+   "retailer": "Youtube"
+  },
+  "kindOf": "product",
+  "urlKey": "youtube.com/watch?v=abcdefghijk",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ },
+ {
+  "input": {
+   "title": "The case for slow cities",
+   "url": "https://longform.example.net/slow-cities",
+   "price": null,
+   "retailer": "Example"
+  },
+  "kindOf": "product",
+  "urlKey": "longform.example.net/slow-cities",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ },
+ {
+  "input": {
+   "title": "The Long Summer",
+   "url": "https://letterboxd.com/film/the-long-summer/",
+   "price": null,
+   "retailer": "Letterboxd"
+  },
+  "kindOf": "product",
+  "urlKey": "letterboxd.com/film/the-long-summer",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ },
+ {
+  "input": {
+   "title": "Notes on Gardens",
+   "url": "https://www.goodreads.com/book/show/123-notes-on-gardens",
+   "price": null,
+   "retailer": "Goodreads"
+  },
+  "kindOf": "product",
+  "urlKey": "goodreads.com/book/show/123-notes-on-gardens",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0.5,
+   "reason": "Low confidence (50%) for “Garden & Outdoor Living”: “gardens” in title",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": [
+    {
+     "collectionId": null,
+     "collectionName": "Garden & Outdoor Living",
+     "taxonomyKey": "garden",
+     "score": 3,
+     "isNew": true
+    }
+   ],
+   "suggested": {
+    "collectionId": null,
+    "collectionName": "Garden & Outdoor Living",
+    "taxonomyKey": "garden",
+    "score": 3,
+    "isNew": true
+   }
+  }
+ },
+ {
+  "input": {
+   "title": "Ramen Kiri",
+   "url": "https://maps.apple.com/?q=Ramen%20Kiri&ll=35.6595,139.7005",
+   "price": null,
+   "retailer": "Apple"
+  },
+  "kindOf": "product",
+  "urlKey": "maps.apple.com/?ll=35.6595%2C139.7005&q=Ramen%20Kiri",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ },
+ {
+  "input": {
+   "title": "Linen apron, washed olive",
+   "url": "https://fieldwork.example.com/apron",
+   "price": 48,
+   "retailer": "Example"
+  },
+  "kindOf": "product",
+  "urlKey": "fieldwork.example.com/apron",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Kitchen",
+   "taxonomyKey": "kitchen",
+   "confidence": 0.63,
+   "reason": "“apron” in title",
+   "isNew": true,
+   "isInbox": false,
+   "alternatives": [
+    {
+     "collectionId": null,
+     "collectionName": "Kitchen",
+     "taxonomyKey": "kitchen",
+     "score": 9,
+     "isNew": true
+    },
+    {
+     "collectionId": "799eb829-0977-4c1e-b383-9c9df6075c67",
+     "collectionName": "Home Decor",
+     "taxonomyKey": "home",
+     "score": 3,
+     "isNew": false
+    }
+   ]
+  }
+ },
+ {
+  "input": {
+   "title": "Push-up ladder",
+   "url": "https://training.example.com/ladder",
+   "price": null,
+   "retailer": "Example"
+  },
+  "kindOf": "product",
+  "urlKey": "training.example.com/ladder",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ },
+ {
+  "input": {
+   "title": "Unsorted thing",
+   "url": "https://example.com/something",
+   "price": null,
+   "retailer": "Example"
+  },
+  "kindOf": "product",
+  "urlKey": "example.com/something",
+  "classify": {
+   "collectionId": null,
+   "collectionName": "Review",
+   "taxonomyKey": null,
+   "confidence": 0,
+   "reason": "No category signals found in the product text",
+   "isNew": false,
+   "isInbox": true,
+   "alternatives": []
+  }
+ }
+]

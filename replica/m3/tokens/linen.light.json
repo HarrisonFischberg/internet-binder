@@ -1,0 +1,33 @@
+{
+ "direction": "linen",
+ "mode": "light",
+ "color": {
+  "table": "#E6E9E3",
+  "paper": "#F8F9F6",
+  "well": "#DCE0D9",
+  "ink": "#1A1F1B",
+  "ink-muted": "#4F5750",
+  "accent": "#3F5B45",
+  "on-accent": "#FFFFFF",
+  "stamp": "#A8342A",
+  "kind-place": "#A8342A",
+  "kind-recipe": "#4A6E12",
+  "kind-film": "#4F3DBF",
+  "kind-book": "#7E4519",
+  "kind-product": "#8C5300",
+  "kind-video": "#8E1D9C",
+  "kind-article": "#1D5AA8",
+  "kind-workout": "#0C6E69"
+ },
+ "radius": {
+  "card": 4,
+  "control": 6,
+  "sheet": 6
+ },
+ "type": {
+  "display": "New York semibold",
+  "title": "New York semibold",
+  "label": "SF Pro medium",
+  "body": "SF Pro"
+ }
+}

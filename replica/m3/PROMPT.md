@@ -43,6 +43,17 @@ trade one away.
 - **The Apple Developer Program is active.** Use real App Groups, a Share Extension, widgets, and a
   CloudKit container for the experiments. The signing team comes from the owner; don't create
   identifiers or change account settings without asking.
+- **Identifiers.** Team ID `KTV2G3Z883`.
+  - App: `com.harrisonfischberg.keepsake`
+  - Share Extension: `com.harrisonfischberg.keepsake.share`
+  - Widgets: `com.harrisonfischberg.keepsake.widgets`
+  - App Group: `group.com.harrisonfischberg.keepsake`
+  - iCloud container (sync experiments only): `iCloud.com.harrisonfischberg.keepsake`
+
+  Use automatic signing with this team. Registering an identifier, App Group or container on the account
+  for the first time needs the owner's OK. The Simulator needs none of them.
+- **Work on the `m3-ios` branch.** The iOS project lives in `ios/` at the repository root, apart from
+  `keepsake/` (the Chrome package).
 - **The Share Sheet is the way in from Instagram on iOS.** No in-app Instagram import or scraping; the
   full Saved-collection import stays in Chrome.
 

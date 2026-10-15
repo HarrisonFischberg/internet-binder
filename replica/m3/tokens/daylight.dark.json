@@ -1,0 +1,33 @@
+{
+ "direction": "daylight",
+ "mode": "dark",
+ "color": {
+  "table": "#08090C",
+  "paper": "#16181D",
+  "well": "#111318",
+  "ink": "#F0F2F5",
+  "ink-muted": "#A0A6B0",
+  "accent": "#7C9BFF",
+  "on-accent": "#0B1020",
+  "stamp": "#F08E7E",
+  "kind-place": "#F08E7E",
+  "kind-recipe": "#A9D46A",
+  "kind-film": "#ADA2FF",
+  "kind-book": "#E3A878",
+  "kind-product": "#F0B45A",
+  "kind-video": "#E59CF0",
+  "kind-article": "#8DB8FF",
+  "kind-workout": "#5FD3CB"
+ },
+ "radius": {
+  "card": 26,
+  "control": 29,
+  "sheet": 38
+ },
+ "type": {
+  "display": "SF Pro Rounded bold",
+  "title": "SF Pro Rounded semibold",
+  "label": "SF Pro Rounded semibold",
+  "body": "SF Pro Rounded"
+ }
+}

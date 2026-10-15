@@ -1,0 +1,33 @@
+{
+ "direction": "cabinet",
+ "mode": "dark",
+ "color": {
+  "table": "#0F1011",
+  "paper": "#222326",
+  "well": "#18191B",
+  "ink": "#ECE9E3",
+  "ink-muted": "#A39F97",
+  "accent": "#E2B366",
+  "on-accent": "#1A1204",
+  "stamp": "#F08E7E",
+  "kind-place": "#F08E7E",
+  "kind-recipe": "#A9D46A",
+  "kind-film": "#ADA2FF",
+  "kind-book": "#E3A878",
+  "kind-product": "#F0B45A",
+  "kind-video": "#E59CF0",
+  "kind-article": "#8DB8FF",
+  "kind-workout": "#5FD3CB"
+ },
+ "radius": {
+  "card": 10,
+  "control": 12,
+  "sheet": 16
+ },
+ "type": {
+  "display": "SF Pro Condensed bold, uppercase",
+  "title": "SF Pro Condensed semibold",
+  "label": "SF Mono medium, uppercase",
+  "body": "SF Pro"
+ }
+}

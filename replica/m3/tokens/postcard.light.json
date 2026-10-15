@@ -1,0 +1,33 @@
+{
+ "direction": "postcard",
+ "mode": "light",
+ "color": {
+  "table": "#EDE6DA",
+  "paper": "#FBF8F2",
+  "well": "#E4DCCD",
+  "ink": "#1E1C19",
+  "ink-muted": "#5C554B",
+  "accent": "#24439A",
+  "on-accent": "#FFFFFF",
+  "stamp": "#A8342A",
+  "kind-place": "#A8342A",
+  "kind-recipe": "#4A6E12",
+  "kind-film": "#4F3DBF",
+  "kind-book": "#7E4519",
+  "kind-product": "#8C5300",
+  "kind-video": "#8E1D9C",
+  "kind-article": "#1D5AA8",
+  "kind-workout": "#0C6E69"
+ },
+ "radius": {
+  "card": 4,
+  "control": 6,
+  "sheet": 6
+ },
+ "type": {
+  "display": "New York (system serif) semibold",
+  "title": "New York semibold",
+  "label": "SF Pro medium",
+  "body": "SF Pro / New York for reading"
+ }
+}

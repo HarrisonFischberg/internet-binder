@@ -1,0 +1,268 @@
+import SwiftUI
+import UniformTypeIdentifiers
+import KeepsakeKit
+import KeepsakeUI
+
+/// Settings: Optional AI, Lookups, the change log, import and export, privacy, and erase.
+/// Everything that sends anything anywhere is off until turned on, and says exactly what it sends
+/// (the same wording as Chrome's PRIVACY.md).
+struct SettingsScreen: View {
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var settings: [String: Any] = [:]
+    @State private var aiOn = false
+    @State private var provider = "openai"
+    @State private var key = ""
+    @State private var lookups: [String: Bool] = ["places": false, "media": false, "books": false]
+    @State private var consent: Consent?
+    @State private var exportDoc: ExportDocument?
+    @State private var importing = false
+    @State private var erasing = false
+    @State private var testResult: String?
+
+    enum Consent: Identifiable { case ai, lookup(String); var id: String { switch self { case .ai: "ai"; case .lookup(let k): k } } }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section { NavigationLink("Appearance") { AppearanceScreen() } }
+                aiSection
+                lookupsSection
+                Section {
+                    NavigationLink("Change log") { ChangeLogScreen() }
+                } footer: { Text("Every change AI made, with Undo.") }
+                Section("Your library") {
+                    Button("Export library", systemImage: "square.and.arrow.up") { Task { await export() } }
+                    Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
+                }
+                Section {
+                    NavigationLink("Privacy") { PrivacyScreen() }
+                    Button("Erase everything", role: .destructive) { erasing = true }
+                } footer: { Text("Keepsake has no account and no server. Your library stays on this iPhone.") }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .task { await load() }
+            .sheet(item: $consent) { c in ConsentSheet(consent: c) { accepted in Task { await decide(c, accepted) } } }
+            .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }), document: exportDoc, contentType: .json,
+                          defaultFilename: "keepsake-export-\(Date.now.formatted(.iso8601.year().month().day()))") { _ in exportDoc = nil }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { r in if case .success(let url) = r { Task { await model.importFile(url) } } }
+            .sheet(isPresented: $erasing) { EraseSheet() }
+        }
+    }
+
+    // MARK: AI
+
+    private var aiSection: some View {
+        Section {
+            Toggle("Optional AI", isOn: Binding(get: { aiOn }, set: { on in
+                if on { consent = .ai } else { Task { aiOn = false; try? await model.library?.updateSettings(["ai": ["on": false]]) } }
+            }))
+            if aiOn {
+                Picker("Provider", selection: $provider) {
+                    Text("OpenAI").tag("openai")
+                    Text("Anthropic").tag("anthropic")
+                }
+                .onChange(of: provider) { Task { try? await model.library?.updateSettings(["ai": ["provider": provider]]) } }
+                SecureField("Your API key", text: $key)
+                    .textContentType(.password).autocorrectionDisabled().textInputAutocapitalization(.never)
+                    .onSubmit { Task { try? await model.library?.setAIKey(key) } }
+                Button("Save key and test") {
+                    Task {
+                        try? await model.library?.setAIKey(key)
+                        do { try await model.library?.testAI(); testResult = "Connected." } catch { testResult = error.localizedDescription }
+                    }
+                }
+                if let testResult { Text(testResult).font(.footnote).foregroundStyle(.secondary) }
+            }
+        } header: { Text("Optional AI") } footer: {
+            Text("Off by default. Uses your own key, kept in this iPhone's Keychain and never exported. Sends only what each feature says, to the provider you choose.")
+        }
+    }
+
+    // MARK: Lookups
+
+    private var lookupsSection: some View {
+        Section {
+            lookupToggle("places", "Places: OpenStreetMap")
+            lookupToggle("media", "Films & shows: Wikidata")
+            lookupToggle("books", "Books: Open Library")
+        } header: { Text("Lookups") } footer: {
+            Text("Off by default. Fill in a place's address and pin, a film's details or a book's from free public sources. Only missing details are filled; nothing you typed is changed.")
+        }
+    }
+
+    private func lookupToggle(_ key: String, _ title: String) -> some View {
+        Toggle(title, isOn: Binding(get: { lookups[key] ?? false }, set: { on in
+            if on { consent = .lookup(key) } else { Task { lookups[key] = false; try? await model.library?.updateSettings(["lookups": [key: false]]) } }
+        }))
+    }
+
+    // MARK: actions
+
+    private func load() async {
+        guard let lib = model.library, let s = try? await lib.settings() else { return }
+        settings = s
+        let ai = s["ai"] as? [String: Any] ?? [:]
+        aiOn = ai["on"] as? Bool ?? false
+        provider = ai["provider"] as? String ?? "openai"
+        key = (try? await lib.aiKey()) ?? ""
+        let l = s["lookups"] as? [String: Any] ?? [:]
+        for k in lookups.keys { lookups[k] = l[k] as? Bool ?? false }
+    }
+
+    private func decide(_ c: Consent, _ accepted: Bool) async {
+        guard accepted, let lib = model.library else { return }
+        switch c {
+        case .ai:
+            try? await lib.updateSettings(["ai": ["on": true, "provider": provider]])
+            aiOn = true
+        case .lookup(let k):
+            try? await lib.updateSettings(["lookups": [k: true]])
+            lookups[k] = true
+            Task { try? await lib.finishSaves(); model.refresh() }
+        }
+        Haptic.settled()
+    }
+
+    private func export() async {
+        guard let data = try? await model.library?.exportData() else { return }
+        exportDoc = ExportDocument(data: data)
+    }
+}
+
+/// What turning a network feature on sends, in plain words, before it's on.
+struct ConsentSheet: View {
+    let consent: SettingsScreen.Consent
+    let decide: (Bool) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private var title: String {
+        switch consent {
+        case .ai: "Turn on Optional AI?"
+        case .lookup("places"): "Look up places on OpenStreetMap?"
+        case .lookup("media"): "Look up films and shows on Wikidata?"
+        default: "Look up books on Open Library?"
+        }
+    }
+    private var points: [String] {
+        switch consent {
+        case .ai: [
+            "Uses your own key with the provider you choose. Keepsake has no AI server.",
+            "After a save: its title, price, description, shop and your collection names, to tidy the title and pick a collection. You can undo every change.",
+            "Filling in a Lifestyle save: its title, caption or description and site, to name the place, film or book, list a workout's exercises or draft a recipe. Labelled and undoable.",
+            "Nothing is sent until you add a key. Turning this off stops it at once.",
+        ]
+        case .lookup("places"): ["Each place's name and city (and street, if known) goes to nominatim.openstreetmap.org, at most one a second.", "Only a result with the same name in the same area is used.", "No cookies, no account."]
+        case .lookup("media"): ["The title (and year, if known) of films and shows goes to www.wikidata.org.", "Posters load from Wikimedia Commons.", "No cookies, no account."]
+        default: ["The title (and author, if known) of books goes to openlibrary.org.", "Covers load from covers.openlibrary.org.", "No cookies, no account."]
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(title).font(KSFont.name(.title2))
+                    ForEach(points, id: \.self) { p in
+                        Label(p, systemImage: "arrow.up.right.circle").font(.body)
+                    }
+                }
+                .padding(20)
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack(spacing: 12) {
+                    Button("Not now") { decide(false); dismiss() }.buttonStyle(.bordered).frame(minHeight: 44)
+                    PrimarySlab("Turn on", symbol: "checkmark") { decide(true); dismiss() }
+                }
+                .padding(16)
+            }
+            .onAppear { Haptic.warning() }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/// AI's changes, newest first, each with Undo (Chrome's change log).
+struct ChangeLogScreen: View {
+    @Environment(LibraryModel.self) private var model
+    @State private var log: [AIChange] = []
+    var body: some View {
+        List {
+            if log.isEmpty { Text("AI hasn't changed anything.").foregroundStyle(.secondary) }
+            ForEach(log) { e in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(e.itemTitle ?? "A save").font(.headline)
+                    ForEach(e.changes, id: \.self) { c in
+                        Text("\(c.field): \(c.from ?? "") → \(c.to ?? "")").font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if e.undone { Text("Undone").font(.caption).foregroundStyle(.secondary) }
+                    else {
+                        Button("Undo") { Task { try? await model.library?.undoAI([e.id]); await load(); model.refresh() } }
+                            .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                    }
+                }
+            }
+        }
+        .navigationTitle("Change log")
+        .task { await load() }
+    }
+    private func load() async { log = (try? await model.library?.aiLog()) ?? [] }
+}
+
+/// Every network path in plain words (mirrors PRIVACY.md for iOS).
+struct PrivacyScreen: View {
+    var body: some View {
+        List {
+            Section("On this iPhone") {
+                Text("Your saves, collections, goals and settings live in Keepsake's storage on this device. No account, no Keepsake server, no analytics.")
+                Text("Your AI key is kept in the Keychain on this device and never exported.")
+            }
+            Section("When Keepsake uses the network") {
+                Text("Pictures of your saves load from the sites they came from, as a web page loads them.")
+                Text("Maps are drawn by Apple Maps. Directions open Apple Maps with the place's name and address.")
+                Text("Optional AI and each Lookup: only when you turn them on, and only what their switch says.")
+                Text("Sharing from Safari: Keepsake reads the page you shared, on this iPhone.")
+            }
+        }
+        .navigationTitle("Privacy")
+    }
+}
+
+/// Erase needs the action typed out (components.md TypedConfirm).
+struct EraseSheet: View {
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var typed = ""
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("This deletes every save, collection, goal and setting on this iPhone. It can't be undone. Export first if you might want them back.")
+                    TextField("Type ERASE to confirm", text: $typed).textInputAutocapitalization(.characters)
+                }
+                Button("Erase everything", role: .destructive) {
+                    Task {
+                        try? await model.library?.eraseEverything()
+                        model.refresh()
+                        Haptic.trashed()
+                        dismiss()
+                    }
+                }
+                .disabled(typed != "ERASE")
+            }
+            .navigationTitle("Erase everything").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
+}
+
+/// The export file: Chrome's own export format (keepsake-export, schema 3).
+struct ExportDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    let data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws { data = configuration.file.regularFileContents ?? Data() }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper { FileWrapper(regularFileWithContents: data) }
+}
