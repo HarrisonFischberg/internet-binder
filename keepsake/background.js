@@ -410,7 +410,7 @@ async function publishFillJob() {
   }
 }
 const fillState = (i) => (i ? JSON.stringify([i.title, i.details]) : '');
-async function startFillBatch(ids, { review = false, label = '', kind = '' } = {}) {
+async function startFillBatch(ids, { review = false, verify = false, label = '', kind = '' } = {}) {
   if (fillJob?.running) return { ok: false, error: 'A check is already running.', job: fillJob };
   const job = { id: uid(), label: sanitizeText(label, 80), kind: sanitizeText(kind, 20), total: ids.length, done: 0, ready: 0, changed: 0, running: true, stopped: false, startedAt: nowIso(), finishedAt: '' };
   fillJob = job;
@@ -419,7 +419,7 @@ async function startFillBatch(ids, { review = false, label = '', kind = '' } = {
     for (const id of ids) {
       if (job.stopped) break;
       const before = await store.getItem(id);
-      await queueFill(id, { review });
+      await queueFill(id, { review, verify });
       const after = await store.getItem(id);
       if (before && after && fillState(before) !== fillState(after)) job.changed++;
       // A place that was waiting in Places review and now has its name and state.
@@ -445,7 +445,9 @@ async function lookupAllowed(settings, which) {
 
 // review: from Places review: a place that isn't named or has no state goes to your AI provider even
 // when it has a title.
-async function fillKind(id, { review = false } = {}) {
+// verify: Check with AI on the Places list: a place missing its street, city or state goes to your provider
+// too; only the missing fields are filled, and a name it already has stays.
+async function fillKind(id, { review = false, verify = false } = {}) {
   let item = await store.getItem(id);
   if (!item || item.deletedAt) return;
   const kind = kindOf(item);
@@ -476,7 +478,8 @@ async function fillKind(id, { review = false } = {}) {
   // about where it is: your provider names it and its city, so the lookup can find it.
   const unknownPlace = kind === 'place' && item.type === 'instagram' && !d.address && d.lat == null && !d.locality;
   const inReview = review && kind === 'place' && placeReviewReasons(item).length > 0;
-  const unnamed = (genericTitle(item.title) || unknownPlace || inReview) && !(item.userFields || []).includes('title');
+  const incomplete = verify && kind === 'place' && (!d.address || !d.locality || !d.region);
+  const unnamed = (genericTitle(item.title) || unknownPlace || inReview || incomplete) && !(item.userFields || []).includes('title');
   if (key && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length) || (kind === 'recipe' && !d.ingredients?.length))) {
     try {
       let patch = null;
@@ -485,12 +488,14 @@ async function fillKind(id, { review = false } = {}) {
         patch = { details: { ...d, ...r } };
       } else {
         const r = await identifyForKind(kind, item, settings, key);
-        if (r && kind === 'place') patch = { title: r.name, details: { ...d, locality: d.locality || r.locality, address: d.address || r.address || '', region: d.region || stateCode(r.state) || r.state || '' } };
+        if (r && kind === 'place') patch = { title: placeNamed(item) && !genericTitle(item.title) ? item.title : r.name, details: { ...d, locality: d.locality || r.locality, address: d.address || r.address || '', region: d.region || stateCode(r.state) || r.state || '' } };
         else if (r && kind === 'media') patch = { title: r.title, details: { ...d, year: d.year || r.year, format: r.format || d.format } };
         else if (r && kind === 'book') patch = { title: r.title, details: { ...d, author: d.author || r.author } };
         else if (r && kind === 'workout') patch = { details: { ...d, exercises: r.exercises, durationMinutes: d.durationMinutes || r.durationMinutes, source: 'ai' } };
       }
-      if (patch) {
+      // Only what the answer actually changes is applied and logged.
+      if (patch) for (const k of Object.keys(patch)) if (JSON.stringify(patch[k]) === JSON.stringify(item[k])) delete patch[k];
+      if (patch && Object.keys(patch).length) {
         const before = Object.fromEntries(Object.keys(patch).map((k) => [k, item[k] ?? null]));
         await store.updateItem(id, patch, { by: 'ai' });
         await store.appendAiLog([{ id: uid(), runId: `fill-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || item.title,
@@ -915,7 +920,7 @@ async function handleMessage(msg, sender) {
     case MSG.FILL_BATCH: {
       if (!fromExtensionPage) throw new Error('Not allowed.');
       const ids = (Array.isArray(msg.itemIds) ? msg.itemIds : []).filter((x) => typeof x === 'string').slice(0, 5000);
-      return startFillBatch([...new Set(ids)], { review: !!msg.review, label: msg.label, kind: msg.kind });
+      return startFillBatch([...new Set(ids)], { review: !!msg.review, verify: !!msg.verify, label: msg.label, kind: msg.kind });
     }
     case MSG.FILL_STOP: {
       if (fillJob?.running) fillJob.stopped = true;

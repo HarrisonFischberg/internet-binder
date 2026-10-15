@@ -569,3 +569,17 @@ test('a fill-in batch can’t be started from a web page', async () => {
   const r = await F.send({ type: MSG.FILL_BATCH, itemIds: ['x'] }, pageTab);
   assert.match(r.error, /Not allowed/);
 });
+
+test('Check with AI on the Places list: a place missing its city or state gets them; its name and street stay; a complete place isn’t sent', async () => {
+  await aiOn();
+  let asked = 0;
+  globalThis.fetch = async (url, opts) => { asked++; return aiReply({ name: 'Some Other Name', address: '999 Wrong St', city: 'New York', state: 'NY' })(); };
+  const partial = await S.addItem({ title: 'Example Bistro', url: 'https://bistro.example/', kind: 'place', details: { address: '12 Main St', source: 'page' } });
+  const complete = await S.addItem({ title: 'Example Diner', url: 'https://diner.example/', kind: 'place', details: { address: '1 Elm St', locality: 'Austin', region: 'TX', lat: 30.27, lng: -97.74, source: 'page' } });
+  await F.send({ type: MSG.FILL_BATCH, itemIds: [partial.id, complete.id], review: true, verify: true, kind: 'place' }, popup);
+  for (let i = 0; i < 80 && F.session.keepsake_fillJob?.running; i++) await new Promise((r) => setTimeout(r, 25));
+  const p = await S.getItem(partial.id);
+  assert.deepEqual([p.title, p.details.address, p.details.locality, p.details.region], ['Example Bistro', '12 Main St', 'New York', 'NY'], 'only the missing fields');
+  assert.equal(asked, 1, 'the complete place was not sent');
+  assert.deepEqual(await S.getItem(complete.id).then((c) => [c.title, c.details.locality]), ['Example Diner', 'Austin']);
+});

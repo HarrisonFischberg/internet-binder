@@ -715,6 +715,12 @@ test('background checks: a progress bar under the header with Stop, then what ch
   await afterChange();
   await go('#kind/place');
   assert.ok(!aiCheck().classList.contains('hidden'));
+  for (const page of ['#all', '#favorites', '#review', '#kind/recipe']) {
+    await go(page);
+    assert.ok(!aiCheck().classList.contains('hidden'), `on ${page}`);
+  }
+  await go('#kind/place');
+  assert.match(aiCheck().title, /every place/, 'on the Places list: every place');
   await go('#settings');
   assert.ok(aiCheck().classList.contains('hidden'), 'not on Settings');
   await go('#ai');

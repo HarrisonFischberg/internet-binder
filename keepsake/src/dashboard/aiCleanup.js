@@ -38,12 +38,14 @@ function scopeItems(ctx, scope) {
   // Shopping saves only: Lifestyle saves (places, recipes…) are checked from their own view.
   const live = ctx.state.items.filter((i) => !i.purchased && !hasOwnView(kindOf(i)));
   if (scope === 'review') return live.filter(needsCollection);
+  if (scope === 'favorites') return live.filter((i) => i.favorite);
   if (scope === 'all') return live;
   return live.filter((i) => i.collectionId === scope);
 }
 
 function scopeLabel(ctx, scope) {
   if (scope === 'review') return 'the Review queue';
+  if (scope === 'favorites') return 'your favorites';
   if (scope === 'all') return 'all saved items';
   return `“${ctx.collectionById(scope)?.name || 'this collection'}”`;
 }

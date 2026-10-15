@@ -381,6 +381,11 @@ a.sidebar-brand:hover .brand-name {
   min-width: 0;
 }
 
+.ai-check {
+  align-self: center;
+  flex: none;
+}
+
 .view-count {
   flex: none;
   padding-bottom: 2px;

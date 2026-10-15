@@ -582,14 +582,20 @@ function renderToolbar() {
     $('selectToggle').textContent = state.selecting ? 'Done' : 'Select';
     $('bulkAi').classList.toggle('hidden', !state.settings?.ai?.on);
   }
-  // Check with AI, up front where your saves are (Library, a collection, a Lifestyle view), when AI is on.
-  const aiHere = !!state.settings?.ai?.on && ['all', 'c', 'kind'].includes(r.name);
+  // Check with AI, next to the title of every page that lists saves, whenever AI is on.
+  const aiHere = !!state.settings?.ai?.on && ['all', 'c', 'kind', 'favorites', 'review'].includes(r.name);
   $('aiCheck').classList.toggle('hidden', !aiHere);
-  if (aiHere) {
-    $('aiCheck').title = r.name === 'kind'
-      ? (r.id === 'place' ? 'Have your AI provider name each place in Places review and say where it is' : `Have your AI provider fill in what’s missing in your ${kindInfo(r.id).plural.toLowerCase()}`)
-      : `Have your AI provider check ${r.name === 'c' ? 'this collection' : 'your shopping saves'}: tidy titles, confirm prices and file them. Every change can be undone.`;
+  if (aiHere) $('aiCheck').title = aiCheckHint(r);
+}
+
+function aiCheckHint(r) {
+  if (r.name === 'kind' && r.id === 'place') {
+    return placesView() === 'review' ? 'Have your AI provider name each place waiting in Places review and say where it is'
+      : 'Have your AI provider check every place: fill in a missing street, city or state (nothing you have is replaced); Lookups add the pins';
   }
+  if (r.name === 'kind') return `Have your AI provider fill in what’s missing in your ${kindInfo(r.id).plural.toLowerCase()}`;
+  const what = r.name === 'c' ? 'this collection' : r.name === 'favorites' ? 'your favorites' : r.name === 'review' ? 'the Review queue' : 'your shopping saves';
+  return `Have your AI provider check ${what}: tidy titles, confirm prices and file them. Every change can be undone.`;
 }
 
 // --- background checks (fill-in batches) ----------------------------------------------------------
@@ -642,13 +648,13 @@ function checkWithAI() {
   if (r.name === 'kind') {
     const items = state.items.filter((i) => kindOf(i) === r.id);
     if (r.id === 'place') {
-      placesViewChoice = 'review';
-      renderView({ keepScroll: true });
-      return fixPlaces(items);
+      if (placesView() === 'review') return fixPlaces(items);
+      // From the list or the map: every place, checked for what's missing.
+      return startFillJob(items.map((i) => i.id), { review: true, verify: true, kind: 'place', label: 'Checking places with AI' });
     }
     return startFillJob(items.map((i) => i.id), { label: `Checking ${kindInfo(r.id).plural.toLowerCase()} with AI`, kind: r.id });
   }
-  return runAiCleanup(ctx, { scope: r.name === 'c' ? r.id : 'all' });
+  return runAiCleanup(ctx, { scope: r.name === 'c' ? r.id : r.name === 'favorites' || r.name === 'review' ? r.name : 'all' });
 }
 
 // Places review's fix: exactly the places waiting there (the count on the tab is the batch's total).
@@ -1573,6 +1579,7 @@ function renderPlaces(view, items) {
     placesViewChoice = value;
     try { localStorage.setItem(PLACES_VIEW_KEY, value); } catch { /* this page only */ }
     renderView({ keepScroll: true });
+    renderToolbar();
   } }, [label]);
   view.append(el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Places view' }, [seg('list', 'List'), seg('map', 'Map'), seg('review', review.length ? `Places review · ${review.length}` : 'Places review')]));
   if (current === 'map') renderPlacesMap(view, ready);
