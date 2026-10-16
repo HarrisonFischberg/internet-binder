@@ -243,6 +243,72 @@ struct CaptureTests {
         let again = try await lib.capture(product: Library.sharedProduct(url: "https://example.com/a", title: "A", text: nil))
         #expect(again.duplicateOf?.id == first.save?.id)
     }
+
+    /// A post page as Instagram serves it logged out: meta tags only (the caption is in og:description).
+    struct PostPage: NetworkTransport {
+        let html: String
+        func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
+            #expect(request.url?.absoluteString == "https://www.instagram.com/reel/AbCdEf12345/")
+            #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
+            return (200, Data(html.utf8))
+        }
+    }
+
+    @Test func sharedInstagramReelIsReadLikeChrome() async throws {
+        let caption = "Brown butter pasta &#x1f35d;\n\nIngredients\n- 350 g rigatoni\n- 90 g butter\n- 12 sage leaves\n\nMethod\n1. Boil the pasta.\n2. Brown the butter.\n#pasta"
+        let html = """
+        <html><head><title>Instagram</title>
+        <meta property="og:title" content="Mia Chen on Instagram: &quot;Brown butter pasta&quot;" />
+        <meta property="og:image" content="https://scontent.cdninstagram.com/v/pasta.jpg?stp=1&amp;oe=1" />
+        <meta property="og:url" content="https://www.instagram.com/miachen/reel/AbCdEf12345/" />
+        <meta property="og:description" content="1,204 likes, 33 comments - miachen on October 11, 2026: &quot;\(caption.replacingOccurrences(of: "\\n", with: "&#10;"))&quot;. " />
+        </head><body></body></html>
+        """
+        let lib = try library()
+        let p = await lib.sharedProduct(url: "https://www.instagram.com/miachen/reel/AbCdEf12345/?igsh=xyz", title: nil, text: nil, transport: PostPage(html: html))
+        #expect(p["image"] as? String == "https://scontent.cdninstagram.com/v/pasta.jpg?stp=1&oe=1")
+        let r = try await lib.capture(product: p)
+        #expect(r.save?.kind == "recipe")
+        #expect(r.save?.hasImage == true)
+        #expect(r.save?.title.contains("Brown butter pasta") == true)
+    }
+
+    /// Your AI provider, faked: it files every save it's asked about in Home Decor.
+    struct FakeProvider: NetworkTransport {
+        func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
+            #expect(request.url?.host() == "api.openai.com")
+            let answer = #"{"items":[{"ref":"i0","collection":"Home Decor","confidence":0.92,"reason":"cushions for a sofa"}]}"#
+            let body: [String: Any] = ["choices": [["message": ["content": answer]]], "output_text": answer]
+            return (200, try JSONSerialization.data(withJSONObject: body))
+        }
+    }
+
+    @Test func fixWithAIFilesAReviewSaveWithUndo() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-ai-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets(), transport: FakeProvider())
+        #expect(await lib.aiReady() == false)
+        try await lib.prepare()
+        try await lib.updateSettings(["ai": ["on": true, "provider": "openai"]])
+        try await lib.setAIKey("sk-test")
+        #expect(await lib.aiReady() == true)
+        let saved = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/linen-thing", title: "Linen thing", text: nil)).save)
+        #expect(saved.needsCollection)
+        let r = try await lib.fixWithAI([saved.id])
+        #expect(r.error.isEmpty)
+        #expect(r.filed.first?.collection == "Home Decor")
+        #expect(try lib.save(saved.id)?.needsCollection == false)
+        try await lib.undoAI(r.logIds ?? [])
+        #expect(try lib.save(saved.id)?.needsCollection == true)
+    }
+
+    @Test func instagramLoginWallStaysALink() async throws {
+        let wall = #"<html><head><title>Login • Instagram</title></head><body><form id="loginForm"><input name="username"></form></body></html>"#
+        let lib = try library()
+        let p = await lib.sharedProduct(url: "https://www.instagram.com/reel/AbCdEf12345/", title: nil, text: nil, transport: PostPage(html: wall))
+        #expect(p["igBundle"] == nil)
+        #expect(try await lib.capture(product: p).save?.kind == "link")
+    }
 }
 
 @Suite("Screens list what Chrome lists")

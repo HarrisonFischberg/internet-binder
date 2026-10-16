@@ -23,6 +23,9 @@ Keepsake has no server, no account, no analytics and no advertising. It contacts
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and
   covers load from Wikimedia Commons and `covers.openlibrary.org`.
+- **Instagram**, only when you share an Instagram post or reel into Keepsake: that post's public page
+  on `www.instagram.com`, fetched once without cookies or your account, to save its caption, creator,
+  date and picture (Chrome's "Read post details"). Settings → Instagram → Read posts you share turns it off.
 Any other request is refused by the app itself (an allowlist built from your settings).
 
 ## Sharing into Keepsake

@@ -17,11 +17,11 @@ public struct SaveImage: View {
     public var body: some View {
         let kind = KindStyle(save.kind)
         if let local = Self.dataImage(save.image) {
-            Image(uiImage: local).resizable().scaledToFill()
+            filled(local)
         } else if let s = save.image, let url = URL(string: s), url.scheme == "https" || url.scheme == "http" {
             // The local copy if there is one (so the picture outlives its site), else the site's, kept as it loads.
             ZStack {
-                if let kept { Image(uiImage: kept).resizable().scaledToFill().transition(.opacity) } else { tile(kind) }
+                if let kept { filled(kept).transition(.opacity) } else { tile(kind) }
             }
             .task(id: save.id) {
                 if let img = ThumbnailStore.shared.cached(save.id) { kept = img; return }
@@ -31,6 +31,16 @@ public struct SaveImage: View {
         } else {
             tile(kind)
         }
+    }
+
+    /// Fills whatever space the card gives it, cropped: a wide photo never widens its card. Taps are
+    /// cropped too (clipping only crops what's drawn), so a tall photo's hidden overflow can't take a
+    /// tap meant for the filter chips above its card.
+    private func filled(_ image: UIImage) -> some View {
+        Color.clear
+            .overlay { Image(uiImage: image).resizable().scaledToFill().allowsHitTesting(false) }
+            .clipped()
+            .contentShape(Rectangle())
     }
 
     private func tile(_ kind: KindStyle) -> some View {

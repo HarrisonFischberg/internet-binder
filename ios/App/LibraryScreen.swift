@@ -269,7 +269,7 @@ struct LibraryScreen: View {
         HStack(spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").font(.body.weight(.semibold)).foregroundStyle(t.inkMuted)
-                TextField("Search \(model.saves.count) saves", text: $query)
+                TextField(model.saves.count == 1 ? "Search 1 save" : "Search \(model.saves.count) saves", text: $query)
                     .focused($searching)
                     .submitLabel(.search)
                     .foregroundStyle(t.ink)

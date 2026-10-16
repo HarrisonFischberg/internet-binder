@@ -87,7 +87,7 @@ If the owner prefers neutral identifiers, change the prefix in `ios/tools/make-x
 ### D16 · 2026-10-15 · The share card fills the sheet iOS gives it
 iOS always presents a share extension as a full-height sheet (a transparent overlay isn't honoured), so
 the whole sheet is the table: status and Undo at the top, the save drawn large as its object, and the
-destination slip and actions at the bottom under the thumb. Auto-closes 2 s after saving unless touched.
+destination slip and actions at the bottom under the thumb. Auto-closes 2 s after saving unless touched. *Changed 2026-10-15 (owner): never auto-closes; it stays until Done or Undo, so the destination is always a choice.*
 
 ### D17 · 2026-10-15 · Paste-a-link uses the system Paste button
 Reading `UIPasteboard` from code makes iOS ask "Allow paste?" every time. The system `PasteButton`

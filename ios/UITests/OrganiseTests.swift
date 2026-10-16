@@ -28,6 +28,26 @@ final class OrganiseTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Nothing waiting. Everything has a home."].waitForExistence(timeout: 5))
     }
 
+    /// Real photos (the demo library): a tall photo's hidden overflow must not take the filter chip's tap.
+    func testFilterChipsWorkAboveCardsWithPhotos() {
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        let app = XCUIApplication()
+        app.launchEnvironment["KEEPSAKE_DB"] = "uitest-\(UUID().uuidString)"
+        app.launchArguments += ["-importOnLaunch", demo]
+        app.launch()
+        app.tabBars.buttons["Library"].tap()
+        let coffee = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Glass pour-over'")).firstMatch
+        XCTAssertTrue(coffee.waitForExistence(timeout: 10))
+        sleep(2)   // pictures load
+        for chip in ["Places", "Recipes"] {
+            app.scrollViews.buttons[chip].firstMatch.tap()
+            XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Saved from'")).firstMatch.waitForExistence(timeout: 1.5), "\(chip): a card opened instead of the filter")
+            XCTAssertTrue(app.scrollViews.buttons[chip].firstMatch.isSelected, "\(chip) chip is selected")
+            XCTAssertFalse(coffee.exists, "\(chip): the product is filtered out")
+            app.scrollViews.buttons["All"].firstMatch.tap()
+        }
+    }
+
     func testLookupsAskFirst() {
         let app = launch()
         app.buttons["Settings"].tap()

@@ -31,7 +31,7 @@ struct HomeScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 26) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: "Keepsake", subtitle: model.saves.isEmpty ? nil : "Things you kept, on this iPhone")
+                        ScreenHeader(title: "Keepsake", subtitle: nil)
                         if size != .regular { Button { settings = true } label: {
                             Image(systemName: "gearshape").font(.body.weight(.semibold)).foregroundStyle(t.ink)
                                 .padding(12).frame(minWidth: 44, minHeight: 44)
@@ -92,6 +92,11 @@ struct HomeScreen: View {
                             SaveObject(save).frame(width: min(shelfWidth, 320)).matchedTransitionSource(id: save.id, in: zoom)
                         }
                         .buttonStyle(PressStyle())
+                        // Long press: the same menu as the Library's cards.
+                        .contextMenu {
+                            Button("Move to Trash", systemImage: "trash", role: .destructive) { Task { await model.trash(save) } }
+                        }
+                        .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
                     }
                 }
                 .padding(.horizontal, 18).padding(.vertical, 12)

@@ -120,6 +120,11 @@ const INGREDIENT_HEAD = /^\s*(?:[#*•\-–\s]*)(?:ingredients?|what you(?:'|’
 const STEP_HEAD = /^\s*(?:[#*•\-–\s]*)(?:method|steps?|instructions?|directions?|how to make(?: it)?|preparation|to make)\s*[:：]?\s*$/i;
 const QUANTITY = /^(?:\d+[\d\s/.,½¼¾⅓⅔-]*|a |an |one |two |three |half |pinch|handful|splash|dash)\s*(?:g|kg|ml|l|oz|lb|lbs|cups?|tbsp|tsp|tablespoons?|teaspoons?|cloves?|cans?|tins?|slices?|sticks?|bunch|pinch|handful|large|small|medium|x)?\b/i;
 
+const NOT_FOOD = /\b(?:reps?|rounds?|sets?|seconds?|secs?|minutes?|mins?|kettlebells?|dumbbells?|barbells?|times|days?|weeks?)\b/i;
+
+// An "Ingredients" heading: the caption really is a recipe, whatever else it lists.
+export const hasIngredientHeading = (text) => String(text || '').split(/\n+/).some((l) => INGREDIENT_HEAD.test(l.trim()));
+
 // Ingredients and steps written into a caption or description ("Ingredients:" … "Method:" …).
 // Returns null unless it finds at least two ingredient lines, so ordinary captions are left alone.
 export function recipeFromText(text) {
@@ -132,13 +137,15 @@ export function recipeFromText(text) {
     if (INGREDIENT_HEAD.test(raw)) { mode = 'ing'; continue; }
     if (STEP_HEAD.test(raw)) { mode = 'step'; continue; }
     const line = raw.replace(/^[•\-–*·▪︎◦✔️✅]+\s*/u, '').replace(/^\d+[.)]\s+/, (m) => (mode === 'step' ? '' : m)).trim();
-    if (!line || /^#\w/.test(line)) continue;
+    // Instagram spacer lines (".", "…", "⬇️") hold no words or numbers.
+    if (!line || /^#\w/.test(line) || !/[\p{L}\p{N}]/u.test(line)) continue;
     if (mode === 'ing') ingredients.push(clean(line, 200));
     else if (mode === 'step') steps.push(clean(line.replace(/^\d+[.)]\s*/, ''), 600));
   }
   // No headings: a run of quantity-led lines is an ingredient list.
   if (!ingredients.length) {
-    const run = lines.filter((l) => QUANTITY.test(l.replace(/^[•\-–*·]+\s*/, '')) && l.length < 90);
+    // "60 seconds non-stop", "1 kettlebell", "10 reps" are a workout's numbers, not ingredients.
+    const run = lines.filter((l) => QUANTITY.test(l.replace(/^[•\-–*·]+\s*/, '')) && l.length < 90 && !NOT_FOOD.test(l));
     if (run.length >= 3) ingredients.push(...run.map((l) => clean(l.replace(/^[•\-–*·]+\s*/, ''), 200)));
   }
   if (ingredients.length < 2) return null;
@@ -152,11 +159,22 @@ export function recipeFromText(text) {
 const WORKOUT_WORDS = /\b(?:work[- ]?outs?|exercises?|routine|hiit|wod|amrap|emom|tabata|circuit|reps|sets|leg day|arm day|push day|pull day|full[- ]body|upper body|lower body|core|abs|glutes|strength|training|warm[- ]?up|cool[- ]?down|calisthenics|mobility|stretch(?:es|ing)?|cardio)\b/i;
 export const looksLikeWorkout = (text) => WORKOUT_WORDS.test(String(text || ''));
 
+// Clear signs a post is a workout even when its caption names no exercises (the routine is in the
+// video): "routine", "#homeworkout", "kettlebell", "reps", "yoga"… Two different ones are needed, so a
+// recipe that "sets" overnight or a "morning routine" stays what it is.
+const WORKOUT_SIGNALS = /(?:^|[^\p{L}\p{N}])#?(home ?work ?outs?|work ?outs?|routines?|exercises?|hiit|yoga|pilates|mobility|stretch(?:es|ing)|calisthenics|kettlebells?|dumbbells?|reps|rounds|leg day|arm day|upper[- ]body|lower[- ]body|full[- ]body|home ?gym|home ?training|warm[- ]?up|circuits?|amrap|emom|tabata)(?![\p{L}\p{N}])/giu;
+export function workoutSignals(text) {
+  const seen = new Set();
+  for (const m of String(text || '').matchAll(WORKOUT_SIGNALS)) seen.add(m[1].toLowerCase().replace(/[\s-]/g, '').replace(/(?:es|s)$/, ''));
+  return seen.size;
+}
+export const isWorkoutPost = (text) => workoutSignals(text) >= 2;
+
 const SECONDS = /^(\d{1,4})\s*(s|sec|secs|seconds?|m|min|mins|minutes?)$/i;
 const toSeconds = (n, unit) => (/^m/i.test(unit) ? Number(n) * 60 : Number(n));
 const X = '\\s*[x×*]\\s*';
 const TIME = '(\\d{1,4})\\s*(s|sec|secs|seconds?|m|min|mins|minutes?)\\b';
-const NAME = "([A-Za-z][A-Za-z0-9'’()/&+ .-]{1,60}?)";
+const NAME = "([A-Za-z][A-Za-z0-9'’()/&+ .\\-–—]{1,60}?)";
 // Ordered: the first pattern that matches a line wins.
 const EXERCISE_PATTERNS = [
   // Squats 3x12 · Squats: 3 x 12 reps · Plank 3 x 45s · Push-ups — 4 sets of 10
@@ -299,13 +317,13 @@ export function workoutFromText(text, { source = 'caption' } = {}) {
       }
     }
     // "4 rounds", "4 total rounds", "Repeat for 3 rounds.", "Rounds: 4"
-    const r = raw.match(/^(?:[^\w]*)(?:repeat\s+(?:for\s+|it\s+|this\s+)?)?(?:x\s*)?(\d{1,2})\s*(?:total\s+)?(?:rounds?|sets?|times|circuits?)\b(?:\s*(?:total|in total|of|:))?[.!]*\s*$/i) || raw.match(/^(?:[^\w]*)(?:rounds?|sets?)\s*[:x×]?\s*(\d{1,2})[.!]*\s*$/i);
+    const r = raw.match(/^(?:[^\w]*)(?:repeat\s+(?:for\s+|it\s+|this\s+)?)?(?:x\s*)?(\d{1,2})(?:\s*[-–—]\s*\d{1,2})?\s*(?:total\s+)?(?:rounds?|sets?|times|circuits?)\b(?:\s*(?:total|in total|of|:))?[.!]*\s*$/i) || raw.match(/^(?:[^\w]*)(?:rounds?|sets?)\s*[:x×]?\s*(\d{1,2})[.!]*\s*$/i);
     if (r) { rounds = Number(r[1]); inList = false; continue; }
     // "8–12 reps per exercise", "30 sec each": the same numbers for every exercise (lower end of a range).
     const each = raw.match(/^[^\w]*(\d{1,3})(?:\s*[-–—]\s*(\d{1,3}))?\s*(reps?|repetitions?|s|sec|secs|seconds?)\b(?:\s*(?:per|each|for each|on each|of each)\s*(?:exercise|move(?:ment)?|side|round)?)?[.!]*\s*$/i);
     if (each) { if (/^r/i.test(each[3])) repsAll = { reps: Number(each[1]), repsMax: Number(each[2]) || null }; else secondsAll = Number(each[1]); inList = false; continue; }
     // "Rest 60s", "Rest: 40–90 sec", "40–90 sec rest"
-    const rest = raw.match(/^(?:[^\w]*)rest\s*[:\-–]?\s*(\d{1,4})(?:\s*[-–—]\s*(\d{1,4}))?\s*(s|sec|secs|seconds?|m|min|mins|minutes?)\b/i)
+    const rest = raw.match(/^(?:[^\w]*)rest\s*(?:for\s+)?[:\-–]?\s*(\d{1,4})(?:\s*[-–—]\s*(\d{1,4}))?\s*(s|sec|secs|seconds?|m|min|mins|minutes?)\b/i)
       || raw.match(/^[^\w]*(\d{1,4})(?:\s*[-–—]\s*(\d{1,4}))?\s*(s|sec|secs|seconds?|m|min|mins|minutes?)\s*(?:of\s*)?rest\b/i);
     if (rest) {
       inList = false;

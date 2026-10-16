@@ -5,7 +5,7 @@ import KeepsakeKit
 import KeepsakeUI
 
 /// The Share Sheet way in. Saves first (one tap, no waiting), then a card shows where it went: flick
-/// the slip to put it somewhere else, add a note, or undo. Closes itself 2 s after saving unless touched.
+/// the slip to put it somewhere else, add a note, or undo. Stays open until you tap Done (or Undo).
 final class ShareViewController: UIViewController {
     private let state = ShareState()
 
@@ -52,7 +52,8 @@ final class ShareState {
         do {
             let library = try Library()
             self.library = library
-            var product = shared.page ?? Library.sharedProduct(url: shared.url, title: shared.title, text: shared.text)
+            var product: [String: Any]
+            if let page = shared.page { product = page } else { product = await library.sharedProduct(url: shared.url, title: shared.title, text: shared.text) }
             // A screenshot or photo with no link: its picture and the text read from it, on this device.
             if shared.page == nil, shared.url == nil, let image = shared.image {
                 product = await ImageCapture.product(from: image)
@@ -73,8 +74,6 @@ final class ShareState {
             destination = here
             destinationLabel = destinations.first { $0.value == here }?.label ?? (result.needsReview ? "Review" : result.destination ?? "")
             UIAccessibility.post(notification: .announcement, argument: "Saved to \(destinationLabel)")
-            try? await Task.sleep(for: .seconds(2))
-            if !touched { finish() }
         } catch {
             phase = .failed(error.localizedDescription)
             Haptic.refused()
@@ -209,7 +208,7 @@ struct ShareCard: View {
                             noteFocused = true
                         }
                     }
-                    secondary("Done", "checkmark") { state.done() }
+                    PrimarySlab("Done", symbol: "checkmark") { state.done() }
                 }
             }
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)

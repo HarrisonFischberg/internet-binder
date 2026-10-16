@@ -22,6 +22,9 @@ struct SaveDetailScreen: View {
     private var current: Save { model.saves.first { $0.id == save.id } ?? save }
     private var d: JSONValue? { current.details }
     private var isDone: Bool { current.status == "done" }
+    private var isInstagram: Bool { (current.host ?? "").hasSuffix("instagram.com") }
+    /// The recipe's steps, without wordless lines (older saves kept Instagram's "." spacers).
+    private var steps: [String] { (d?["steps"]?.array?.compactMap(\.string) ?? []).filter { $0.contains(where: { $0.isLetter || $0.isNumber }) } }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -30,6 +33,7 @@ struct SaveDetailScreen: View {
                 VStack(alignment: .leading, spacing: 22) {
                     hero
                     titleBlock
+                    if current.needsCollection && current.purchased != true { FilingPanel(save: current) }
                     panel
                     if let note = current.note, !note.isEmpty {
                         Text("“\(note)”").font(KSFont.note).foregroundStyle(t.inkMuted)
@@ -42,7 +46,6 @@ struct SaveDetailScreen: View {
             actions
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.hidden, for: .tabBar)   // one primary action on this screen: no tabs competing with it
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -83,7 +86,7 @@ struct SaveDetailScreen: View {
         .sheet(isPresented: $editing) { EditSaveSheet(save: current) }
         .task(id: "\(current.status ?? "")\(current.title)") { await reload() }
         .fullScreenCover(isPresented: $cooking) {
-            CookingView(save: current, steps: d?["steps"]?.array?.compactMap(\.string) ?? [],
+            CookingView(save: current, steps: steps,
                         ingredients: d?["ingredients"]?.array?.compactMap(\.string) ?? []) {
                 Task { await model.setDone(current, true) }
             }
@@ -128,11 +131,20 @@ struct SaveDetailScreen: View {
             .rotationEffect(.degrees(-0.6))
             .padding(.top, 8)
         } else if current.hasImage {
-            SaveImage(current, symbolSize: 48)
-                .frame(height: 300).frame(maxWidth: .infinity).clipped()
-                .padding(current.kind == "recipe" ? 0 : 8)
-                .background(t.paper).resting()
-                .padding(.top, 8)
+            // The picture opens where it came from: an Instagram reel's thumbnail (with its play
+            // button) plays the reel.
+            Button {
+                if let url = current.url.flatMap(URL.init(string:)) { openURL(url) }
+            } label: {
+                SaveImage(current, symbolSize: 48)
+                    .frame(height: 300).frame(maxWidth: .infinity).clipped()
+                    .padding(current.kind == "recipe" ? 0 : 8)
+                    .background(t.paper).resting()
+            }
+            .buttonStyle(PressStyle())
+            .disabled(current.url == nil)
+            .accessibilityLabel(isInstagram ? "Open the post on Instagram" : "Open \(current.host ?? "the page")")
+            .padding(.top, 8)
         } else {
             SaveObject(current).frame(maxWidth: 260).frame(maxWidth: .infinity).padding(.top, 16)
         }
@@ -143,10 +155,6 @@ struct SaveDetailScreen: View {
             KindLabel(kind: current.kind)
             Text(current.title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
             if let fact = current.fact, !fact.isEmpty { Text(fact).font(.subheadline).foregroundStyle(t.inkMuted) }
-            if current.needsCollection {
-                Label("Not in a collection yet. It's waiting in Review.", systemImage: "tray")
-                    .font(.footnote).foregroundStyle(t.inkMuted).padding(.top, 4)
-            }
         }
     }
 
@@ -158,7 +166,7 @@ struct SaveDetailScreen: View {
         case "recipe": recipePanel
         case "workout": workoutPanel
         default:
-            if let text = current.description, !text.isEmpty {
+            if let text = [current.description, current.instagram?.caption].compactMap({ $0 }).first(where: { !$0.isEmpty }) {
                 Text(text).font(.system(.body, design: .serif)).foregroundStyle(t.ink).lineSpacing(4)
             }
         }
@@ -201,7 +209,6 @@ struct SaveDetailScreen: View {
                     }
                 }
             }
-            let steps = d?["steps"]?.array?.compactMap(\.string) ?? []
             if !steps.isEmpty {
                 card("Method") {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
@@ -269,7 +276,9 @@ struct SaveDetailScreen: View {
 
     @ViewBuilder private var source: some View {
         if let host = current.host, !host.isEmpty {
-            Text("Saved from \(host)").font(.footnote).foregroundStyle(t.inkMuted)
+            let ig = current.instagram
+            let by = [ig?.creator.flatMap { $0.isEmpty ? nil : "@\($0)" }, ig?.postedAt.flatMap { $0.isEmpty ? nil : $0 }].compactMap { $0 }
+            Text((["Saved from \(host)"] + by).joined(separator: " · ")).font(.footnote).foregroundStyle(t.inkMuted)
         }
     }
 
@@ -286,7 +295,7 @@ struct SaveDetailScreen: View {
                 .disabled(mapsLink == nil)
             case "recipe":
                 HoldToStamp("Cooked", done: isDone) { Task { await model.setDone(current, !isDone) } }
-                if !(d?["steps"]?.array ?? []).isEmpty {
+                if !steps.isEmpty {
                     PrimarySlab("Start cooking", symbol: "flame.fill") { cooking = true }
                 } else if let url = current.url.flatMap(URL.init(string:)) {
                     PrimarySlab("Open recipe", symbol: "safari") { openURL(url) }

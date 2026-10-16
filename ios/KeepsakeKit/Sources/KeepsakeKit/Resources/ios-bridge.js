@@ -252,6 +252,73 @@
       if (done.length) await store.markAiLogUndone(done);
       return done.length;
     },
+    // Optional AI is on and a key is set: the AI buttons show.
+    async aiReady() {
+      const settings = await store.getSettings();
+      return !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
+    },
+    // Fix with AI for saves in Review (dashboard/aiCleanup.js runAiCleanup, scope 'review', planFixes):
+    // each save's title, description (an Instagram post's caption) and current collection go to your
+    // provider in batches; a confident answer files it, tidies a product's title and price, and logs the
+    // change with Undo. Hand-edited fields stay. No live pages are read on iOS.
+    async fixWithAI(ids) {
+      const settings = await store.getSettings();
+      const key = await store.getSecret('aiApiKey');
+      if (!settings.ai?.on || !key) throw new Error('Turn on Optional AI and add your key first.');
+      const prefs = await store.getPrefs();
+      const threshold = prefs.confidenceThreshold || 0.6;
+      const FIELDS = ['title', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
+      const report = { checked: 0, changed: 0, filed: [], error: '' };
+      const items = (await Promise.all(ids.map((id) => store.getItem(id)))).filter((i) => i && !i.deletedAt);
+      for (let at = 0; at < items.length; at += K.provider.CLEANUP_BATCH) {
+        const batch = items.slice(at, at + K.provider.CLEANUP_BATCH);
+        const collections = await store.getCollections();
+        const entries = batch.map((item, n) => {
+          const col = item.collectionId ? collections.find((c) => c.id === item.collectionId) : null;
+          return { ref: `i${n}`, item: item.instagram?.caption ? { ...item, description: item.instagram.caption } : item, live: null, currentCollection: col ? col.name : '' };
+        });
+        let results;
+        try {
+          results = await K.provider.cleanupWithAI(entries, collections, settings, key);
+        } catch (e) {
+          report.error = String((e && e.message) || e);
+          break;
+        }
+        const log = [];
+        for (let n = 0; n < batch.length; n++) {
+          const ai = results.get(`i${n}`);
+          if (!ai) continue;
+          report.checked++;
+          const item = (await store.getItem(batch[n].id)) || batch[n];
+          const mine = new Set(item.userFields || []);
+          const patch = {};
+          const changes = [];
+          if (item.type === 'product') {
+            if (ai.title && ai.title !== item.title && !mine.has('title')) { patch.title = ai.title; changes.push({ field: 'title', from: item.title, to: ai.title }); }
+            const currency = ai.currency || item.currency || '';
+            if (ai.price !== null && ai.price !== undefined && !mine.has('price') && (ai.price !== item.price || (ai.currency && ai.currency !== item.currency))) {
+              patch.price = ai.price;
+              patch.currency = currency;
+              changes.push({ field: 'price', from: K.util.formatPrice(item.price, item.currency) || 'none', to: K.util.formatPrice(ai.price, currency) });
+            }
+          }
+          if (ai.collectionId && ai.collectionId !== item.collectionId && K.kinds.needsCollection(item) && ai.confidence >= threshold) {
+            Object.assign(patch, { collectionId: ai.collectionId, needsReview: false, categorizationSource: 'ai', confidence: ai.confidence, categorizationReason: `AI: ${ai.reason || 'best match'}` });
+            changes.push({ field: 'collection', fromId: item.collectionId || null, toId: ai.collectionId, to: ai.collectionName });
+            report.filed.push({ id: item.id, collection: ai.collectionName || '' });
+          }
+          if (!changes.length) continue;
+          const before = {};
+          for (const f of FIELDS) if (f in patch) before[f] = item[f] === undefined ? null : item[f];
+          await store.updateItem(item.id, patch, { by: 'ai' });
+          report.changed++;
+          log.push({ id: K.util.uid(), runId: `ios-fix-${Date.now()}`, at: K.util.nowIso(), itemId: item.id, itemTitle: patch.title || item.title, changes, before, after: patch, reason: ai.reason || '', undone: false });
+        }
+        if (log.length) await store.appendAiLog(log);
+        report.logIds = [...(report.logIds || []), ...log.map((e) => e.id)];
+      }
+      return report;
+    },
     async testAi() {
       const settings = await store.getSettings();
       return K.provider.testConnection(settings, await store.getSecret('aiApiKey'));

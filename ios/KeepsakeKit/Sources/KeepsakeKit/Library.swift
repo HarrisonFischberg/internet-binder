@@ -26,6 +26,14 @@ public struct Save: Identifiable, Hashable, Sendable, Decodable {
     public let description: String?
     public let details: JSONValue?
     public let topics: [String]?
+    /// What an Instagram post said (Chrome's item.instagram): its caption, creator and date.
+    public let instagram: Instagram?
+    public struct Instagram: Hashable, Sendable, Decodable {
+        public let caption: String?
+        public let creator: String?
+        public let postedAt: String?
+        public let location: String?
+    }
     /// The one fact that matters for this kind ("9 ingredients · 25 min"), from Chrome's keyFact.
     public var fact: String?
 

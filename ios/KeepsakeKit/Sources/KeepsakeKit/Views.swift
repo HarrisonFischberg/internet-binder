@@ -228,12 +228,27 @@ public struct AIChange: Decodable, Sendable, Identifiable {
     public let undone: Bool
 }
 
+/// What Fix with AI did to saves in Review.
+public struct AIFixReport: Decodable, Sendable {
+    public struct Filed: Decodable, Sendable { public let id: String; public let collection: String }
+    public let checked: Int
+    public let changed: Int
+    public let filed: [Filed]
+    public let error: String
+    /// The AI change log entries it wrote, for Undo.
+    public let logIds: [String]?
+}
+
 extension Library {
     /// Runs the after-save work that is turned on (AI tidy, fill-in with AI and Lookups).
     public func finishSaves() async throws { try await prepare(); try await core.call("views.finishSaves") }
     public func fixPlace(_ id: String) async throws -> Save { try await core.call("views.fixPlace", [id], as: Save.self) }
     public func aiLog() async throws -> [AIChange] { try await prepare(); return try await core.call("views.aiLog", as: [AIChange].self) }
     @discardableResult public func undoAI(_ ids: [String]) async throws -> Int { try await core.call("views.undoAi", [ids], as: Int.self) }
+    /// Optional AI is on and a key is set.
+    public func aiReady() async -> Bool { (try? await core.call("views.aiReady") as? Bool) ?? false }
+    /// Chrome's Fix with AI for saves in Review: files the ones the AI is confident about.
+    public func fixWithAI(_ ids: [String]) async throws -> AIFixReport { try await prepare(); return try await core.call("views.fixWithAI", [ids], as: AIFixReport.self) }
     public func testAI() async throws { try await core.call("views.testAi") }
     public func suggestions(for id: String) async throws -> ReviewSuggestions { try await core.call("views.suggestions", [id], as: ReviewSuggestions.self) }
     /// Files a save from Review and learns from it strongly (Chrome's Review filing).

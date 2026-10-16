@@ -11,6 +11,7 @@ struct SettingsScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var settings: [String: Any] = [:]
     @State private var aiOn = false
+    @State private var readPosts = true
     @State private var provider = "openai"
     @State private var key = ""
     @State private var lookups: [String: Bool] = ["places": false, "media": false, "books": false]
@@ -28,6 +29,7 @@ struct SettingsScreen: View {
                 Section { NavigationLink("Appearance") { AppearanceScreen() } }
                 aiSection
                 lookupsSection
+                instagramSection
                 Section {
                     NavigationLink("Change log") { ChangeLogScreen() }
                 } footer: { Text("Every change AI made, with Undo.") }
@@ -94,6 +96,20 @@ struct SettingsScreen: View {
         }
     }
 
+    // MARK: Instagram
+
+    /// Chrome's Read post details (settings.instagram.readPostDetails, on unless turned off).
+    private var instagramSection: some View {
+        Section {
+            Toggle("Read posts you share", isOn: Binding(get: { readPosts }, set: { on in
+                readPosts = on
+                Task { try? await model.library?.updateSettings(["instagram": ["readPostDetails": on]]) }
+            }))
+        } header: { Text("Instagram") } footer: {
+            Text("When you share a post or reel, Keepsake opens its public page once, without your account or cookies, to save its caption, creator, date and picture. Turn off to save just the link.")
+        }
+    }
+
     private func lookupToggle(_ key: String, _ title: String) -> some View {
         Toggle(title, isOn: Binding(get: { lookups[key] ?? false }, set: { on in
             if on { consent = .lookup(key) } else { Task { lookups[key] = false; try? await model.library?.updateSettings(["lookups": [key: false]]) } }
@@ -109,6 +125,7 @@ struct SettingsScreen: View {
         aiOn = ai["on"] as? Bool ?? false
         provider = ai["provider"] as? String ?? "openai"
         key = (try? await lib.aiKey()) ?? ""
+        readPosts = (s["instagram"] as? [String: Any])?["readPostDetails"] as? Bool ?? true
         let l = s["lookups"] as? [String: Any] ?? [:]
         for k in lookups.keys { lookups[k] = l[k] as? Bool ?? false }
     }
@@ -225,6 +242,7 @@ struct PrivacyScreen: View {
                 Text("Maps are drawn by Apple Maps. Directions open Apple Maps with the place's name and address.")
                 Text("Optional AI and each Lookup: only when you turn them on, and only what their switch says.")
                 Text("Sharing from Safari: Keepsake reads the page you shared, on this iPhone.")
+                Text("Sharing an Instagram post or reel: Keepsake opens that post's public page once, without your account or cookies, to save its caption and picture. You can turn this off under Instagram.")
             }
         }
         .navigationTitle("Privacy")

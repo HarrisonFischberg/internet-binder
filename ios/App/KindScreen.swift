@@ -47,6 +47,8 @@ struct ReviewScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var suggestions: [String: ReviewSuggestions] = [:]
     @State private var destinations: [Destination] = []
+    @State private var aiReady = false
+    @State private var asking = false
     private var saves: [Save] { model.saves.filter { $0.needsCollection && $0.purchased != true } }
 
     var body: some View {
@@ -55,6 +57,22 @@ struct ReviewScreen: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     ScreenHeader(title: "Review", subtitle: "Keepsake wasn't sure where these go")
+                    if aiReady && !saves.isEmpty {
+                        Button {
+                            asking = true
+                            Task { await model.fixWithAI(saves); asking = false }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if asking { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
+                                Text(asking ? "Asking your AI…" : "Fix all \(saves.count) with AI")
+                            }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(t.onAccent)
+                            .padding(.horizontal, 16).frame(minHeight: 44)
+                            .background(t.accent, in: Capsule())
+                        }
+                        .disabled(asking)
+                        .accessibilityHint("Sends each save's title and caption to your AI provider, which files the ones it's sure about.")
+                    }
                     if saves.isEmpty {
                         EmptyNote(symbol: "checkmark.circle", text: "Nothing waiting. Everything has a home.")
                     }
@@ -70,6 +88,7 @@ struct ReviewScreen: View {
         .task(id: saves.map(\.id)) {
             guard let lib = model.library else { return }
             destinations = (try? await lib.destinations()) ?? []
+            aiReady = await lib.aiReady()
             for s in saves where suggestions[s.id] == nil { suggestions[s.id] = try? await lib.suggestions(for: s.id) }
         }
     }
@@ -109,16 +128,136 @@ struct ReviewScreen: View {
         .padding(14).background(t.paper).resting()
     }
 
-    private func file(_ save: Save, _ target: String, _ label: String) {
-        guard let lib = model.library else { return }
+    private func file(_ save: Save, _ target: String, _ label: String) { model.file(save, into: target, label: label) }
+}
+
+extension LibraryModel {
+    /// Files a save from Review (Chrome's Review filing: learns strongly), with Undo back to Review.
+    func file(_ save: Save, into target: String, label: String) {
+        guard let lib = library else { return }
         Task {
             _ = try? await lib.file(save.id, into: target)
             Haptic.dropped()
-            model.refresh()
-            model.show("Filed in \(label)") {
+            refresh()
+            show("Filed in \(label)") {
                 try? await lib.update(save.id, ["collectionId": NSNull(), "needsReview": true, "kind": save.kind, "details": [:]])
-                model.refresh()
+                self.refresh()
             }
+        }
+    }
+
+    /// Chrome's Fix with AI for saves in Review: files what the AI is confident about, with Undo.
+    func fixWithAI(_ saves: [Save]) async {
+        guard let lib = library, !saves.isEmpty else { return }
+        do {
+            let r = try await lib.fixWithAI(saves.map(\.id))
+            refresh()
+            if !r.error.isEmpty { show("AI couldn't check: \(r.error)"); Haptic.refused(); return }
+            let logIds = r.logIds ?? []
+            var undo: (@MainActor () async -> Void)?
+            if !logIds.isEmpty {
+                undo = { @MainActor in
+                    _ = try? await lib.undoAI(logIds)
+                    self.refresh()
+                }
+            }
+            if saves.count == 1 {
+                if let f = r.filed.first { Haptic.dropped(); show("AI filed it in \(f.collection)", undo: undo) }
+                else { show("AI wasn't sure either, so it stays in Review.") }
+            } else {
+                Haptic.settled()
+                show(r.filed.isEmpty ? "AI wasn't sure about any of them." : "AI filed \(r.filed.count) of \(saves.count)", undo: undo)
+            }
+        } catch {
+            show(error.localizedDescription)
+            Haptic.refused()
+        }
+    }
+}
+
+/// Where a save in Review goes, on its own screen: Keepsake's best guesses, every Lifestyle view and
+/// collection, and Fix with AI when Optional AI is on. One tap files it (with Undo).
+struct FilingPanel: View {
+    let save: Save
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+    @State private var suggestions: ReviewSuggestions?
+    @State private var destinations: [Destination] = []
+    @State private var aiReady = false
+    @State private var asking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Where does it go?").font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                if let why = suggestions?.reason, !why.isEmpty {
+                    Text(why).font(.footnote).foregroundStyle(t.inkMuted)
+                } else {
+                    Text("It's waiting in Review. Pick a place and Keepsake learns from it.").font(.footnote).foregroundStyle(t.inkMuted)
+                }
+            }
+            if aiReady {
+                Button {
+                    asking = true
+                    Task { await model.fixWithAI([save]); asking = false }
+                } label: {
+                    HStack(spacing: 8) {
+                        if asking { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
+                        Text(asking ? "Asking your AI…" : "Fix with AI")
+                    }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(t.onAccent)
+                    .padding(.horizontal, 16).frame(minHeight: 44)
+                    .background(t.accent, in: Capsule())
+                }
+                .disabled(asking)
+                .accessibilityHint("Sends its title and caption to your AI provider, which picks a collection.")
+            }
+            if let picks = suggestions?.picks, !picks.isEmpty {
+                group("Suggested") {
+                    ForEach(picks) { p in
+                        Chip(p.label, symbol: p.isNew ? "plus" : "sparkle", selected: false) { model.file(save, into: p.value, label: p.label) }
+                            .accessibilityLabel("File in \(p.label)")
+                    }
+                }
+            }
+            let lifestyle = destinations.filter { $0.group == "lifestyle" }
+            if !lifestyle.isEmpty {
+                group("Lifestyle") {
+                    ForEach(lifestyle) { d in
+                        let k = KindStyle(d.kind ?? "")
+                        Chip(d.label, symbol: k.symbol, tint: k.color, selected: false) { model.file(save, into: d.value, label: d.label) }
+                            .accessibilityLabel("File in \(d.label)")
+                    }
+                }
+            }
+            let collections = destinations.filter { $0.group == "collection" }
+            if !collections.isEmpty {
+                group("Collections") {
+                    ForEach(collections) { d in
+                        Chip(d.label, symbol: "folder", selected: false) { model.file(save, into: d.value, label: d.label) }
+                            .accessibilityLabel("File in \(d.label)")
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.paper)
+        .overlay(alignment: .top) { Rectangle().fill(t.accent.opacity(0.7)).frame(height: 1.5) }
+        .resting()
+        .task(id: save.id) {
+            guard let lib = model.library else { return }
+            async let s = try? lib.suggestions(for: save.id)
+            async let d = try? lib.destinations()
+            async let ready = lib.aiReady()
+            (suggestions, destinations, aiReady) = (await s, await d ?? [], await ready)
+        }
+    }
+
+    private func group<C: View>(_ title: String, @ViewBuilder _ chips: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(t.inkMuted)
+            Flow(spacing: 8) { chips() }
         }
     }
 }

@@ -22,11 +22,10 @@ struct RootView: View {
         Group {
             if size == .regular { SplitRootView() } else { tabs }
         }
-        .overlay(alignment: .top) {
-            GeometryReader { g in
-                ToastView().frame(maxWidth: .infinity).padding(.top, max(g.safeAreaInsets.top, 20))
-            }
-            .ignoresSafeArea()
+        // Near the bottom, under the thumb: above the tab bar, Library's search bar and a save's
+        // action buttons, clear of the Dynamic Island and of titles and navigation buttons.
+        .overlay(alignment: .bottom) {
+            ToastView().frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 128)
         }
         .task { await model.start() }
         .onChange(of: phase) { _, now in
@@ -112,7 +111,7 @@ struct ToastView: View {
                 .background(t.paper, in: Capsule())
                 .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
                 .shadow(color: .black.opacity(0.15), radius: 14, y: 6)
-                .transition(reduce ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .transition(reduce ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .task(id: toast.id) {
                     UIAccessibility.post(notification: .announcement, argument: toast.text)
                     try? await Task.sleep(for: .seconds(8))
@@ -122,7 +121,6 @@ struct ToastView: View {
             }
         }
         .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: model.toast)
-        .padding(.top, 4)
     }
 }
 

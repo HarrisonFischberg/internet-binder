@@ -7,7 +7,7 @@
 import { classify, learnFromCorrection, AUTO_FILE_CONFIDENCE } from './categorizer.js';
 import { parsePrice, sanitizeText } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
-import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
+import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, hasIngredientHeading, isWorkoutPost, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
 import { guessTopics } from './topics.js';
 
 // Lifestyle kinds whose details are filled in after the save (AI or Lookups, when turned on).
@@ -65,7 +65,7 @@ const KIND_REASON = {
 // training too, so a recipe's "2 x 400 g tins" never turns into a workout.
 export function workoutOf(product) {
   const about = `${product.title || ''} ${product.description || ''}`;
-  if (!looksLikeWorkout(about)) return null;
+  if (!looksLikeWorkout(about) && !isWorkoutPost(about)) return null;
   const source = product.isInstagram ? 'caption' : 'page';
   // Instagram puts the caption in the page title as well as the description, and either may be cut
   // short: read the longer one first.
@@ -120,11 +120,16 @@ export function kindOfCapture(product) {
   // An Instagram post: a recipe or workout in the caption, a place when it's tagged with a location or
   // names one with 📍; otherwise a link.
   if (product.isInstagram) {
-    if (recipeFromText(product.description)) return 'recipe';
-    if (workoutOf(product)) return 'workout';
+    const recipe = recipeFromText(product.description);
+    const workout = workoutOf(product);
+    // A routine listed with no "Ingredients" heading ("10 Upright Rows", "10 Horn Curls"…) is a workout.
+    if (recipe && !(workout && workout.exercises.length >= 3 && !hasIngredientHeading(product.description))) return 'recipe';
+    if (workout) return 'workout';
     if (product.igLocation?.name || placeFromText(product.description) || placeFromText(product.title)) return 'place';
     // A business's profile (an address, or "Donuts · Open 24/7" in its bio).
     if (placeFromProfile(product.profile)) return 'place';
+    // A workout whose routine is only in the video: a Workout with no exercises listed (nothing made up).
+    if (isWorkoutPost(`${product.title || ''}\n${product.description || ''}`)) return 'workout';
     return 'link';
   }
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';

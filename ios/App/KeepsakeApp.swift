@@ -167,7 +167,7 @@ final class LibraryModel {
             return
         }
         do {
-            let r = try await library.capture(product: Library.sharedProduct(url: link, title: nil, text: nil), source: "paste")
+            let r = try await library.capture(product: await library.sharedProduct(url: link, title: nil, text: nil), source: "paste")
             refresh()
             if let dup = r.duplicateOf {
                 show("Already saved: \(dup.title)")

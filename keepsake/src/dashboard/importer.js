@@ -5,7 +5,7 @@
 // feature is used explicitly.
 
 import { MSG } from '../shared/messages.js';
-import { LIFESTYLE, kindInfo, kindForCollectionName, detailsForKind, recipeFromText, workoutFromText, looksLikeWorkout, placeFromText } from '../shared/kinds.js';
+import { LIFESTYLE, kindInfo, kindForCollectionName, detailsForKind, recipeFromText, workoutFromText, looksLikeWorkout, hasIngredientHeading, isWorkoutPost, placeFromText } from '../shared/kinds.js';
 import { el, clear, sanitizeText, pluralize } from '../shared/util.js';
 import { classify } from '../shared/categorizer.js';
 import { normalizeUrl } from '../shared/url.js';
@@ -236,9 +236,13 @@ export async function importPosts(ctx, scan, posts) {
   const kindOfPost = (post) => {
     if (nameKind) return nameKind;
     const cap = post.caption || '';
-    if (recipeFromText(cap)) return 'recipe';
-    if (looksLikeWorkout(cap) && workoutFromText(cap, { source: 'caption' })) return 'workout';
+    const workout = looksLikeWorkout(cap) || isWorkoutPost(cap) ? workoutFromText(cap, { source: 'caption' }) : null;
+    // Same rules as a single save (capture.js): a routine listed with no "Ingredients" heading is a workout.
+    if (recipeFromText(cap) && !(workout && workout.exercises.length >= 3 && !hasIngredientHeading(cap))) return 'recipe';
+    if (workout) return 'workout';
     if (placeFromText(cap)) return 'place';
+    // The routine is in the video: a Workout with no exercises listed.
+    if (isWorkoutPost(cap)) return 'workout';
     return null;
   };
   const created = [];

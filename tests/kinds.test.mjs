@@ -60,6 +60,11 @@ test('recipe from a caption without headings (quantity-led lines)', () => {
   assert.equal(r.ingredients.length, 4);
 });
 
+test('Instagram spacer lines are not steps', () => {
+  const r = recipeFromText('Marshmallows\n\nIngredients:\n- 60g gelatin\n- 1/2 tsp salt\n\nInstructions:\n1. Bloom the gelatin\n2. Whisk until fluffy\n.\n.\n.\n⬇️\n#lowcalorierecipes');
+  assert.deepEqual(r.steps, ['Bloom the gelatin', 'Whisk until fluffy']);
+});
+
 test('ordinary captions are not recipes', () => {
   assert.equal(recipeFromText('Morning light in the kitchen corner ✨\n#home #decor'), null);
   assert.equal(recipeFromText('New drop! 3 colours, 2 fits.\nShop the link in bio'), null);
@@ -486,4 +491,39 @@ test('tidyStreet: a number written after the street, or with a slash, is put whe
   const { tidyStreet, sanitizeDetails } = await import('../keepsake/src/shared/kinds.js');
   assert.deepEqual(['Rogers Ave, 570', '108/ San Pedro St.', '23 Cleveland Place', 'Suite 4, 12'].map(tidyStreet), ['570 Rogers Ave', '108 San Pedro St.', '23 Cleveland Place', 'Suite 4, 12']);
   assert.deepEqual(sanitizeDetails('place', { lookup: { source: 'OpenStreetMap', url: 'https://www.openstreetmap.org/way/9', approximate: true } }).lookup, { source: 'OpenStreetMap', url: 'https://www.openstreetmap.org/way/9', approximate: true });
+});
+
+// Instagram workouts (owner's saves, 2026-10-16): a routine with no ingredient heading, and reels whose
+// routine is only in the video.
+test('Instagram: a listed kettlebell complex is a workout, not a recipe', async () => {
+  const { kindOfCapture } = await import('../keepsake/src/shared/capture.js');
+  const { workoutFromText } = await import('../keepsake/src/shared/kinds.js');
+  const caption = 'Try this simple upper-body kettlebell complex.\n\nAll you need is one kettlebell.\n\n10 Upright Rows\n10 Horn Curls\n10 Tricep Extensions\n10 Weighted Presses — Right\n10 Weighted Presses — Left\n10 Weighted Curls\n\nRest for 1 minute.\n\nRepeat for 5–6 rounds.';
+  assert.equal(kindOfCapture({ isInstagram: true, title: 'Instagram', description: caption, url: 'https://www.instagram.com/reel/abc12/' }), 'workout');
+  const w = workoutFromText(caption);
+  assert.deepEqual(w.exercises.map((e) => e.name), ['Upright Rows', 'Horn Curls', 'Tricep Extensions', 'Weighted Presses — Right', 'Weighted Presses — Left', 'Weighted Curls']);
+  assert.equal(w.exercises[0].sets, 5);
+  assert.equal(w.exercises[5].restSeconds, 60);
+});
+
+test('Instagram: a routine that is only in the video is still a workout, with no exercises made up', async () => {
+  const { kindOfCapture } = await import('../keepsake/src/shared/capture.js');
+  const { detailsForKind } = await import('../keepsake/src/shared/kinds.js');
+  const ig = (description) => ({ isInstagram: true, title: 'Instagram', description, url: 'https://www.instagram.com/reel/abc12/' });
+  for (const caption of [
+    'Meet the GORILLA LOADER. 🦍\nSquat → clean → curl → press.\n10 minutes. At home.\n\n#Kettlebell #homeworkout #hometraining',
+    'Yoga routine for men who are sitting at a desk all day 🤍✨',
+    'THE SIMPLEST BRUTAL ROUTINE YOU CAN DO.\n\n1 kettlebell.\n1 rep each side — as shown in the video.\n60 seconds NON-STOP.\nRest 30 seconds.\nRepeat for 5–6 rounds.',
+  ]) {
+    assert.equal(kindOfCapture(ig(caption)), 'workout', caption.slice(0, 30));
+    assert.deepEqual(detailsForKind('workout', { ...ig(caption), kind: 'link', details: {} }).details.exercises, []);
+  }
+});
+
+test('Instagram: recipes and other posts with a workout word stay what they are', async () => {
+  const { kindOfCapture } = await import('../keepsake/src/shared/capture.js');
+  const ig = (description) => ({ isInstagram: true, title: 'Instagram', description, url: 'https://www.instagram.com/reel/abc12/' });
+  assert.equal(kindOfCapture(ig('Marshmallows\n\nIngredients:\n- 60g gelatin\n- 400g allulose\n\nInstructions:\n1. Bloom\n2. Fridge until it sets')), 'recipe');
+  assert.equal(kindOfCapture(ig('High protein oats 💪 #fitness #gym\n1 cup oats\n2 scoops protein\n1 cup milk\n1 tbsp honey')), 'recipe');
+  assert.equal(kindOfCapture(ig('My morning routine ☕️ slow mornings only')), 'link');
 });
