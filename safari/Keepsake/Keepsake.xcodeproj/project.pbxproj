@@ -178,6 +178,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 846E4DBE3082138200BA0257 /* Build configuration list for PBXNativeTarget "Keepsake Extension" */;
 			buildPhases = (
+				846E4DF03082138200BA0257 /* Build Safari copy */,
 				846E4DB03082138200BA0257 /* Sources */,
 				846E4DB13082138200BA0257 /* Frameworks */,
 				846E4DB23082138200BA0257 /* Resources */,
@@ -252,6 +253,25 @@
 			);
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		846E4DF03082138200BA0257 /* Build Safari copy */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build Safari copy";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Rebuild safari/dist from keepsake/ so the extension always ships the current Chrome code.\nNODE=\"$(command -v node || ls -d \"$HOME\"/.nvm/versions/node/*/bin/node 2>/dev/null | tail -1)\"\nfor n in /opt/homebrew/bin/node /usr/local/bin/node; do [ -x \"$NODE\" ] || NODE=\"$n\"; done\n[ -x \"$NODE\" ] || { echo \"error: node not found; install Node 20+ to build the Safari copy\"; exit 1; }\n\"$NODE\" \"$SRCROOT/../build.mjs\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		846E4D953082138100BA0257 /* Sources */ = {
@@ -334,7 +354,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -397,7 +417,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
