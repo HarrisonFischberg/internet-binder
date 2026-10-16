@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Keepsake",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Save products, places, recipes, workouts, videos and more from any site. Sorted for you and kept on your device. No account.",
   "minimum_chrome_version": "121",
   "icons": {
