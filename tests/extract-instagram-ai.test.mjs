@@ -53,6 +53,15 @@ const { window } = new JSDOM('');
 globalThis.DOMParser = window.DOMParser;
 const { parsePostHtml, titleFromCaption, postKindFromUrl } = await import('../keepsake/src/instagram/post.js');
 
+test('extract: an Instagram post whose og:url is the /<user>/reel/ form keeps its head (Safari gets a bare "Instagram" title)', () => {
+  const p = extractFrom(`<html><head><title>Instagram</title>
+    <meta property="og:title" content="Justin Ho on Instagram: &quot;Sugar free marshmallows&quot;">
+    <meta property="og:image" content="https://scontent.cdninstagram.com/v/post.jpg">
+    <meta property="og:url" content="https://www.instagram.com/squenchlift/reel/DeYIQuGxgOp/"></head><body></body></html>`, 'https://www.instagram.com/p/DeYIQuGxgOp/');
+  assert.equal(p.image, 'https://scontent.cdninstagram.com/v/post.jpg');
+  assert.match(p.title, /Sugar free marshmallows/);
+});
+
 test('instagram: post page parsed from meta tags; javascript: and instagram links rejected', () => {
   const html = `<html><head><title>x</title>
     <meta property="og:description" content="1,234 likes, 12 comments - slowmornings on March 3, 2026: &quot;Morning light in the kitchen corner. Lamp from https://fenwick.example/shade and javascript:alert(1) #kitchen #lamp @friend&quot;">

@@ -49,7 +49,9 @@
     if (!ogUrl) return false;
     const o = new URL(ogUrl, location.href);
     const here = new URL(location.href);
-    const id = (u) => `${u.hostname.replace(/^www\.|^m\./, '')}${u.pathname.replace(/\/+$/, '')}${u.searchParams.get('v') ? `?v=${u.searchParams.get('v')}` : ''}`;
+    // An Instagram post is the same page at /p/<code>/, /reel/<code>/ and /<user>/reel/<code>/.
+    const igPost = (u) => (/(^|\.)instagram\.com$/.test(u.hostname) ? (u.pathname.match(/^\/(?:[^/]+\/)?(?:p|reels?|tv)\/([\w-]{5,})/) || [])[1] : '');
+    const id = (u) => (igPost(u) ? `instagram.com/post/${igPost(u)}` : `${u.hostname.replace(/^www\.|^m\./, '')}${u.pathname.replace(/\/+$/, '')}${u.searchParams.get('v') ? `?v=${u.searchParams.get('v')}` : ''}`);
     if (id(o) === id(here)) return false;
     if (!o.pathname.replace(/\/+$/, '') && here.pathname.replace(/\/+$/, '')) return true;
     const t = rawMeta('meta[property="og:title"]').toLowerCase().slice(0, 30);
