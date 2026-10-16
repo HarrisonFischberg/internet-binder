@@ -10,6 +10,9 @@
 //      description, retailer and the list of the user's collection names.
 //   3. "Clean up with AI": the same fields for each item being checked, plus
 //      the title/price/availability read from its live product page.
+//   4. Understanding a save (every save and import while AI is on, and Fix with AI):
+//      its title, caption or description, hashtags, location tag, site, the
+//      text of pages it links to and its locally stored thumbnail.
 // Nothing else leaves the browser: no cookies, no account data, no history.
 
 export const PROVIDERS = {
@@ -424,6 +427,67 @@ export async function identifyForKind(kind, item, settings, apiKey) {
     return exercises.length ? { exercises, durationMinutes: Number(parsed.minutes) || null } : null;
   }
   return null;
+}
+
+// --- Understand a save (what it is, and that kind's details) ------------------------------------------
+// One save per request: its title, caption or description, hashtags, location tag, site, the text of
+// pages it links to (when Keepsake could read them) and its locally stored thumbnail (never a remote
+// image link). The answer is checked and applied by src/shared/understand.js.
+const UNDERSTAND_SYSTEM = `You read one thing a person saved (an Instagram post or reel, a TikTok, a video, a web page or a link) and turn it into a card in their Keepsake app.
+Decide what it is, then fill in that kind's details as completely as you can.
+Return ONLY JSON: {"kind":"…","confidence":0-1,"title":"…","details":{…},"drafted":["field", …],"reason":"one short sentence"}
+Kinds and their details:
+- recipe (a dish or drink to make): {"ingredients":["quantity + ingredient"],"steps":["one step"],"yield":"e.g. 4 servings","totalMinutes":number|null,"prepMinutes":number|null,"cookMinutes":number|null,"cuisine":"","category":"e.g. dessert, dinner"}
+- workout (exercise to do): {"exercises":[{"name":"","sets":number|null,"reps":number|null,"seconds":number|null,"restSeconds":number|null}],"durationMinutes":number|null,"focus":"e.g. legs, full body, core"}
+- place (one restaurant, café, bar, bakery, shop, hotel, park or other spot to visit): {"address":"street address","locality":"city","region":"US state as its two-letter code, else the region","postalCode":"","country":"","cuisine":"","priceRange":"$ to $$$$","category":"restaurant, cafe, bar, bakery, shop, hotel, attraction…","phone":"","hours":["Mon–Fri 8am–3pm"]}
+- video (a video to watch that is none of the other kinds): {"channel":"","platform":""}
+- article (something to read): {"author":"","siteName":""}
+- media (a film or TV show): {"format":"film|series","year":number|null,"director":"","genres":[]}
+- book: {"author":"","year":number|null,"genres":[]}
+- product (one thing to buy): {}
+- link (none of these, or several different things): {}
+Rules:
+- Use everything given: title, caption, description, hashtags, location tag, linked pages and the image.
+- title: the thing's own name (the dish, the place, the routine, the film), short, no emoji, hashtags or "on Instagram".
+- Take every detail the input states first, word for word where you can (ingredient quantities, exercise sets and reps, the street address).
+- A recipe or workout whose details are not written out (they are only in the video or image): draft a sensible version from what the post shows and says, and list each drafted field in "drafted" (for example ["ingredients","steps"]). Give quantities.
+- Never invent a place's street address, phone or opening hours; leave them empty when not given. The city and state may come from the text, the location tag or a well-known place name (Brooklyn is in NY).
+- A round-up of several places, recipes or workouts ("Top 10 …"): give the kind but leave details empty, and say so in reason.
+- confidence is how sure you are of the kind (0.9+ only when it clearly is that kind).`;
+
+export async function understandWithAI(input, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  const cut = (v, n) => String(v || '').slice(0, n);
+  const text = [
+    `Title: ${cut(input.title, 200)}`,
+    input.fixedKind ? `The person filed this as a ${input.fixedKind}: answer with kind "${input.fixedKind}" and fill in its details.` : input.kind ? `Saved as: ${input.kind}` : '',
+    input.caption ? `Caption: ${cut(input.caption, 2200)}` : '',
+    input.creator ? `Creator: ${cut(input.creator, 80)}` : '',
+    input.hashtags?.length ? `Hashtags: ${input.hashtags.slice(0, 30).map((h) => `#${cut(h, 60)}`).join(' ')}` : '',
+    input.location ? `Location tag: ${cut(input.location, 200)}` : '',
+    input.description ? `Description: ${cut(input.description, 1500)}` : '',
+    input.site ? `From: ${cut(input.site, 120)}` : '',
+    input.url ? `Link: ${cut(input.url, 300)}` : '',
+    input.known ? `Already known: ${cut(JSON.stringify(input.known), 1500)}` : '',
+    ...(input.pages || []).slice(0, 3).map((pg) => `Linked page ${cut(pg.url, 300)}:\n${cut(pg.text, 4000)}`),
+    input.image ? 'The image is the post\'s thumbnail.' : '',
+  ].filter(Boolean).join('\n');
+  const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
+  const parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system: UNDERSTAND_SYSTEM, userText: text, imageDataUrl: image, maxTokens: 1800 }));
+  if (!parsed || typeof parsed !== 'object') throw new Error('The provider didn’t return a usable answer.');
+  const kinds = ['recipe', 'workout', 'place', 'video', 'article', 'media', 'book', 'product', 'link'];
+  const kind = kinds.includes(parsed.kind) ? parsed.kind : 'link';
+  const details = parsed.details && typeof parsed.details === 'object' ? { ...parsed.details } : {};
+  // The card's exercise times are in seconds under another name.
+  if (Array.isArray(details.exercises)) details.exercises = details.exercises.map((e) => (e && typeof e === 'object' ? { ...e, durationSeconds: e.durationSeconds ?? e.seconds } : e));
+  return {
+    kind,
+    confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0)),
+    title: typeof parsed.title === 'string' ? parsed.title.replace(/\s+/g, ' ').trim().slice(0, 200) : '',
+    details,
+    drafted: (Array.isArray(parsed.drafted) ? parsed.drafted : []).filter((f) => typeof f === 'string').slice(0, 12),
+    reason: cut(parsed.reason, 200),
+  };
 }
 
 export async function testConnection(settings, apiKey) {

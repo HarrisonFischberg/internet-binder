@@ -159,7 +159,7 @@
       const items = (await Promise.all(ids.map((id) => store.getItem(id)))).filter(Boolean);
       if (target.startsWith('kind:')) {
         const kind = target.slice(5);
-        for (const it of items) await store.updateItem(it.id, K.kinds.kindChangePatch(it, kind), { by: 'kind' });
+        for (const it of items) await store.updateItem(it.id, K.kinds.kindChangePatch(it, kind, { yours: true }), { by: 'kind' });
         return K.kinds.kindInfo(kind).plural;
       }
       for (const it of items) if (K.kinds.hasOwnView(K.kinds.kindOf(it))) await store.updateItem(it.id, { kind: K.kinds.shoppingKindFor(it), details: {} }, { by: 'kind' });
@@ -180,6 +180,15 @@
       }
       if (item.kind === 'place') out.maps = K.kinds.mapsLinks(item.title, d);
       if (item.kind === 'recipe') out.time = K.kinds.formatMinutes(d.totalMinutes);
+      // Where the card's details came from (dashboard.js's labels), and what your AI provider drafted
+      // because the save didn't say it ("AI draft" beside those headings).
+      const SOURCE = {
+        recipe: { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', ai: 'Recipe read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' },
+        workout: { page: 'Exercises from the page', caption: 'Exercises from the caption', you: 'Exercises added by you', ai: 'Exercises read by AI', 'ai-draft': 'Exercises drafted by AI: check them before you train' },
+        place: { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you', ai: 'Details found by AI' },
+      };
+      out.sourceLabel = SOURCE[item.kind]?.[d.source] || '';
+      out.drafted = Array.isArray(d.drafted) ? d.drafted : [];
       return out;
     },
     // What the widgets show, worked out here so the widget process never runs this code: active goals
@@ -208,11 +217,14 @@
       const lookupsOn = Object.values(settings.lookups || {}).some(Boolean);
       const items = await store.getItems();
       let tidied = 0;
+      // With AI on, tidySave first has your provider work out what each save is (understand.js).
       for (const it of items.filter((i) => i.captureState === 'pending')) { await K.fill.tidySave(store, it.id); tidied++; }
       if (!aiOn && !lookupsOn) return { tidied, filled: 0 };
       const raw = await store.backend.get(['keepsake_ios_filled']);
       const filled = new Set(raw.keepsake_ios_filled || []);
-      const todo = items.filter((i) => K.capture.FILLED_KINDS.includes(K.kinds.kindOf(i)) && !filled.has(i.id)).slice(0, 20);
+      // Read again: a save the tidy found to be a recipe or place is filled in now. A save your provider
+      // hasn't read yet (you moved it into a Lifestyle view) is filled in again.
+      const todo = (await store.getItems()).filter((i) => K.capture.FILLED_KINDS.includes(K.kinds.kindOf(i)) && (!filled.has(i.id) || (aiOn && !i.understoodAt))).slice(0, 20);
       let last = 0;
       const waitTurn = async () => {
         const wait = 1100 - (Date.now() - last);
@@ -269,7 +281,28 @@
       const threshold = prefs.confidenceThreshold || 0.6;
       const FIELDS = ['title', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
       const report = { checked: 0, changed: 0, filed: [], error: '' };
-      const items = (await Promise.all(ids.map((id) => store.getItem(id)))).filter((i) => i && !i.deletedAt);
+      const runId = `ios-fix-${Date.now()}`;
+      const found = (await Promise.all(ids.map((id) => store.getItem(id)))).filter((i) => i && !i.deletedAt);
+      // What each save is, first (Chrome's Fix with AI, understand.js): a recipe, workout or place goes to
+      // its Lifestyle view with its details; the rest get the shopping check below.
+      const items = [];
+      for (const it of found) {
+        let r = null;
+        try {
+          r = await K.understand.understandItem(store, it.id, { force: true, runId });
+        } catch (e) {
+          report.error = String((e && e.message) || e);
+          if (/\((401|403|429)\)|API key|base URL/i.test(report.error)) return report;
+        }
+        if (r && K.kinds.hasOwnView(r.kind)) {
+          report.checked++;
+          if (r.changed) {
+            report.changed++;
+            report.filed.push({ id: it.id, collection: K.kinds.kindInfo(r.kind).plural });
+          }
+        } else items.push((await store.getItem(it.id)) || it);
+      }
+      report.logIds = (await store.getAiLog()).filter((e) => e.runId === runId).map((e) => e.id);
       for (let at = 0; at < items.length; at += K.provider.CLEANUP_BATCH) {
         const batch = items.slice(at, at + K.provider.CLEANUP_BATCH);
         const collections = await store.getCollections();
@@ -312,7 +345,7 @@
           for (const f of FIELDS) if (f in patch) before[f] = item[f] === undefined ? null : item[f];
           await store.updateItem(item.id, patch, { by: 'ai' });
           report.changed++;
-          log.push({ id: K.util.uid(), runId: `ios-fix-${Date.now()}`, at: K.util.nowIso(), itemId: item.id, itemTitle: patch.title || item.title, changes, before, after: patch, reason: ai.reason || '', undone: false });
+          log.push({ id: K.util.uid(), runId, at: K.util.nowIso(), itemId: item.id, itemTitle: patch.title || item.title, changes, before, after: patch, reason: ai.reason || '', undone: false });
         }
         if (log.length) await store.appendAiLog(log);
         report.logIds = [...(report.logIds || []), ...log.map((e) => e.id)];

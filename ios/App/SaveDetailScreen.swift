@@ -162,15 +162,24 @@ struct SaveDetailScreen: View {
 
     @ViewBuilder private var panel: some View {
         switch current.kind {
-        case "place": placePanel
-        case "recipe": recipePanel
-        case "workout": workoutPanel
+        case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placePanel }
+        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; recipePanel }
+        case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         default:
             if let text = [current.description, current.instagram?.caption].compactMap({ $0 }).first(where: { !$0.isEmpty }) {
                 Text(text).font(.system(.body, design: .serif)).foregroundStyle(t.ink).lineSpacing(4)
             }
         }
     }
+
+    /// Where the card's details came from ("Recipe read by AI"), worked out by Chrome's labels.
+    @ViewBuilder private var sourceNote: some View {
+        if let label = detail?.sourceLabel, !label.isEmpty {
+            Text(label).font(KSFont.note).foregroundStyle(t.inkMuted)
+        }
+    }
+
+    private func isDrafted(_ field: String) -> Bool { detail?.drafted?.contains(field) ?? false }
 
     private var placePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -187,7 +196,7 @@ struct SaveDetailScreen: View {
         VStack(alignment: .leading, spacing: 18) {
             let ingredients = d?["ingredients"]?.array?.compactMap(\.string) ?? []
             if !ingredients.isEmpty {
-                card("Ingredients") {
+                card("Ingredients", drafted: isDrafted("ingredients")) {
                     ForEach(Array(ingredients.enumerated()), id: \.offset) { i, line in
                         let on = checked.contains(i)
                         Button {
@@ -210,7 +219,7 @@ struct SaveDetailScreen: View {
                 }
             }
             if !steps.isEmpty {
-                card("Method") {
+                card("Method", drafted: isDrafted("steps")) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text("\(i + 1)").font(.system(.headline, design: .serif)).foregroundStyle(t.stamp)
@@ -231,7 +240,7 @@ struct SaveDetailScreen: View {
             if let goal { GoalCard(goal: goal) }
             let exercises = detail?.exercises ?? []
             if !exercises.isEmpty {
-                card("Exercises") {
+                card("Exercises", drafted: isDrafted("exercises")) {
                     ForEach(Array(exercises.enumerated()), id: \.offset) { _, line in
                         Text(line).font(.system(.body, design: .serif)).foregroundStyle(t.ink)
                             .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
@@ -253,9 +262,19 @@ struct SaveDetailScreen: View {
         }
     }
 
-    private func card<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
+    private func card<C: View>(_ title: String, drafted: Bool = false, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink).padding(.bottom, 8).accessibilityAddTraits(.isHeader)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                // What your AI provider wrote because the post doesn't say it.
+                if drafted {
+                    Text("AI draft").font(.caption.weight(.semibold)).foregroundStyle(t.ink)
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(Capsule().fill(t.stamp.opacity(0.18)))
+                        .accessibilityLabel("Drafted by AI: check it before you use it")
+                }
+            }
+            .padding(.bottom, 8)
             content()
         }
         .padding(16)

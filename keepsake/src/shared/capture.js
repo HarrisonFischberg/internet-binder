@@ -220,10 +220,10 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
   const { kind, details } = captureFacts(product);
   let classification = given || classifyCapture(product, kind, details, { collections, prefs, settings });
 
-  // With AI on, the save is stored first with the local result and marked "finishing details";
-  // the AI tidies the title and may re-file it afterwards (enrichItem). Nothing waits on the network.
-  // The tidy is written for products, so other kinds are left as captured.
-  const aiWanted = kind === 'product' && !collectionId && !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
+  // With AI on, the save is stored first with the local result and marked "finishing details"; your
+  // provider then works out what it is (a product may turn out to be a recipe) and tidies it (tidySave).
+  // Nothing waits on the network. Lifestyle saves get the same reading from their fill-in (fillSave).
+  const aiWanted = !FILLED_KINDS.includes(kind) && !collectionId && !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
 
   if (instant && !collectionId && !classification.isInbox && classification.confidence < AUTO_FILE_CONFIDENCE) {
     const pick = { collectionId: classification.collectionId, collectionName: classification.collectionName, taxonomyKey: classification.taxonomyKey, isNew: classification.isNew };

@@ -17,6 +17,8 @@ import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor,
 import { guessTopics } from './src/shared/topics.js';
 import { normalizeProduct, captureFacts, classifyCapture, saveCapture, FILLED_KINDS } from './src/shared/capture.js';
 import { fillSave, tidySave } from './src/shared/fill.js';
+import { understandItem } from './src/shared/understand.js';
+import { fetchPage } from './src/ai/pages.js';
 import { placeNamed, placeReviewReasons, stateCode } from './src/shared/places.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -164,7 +166,7 @@ async function publishFillJob() {
   }
 }
 const fillState = (i) => (i ? JSON.stringify([i.title, i.details]) : '');
-async function startFillBatch(ids, { review = false, verify = false, label = '', kind = '' } = {}) {
+async function startFillBatch(ids, { review = false, verify = false, understand = false, force = false, label = '', kind = '' } = {}) {
   if (fillJob?.running) return { ok: false, error: 'A check is already running.', job: fillJob };
   const job = { id: uid(), label: sanitizeText(label, 80), kind: sanitizeText(kind, 20), total: ids.length, done: 0, ready: 0, changed: 0, running: true, stopped: false, startedAt: nowIso(), finishedAt: '' };
   fillJob = job;
@@ -173,7 +175,7 @@ async function startFillBatch(ids, { review = false, verify = false, label = '',
     for (const id of ids) {
       if (job.stopped) break;
       const before = await store.getItem(id);
-      await queueFill(id, { review, verify });
+      await queueFill(id, { review, verify, understand, force });
       const after = await store.getItem(id);
       if (before && after && fillState(before) !== fillState(after)) job.changed++;
       // A place that was waiting in Places review and now has its name and state.
@@ -198,14 +200,22 @@ async function lookupAllowed(settings, which) {
 }
 
 // The fill-in itself is shared with iOS (src/shared/fill.js); this worker supplies the network, the
-// Lookups Chrome has granted, and OpenStreetMap's pace.
-function fillKind(id, opts = {}) {
+// Lookups Chrome has granted, and OpenStreetMap's pace. understand: an Instagram import or Fix with AI,
+// where any save (not only a Lifestyle one) is read by your provider first; force reads it again.
+async function fillKind(id, opts = {}) {
   const waitTurn = async () => {
     const wait = 1100 - (Date.now() - lastNominatim);
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastNominatim = Date.now();
   };
-  return fillSave(store, id, opts, { fetchFn: fetch, allowed: lookupAllowed, waitTurn });
+  if (opts.understand) {
+    try {
+      await understandItem(store, id, { force: !!opts.force }, { fetchPage });
+    } catch {
+      /* the provider didn't answer: the save stays as it was */
+    }
+  }
+  return fillSave(store, id, opts, { fetchFn: fetch, allowed: lookupAllowed, waitTurn, fetchPage });
 }
 
 // --- after the save: optional AI tidy ---------------------------------------------------------------
@@ -228,8 +238,12 @@ async function enrichPending() {
   return enrichQueue;
 }
 
-function enrichItem(id) {
-  return tidySave(store, id);
+// Your provider works out what the save is first (src/shared/understand.js); a save that turns out to be
+// a place, recipe, workout, film or book then gets its Lifestyle fill-in (Lookups for a place's pin).
+async function enrichItem(id) {
+  const res = await tidySave(store, id, { fetchPage });
+  if (res && FILLED_KINDS.includes(res.kind)) queueFill(id);
+  return res;
 }
 
 // What the capture card on the page needs to look like the person's chosen style and theme.
@@ -549,7 +563,7 @@ async function handleMessage(msg, sender) {
       if (typeof patch.collectionId === 'string' && patch.collectionId.startsWith('kind:')) patch.kind = patch.collectionId.slice(5);
       if (typeof patch.kind === 'string' && isKind(patch.kind) && hasOwnView(patch.kind)) {
         delete patch.collectionId;
-        await store.updateItem(item.id, kindChangePatch(item, patch.kind), { by: 'kind' });
+        await store.updateItem(item.id, kindChangePatch(item, patch.kind, { yours: true }), { by: 'kind' });
         queueFill(item.id);
         delete patch.kind;
       }
@@ -580,13 +594,13 @@ async function handleMessage(msg, sender) {
       return { ok: true, item: await store.getItem(item.id) };
     }
     case MSG.FILL_ITEM: {
-      queueFill(msg.itemId, { review: !!msg.review });
+      queueFill(msg.itemId, { review: !!msg.review, understand: !!msg.understand });
       return { ok: true };
     }
     case MSG.FILL_BATCH: {
       if (!fromExtensionPage) throw new Error('Not allowed.');
       const ids = (Array.isArray(msg.itemIds) ? msg.itemIds : []).filter((x) => typeof x === 'string').slice(0, 5000);
-      return startFillBatch([...new Set(ids)], { review: !!msg.review, verify: !!msg.verify, label: msg.label, kind: msg.kind });
+      return startFillBatch([...new Set(ids)], { review: !!msg.review, verify: !!msg.verify, understand: !!msg.understand, force: !!msg.force, label: msg.label, kind: msg.kind });
     }
     case MSG.FILL_STOP: {
       if (fillJob?.running) fillJob.stopped = true;

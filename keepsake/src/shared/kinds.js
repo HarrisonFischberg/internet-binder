@@ -4,11 +4,12 @@
 // kind: product | place | recipe | video | article | workout | media | book | link
 // details (by kind):
 //   recipe  { ingredients: [string], steps: [string], yield, totalMinutes, prepMinutes, cookMinutes,
-//             cuisine, category, author, source: 'page' | 'caption' | 'you' | 'ai-draft' }
+//             cuisine, category, author, source: 'page' | 'caption' | 'you' | 'ai' | 'ai-draft', drafted?: [field] }
 //   workout { exercises: [{ name, sets, reps, durationSeconds, restSeconds }], durationMinutes, focus,
-//             source: 'page' | 'caption' | 'you' }   (goals and check-ins are their own records: goals.js)
+//             source: 'page' | 'caption' | 'you' | 'ai' | 'ai-draft', drafted?: [field] }   (goals and check-ins: goals.js)
 //   place   { address, locality, region, postalCode, country, lat, lng, phone, cuisine, priceRange, hours: [string],
-//             category, source: 'page' | 'maps-link' | 'you' }
+//             category, source: 'page' | 'maps-link' | 'you' | 'ai' }
+//   drafted: the fields your AI provider wrote because the save didn't say (shown as "AI draft").
 //   video   { durationSeconds, channel, platform, publishedOn: 'YYYY-MM-DD', source: 'page' | 'you' }
 //   article { author, siteName, publishedOn: 'YYYY-MM-DD', wordCount, readingMinutes, source: 'page' | 'you' }
 //   media   { format: 'film' | 'series', year, director, runtimeMinutes, seasons, genres: [string], source: 'page' | 'you' }
@@ -780,10 +781,11 @@ export function detailsForKind(kind, item = {}) {
 export const LIFESTYLE = () => KINDS.filter((k) => hasOwnView(k.value));
 
 // You put a save into a Lifestyle view: it becomes that kind, with that kind's details worked out
-// from what it holds, and leaves any collection (collections are for shopping).
-export function kindChangePatch(item, kind) {
+// from what it holds, and leaves any collection (collections are for shopping). yours: you chose it,
+// so the kind is kept as yours and your AI provider reads the save again for that kind's details.
+export function kindChangePatch(item, kind, { yours = false } = {}) {
   const { details, title } = detailsForKind(kind, item);
-  return { kind, details, ...(title ? { title } : {}), collectionId: null, needsReview: false };
+  return { kind, details, ...(title ? { title } : {}), collectionId: null, needsReview: false, ...(yours ? { userFields: ['kind'], understoodAt: null } : {}) };
 }
 
 // You put a Lifestyle save into a collection: it becomes something to buy (a product when it has a
@@ -987,9 +989,16 @@ export function bookFromSchema(node) {
 
 // --- details ------------------------------------------------------------------------------------
 
-const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai-draft'];
-const WORKOUT_SOURCES = ['page', 'caption', 'you', 'ai'];
-const PLACE_SOURCES = ['page', 'maps-link', 'you'];
+// 'ai': read by your AI provider from the post, page or links; 'ai-draft': mostly written by it.
+const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai', 'ai-draft'];
+const WORKOUT_SOURCES = ['page', 'caption', 'you', 'ai', 'ai-draft'];
+const PLACE_SOURCES = ['page', 'maps-link', 'you', 'ai'];
+// Fields your AI provider drafted because the save didn't say (the recipe or routine is in the video).
+const DRAFTABLE = { recipe: ['ingredients', 'steps', 'yield', 'totalMinutes', 'prepMinutes', 'cookMinutes'], workout: ['exercises', 'durationMinutes'] };
+const draftedOf = (kind, details) => {
+  const list = Array.isArray(details.drafted) ? details.drafted.filter((f) => DRAFTABLE[kind].includes(f)) : [];
+  return list.length ? { drafted: [...new Set(list)] } : {};
+};
 const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 // Where looked-up details came from (OpenStreetMap, Wikidata, Open Library, or your AI provider), with a link.
 const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI'];
@@ -1015,6 +1024,7 @@ export function sanitizeDetails(kind, details) {
       category: clean(details.category, 80),
       author: clean(details.author, 80),
       source: RECIPE_SOURCES.includes(details.source) ? details.source : 'you',
+      ...draftedOf('recipe', details),
     };
   }
   if (kind === 'workout') {
@@ -1025,6 +1035,7 @@ export function sanitizeDetails(kind, details) {
       durationMinutes: Number.isFinite(mins) && mins > 0 && mins < 1440 ? Math.round(mins) : null,
       focus: clean(details.focus, 60),
       source: WORKOUT_SOURCES.includes(details.source) ? details.source : 'you',
+      ...draftedOf('workout', details),
     };
   }
   if (kind === 'place') {

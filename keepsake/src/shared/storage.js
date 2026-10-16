@@ -44,7 +44,9 @@ const LEGACY = { collections: KEYS.collections, items: KEYS.items, prefs: KEYS.p
 const LEGACY_KEYS = [...Object.values(LEGACY), AI_LOG_KEY];
 export const TRASH_DAYS = 30;
 // Fields a person edits by hand. Once edited, AI and enrichment leave them alone.
-const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'url', 'description', 'topics'];
+// Fields you set by hand: automation (Lookups, AI) leaves them as they are. kind: you put the save in a
+// Lifestyle view (or took it out), so your AI provider fills in that kind's details and never changes it.
+const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'url', 'description', 'topics', 'kind'];
 const CAPTURE_STATES = ['pending', 'complete', 'failed'];
 export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024, maxGoals: 2000, maxCheckins: 50000, maxCheckinsPerGoal: 2000 };
 
@@ -280,6 +282,8 @@ export function makeItem(input = {}) {
     userFields: uniqStrings(input.userFields, 20).filter((f) => USER_FIELDS.includes(f) || f === 'collectionId'),
     captureState: CAPTURE_STATES.includes(input.captureState) ? input.captureState : 'complete',
     captureError: sanitizeText(input.captureError, 200),
+    // When your AI provider last read the save to work out what it is (src/shared/understand.js).
+    understoodAt: typeof input.understoodAt === 'string' && !Number.isNaN(Date.parse(input.understoodAt)) ? input.understoodAt : null,
     deletedAt: typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt)) ? input.deletedAt : null,
     createdAt: input.createdAt || now,
     updatedAt: now,
@@ -671,9 +675,12 @@ export function createStore(kv, db = memoryRecordBackend()) {
     async updateItem(id, patch, { by = 'user' } = {}) {
       const [next] = await db.update('items', [id], (existing) => {
         if (!existing) return undefined;
-        const userFields = new Set(existing.userFields || []);
+        // A patch may add to them (kindChangePatch for a kind you picked); it never takes any away.
+        const userFields = new Set([...(existing.userFields || []), ...(Array.isArray(patch.userFields) ? patch.userFields : [])]);
         if (by === 'user') for (const f of USER_FIELDS) if (f in patch && patch[f] !== existing[f]) userFields.add(f);
-        return makeItem({ ...existing, ...patch, id, createdAt: existing.createdAt, userFields: [...userFields] });
+        // A kind you picked is read again by your AI provider, for that kind's details.
+        const rekinded = by === 'user' && 'kind' in patch && patch.kind !== existing.kind;
+        return makeItem({ ...existing, ...patch, id, createdAt: existing.createdAt, userFields: [...userFields], ...(rekinded ? { understoodAt: null } : {}) });
       });
       if (!next) throw new Error('Item not found');
       return next;

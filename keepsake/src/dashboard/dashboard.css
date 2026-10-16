@@ -738,6 +738,13 @@ a.sidebar-brand:hover .brand-name {
   background: var(--moss);
 }
 
+/* "AI draft" beside a heading: what your AI provider wrote because the save didn't say it. */
+.ai-draft-tag {
+  margin-left: 8px;
+  vertical-align: middle;
+  backdrop-filter: none;
+}
+
 .card-actions {
   position: absolute;
   top: 8px;

@@ -1,7 +1,8 @@
-// "Clean up with AI": checks saved items against their live product pages,
-// tidies titles, confirms prices, replaces broken images and files items into
-// collections. Confident fixes are applied straight away and every change is
-// written to an undo log (store.getAiLog), shown on the #ailog page.
+// "Clean up with AI": first works out what each save is (src/shared/understand.js): a recipe, workout,
+// place, film, book, video or article goes to its Lifestyle view with its details. What's left is
+// checked against its live product page: tidied titles, confirmed prices, replaced broken images and
+// filed into collections. Confident fixes are applied straight away and every change is written to an
+// undo log (store.getAiLog), shown on the #ailog page.
 //
 // Runs only when the user starts it from the dashboard. Live pages are fetched
 // from this browser without cookies (credentials: 'omit') and parsed with
@@ -10,7 +11,12 @@
 import { el, clear, formatPrice, parsePrice, pluralize, uid, nowIso } from '../shared/util.js';
 import { providerConfig, originFor, cleanupWithAI, CLEANUP_BATCH } from '../ai/provider.js';
 import * as UI from './ui.js';
-import { needsCollection, hasOwnView, kindOf } from '../shared/kinds.js';
+import { needsCollection, hasOwnView, kindOf, kindInfo } from '../shared/kinds.js';
+import { understandItem } from '../shared/understand.js';
+import { fetchPage } from '../ai/pages.js';
+
+// Saves read with your provider at once: one request each.
+const UNDERSTAND_AT_ONCE = 4;
 
 const ALL_SITES = '*://*/*';
 // Moving an item that is already in a collection needs more certainty than
@@ -74,7 +80,7 @@ export async function runAiCleanup(ctx, { scope = 'all' } = {}) {
 
   const cfg = providerConfig(settings);
   const products = items.filter((i) => i.type === 'product').length;
-  const requests = Math.ceil(items.length / CLEANUP_BATCH);
+  const requests = items.length + Math.ceil(items.length / CLEANUP_BATCH);
   const liveCheck = el('input', { type: 'checkbox' });
   liveCheck.checked = true;
   const go = await UI.openModal({
@@ -82,6 +88,7 @@ export async function runAiCleanup(ctx, { scope = 'all' } = {}) {
     body: [
       el('p', { class: 'modal-text' }, [`Keepsake will check ${scopeLabel(ctx, scope)} and apply confident fixes straight away. Every change is logged and can be undone.`]),
       el('ul', { class: 'modal-list' }, [
+        el('li', {}, ['Work out what each save is. Recipes, workouts, places, films, books, videos and articles move to their Lifestyle view with everything their card shows: ingredients and steps, exercises with sets and reps, a place’s street, city and cuisine. What the post doesn’t say (a recipe that’s only in the video) is drafted and marked AI draft.']),
         el('li', {}, ['Tidy titles (store names, SEO filler and promo text removed).']),
         el('li', {}, ['Confirm prices against the live page. The AI can only pick a price that appears on the page or in your saved data.']),
         el('li', {}, ['Replace missing or broken images with the page’s current one.']),
@@ -92,8 +99,8 @@ export async function runAiCleanup(ctx, { scope = 'all' } = {}) {
       el('label', { class: 'check' }, [liveCheck, el('span', {}, [`Read each item’s live product page (${pluralize(products, 'page', 'pages')}, fetched from this browser without your cookies). Needs access to all sites. Without it, prices can’t be confirmed.`])]),
       el('div', { class: 'payload-preview' }, [
         el('div', {}, [el('strong', {}, ['Destination: ']), cfg.baseUrl, ` (model ${cfg.model})`]),
-        el('div', {}, [el('strong', {}, ['Sent per item: ']), 'title, price, retailer, a short description, its current collection, and what the live page shows (title, price, availability). Plus your collection names.']),
-        el('div', {}, [el('strong', {}, ['Requests: ']), `about ${requests} (${CLEANUP_BATCH} items each), billed to your API key.`]),
+        el('div', {}, [el('strong', {}, ['Sent per item: ']), 'title, caption or description, hashtags, Instagram location tag, price, retailer, its current collection, its stored thumbnail (never a link to an image), and what its own page and the pages its caption links to show (only with access to all sites). Plus your collection names.']),
+        el('div', {}, [el('strong', {}, ['Requests: ']), `about ${requests} (one per item, then ${CLEANUP_BATCH} items each for the shopping check), billed to your API key.`]),
       ]),
     ],
     actions: [{ label: 'Cancel', quiet: true, value: false }, { label: 'Start', primary: true, value: true }],
@@ -124,7 +131,7 @@ export async function runAiCleanup(ctx, { scope = 'all' } = {}) {
 
 async function runWithProgress(ctx, items, { scope, key, useLive }) {
   const runId = uid();
-  const report = { runId, total: items.length, checked: 0, changed: 0, titles: 0, prices: 0, images: 0, moved: 0, stillReview: 0, failed: 0, notes: [], stopped: false, error: '' };
+  const report = { runId, total: items.length, checked: 0, changed: 0, titles: 0, prices: 0, images: 0, moved: 0, lifestyle: {}, details: 0, stillReview: 0, failed: 0, notes: [], stopped: false, error: '' };
   let stopped = false;
   const status = el('p', { class: 'modal-text' }, ['Starting…']);
   const fill = el('div', { class: 'progress-fill', style: { width: '0%' } });
@@ -146,9 +153,43 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
   };
 
   const threshold = Number(ctx.state.prefs?.confidenceThreshold) || 0.6;
+  const fatal = (msg) => /\((401|403|429)\)|API key|base URL|Failed to fetch|NetworkError/i.test(msg);
   for (let i = 0; i < items.length && !stopped; i += CLEANUP_BATCH) {
-    const batch = items.slice(i, i + CLEANUP_BATCH);
-    status.textContent = useLive ? `Reading pages and checking items ${i + 1}–${i + batch.length}…` : `Checking items ${i + 1}–${i + batch.length}…`;
+    const all = items.slice(i, i + CLEANUP_BATCH);
+    status.textContent = `Working out what items ${i + 1}–${i + all.length} are…`;
+    // What each save is, first: a recipe, workout or place leaves for its Lifestyle view with its details.
+    const read = new Map();
+    for (let at = 0; at < all.length && !stopped; at += UNDERSTAND_AT_ONCE) {
+      await Promise.all(all.slice(at, at + UNDERSTAND_AT_ONCE).map(async (item) => {
+        try {
+          read.set(item.id, await understandItem(ctx.store, item.id, { force: true, runId }, { fetchPage: useLive ? fetchPage : async () => null }));
+        } catch (e) {
+          read.set(item.id, { error: String((e && e.message) || e) });
+        }
+      }));
+    }
+    const firstError = [...read.values()].find((r) => r?.error);
+    if (firstError && fatal(firstError.error)) {
+      report.error = firstError.error;
+      report.failed += all.length;
+      update();
+      break;
+    }
+    const batch = [];
+    for (const item of all) {
+      const r = read.get(item.id);
+      if (r && !r.error && hasOwnView(r.kind)) {
+        report.checked++;
+        if (r.changed) {
+          report.changed++;
+          if (kindOf(item) !== r.kind) report.lifestyle[r.kind] = (report.lifestyle[r.kind] || 0) + 1;
+          else report.details++;
+        }
+      } else batch.push(item);
+    }
+    update();
+    if (!batch.length || stopped) continue;
+    status.textContent = useLive ? `Reading pages and checking items ${i + 1}–${i + all.length}…` : `Checking items ${i + 1}–${i + all.length}…`;
     const collections = ctx.state.collections;
     const prepared = await Promise.all(batch.map(async (item, n) => {
       const isProduct = item.type === 'product';
@@ -169,7 +210,7 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
       report.failed += batch.length;
       update();
       // A bad key, quota or unreachable provider fails every batch the same way: stop now.
-      if (/\((401|403|429)\)|API key|base URL|Failed to fetch|NetworkError/i.test(msg) || !report.checked) {
+      if (fatal(msg) || !report.checked) {
         report.error = msg;
         break;
       }
@@ -184,7 +225,7 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
         continue;
       }
       report.checked++;
-      const current = ctx.state.items.find((x) => x.id === p.item.id) || p.item;
+      const current = (await ctx.store.getItem(p.item.id)) || p.item;
       const { patch, changes } = planFixes(current, ai, p, { scope, threshold });
       noteIssues(report, current, p, ai, patch);
       if (!changes.length) continue;
@@ -265,6 +306,8 @@ function noteIssues(report, item, prepared, ai, patch) {
 
 async function showSummary(ctx, report) {
   const lines = [
+    ...Object.entries(report.lifestyle).map(([kind, n]) => `${n} moved to ${kindInfo(kind).plural}`),
+    report.details ? `${pluralize(report.details, 'Lifestyle save', 'Lifestyle saves')} filled in` : '',
     report.titles ? `${pluralize(report.titles, 'title', 'titles')} tidied` : '',
     report.prices ? `${pluralize(report.prices, 'price', 'prices')} updated` : '',
     report.images ? `${pluralize(report.images, 'image', 'images')} replaced` : '',

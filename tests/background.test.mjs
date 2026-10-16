@@ -271,17 +271,38 @@ test('fill-in: a place saved with lookups on gets its address and pin; with look
   assert.deepEqual([filled.details.address, filled.details.locality, filled.details.lat, filled.details.lookup.source], ['727 Manhattan Avenue', 'Greenpoint', 40.726, 'OpenStreetMap']);
 });
 
-test('fill-in with AI on: a post with no place name gets one from your AI provider, logged with Undo', async () => {
+test('with AI on: a post your provider recognises as a place becomes one, named, logged with Undo', async () => {
   await aiOn();
-  globalThis.fetch = aiReply({ name: 'Doughnut Plant', city: 'Lower East Side' });
+  globalThis.fetch = aiReply({ kind: 'place', confidence: 0.9, title: 'Doughnut Plant', details: { locality: 'Lower East Side', region: 'NY', cuisine: 'Doughnuts' }, reason: 'A doughnut shop' });
   const post = { title: 'Instagram', url: 'https://www.instagram.com/reel/fill2/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [], description: 'best donut in nyc, the tres leches one 😍' };
   const res = await F.send({ type: MSG.SAVE_ITEM, product: post, instant: true }, popup);
+  for (let i = 0; i < 60 && (await S.getItem(res.item.id)).title === 'Instagram'; i++) await new Promise((r) => setTimeout(r, 50));
+  const it = await S.getItem(res.item.id);
+  assert.deepEqual([it.kind, it.title, it.details.locality, it.details.region, it.details.cuisine, it.collectionId], ['place', 'Doughnut Plant', 'Lower East Side', 'NY', 'Doughnuts', null]);
+  const entry = (await S.getAiLog()).find((e) => e.itemId === it.id);
+  assert.ok(entry && entry.changes.some((c) => c.field === 'kind'));
+  assert.equal(entry.before.kind, 'link', 'Undo puts it back as it was');
+});
+
+test('with AI on: a place you filed yourself is read for that kind, and a kind you chose is never changed', async () => {
+  await aiOn();
+  let asked = '';
+  globalThis.fetch = async (url, opts) => { asked = String(opts?.body || ''); return aiReply({ kind: 'link', confidence: 0.4, title: 'Tres leches donut' })(); };
+  const post = { title: 'Instagram', url: 'https://www.instagram.com/reel/fill3/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [], description: 'the tres leches one 😍' };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: post, instant: true }, popup);
+  for (let i = 0; i < 60 && !(await S.getItem(res.item.id)).understoodAt; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal((await S.getItem(res.item.id)).kind, 'link', 'not sure: it stays a link');
+  globalThis.fetch = async (url, opts) => { asked = String(opts?.body || ''); return aiReply({ kind: 'place', confidence: 0.6, title: 'Doughnut Plant', details: { locality: 'New York' } })(); };
   await F.send({ type: MSG.UPDATE_ITEM, itemId: res.item.id, patch: { kind: 'place' } }, popup);
   for (let i = 0; i < 60 && (await S.getItem(res.item.id)).title === 'Instagram'; i++) await new Promise((r) => setTimeout(r, 50));
   const it = await S.getItem(res.item.id);
-  assert.deepEqual([it.kind, it.title, it.details.locality], ['place', 'Doughnut Plant', 'Lower East Side']);
-  const log = await S.getAiLog();
-  assert.ok(log.some((e) => e.itemId === it.id && e.reason === 'Filled in for Places'));
+  assert.deepEqual([it.kind, it.title, it.details.locality], ['place', 'Doughnut Plant', 'New York']);
+  assert.match(asked, /filed this as a place/);
+  // Your provider calling it something else later doesn't move it.
+  globalThis.fetch = aiReply({ kind: 'recipe', confidence: 0.99, title: 'Tres leches', details: { ingredients: ['milk', 'sugar'] } });
+  await F.send({ type: MSG.FILL_BATCH, itemIds: [it.id], force: true, understand: true }, popup);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal((await S.getItem(it.id)).kind, 'place');
 });
 
 test('one click on an Instagram reel: its own caption is read, so it saves as the place, with the address', async () => {
@@ -499,20 +520,22 @@ test('a venue listing’s labeled Address block with its city is a place, even w
 test('fill-in with AI on: an imported Instagram place that says nothing about where it is gets a name and city', async () => {
   await aiOn();
   let asked = '';
-  globalThis.fetch = async (url, opts) => { asked = String(opts?.body || ''); return aiReply({ name: 'Example Noodle Bar', city: 'East Village' })(); };
+  globalThis.fetch = async (url, opts) => { asked = String(opts?.body || ''); return aiReply({ kind: 'place', confidence: 0.9, title: 'Example Noodle Bar', details: { locality: 'East Village', address: '1 Invented Ave', phone: '212 555 0199' } })(); };
   const item = await S.addItem({ type: 'instagram', kind: 'place', title: 'Slurp-worthy noodles tonight', url: 'https://www.instagram.com/p/IMPFILL1/', details: { source: 'page' },
     instagram: { caption: 'Slurp-worthy noodles tonight 🍜', location: 'Example Noodle Bar' } });
   await F.send({ type: MSG.FILL_ITEM, itemId: item.id }, popup);
   for (let i = 0; i < 60 && (await S.getItem(item.id)).title !== 'Example Noodle Bar'; i++) await new Promise((r) => setTimeout(r, 50));
   const it = await S.getItem(item.id);
   assert.deepEqual([it.title, it.details.locality], ['Example Noodle Bar', 'East Village']);
+  assert.deepEqual([it.details.address, it.details.phone], ['', ''], 'a street or phone the post never gave is not kept');
   assert.match(asked, /Location tag: Example Noodle Bar/, 'the location tag goes with the caption');
-  // One that already has its street or pin is not sent.
-  asked = '';
-  const known = await S.addItem({ type: 'instagram', kind: 'place', title: 'Example Pizza', url: 'https://www.instagram.com/p/IMPFILL2/', details: { address: '7 Carmine St', locality: 'New York', source: 'page' }, instagram: { caption: 'pizza', location: 'Example Pizza' } });
+  // One that already has its street keeps it: the answer only fills gaps.
+  const known = await S.addItem({ type: 'instagram', kind: 'place', title: 'Example Pizza', url: 'https://www.instagram.com/p/IMPFILL2/', details: { address: '7 Carmine St', locality: 'New York', source: 'page' }, instagram: { caption: 'pizza 7 Carmine St', location: 'Example Pizza' } });
+  globalThis.fetch = aiReply({ kind: 'place', confidence: 0.9, title: 'Example Pizza', details: { address: '9 Other St', locality: 'Manhattan', cuisine: 'Pizza', region: 'NY' } });
   await F.send({ type: MSG.FILL_ITEM, itemId: known.id }, popup);
-  await new Promise((r) => setTimeout(r, 300));
-  assert.equal(asked, '');
+  for (let i = 0; i < 60 && !(await S.getItem(known.id)).understoodAt; i++) await new Promise((r) => setTimeout(r, 50));
+  const k = await S.getItem(known.id);
+  assert.deepEqual([k.details.address, k.details.locality, k.details.cuisine, k.details.region], ['7 Carmine St', 'New York', 'Pizza', 'NY']);
 });
 
 test('Places review: the caption is read again first; then your AI provider names the place and its state', async () => {

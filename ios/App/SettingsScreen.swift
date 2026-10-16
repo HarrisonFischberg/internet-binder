@@ -168,8 +168,9 @@ struct ConsentSheet: View {
         switch consent {
         case .ai: [
             "Uses your own key with the provider you choose. Keepsake has no AI server.",
-            "After a save: its title, price, description, shop and your collection names, to tidy the title and pick a collection. You can undo every change.",
-            "Filling in a Lifestyle save: its title, caption or description and site, to name the place, film or book, list a workout's exercises or draft a recipe. Labelled and undoable.",
+            "After a save: its title, caption or description, hashtags, location tag, site and the thumbnail stored on this iPhone, to work out what it is (a recipe, workout, place…) and fill in its card. What the post doesn't say is drafted and marked AI draft. You can undo every change.",
+            "Something to buy also gets its price, shop and your collection names, to tidy the title and pick a collection.",
+            "Nothing is fetched from the pages a post links to on this iPhone.",
             "Nothing is sent until you add a key. Turning this off stops it at once.",
         ]
         case .lookup("places"): ["Each place's name and city (and street, if known) goes to nominatim.openstreetmap.org, at most one a second.", "Only a result with the same name in the same area is used.", "No cookies, no account."]

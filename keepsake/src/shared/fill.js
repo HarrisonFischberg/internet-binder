@@ -5,20 +5,33 @@
 // AI calls go through src/ai/provider.js with the person's own key; nothing runs unless it is on.
 
 import { uid, nowIso, sanitizeText } from './util.js';
-import { kindOf, kindInfo, detailsForKind, genericTitle } from './kinds.js';
+import { kindOf, kindInfo, detailsForKind, genericTitle, hasOwnView } from './kinds.js';
 import { placeNamed, placeReviewReasons, stateCode } from './places.js';
 import { lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './lookups.js';
 import { FILLED_KINDS } from './capture.js';
-import { cleanupWithAI, identifyForKind, draftRecipe } from '../ai/provider.js';
+import { cleanupWithAI, identifyForKind } from '../ai/provider.js';
+import { understandItem } from './understand.js';
 
+// What a Lifestyle save is still missing, for Check with AI to read it again.
+function incompleteDetails(kind, d = {}) {
+  if (kind === 'recipe') return !d.ingredients?.length || !d.steps?.length;
+  if (kind === 'workout') return !d.exercises?.length;
+  if (kind === 'place') return !d.address || !d.locality || !d.region;
+  if (kind === 'media') return !d.year;
+  if (kind === 'book') return !d.author;
+  return false;
+}
+
+// With AI on, your provider reads the save once (src/shared/understand.js): what it is and that kind's
+// details. force: Check with AI, which reads it again when something is still missing.
 // review: from Places review: a place that isn't named or has no state goes to your AI provider even
 // when it has a title.
 // verify: Check with AI on the Places list: a place missing its street, city or state goes to your provider
 // too; only the missing fields are filled, and a name it already has stays.
-export async function fillSave(store, id, { review = false, verify = false } = {}, { fetchFn, allowed, waitTurn = async () => {} }) {
+export async function fillSave(store, id, { review = false, verify = false, force = false } = {}, { fetchFn, allowed, waitTurn = async () => {}, fetchPage = async () => null }) {
   let item = await store.getItem(id);
   if (!item || item.deletedAt) return;
-  const kind = kindOf(item);
+  let kind = kindOf(item);
   if (!FILLED_KINDS.includes(kind)) return;
   const settings = await store.getSettings();
   const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
@@ -48,19 +61,28 @@ export async function fillSave(store, id, { review = false, verify = false } = {
   const inReview = review && kind === 'place' && placeReviewReasons(item).length > 0;
   const incomplete = verify && kind === 'place' && (!d.address || !d.locality || !d.region);
   const unnamed = (genericTitle(item.title) || unknownPlace || inReview || incomplete) && !(item.userFields || []).includes('title');
-  if (key && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length) || (kind === 'recipe' && !d.ingredients?.length))) {
+  if (key && !review && !verify) {
+    // Your provider reads the save: what it is and everything that kind's card shows.
+    if (!item.understoodAt || (force && incompleteDetails(kind, d))) {
+      try {
+        await understandItem(store, id, { force: true }, { fetchPage });
+        item = await store.getItem(id);
+        d = item.details || {};
+        kind = kindOf(item);
+      } catch {
+        /* the provider didn't answer: the save stays as it was */
+      }
+      if (!FILLED_KINDS.includes(kind)) return; // it turned out to be something else
+    }
+  } else if (key && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length))) {
+    // Places review and the Places list's Check with AI: your provider names the place and its city.
     try {
       let patch = null;
-      if (kind === 'recipe') {
-        const r = await draftRecipe(item, settings, key);
-        patch = { details: { ...d, ...r } };
-      } else {
-        const r = await identifyForKind(kind, item, settings, key);
-        if (r && kind === 'place') patch = { title: placeNamed(item) && !genericTitle(item.title) ? item.title : r.name, details: { ...d, locality: d.locality || r.locality, address: d.address || r.address || '', region: d.region || stateCode(r.state) || r.state || '' } };
-        else if (r && kind === 'media') patch = { title: r.title, details: { ...d, year: d.year || r.year, format: r.format || d.format } };
-        else if (r && kind === 'book') patch = { title: r.title, details: { ...d, author: d.author || r.author } };
-        else if (r && kind === 'workout') patch = { details: { ...d, exercises: r.exercises, durationMinutes: d.durationMinutes || r.durationMinutes, source: 'ai' } };
-      }
+      const r = await identifyForKind(kind, item, settings, key);
+      if (r && kind === 'place') patch = { title: placeNamed(item) && !genericTitle(item.title) ? item.title : r.name, details: { ...d, locality: d.locality || r.locality, address: d.address || r.address || '', region: d.region || stateCode(r.state) || r.state || '' } };
+      else if (r && kind === 'media') patch = { title: r.title, details: { ...d, year: d.year || r.year, format: r.format || d.format } };
+      else if (r && kind === 'book') patch = { title: r.title, details: { ...d, author: d.author || r.author } };
+      else if (r && kind === 'workout') patch = { details: { ...d, exercises: r.exercises, durationMinutes: d.durationMinutes || r.durationMinutes, source: 'ai' } };
       // Only what the answer actually changes is applied and logged.
       if (patch) for (const k of Object.keys(patch)) if (JSON.stringify(patch[k]) === JSON.stringify(item[k])) delete patch[k];
       if (patch && Object.keys(patch).length) {
@@ -103,26 +125,40 @@ export async function fillSave(store, id, { review = false, verify = false } = {
   }
 }
 
-// Runs once per pending item. Re-reads the item first, so anything the person did in the meantime
-// wins: a hand-edited title is kept, and a save they filed or moved is never re-filed. Every change
-// goes to the AI change log with Undo. If the provider fails, the save simply stays as it was.
-export async function tidySave(store, id) {
+// Runs once per pending item. Your provider first works out what the save is (src/shared/understand.js):
+// a recipe, workout or place leaves for its Lifestyle view with its details. Anything else gets the
+// shopping tidy: a cleaner title and a collection. Re-reads the item first, so anything the person did
+// in the meantime wins: a hand-edited title is kept, and a save they filed or moved is never re-filed.
+// Every change goes to the AI change log with Undo. If the provider fails, the save simply stays as it
+// was. Returns the save's kind afterwards, so the caller can fill in a Lifestyle save.
+export async function tidySave(store, id, deps = {}) {
   const item = await store.getItem(id);
-  if (!item || item.deletedAt || item.captureState !== 'pending') return;
+  if (!item || item.deletedAt || item.captureState !== 'pending') return null;
   const [collections, prefs, settings, key] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings(), store.getSecret('aiApiKey')]);
   if (!settings.ai?.on || !key) {
     await store.updateItem(id, { captureState: 'complete' }, { by: 'machine' });
-    return;
+    return { kind: kindOf(item) };
+  }
+  try {
+    await understandItem(store, id, {}, deps);
+  } catch {
+    /* the provider didn't answer: the tidy below tries once more and records why if it fails */
+  }
+  const read = await store.getItem(id);
+  if (!read || read.deletedAt) return null;
+  if (hasOwnView(kindOf(read))) {
+    await store.updateItem(id, { captureState: 'complete', captureError: '' }, { by: 'machine' });
+    return { kind: kindOf(read) };
   }
   let ai = null;
   try {
     ai = (await cleanupWithAI([{ ref: 'new', item, live: null }], collections, settings, key)).get('new') || null;
   } catch (e) {
     await store.updateItem(id, { captureState: 'complete', captureError: sanitizeText(`AI tidy skipped: ${(e && e.message) || e}`, 200) }, { by: 'machine' }).catch(() => {});
-    return;
+    return { kind: kindOf(read) };
   }
   const current = await store.getItem(id);
-  if (!current || current.deletedAt) return;
+  if (!current || current.deletedAt) return null;
   const threshold = prefs.confidenceThreshold || 0.6;
   const userFields = new Set(current.userFields || []);
   const patch = { captureState: 'complete', captureError: '' };
@@ -147,5 +183,5 @@ export async function tidySave(store, id) {
   if (changes.length) {
     const { captureState, captureError, ...after } = patch;
     await store.appendAiLog([{ id: uid(), runId: `save-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after, reason: (ai && ai.reason) || '', undone: false }]);
-  }
+  }  return { kind: kindOf(current) };
 }

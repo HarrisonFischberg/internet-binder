@@ -661,7 +661,8 @@ function checkWithAI() {
       // From the list or the map: every place, checked for what's missing.
       return startFillJob(items.map((i) => i.id), { review: true, verify: true, kind: 'place', label: 'Checking places with AI' });
     }
-    return startFillJob(items.map((i) => i.id), { label: `Checking ${kindInfo(r.id).plural.toLowerCase()} with AI`, kind: r.id });
+    // force: a save your provider already read is read again when its card still has gaps.
+    return startFillJob(items.map((i) => i.id), { label: `Checking ${kindInfo(r.id).plural.toLowerCase()} with AI`, kind: r.id, force: true });
   }
   return runAiCleanup(ctx, { scope: r.name === 'c' ? r.id : r.name === 'favorites' || r.name === 'review' ? r.name : 'all' });
 }
@@ -1520,7 +1521,7 @@ async function openPlace(id) {
   const d = item.details || {};
   const where = addressLine(d);
   const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
-  const sourceLabel = d.lookup?.source && d.lookup.source !== 'AI' ? '' : { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you' }[d.source] || '';
+  const sourceLabel = d.lookup?.source && d.lookup.source !== 'AI' ? '' : { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you', ai: 'Details found by AI' }[d.source] || '';
   const copyAddress = el('button', { type: 'button', class: 'btn btn-sm', onClick: async () => {
     try {
       await navigator.clipboard.writeText(where);
@@ -1761,7 +1762,7 @@ async function openWorkout(id) {
   const d = item.details || {};
   const exercises = d.exercises || [];
   const aiReady = !!state.settings?.ai?.on && !!(await store.getSecret('aiApiKey').catch(() => ''));
-  const sourceLabel = { page: 'Exercises from the page', caption: 'Exercises from the caption', you: 'Exercises added by you' }[d.source] || '';
+  const sourceLabel = { page: 'Exercises from the page', caption: 'Exercises from the caption', you: 'Exercises added by you', ai: 'Exercises read by AI', 'ai-draft': 'Exercises drafted by AI: check them before you train' }[d.source] || '';
   const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const facts = [
     exercises.length ? ['Exercises', String(exercises.length)] : null,
@@ -1791,7 +1792,7 @@ async function openWorkout(id) {
     ]),
     el('div', { class: 'recipe-columns workout-columns' }, [
       el('section', { class: 'recipe-col' }, [
-        el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Exercises']), el('span', { class: 'recipe-count' }, [exercises.length ? pluralize(exercises.length, 'exercise', 'exercises') : ''])]),
+        el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Exercises', isDrafted(d, 'exercises') ? draftTag() : null]), el('span', { class: 'recipe-count' }, [exercises.length ? pluralize(exercises.length, 'exercise', 'exercises') : ''])]),
         exercises.length ? el('div', { class: 'table-scroll' }, [table]) : el('div', { class: 'recipe-empty' }, [
           el('p', {}, ['Keepsake couldn’t find exercises on this page. Add them yourself.']),
           el('p', { class: 'help' }, ['In Edit details, write one exercise per line, like “Squats 3×12” or “Plank 45s”.']),
@@ -2017,6 +2018,10 @@ async function openWorkout(id) {
   });
 }
 
+// "AI draft" next to what your AI provider wrote because the save didn't say it (details.drafted).
+const isDrafted = (d, field) => Array.isArray(d?.drafted) && d.drafted.includes(field);
+const draftTag = () => el('span', { class: 'badge badge-brass ai-draft-tag', title: 'Your AI provider wrote this because the post doesn’t say it. Check it before you use it.' }, ['AI draft']);
+
 // The recipe view: a large dialog with the photo, what you need and what to do. Checking off
 // ingredients and steps is just for cooking along (not saved). Editing lives in Edit details.
 async function openRecipe(id) {
@@ -2028,7 +2033,7 @@ async function openRecipe(id) {
   const d = item.details || {};
   const ingredients = d.ingredients || [];
   const steps = d.steps || [];
-  const sourceLabel = { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', 'ai-draft': 'Drafted by AI: check it before you cook' }[d.source] || '';
+  const sourceLabel = { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', ai: 'Recipe read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' }[d.source] || '';
   const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const facts = [
     d.totalMinutes ? ['Time', formatMinutes(d.totalMinutes)] : null,
@@ -2069,8 +2074,8 @@ async function openRecipe(id) {
         el('p', { class: 'help' }, ['Add them yourself in Edit details, or, with Optional AI on, ask for a draft there.']),
       ])
       : el('div', { class: 'recipe-columns' }, [
-        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Ingredients']), counter]), ingList]),
-        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Method']), el('span', { class: 'recipe-count' }, [steps.length ? `${steps.length} steps · tap a step when it’s done` : ''])]), stepList]),
+        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Ingredients', isDrafted(d, 'ingredients') ? draftTag() : null]), counter]), ingList]),
+        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Method', isDrafted(d, 'steps') ? draftTag() : null]), el('span', { class: 'recipe-count' }, [steps.length ? `${steps.length} steps · tap a step when it’s done` : ''])]), stepList]),
       ]),
   ]);
   const cooked = item.status === 'done';
@@ -2416,7 +2421,7 @@ async function openItem(id) {
 
   function placePanel() {
     const box = el('div', { class: 'recipe-panel' });
-    const sourceLabel = { page: 'From the page', 'maps-link': 'From a maps link', you: 'Added by you' }[startPlace.source] || '';
+    const sourceLabel = { page: 'From the page', 'maps-link': 'From a maps link', you: 'Added by you', ai: 'Found by AI' }[startPlace.source] || '';
     const f = placeFields;
     box.append(...[
       el('div', { class: 'recipe-head' }, [el('h3', {}, ['Place']), sourceLabel ? el('span', { class: 'recipe-facts' }, [sourceLabel]) : null]),
@@ -2436,7 +2441,7 @@ async function openItem(id) {
 
   function workoutPanel() {
     const box = el('div', { class: 'recipe-panel' });
-    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you' }[startWorkout.source] || '';
+    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you', ai: 'Read by AI', 'ai-draft': 'Drafted by AI' }[startWorkout.source] || '';
     box.append(el('div', { class: 'recipe-head' }, [el('h3', {}, ['Workout']), sourceLabel ? el('span', { class: 'recipe-facts' }, [sourceLabel]) : null]));
     const check = () => {
       const { exercises, unread } = readWorkoutLines();
@@ -2454,7 +2459,7 @@ async function openItem(id) {
 
   function recipePanel() {
     const box = el('div', { class: 'recipe-panel' });
-    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you', 'ai-draft': 'Drafted by AI: check it before you cook' }[recipe.source] || '';
+    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you', ai: 'Read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' }[recipe.source] || '';
     const facts = [recipe.yield, formatMinutes(recipe.totalMinutes), sourceLabel].filter(Boolean);
     box.append(el('div', { class: 'recipe-head' }, [el('h3', {}, ['Recipe']), facts.length ? el('span', { class: 'recipe-facts' }, [facts.join(' · ')]) : null]));
     if (drafted) box.append(el('p', { class: 'notice notice-warn' }, ['Your AI provider drafted this from the title and caption. It’s a suggestion, not the creator’s recipe. Edit it, then Save changes to keep it (you can undo it from the AI change log).']));
@@ -2473,7 +2478,7 @@ async function openItem(id) {
         el('div', { class: 'price-inline' }, [yieldInput, minutes]),
         el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => {
           const lines = (t) => t.value.split('\n').map((x) => x.trim()).filter(Boolean);
-          recipe = { ...recipe, ingredients: lines(ing), steps: lines(steps), yield: yieldInput.value.trim(), totalMinutes: Number(minutes.value) || null, source: drafted ? 'ai-draft' : (recipe.source === 'page' || recipe.source === 'caption') && !recipeChanged(ing, steps) ? recipe.source : 'you' };
+          recipe = { ...recipe, ingredients: lines(ing), steps: lines(steps), yield: yieldInput.value.trim(), totalMinutes: Number(minutes.value) || null, source: drafted ? 'ai-draft' : (recipe.source === 'page' || recipe.source === 'caption' || recipe.source === 'ai') && !recipeChanged(ing, steps) ? recipe.source : 'you', drafted: recipeChanged(ing, steps) ? [] : recipe.drafted };
           recipeEditing = false;
           renderKindPanel();
         } }, ['Done editing'])]),
@@ -2587,7 +2592,8 @@ async function openItem(id) {
           const was = sanitizeDetails('workout', startWorkout);
           const same = JSON.stringify(sanitizeDetails('workout', { ...next, source: was.source }).exercises) === JSON.stringify(was.exercises);
           const fromPrefill = prefilledText && workoutLines.value.trim() === prefilledText.trim();
-          patch.details = sanitizeDetails('workout', { ...next, source: same && startKind === 'workout' ? was.source : fromPrefill ? (item.type === 'instagram' ? 'caption' : 'page') : 'you' });
+          // An AI draft you leave as it is stays marked; one you change is yours.
+          patch.details = sanitizeDetails('workout', { ...next, source: same && startKind === 'workout' ? was.source : fromPrefill ? (item.type === 'instagram' ? 'caption' : 'page') : 'you', drafted: same && startKind === 'workout' ? was.drafted : [] });
         } else if (kindSelect.value === 'place') {
           const next = Object.fromEntries(Object.entries(placeFields).map(([k, i]) => [k, i.value.trim()]));
           next.hours = placeHours.value.split('\n').map((x) => x.trim()).filter(Boolean);
@@ -3249,7 +3255,7 @@ async function putItems(items, target, { learn = 'light' } = {}) {
   if (target.startsWith('kind:')) {
     const kind = target.slice(5);
     for (const it of items) {
-      await store.updateItem(it.id, kindChangePatch(it, kind), { by: 'kind' });
+      await store.updateItem(it.id, kindChangePatch(it, kind, { yours: true }), { by: 'kind' });
       send({ type: MSG.FILL_ITEM, itemId: it.id });
     }
     UI.toast(`Moved to ${kindInfo(kind).plural}.`);

@@ -71,6 +71,10 @@ public struct SaveDetail: Decodable, Sendable {
     public let maps: Maps?
     /// "25 min" (formatMinutes).
     public let time: String
+    /// Where the details came from ("Recipe read by AI"), or nothing.
+    public let sourceLabel: String?
+    /// The fields your AI provider drafted because the save didn't say them ("ingredients", "steps", "exercises").
+    public let drafted: [String]?
 }
 
 public struct GoalView: Decodable, Sendable {

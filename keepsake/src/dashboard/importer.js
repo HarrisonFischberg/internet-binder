@@ -303,8 +303,12 @@ export async function importPosts(ctx, scan, posts) {
     const col = await ctx.store.getCollection(item.collectionId);
     if (col && !col.coverImage && item.image) await ctx.store.updateCollection(col.id, { coverImage: item.image });
   }
-  // Lifestyle saves: the worker fills in what the post didn't say (Lookups and Optional AI, if on).
-  for (const item of created) if (LIFESTYLE().some((k) => k.value === item.kind)) ctx.send({ type: MSG.FILL_ITEM, itemId: item.id });
+  // With Optional AI on, your provider reads every imported post in the background (what it is, and its
+  // card's details: src/shared/understand.js), with progress under the header. Otherwise Lifestyle saves
+  // get the Lookups you turned on.
+  const aiOn = !!ctx.state.settings?.ai?.on;
+  const batch = aiOn && created.length ? await ctx.send({ type: MSG.FILL_BATCH, itemIds: created.map((i) => i.id), understand: true, label: `Reading “${igName}” with AI` }) : null;
+  if (!batch?.ok) for (const item of created) if (aiOn || LIFESTYLE().some((k) => k.value === item.kind)) ctx.send({ type: MSG.FILL_ITEM, itemId: item.id, understand: aiOn });
   const cols = await ctx.store.getCollections();
   const where = [...places.entries()].map(([key, count]) => (key.startsWith('kind:')
     ? { label: kindInfo(key.slice(5)).plural, count, kind: key.slice(5) }
@@ -322,7 +326,8 @@ async function showImportSummary(ctx, s, igName) {
   const notes = [
     s.skipped ? `${pluralize(s.skipped, 'post was', 'posts were')} already in Keepsake, so ${s.skipped === 1 ? 'it was' : 'they were'} skipped.` : '',
     s.unread ? `${pluralize(s.unread, 'post', 'posts')} couldn’t be read${s.loginWalls ? ' (Instagram showed a login page)' : ''}, so ${s.unread === 1 ? 'it was' : 'they were'} imported with what the grid showed.` : '',
-    hasPlaces ? 'Places are being filled in (addresses and map pins) in the background, with the Lookups and AI you turned on.' : '',
+    aiOn ? 'Your AI provider is reading each post in the background: recipes, workouts and places move to their Lifestyle views with their details as it goes (progress is under the header).' : '',
+    hasPlaces && !aiOn ? 'Places are being filled in (addresses and map pins) in the background, with the Lookups you turned on.' : '',
   ].filter(Boolean);
   const choice = await UI.openModal({
     title: `Imported ${pluralize(s.imported, 'post', 'posts')} from “${igName}”`,
