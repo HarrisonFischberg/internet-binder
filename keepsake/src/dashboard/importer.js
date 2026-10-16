@@ -8,6 +8,7 @@ import { MSG } from '../shared/messages.js';
 import { LIFESTYLE, kindInfo, kindForCollectionName, detailsForKind, recipeFromText, workoutFromText, looksLikeWorkout, hasIngredientHeading, isWorkoutPost, placeFromText } from '../shared/kinds.js';
 import { el, clear, sanitizeText, pluralize } from '../shared/util.js';
 import { classify } from '../shared/categorizer.js';
+import { getThumbs, thumbKey } from '../instagram/scanStore.js';
 import { normalizeUrl } from '../shared/url.js';
 import { titleFromCaption } from '../instagram/post.js';
 import { enrichPosts, hasInstagramAccess, requestInstagramAccess } from '../instagram/enrich.js';
@@ -251,7 +252,10 @@ export async function importPosts(ctx, scan, posts) {
   const newCollections = new Map();
   let review = 0;
   let skipped = 0;
-  for (const post of posts) {
+  // The thumbnails the scan copied (src/instagram/scanStore.js); a post without one keeps Instagram's link.
+  const thumbs = await getThumbs(posts.map(thumbKey)).catch(() => new Map());
+  for (const raw of posts) {
+    const post = raw.thumbnail?.startsWith('data:') || !thumbs.has(thumbKey(raw)) ? raw : { ...raw, thumbnail: thumbs.get(thumbKey(raw)) };
     if (await ctx.store.findByUrl(post.url)) {
       skipped++;
       continue;

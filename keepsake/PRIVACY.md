@@ -20,7 +20,8 @@ All data lives in the browser profile you installed Keepsake in: your saves, col
 | IndexedDB `aiLog` | What *Fix with AI*, and the AI tidy after a save, changed (item id and title, each field's value before and after, the AI's one-line reason), capped at 3,000 entries, so changes can be undone. **Excluded from exports.** |
 | `keepsake_meta` | Schema version for migrations. |
 | `keepsake_items`, `keepsake_collections`, `keepsake_prefs`, `keepsake_importHistory`, `keepsake_aiLog` | Only if you used Keepsake 1.3 or earlier: your library as it was before 1.4 moved it to IndexedDB, left unchanged so an older version still works. Erased by *Delete all local data*. |
-| `keepsake_igScan` (session only) | Progress and results of an Instagram scan in progress; cleared after import or when the browser closes. |
+| `keepsake_igScan` (session only) | A summary of an Instagram scan in progress (status, how many posts, which tab, the collection's name); cleared after import or when the browser closes. |
+| IndexedDB `keepsake-scan` | The posts an Instagram scan in progress found (links, grid captions, creator names) and the thumbnails it copied (small JPEGs, ≤ 320 px), until you import them; cleared when the next scan starts, after its import and with *Delete all local data*. |
 
 Keepsake does **not** store browsing history, page contents beyond the fields above, cookies, form data, credentials, or anything from pages you did not save from.
 

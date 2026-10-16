@@ -583,3 +583,89 @@ test('Check with AI on the Places list: a place missing its city or state gets t
   assert.equal(asked, 1, 'the complete place was not sent');
   assert.deepEqual(await S.getItem(complete.id).then((c) => [c.title, c.details.locality]), ['Example Diner', 'Austin']);
 });
+
+test('instagram scan: thumbnails arrive one by one into IndexedDB; the post list and its messages stay small', async () => {
+  const { getThumbs } = await import('../keepsake/src/instagram/scanStore.js');
+  F.state.sessionQuota = { bytes: 1_000_000 }; // a 1 MB area; 80 thumbnails are ~3 MB
+  try {
+    const igTab = { tab: { id: 9, url: 'https://www.instagram.com/me/saved/food/123/' }, url: 'https://www.instagram.com/me/saved/food/123/' };
+    const thumb = (n) => `data:image/jpeg;base64,${String(n).padStart(4, '0')}${'A'.repeat(40_000)}`;
+    const posts = Array.from({ length: 80 }, (_, n) => ({ url: `https://www.instagram.com/p/FOOD${n}x/`, shortcode: `FOOD${n}x`, type: 'post', thumbnail: `https://scontent.cdninstagram.com/${n}.jpg`, captured: true, caption: `Post ${n}` }));
+    for (const [n, p] of posts.entries()) assert.equal((await F.send({ type: MSG.IG_SCAN_THUMB, shortcode: p.shortcode, data: thumb(n) }, igTab)).ok, true);
+    assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', collectionName: 'Food', posts }, igTab)).ok, true);
+    assert.ok(Buffer.byteLength(JSON.stringify(F.session)) < 100_000, 'the session entry stays small');
+    const { scan } = await F.send({ type: MSG.IG_SCAN_STATE }, popup);
+    assert.equal(scan.status, 'done');
+    assert.equal(scan.posts.length, 80);
+    assert.equal(scan.posts[42].thumbnail, 'https://scontent.cdninstagram.com/42.jpg');
+    assert.equal((await getThumbs(['FOOD42x'])).get('FOOD42x'), thumb(42));
+    // Only an Instagram tab can hand in a thumbnail, and only a picture.
+    assert.equal((await F.send({ type: MSG.IG_SCAN_THUMB, shortcode: 'FOOD1x', data: thumb(1) }, pageTab)).ok, false);
+    assert.equal((await F.send({ type: MSG.IG_SCAN_THUMB, shortcode: 'FOOD1x', data: 'javascript:alert(1)' }, igTab)).ok, false);
+    // An older page that still puts the pictures in the list: they are moved out too.
+    await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', collectionName: 'Food', posts: posts.map((p, n) => ({ ...p, thumbnail: thumb(n), originalThumbnail: p.thumbnail })) }, igTab);
+    assert.ok(Buffer.byteLength(JSON.stringify(F.session)) < 100_000);
+    await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
+    assert.equal((await F.send({ type: MSG.IG_SCAN_STATE }, popup)).scan, null);
+    assert.equal((await getThumbs(['FOOD42x'])).size, 0);
+    // The session copy is a summary: 80 posts fit an area of 2 KB, and only a change is written.
+    F.state.sessionQuota = { bytes: 2_000 };
+    assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'scanning', collectionName: 'Food', posts }, igTab)).ok, true);
+    assert.equal(F.session.keepsake_igScan.count, 80);
+    assert.equal(F.session.keepsake_igScan.posts, undefined);
+    assert.equal((await F.send({ type: MSG.IG_SCAN_STATE }, popup)).scan.posts.length, 80);
+    let writes = 0;
+    const count = (changes, area) => { if (area === 'session' && changes.keepsake_igScan) writes++; };
+    F.listeners.storage.add(count);
+    for (let i = 0; i < 5; i++) await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'scanning', collectionName: 'Food', posts }, igTab);
+    F.listeners.storage.delete(count);
+    assert.equal(writes, 0, 'the same progress again writes nothing');
+    // No room even for that: the worker answers instead of throwing at the page.
+    F.state.sessionQuota = { bytes: 50 };
+    assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', collectionName: 'Food', posts }, igTab)).ok, false);
+  } finally {
+    F.state.sessionQuota = { bytes: Infinity };
+    await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
+  }
+});
+
+test('instagram scan: a new scan starts even when an older one left the session area full', async () => {
+  const igTab = { tab: { id: 9, url: 'https://www.instagram.com/me/saved/food/123/' }, url: 'https://www.instagram.com/me/saved/food/123/' };
+  // What 1.4.3 left behind in Safari: the scan with its thumbnails, filling the area.
+  F.session.keepsake_igScan = { tabId: 9, status: 'scanning', posts: [{ url: 'https://www.instagram.com/p/OLD1x/', shortcode: 'OLD1x', thumbnail: `data:image/jpeg;base64,${'A'.repeat(950_000)}` }] };
+  F.state.sessionQuota = { bytes: 1_000_000, countsReplaced: true };
+  try {
+    assert.equal((await F.send({ type: MSG.IG_START_SCAN, tabId: 9 }, popup)).ok, true);
+    const posts = [{ url: 'https://www.instagram.com/p/NEW1x/', shortcode: 'NEW1x', type: 'post', thumbnail: 'https://scontent.cdninstagram.com/1.jpg' }];
+    assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'scanning', collectionName: 'Food', posts }, igTab)).ok, true);
+    const { scan } = await F.send({ type: MSG.IG_SCAN_STATE }, popup);
+    assert.deepEqual(scan.posts.map((p) => p.shortcode), ['NEW1x']);
+    // A full area mid-scan: the write still lands.
+    F.session.keepsake_igScan = { ...F.session.keepsake_igScan, filler: 'A'.repeat(950_000) };
+    assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', collectionName: 'Food', posts }, igTab)).ok, true);
+    assert.equal((await F.send({ type: MSG.IG_SCAN_STATE }, popup)).scan.status, 'done');
+  } finally {
+    F.state.sessionQuota = { bytes: Infinity };
+    await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
+  }
+});
+
+test('instagram scan: 289 posts reported every second fit a session area that never frees what it wrote', async () => {
+  const igTab = { tab: { id: 9, url: 'https://www.instagram.com/me/saved/food/123/' }, url: 'https://www.instagram.com/me/saved/food/123/' };
+  F.state.sessionQuota = { bytes: 200_000, leaks: true };
+  try {
+    await F.send({ type: MSG.IG_START_SCAN, tabId: 9 }, popup);
+    const all = Array.from({ length: 289 }, (_, n) => ({ url: `https://www.instagram.com/p/ALL${n}xx/`, shortcode: `ALL${n}xx`, type: 'post', thumbnail: `https://scontent.cdninstagram.com/${n}.jpg`, caption: 'A long caption about sugar free marshmallows '.repeat(20) }));
+    // The page reports its whole list on every tick, a few new posts at a time, then several ticks with nothing new.
+    for (let tick = 0, n = 0; n < 289 || tick < 120; tick++, n = Math.min(289, n + 3)) {
+      assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'scanning', collectionName: 'Food', posts: all.slice(0, n) }, igTab)).ok, true, `tick ${tick}`);
+    }
+    assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', reason: 'end', collectionName: 'Food', posts: all }, igTab)).ok, true);
+    const { scan } = await F.send({ type: MSG.IG_SCAN_STATE }, popup);
+    assert.equal(scan.status, 'done');
+    assert.equal(scan.posts.length, 289);
+  } finally {
+    F.state.sessionQuota = { bytes: Infinity };
+    await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
+  }
+});

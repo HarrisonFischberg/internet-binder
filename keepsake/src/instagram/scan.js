@@ -10,7 +10,7 @@
 (function keepsakeInstagramScan() {
   const adapter = globalThis.KeepsakeInstagram;
   if (!adapter || !globalThis.chrome?.runtime?.id) return;
-  const MSG = { IG_SCAN_UPDATE: 'keepsake:ig-update', IG_STOP_SCAN: 'keepsake:ig-stop' };
+  const MSG = { IG_SCAN_UPDATE: 'keepsake:ig-update', IG_SCAN_THUMB: 'keepsake:ig-thumb', IG_STOP_SCAN: 'keepsake:ig-stop' };
 
   const state = globalThis.__keepsakeIgScan || (globalThis.__keepsakeIgScan = { running: false, posts: new Map(), timer: null });
 
@@ -66,8 +66,16 @@
       const rec = state.posts.get(post.shortcode);
       if (rec) {
         rec.originalThumbnail = rec.thumbnail;
-        if (data) rec.thumbnail = data;
         rec.captured = !!data;
+        // Sent once, on its own: progress reports carry the post list without pictures. A collection's
+        // thumbnails run to megabytes, and Safari stops delivering messages that big.
+        if (data) {
+          try {
+            chrome.runtime.sendMessage({ type: MSG.IG_SCAN_THUMB, shortcode: post.shortcode, data }, () => void chrome.runtime.lastError);
+          } catch {
+            /* worker gone */
+          }
+        }
       }
     });
   }

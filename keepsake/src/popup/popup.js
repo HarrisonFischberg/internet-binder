@@ -718,7 +718,8 @@ async function startScan() {
 }
 
 function renderScan(scan) {
-  const n = scan.posts ? scan.posts.length : 0;
+  // From the worker the scan has its posts; the session copy it watches has only their count.
+  const n = scan.posts ? scan.posts.length : scan.count || 0;
   if (scan.collectionName) {
     $('igTitle').textContent = `“${scan.collectionName}”`;
     $('igName').textContent = scan.collectionName;

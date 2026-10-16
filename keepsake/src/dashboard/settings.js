@@ -9,6 +9,7 @@ import { PROVIDERS, providerConfig, originFor, describePayload, analyzePost, tes
 import * as UI from './ui.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { hasInstagramAccess, revokeInstagramAccess } from '../instagram/enrich.js';
+import { clearScanStore } from '../instagram/scanStore.js';
 
 const ALL_SITES = '*://*/*';
 
@@ -379,6 +380,7 @@ function dataSection(ctx) {
         if (!ok) return;
         await ctx.store.clearAll();
         try { await chrome.storage.session.clear(); } catch { /* fine */ }
+        try { await clearScanStore(); } catch { /* fine */ }
         await ctx.store.init();
         await ctx.reload();
         ctx.navigate('#welcome');

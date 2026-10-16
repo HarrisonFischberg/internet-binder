@@ -4,8 +4,9 @@ import { readFileSync } from 'node:fs';
 // It records calls so tests can assert on side effects (scripts injected, tabs opened).
 // It is not a browser: nothing here proves behaviour in real Chrome.
 
-function areaOf(data, name, notify) {
+function areaOf(data, name, notify, quota = () => ({ bytes: Infinity })) {
   const clone = (v) => (v === undefined ? undefined : structuredClone(v));
+  let written = 0;
   return {
     async get(keys) {
       const out = {};
@@ -14,6 +15,14 @@ function areaOf(data, name, notify) {
       return out;
     },
     async set(obj) {
+      // A quota, like Safari's session area: the write fails and nothing changes. `countsReplaced`
+      // also counts the value a key is about to lose, so a full area refuses even a smaller value;
+      // `leaks` counts every byte ever written, replaced or removed, until the browser restarts.
+      const q = quota();
+      const add = Buffer.byteLength(JSON.stringify(obj));
+      const size = q.leaks ? written + add : q.countsReplaced ? Buffer.byteLength(JSON.stringify(data)) + add : Buffer.byteLength(JSON.stringify({ ...data, ...obj }));
+      if (size > q.bytes) throw new Error(`Invalid call to browser.storage.${name}.set(). Exceeded storage quota.`);
+      written += add;
       const changes = {};
       for (const [k, v] of Object.entries(obj)) {
         changes[k] = { oldValue: clone(data[k]), newValue: clone(v) };
@@ -47,7 +56,7 @@ export function fakeChrome() {
   const session = {};
   const notify = (changes, area) => L.storage.forEach((fn) => fn(changes, area));
   const calls = { executeScript: [], tabsCreated: [], tabsRemoved: [], contextMenus: [], registered: [] };
-  const state = { granted: [], executeScript: async () => [{ result: null }], registered: [] };
+  const state = { granted: [], executeScript: async () => [{ result: null }], registered: [], sessionQuota: { bytes: Infinity } };
   let nextTab = 100;
 
   const chrome = {
@@ -61,7 +70,7 @@ export function fakeChrome() {
       lastError: undefined,
       sendMessage: () => {},
     },
-    storage: { local: areaOf(local, 'local', notify), session: areaOf(session, 'session', notify), onChanged: event(L.storage) },
+    storage: { local: areaOf(local, 'local', notify), session: areaOf(session, 'session', notify, () => state.sessionQuota), onChanged: event(L.storage) },
     contextMenus: {
       removeAll: (cb) => { calls.contextMenus.length = 0; cb && cb(); },
       create: (opts, cb) => { calls.contextMenus.push(opts); cb && cb(); },

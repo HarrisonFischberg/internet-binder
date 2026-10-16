@@ -12,7 +12,8 @@ export const MSG = {
   FLOATING_REFRESH: 'keepsake:floating-refresh', // background -> content scripts when settings change
   IG_START_SCAN: 'keepsake:ig-start', // { tabId } -> { ok }
   IG_STOP_SCAN: 'keepsake:ig-stop', // { tabId } -> { ok }
-  IG_SCAN_UPDATE: 'keepsake:ig-update', // from page -> background (progress/results)
+  IG_SCAN_UPDATE: 'keepsake:ig-update', // from page -> background (progress/results, no pictures)
+  IG_SCAN_THUMB: 'keepsake:ig-thumb', // from page -> background { shortcode, data }: one captured thumbnail
   IG_SCAN_STATE: 'keepsake:ig-state', // -> { ok, scan }
   IG_SCAN_CLEAR: 'keepsake:ig-clear',
   IG_SCAN_SET_POSTS: 'keepsake:ig-set-posts', // extension pages -> background { posts } (after "Read post details")

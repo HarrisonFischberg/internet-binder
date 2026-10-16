@@ -118,9 +118,12 @@ async function boot() {
       // Finished: say so once, and take the bar away after a while.
       if (was?.running && state.fillJob && !state.fillJob.running) setTimeout(renderJobBar, JOB_SHOWN_MS + 200);
     }
+    // The session copy is the scan's summary; its posts come with the scan from the worker.
     if (area === 'session' && changes.keepsake_igScan && state.route.name === 'import') {
-      state.scan = changes.keepsake_igScan.newValue || null;
-      render({ keepScroll: true });
+      send({ type: MSG.IG_SCAN_STATE }).then((res) => {
+        state.scan = res?.ok ? res.scan : null;
+        if (state.route.name === 'import') render({ keepScroll: true });
+      });
     }
   });
 }

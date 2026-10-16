@@ -11,6 +11,7 @@ import { isRestrictedUrl, openableUrl } from './src/shared/url.js';
 import { MSG, SESSION_KEYS } from './src/shared/messages.js';
 import { cleanupWithAI, identifyForKind, draftRecipe } from './src/ai/provider.js';
 import { parsePostBundle } from './src/instagram/post.js';
+import { putThumbs, savePosts, loadPosts, clearScanStore, thumbKey } from './src/instagram/scanStore.js';
 import { LOOKUP_SOURCES, lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './src/shared/lookups.js';
 import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
@@ -385,18 +386,58 @@ async function floatingConfig(host) {
 
 // --- Instagram scan state ------------------------------------------------------------------------------
 
+// The scan's post list and thumbnails live in IndexedDB (src/instagram/scanStore.js). The session area
+// holds a small summary the popup and dashboard watch ({ tabId, status, count, collectionName… }),
+// rewritten only when it changes: Safari's session area fills up when a big entry is rewritten every
+// second, and stays full until Safari quits.
+let lastSummary = '';
+
 async function getScan() {
   const raw = await chrome.storage.session.get(SESSION_KEYS.igScan);
-  return raw[SESSION_KEYS.igScan] || null;
+  const summary = raw[SESSION_KEYS.igScan] || null;
+  return summary ? { ...summary, posts: await loadPosts().catch(() => []) } : null;
 }
 
+const summaryOf = ({ posts, updatedAt, ...rest }) => ({ ...rest, count: Array.isArray(posts) ? posts.length : 0 });
+
 async function setScan(scan) {
-  await chrome.storage.session.set({ [SESSION_KEYS.igScan]: scan });
+  const thumbs = new Map();
+  const posts = (scan.posts || []).map((p) => {
+    if (!String(p.thumbnail || '').startsWith('data:')) return p;
+    thumbs.set(thumbKey(p), p.thumbnail);
+    return { ...p, thumbnail: p.originalThumbnail || '' };
+  });
+  await putThumbs(thumbs);
+  await savePosts(posts);
+  const summary = summaryOf({ ...scan, posts });
+  const key = JSON.stringify(summary);
+  if (key === lastSummary) return;
+  await writeScan({ ...summary, updatedAt: Date.now() });
+  lastSummary = key;
+}
+
+// Safari can refuse to replace a big entry with a small one when the old one already fills its
+// quota (an earlier scan's thumbnails): drop the old entry and write again.
+async function writeScan(value) {
+  try {
+    await chrome.storage.session.set({ [SESSION_KEYS.igScan]: value });
+  } catch (e) {
+    if (!/quota/i.test(String((e && e.message) || e))) throw e;
+    await chrome.storage.session.remove(SESSION_KEYS.igScan);
+    await chrome.storage.session.set({ [SESSION_KEYS.igScan]: value });
+  }
+}
+
+async function clearScan() {
+  lastSummary = '';
+  await chrome.storage.session.remove(SESSION_KEYS.igScan);
+  await clearScanStore().catch(() => {});
 }
 
 async function startInstagramScan(tabId) {
   const settings = await store.getSettings();
   const ig = settings.instagram;
+  await clearScan();
   await setScan({ tabId, status: 'starting', posts: [], collectionName: '', startedAt: Date.now() });
   await chrome.scripting.executeScript({
     target: { tabId },
@@ -586,16 +627,32 @@ async function handleMessage(msg, sender) {
     case MSG.IG_SCAN_UPDATE: {
       if (!sender.tab || !/(^|\.)instagram\.com$/.test(new URL(sender.tab.url || sender.url || 'https://invalid/').hostname)) return { ok: false };
       const posts = (Array.isArray(msg.posts) ? msg.posts : []).slice(0, 2000).map(sanitizePost);
-      await setScan({
+      const scan = {
         tabId: sender.tab.id, status: msg.status === 'done' ? 'done' : msg.status === 'error' ? 'error' : 'scanning',
         error: msg.error ? sanitizeText(msg.error, 300) : '', reason: sanitizeText(msg.reason, 40), collectionName: sanitizeText(msg.collectionName, 80),
         collectionUrl: sanitizeText(msg.collectionUrl, 300), username: sanitizeText(msg.username, 80), posts, updatedAt: Date.now(),
-      });
+      };
+      try {
+        await setScan(scan);
+      } catch (e) {
+        // Say so instead of leaving the last good update ("Scanning…") showing for ever.
+        lastSummary = '';
+        await writeScan({ ...summaryOf(scan), status: 'error', error: `Keepsake couldn’t keep this scan (${friendlyError(e)}). Stop the scan, then try a smaller collection.`, updatedAt: Date.now() }).catch(() => {});
+        return { ok: false, error: friendlyError(e) };
+      }
       return { ok: true };
     }
     case MSG.ENRICH_PENDING: {
       if (!fromExtensionPage) throw new Error('Not allowed.');
       await enrichPending();
+      return { ok: true };
+    }
+    case MSG.IG_SCAN_THUMB: {
+      if (!sender.tab || !/(^|\.)instagram\.com$/.test(new URL(sender.tab.url || sender.url || 'https://invalid/').hostname)) return { ok: false };
+      const key = typeof msg.shortcode === 'string' && /^[\w-]{5,40}$/.test(msg.shortcode) ? msg.shortcode : '';
+      const data = typeof msg.data === 'string' && msg.data.startsWith('data:image/') && msg.data.length <= 600000 ? msg.data : '';
+      if (!key || !data) return { ok: false };
+      await putThumbs(new Map([[key, data]]));
       return { ok: true };
     }
     case MSG.IG_SCAN_STATE:
@@ -613,7 +670,7 @@ async function handleMessage(msg, sender) {
       return readPostInTab(msg.url);
     }
     case MSG.IG_SCAN_CLEAR:
-      await chrome.storage.session.remove(SESSION_KEYS.igScan);
+      await clearScan();
       return { ok: true };
     default:
       return { ok: false, error: `Unknown message ${msg.type}` };
