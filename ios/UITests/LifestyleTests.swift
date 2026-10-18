@@ -75,7 +75,7 @@ final class LifestyleTests: XCTestCase {
         app.buttons["Make it a goal"].tap()
         app.buttons["Start the goal"].tap()
         XCTAssertTrue(app.staticTexts["0 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
-        app.buttons["Done today"].press(forDuration: 0.8)
+        app.buttons["Done today"].tap()
         XCTAssertTrue(app.staticTexts["1 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
         app.buttons["Undo"].tap()
         XCTAssertTrue(app.staticTexts["0 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))

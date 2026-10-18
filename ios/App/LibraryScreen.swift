@@ -27,6 +27,8 @@ struct LibraryScreen: View {
     @State private var naming = false
     @State private var newName = ""
     @FocusState private var searching: Bool
+    /// Home's section order, so a drag there reorders the Library's sections too.
+    @AppStorage(SavedOrder.key(HomeSections.key)) private var sectionOrder = ""
 
     enum Filter: Hashable { case all, collections, lifestyle, review, kind(String), collection(String) }
 
@@ -117,7 +119,7 @@ struct LibraryScreen: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Library").font(KSFont.display()).foregroundStyle(t.ink)
                     .accessibilityAddTraits(.isHeader)
-                Text(model.saves.count == 1 ? "1 save, kept on this iPhone" : "\(model.saves.count) saves, kept on this iPhone")
+                Text(model.saves.count == 1 ? "1 save" : "\(model.saves.count) saves")
                     .font(KSFont.note).foregroundStyle(t.inkMuted)
             }
             Spacer()
@@ -262,19 +264,22 @@ struct LibraryScreen: View {
     @ViewBuilder private var overview: some View {
         VStack(alignment: .leading, spacing: 30) {
             if filter == .all, model.reviewCount > 0 { reviewRow }
-            if filter != .lifestyle {
-                let filed = model.saves.filter { !($0.collectionId ?? "").isEmpty }.count
-                GroupSection(title: "Collections", detail: "\(count(collections.count, "collection")) · \(count(filed, "save"))") {
-                    CollectionTiles(collections: collections) { naming = true }
+            // In Home's order: drag the sections there, and the stacks within them here.
+            ForEach(HomeSections.order(sectionOrder), id: \.self) { section in
+                if section == "collections", filter != .lifestyle {
+                    let filed = model.saves.filter { !($0.collectionId ?? "").isEmpty }.count
+                    GroupSection(title: "Collections", detail: "\(count(collections.count, "collection")) · \(count(filed, "save"))") {
+                        CollectionTiles(collections: collections) { naming = true }
+                    }
                 }
-            }
-            if filter != .collections {
-                let lifestyle = model.saves.filter(\.hasOwnView)
-                GroupSection(title: "Lifestyle", detail: "\(count(Set(lifestyle.map(\.kind)).count, "view")) · \(count(lifestyle.count, "save"))") {
-                    if lifestyle.isEmpty {
-                        Text("Recipes, places, workouts, films and books land here.").font(KSFont.note).foregroundStyle(t.inkMuted)
-                    } else {
-                        LifestyleTiles()
+                if section == "lifestyle", filter != .collections {
+                    let lifestyle = model.saves.filter(\.hasOwnView)
+                    GroupSection(title: "Lifestyle", detail: "\(count(Set(lifestyle.map(\.kind)).count, "view")) · \(count(lifestyle.count, "save"))") {
+                        if lifestyle.isEmpty {
+                            Text("Recipes, places, workouts, films and books land here.").font(KSFont.note).foregroundStyle(t.inkMuted)
+                        } else {
+                            LifestyleTiles()
+                        }
                     }
                 }
             }

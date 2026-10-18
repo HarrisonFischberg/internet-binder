@@ -24,6 +24,27 @@ public struct Perforated: Shape {
     }
 }
 
+/// A round price sticker: a circle with a wavy edge of `bumps` scallops.
+public struct Scallop: Shape {
+    var bumps = 14
+    public init(bumps: Int = 14) { self.bumps = bumps }
+    public func path(in r: CGRect) -> Path {
+        let c = CGPoint(x: r.midX, y: r.midY)
+        let outer = min(r.width, r.height) / 2
+        let inner = outer * 0.9
+        var p = Path()
+        let steps = bumps * 12
+        for i in 0...steps {
+            let a = Double(i) / Double(steps) * 2 * .pi - .pi / 2
+            let radius = inner + (outer - inner) * CGFloat((1 + cos(a * Double(bumps))) / 2)
+            let pt = CGPoint(x: c.x + radius * CGFloat(cos(a)), y: c.y + radius * CGFloat(sin(a)))
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
 /// A ticket: two half-moon notches where the stub tears off.
 public struct TicketShape: Shape {
     var stub: CGFloat = 54
