@@ -20,6 +20,7 @@ import { fillSave, tidySave } from './src/shared/fill.js';
 import { understandItem } from './src/shared/understand.js';
 import { fetchPage } from './src/ai/pages.js';
 import { placeNamed, placeReviewReasons, stateCode } from './src/shared/places.js';
+import { restoreActionIcon } from './src/toolbar/icon.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 const CONTENT_SCRIPT_ID = 'keepsake-floating';
@@ -31,6 +32,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   const { fresh } = await store.init();
   await createContextMenu();
   await syncContentScripts();
+  await restoreActionIcon();
   if (details.reason === 'install' && fresh) {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/dashboard/dashboard.html#welcome') });
   }
@@ -40,6 +42,7 @@ chrome.runtime.onStartup.addListener(async () => {
   await store.init();
   await createContextMenu();
   await syncContentScripts();
+  await restoreActionIcon();
   enrichPending();
 });
 
