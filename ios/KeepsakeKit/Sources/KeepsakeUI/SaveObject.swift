@@ -258,7 +258,7 @@ public struct ShelfCard: View {
     let width: CGFloat
     @Environment(\.ks) private var t
     /// Grows with Dynamic Type, so the name and fact keep their room.
-    @ScaledMetric(relativeTo: .headline) private var textHeight: CGFloat = 92
+    @ScaledMetric(relativeTo: .headline) private var textHeight: CGFloat = 80
     public init(_ save: Save, width: CGFloat) { self.save = save; self.width = width }
 
     private var done: Bool { save.status == "done" || save.purchased == true }
@@ -276,7 +276,8 @@ public struct ShelfCard: View {
                 }
             VStack(alignment: .leading, spacing: 3) {
                 KindLabel(kind: save.kind)
-                Text(save.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
+                Text(save.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2, reservesSpace: true)
+                    .fixedSize(horizontal: false, vertical: true)   // never squeezed to one line
                 if let fact = save.fact, !fact.isEmpty { Text(fact).font(KSFont.fact).foregroundStyle(t.inkMuted).lineLimit(1) }
             }
             .padding(.horizontal, 3)
