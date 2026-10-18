@@ -95,6 +95,49 @@ final class ScreenshotTests: XCTestCase {
         XCUIDevice.shared.appearance = .light
     }
 
+    /// A save's own buttons: Home, the Library, a recipe, a product in a collection (Purchased and Share),
+    /// and the 🎉 just after a stamp. Postcard, light and dark, seeded with the demo library.
+    func testCardScreens() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        for mode in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = mode
+            let tag = "postcard-\(mode == .dark ? "dark" : "light")"
+            let app = XCUIApplication()
+            app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "postcard"]
+            app.launch()
+            XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+            sleep(2)   // pictures load
+            try shoot(app, folder, "\(tag)-home")
+            app.tabBars.buttons["Library"].tap()
+            sleep(1)
+            try shoot(app, folder, "\(tag)-library")
+            let recipes = card(app, "Recipes,")
+            for _ in 0..<4 where !recipes.isHittable { app.swipeUp() }
+            recipes.tap()
+            card(app, "Spaghetti alla carbonara").tap()
+            XCTAssertTrue(app.buttons["Cooked"].waitForExistence(timeout: 5))
+            try shoot(app, folder, "\(tag)-recipe")
+            app.buttons["Cooked"].tap()
+            usleep(450_000)   // the 🎉 has landed; it leaves after 1.3 s
+            try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(tag)-cooked-toast.png"))
+            app.buttons["Cooked, stamped"].tap()   // leave the demo as it was
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            let kitchen = card(app, "Kitchen,")
+            for _ in 0..<4 where !kitchen.isHittable { app.swipeDown() }
+            kitchen.tap()
+            card(app, "Stoneware mugs").tap()
+            XCTAssertTrue(app.buttons["Purchased"].waitForExistence(timeout: 5))
+            sleep(1)
+            try shoot(app, folder, "\(tag)-product")
+            app.terminate()
+        }
+        XCUIDevice.shared.appearance = .light
+    }
+
     /// The Share Extension's card from Safari: the two libraries, then one library's groups. The extension
     /// writes to the real (App Group) library, so the app first fills it from the demo if it's empty.
     func testShareCard() throws {

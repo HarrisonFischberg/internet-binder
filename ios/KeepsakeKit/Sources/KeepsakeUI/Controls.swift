@@ -96,7 +96,9 @@ public struct StampButton: View {
                 Image(systemName: done ? doneSymbol : symbol).font(.title3.weight(.semibold))
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.bounce, value: done)
-                Text(label).font(.caption2.weight(.semibold)).lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center)
+                // One word stays whole ("Purchased", never "Pur-chased"); two may take two lines.
+                Text(label).font(.caption2.weight(.semibold)).lineLimit(label.contains(" ") ? 2 : 1).minimumScaleFactor(0.7)
+                    .multilineTextAlignment(.center)
             }
             .foregroundStyle(done ? t.onAccent : ink)
             .padding(6)
@@ -108,10 +110,8 @@ public struct StampButton: View {
             .animation(KSMotion.or(KSMotion.stamp, reduce: reduce), value: done)
         }
         .buttonStyle(PressStyle())
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel(done ? "\(label), stamped" : label)
         .accessibilityHint(done ? "Double-tap to take the stamp off." : "Double-tap to stamp.")
-        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder private func outline(_ ink: Color) -> some View {

@@ -48,7 +48,7 @@ final class CardActionsTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Purchased!"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.buttons["Purchased, stamped"].waitForExistence(timeout: 3))
         app.buttons["Share"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["Copy"].waitForExistence(timeout: 5), "the system Share Sheet")
+        XCTAssertTrue(app.descendants(matching: .any)["Copy"].firstMatch.waitForExistence(timeout: 5), "the system Share Sheet")
     }
 
     func testLibraryCountIsJustSaves() {
