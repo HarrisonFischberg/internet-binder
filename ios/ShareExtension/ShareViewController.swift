@@ -103,7 +103,7 @@ final class ShareState {
 
     /// What's already in a group (not counting this save), for its tile.
     func members(_ d: Destination) -> [Save] {
-        saves.filter { $0.id != save?.id && (d.kind.map { k in $0.kind == k } ?? ($0.collectionId == d.value)) }
+        saves.filter { s in s.id != save?.id && (d.kind.map { s.kind == $0 } ?? (s.collectionId == d.value)) }
     }
 
     func members(_ shelf: Shelf) -> [Save] {

@@ -17,8 +17,8 @@ final class LifestyleTests: XCTestCase {
 
     func open(_ app: XCUIApplication, kind chip: String, save title: String) {
         app.tabBars.buttons["Library"].tap()
-        let chipButton = app.buttons[chip]
-        XCTAssertTrue(chipButton.waitForExistence(timeout: 5))
+        let chipButton = app.chip(chip)
+        XCTAssertTrue(chipButton.exists)
         chipButton.tap()
         let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 3))
@@ -28,12 +28,12 @@ final class LifestyleTests: XCTestCase {
     func testLibraryGroupsCollectionsThenLifestyle() {
         let app = launch()
         app.tabBars.buttons["Library"].tap()
-        let collections = app.staticTexts["Collections"], lifestyle = app.staticTexts["Lifestyle"]
-        XCTAssertTrue(collections.waitForExistence(timeout: 5) && lifestyle.exists)
+        XCTAssertTrue(app.staticTexts["Lifestyle"].waitForExistence(timeout: 5))
+        let collections = app.header("Collections"), lifestyle = app.header("Lifestyle")
         XCTAssertLessThan(collections.frame.minY, lifestyle.frame.minY, "Collections sits above Lifestyle")
-        app.buttons["Collection Clothing"].tap()
+        app.chip("Collection Clothing").tap()
         XCTAssertTrue(app.buttons["Collection Clothing"].isSelected, "a collection is a chip too")
-        app.buttons["All"].tap()
+        app.chip("All").tap()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Workouts,'")).firstMatch.tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Push-up ladder'")).firstMatch.waitForExistence(timeout: 3))
     }

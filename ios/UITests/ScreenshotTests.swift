@@ -59,4 +59,39 @@ final class ScreenshotTests: XCTestCase {
         }
         XCUIDevice.shared.appearance = .light
     }
+
+    /// Home, Lifestyle, Collections and the Library's stacks, seeded with the demo library's photos, light and dark.
+    func testGroupsScreens() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        for mode in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = mode
+            let tag = "postcard-\(mode == .dark ? "dark" : "light")"
+            let app = XCUIApplication()
+            app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "postcard"]
+            app.launch()
+            XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+            sleep(2)   // pictures load
+            try shoot(app, folder, "\(tag)-home")
+            app.buttons["Lifestyle"].tap()
+            _ = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Places,'")).firstMatch.waitForExistence(timeout: 5)
+            sleep(1)
+            try shoot(app, folder, "\(tag)-lifestyle")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            app.buttons["Collections"].tap()
+            sleep(2)
+            try shoot(app, folder, "\(tag)-collections")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            app.tabBars.buttons["Library"].tap()
+            sleep(2)
+            try shoot(app, folder, "\(tag)-library-all")
+            app.buttons["Collections"].firstMatch.tap()
+            sleep(2)
+            try shoot(app, folder, "\(tag)-library-collections")
+            app.terminate()
+        }
+        XCUIDevice.shared.appearance = .light
+    }
 }
