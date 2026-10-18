@@ -15,7 +15,7 @@ struct HomeScreen: View {
     @State private var sectionOrder: [String] = []
     @State private var dragging: String?
     @Environment(\.accessibilityReduceMotion) private var reduce
-    /// Recent shelf cards grow with Dynamic Type so their text never truncates.
+    /// Recent shelf cards: all one size, growing with Dynamic Type.
     @ScaledMetric(relativeTo: .headline) private var shelfWidth: CGFloat = 170
     @Environment(\.horizontalSizeClass) private var size
 
@@ -134,7 +134,7 @@ struct HomeScreen: View {
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(recentOrder.compactMap { id in model.saves.first { $0.id == id } }) { save in
                         NavigationLink(value: save) {
-                            SaveObject(save).frame(width: min(shelfWidth, 320)).matchedTransitionSource(id: save.id, in: zoom)
+                            ShelfCard(save, width: min(shelfWidth, 320)).matchedTransitionSource(id: save.id, in: zoom)
                         }
                         .buttonStyle(PressStyle())
                         // Hold and slide to put Recent in your own order.
