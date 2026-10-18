@@ -36,15 +36,19 @@ final class OrganiseTests: XCTestCase {
         app.launchArguments += ["-importOnLaunch", demo]
         app.launch()
         app.tabBars.buttons["Library"].tap()
+        // The Library opens on its stacks; Products lays the saves out, photos and all.
+        XCTAssertTrue(app.scrollViews.buttons["Products"].firstMatch.waitForExistence(timeout: 10))
+        app.chip("Products").tap()
         let coffee = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Glass pour-over'")).firstMatch
         XCTAssertTrue(coffee.waitForExistence(timeout: 10))
         sleep(2)   // pictures load
         for chip in ["Places", "Recipes"] {
-            app.scrollViews.buttons[chip].firstMatch.tap()
+            app.chip(chip).tap()
             XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Saved from'")).firstMatch.waitForExistence(timeout: 1.5), "\(chip): a card opened instead of the filter")
             XCTAssertTrue(app.scrollViews.buttons[chip].firstMatch.isSelected, "\(chip) chip is selected")
             XCTAssertFalse(coffee.exists, "\(chip): the product is filtered out")
-            app.scrollViews.buttons["All"].firstMatch.tap()
+            app.chip("Products").tap()
+            XCTAssertTrue(coffee.waitForExistence(timeout: 3))
         }
     }
 
@@ -85,13 +89,14 @@ final class OrganiseTests: XCTestCase {
     func testFilterPurchased() {
         let app = launch()
         app.tabBars.buttons["Library"].tap()
-        let filter = app.buttons["Filter"]
-        XCTAssertTrue(filter.waitForExistence(timeout: 5))
+        let filter = app.chip("Filter")
+        XCTAssertTrue(filter.exists)
         filter.tap()
         app.buttons["Purchased"].tap()
         XCTAssertTrue(card(app, "Linen apron").waitForExistence(timeout: 3))
         XCTAssertFalse(card(app, "Café Azulejo").exists)
-        app.buttons["Remove filter Purchased"].tap()
-        XCTAssertTrue(card(app, "Push-up ladder").waitForExistence(timeout: 3))
+        app.chip("Remove filter Purchased").tap()
+        // Nothing narrows the saves now, so All is back to its stacks.
+        XCTAssertTrue(card(app, "Workouts,").waitForExistence(timeout: 3))
     }
 }
