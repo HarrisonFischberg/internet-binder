@@ -368,7 +368,7 @@ struct ShareCard: View {
             }
             HStack(spacing: 12) {
                 libraryCard(.collections, "Collections", "Things to buy", symbol: "bag", tint: KindStyle("product").color)
-                libraryCard(.lifestyle, "Lifestyle", "Recipes, places, workouts", symbol: "sparkles", tint: KindStyle("recipe").color)
+                libraryCard(.lifestyle, "Lifestyle", "Recipes, places & more", symbol: "sparkles", tint: KindStyle("recipe").color)
             }
             reviewRow
         }
@@ -387,7 +387,6 @@ struct ShareCard: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
-                Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink)
                     Text(here ? state.destinationLabel : caption).font(.footnote).foregroundStyle(here ? tint : t.inkMuted).lineLimit(1)
@@ -399,7 +398,8 @@ struct ShareCard: View {
                 .font(.caption.weight(.medium)).foregroundStyle(t.inkMuted)
             }
             .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
             .background {
                 ZStack {
                     Rectangle().fill(t.paper)
@@ -461,6 +461,10 @@ struct ShareCard: View {
             }
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 14)], spacing: 16) {
+                    if !lifestyle {
+                        Button { naming = true } label: { NewGroupTile("New collection") }
+                            .buttonStyle(PressStyle())
+                    }
                     ForEach(state.groups(shelf)) { d in
                         let items = state.members(d)
                         let k = d.kind.map(KindStyle.init)
@@ -468,7 +472,7 @@ struct ShareCard: View {
                         Button { state.put(d) } label: {
                             GroupTile(d.label, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
                                       cover: items.first(where: \.hasImage), symbol: k?.symbol ?? "bag",
-                                      tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here)
+                                      tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here, compact: true)
                                 .overlay(alignment: .topLeading) {
                                     if here {
                                         Image(systemName: "checkmark.circle.fill").font(.title3)
@@ -478,10 +482,6 @@ struct ShareCard: View {
                                 }
                         }
                         .buttonStyle(PressStyle())
-                    }
-                    if !lifestyle {
-                        Button { naming = true } label: { NewGroupTile("New collection") }
-                            .buttonStyle(PressStyle())
                     }
                 }
                 .padding(.horizontal, 4).padding(.vertical, 8)

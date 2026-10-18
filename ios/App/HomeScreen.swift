@@ -46,7 +46,7 @@ struct HomeScreen: View {
                     if model.saves.isEmpty && model.loaded {
                         EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Keepsake from any app.")
                     }
-                    if !model.saves.isEmpty { recent }
+                    if !model.saves.isEmpty { recent.padding(.bottom, -8) }
                     VStack(spacing: 12) {
                         shelfRow("Collections", route: .collections, saves: collectedSaves, symbol: "bag", tint: KindStyle("product").color,
                                  detail: count(collections.count, "collection") + " · " + count(collectedSaves.count, "save"))

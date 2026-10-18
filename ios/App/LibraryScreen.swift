@@ -147,16 +147,6 @@ struct LibraryScreen: View {
                 if model.reviewCount > 0 {
                     Chip("Review \(model.reviewCount)", symbol: "tray", selected: filter == .review) { set(.review) }
                 }
-                divider
-                ForEach(collections) { c in
-                    Chip(c.name, symbol: "bag", tint: KindStyle("product").color, selected: filter == .collection(c.id)) { set(.collection(c.id)) }
-                        .accessibilityLabel("Collection \(c.name)")
-                }
-                if !collections.isEmpty && !kinds.isEmpty { divider }
-                ForEach(kinds, id: \.self) { k in
-                    let s = KindStyle(k)
-                    Chip(plural(k), symbol: s.symbol, tint: s.color, selected: filter == .kind(k)) { set(.kind(k)) }
-                }
                 if let status {
                     Chip("\(statusNames[status] ?? status)  ✕", selected: true) { self.status = nil }
                         .accessibilityLabel("Remove filter \(statusNames[status] ?? status)")
@@ -179,6 +169,16 @@ struct LibraryScreen: View {
                         .padding(.horizontal, 14).frame(minHeight: 44)
                         .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
                 }
+                divider
+                ForEach(collections) { c in
+                    Chip(c.name, symbol: "bag", tint: KindStyle("product").color, selected: filter == .collection(c.id)) { set(.collection(c.id)) }
+                        .accessibilityLabel("Collection \(c.name)")
+                }
+                if !collections.isEmpty && !kinds.isEmpty { divider }
+                ForEach(kinds, id: \.self) { k in
+                    let s = KindStyle(k)
+                    Chip(plural(k), symbol: s.symbol, tint: s.color, selected: filter == .kind(k)) { set(.kind(k)) }
+                }
             }
             .padding(.horizontal, 18)
         }
@@ -186,7 +186,7 @@ struct LibraryScreen: View {
         .padding(.horizontal, -18)
     }
 
-    /// A hairline between the chip groups: the two libraries, your collections, then the kinds.
+    /// A hairline between the chip groups: the two libraries and Filter, your collections, then the kinds.
     private var divider: some View {
         Rectangle().fill(t.rule).frame(width: 1, height: 22).padding(.horizontal, 2).accessibilityHidden(true)
     }
