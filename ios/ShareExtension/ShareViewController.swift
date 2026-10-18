@@ -242,7 +242,7 @@ struct ShareCard: View {
                 status
                 if let save = state.save {
                     if state.shelf == nil {
-                        Spacer(minLength: 4).frame(maxHeight: 28)
+                        Spacer(minLength: 4)
                         SaveObject(save)
                             .frame(maxWidth: 210)
                             .frame(maxWidth: .infinity)
