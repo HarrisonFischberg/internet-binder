@@ -96,6 +96,7 @@ final class OrganiseTests: XCTestCase {
         XCTAssertTrue(card(app, "Linen apron").waitForExistence(timeout: 3))
         XCTAssertFalse(card(app, "Café Azulejo").exists)
         app.chip("Remove filter Purchased").tap()
-        XCTAssertTrue(card(app, "Push-up ladder").waitForExistence(timeout: 3))
+        // Nothing narrows the saves now, so All is back to its stacks.
+        XCTAssertTrue(card(app, "Workouts,").waitForExistence(timeout: 3))
     }
 }
