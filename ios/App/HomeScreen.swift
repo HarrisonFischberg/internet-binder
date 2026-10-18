@@ -10,6 +10,11 @@ struct HomeScreen: View {
     @Environment(\.ks) private var t
     @State private var settings = false
     @State private var collections: [SaveCollection] = []
+    /// Recent and the two sections, in the order you've dragged them into.
+    @State private var recentOrder: [String] = []
+    @State private var sectionOrder: [String] = []
+    @State private var dragging: String?
+    @Environment(\.accessibilityReduceMotion) private var reduce
     /// Recent shelf cards grow with Dynamic Type so their text never truncates.
     @ScaledMetric(relativeTo: .headline) private var shelfWidth: CGFloat = 170
     @Environment(\.horizontalSizeClass) private var size
@@ -48,10 +53,18 @@ struct HomeScreen: View {
                     }
                     if !model.saves.isEmpty { recent.padding(.bottom, -8) }
                     VStack(spacing: 12) {
-                        shelfRow("Collections", route: .collections, saves: collectedSaves, symbol: "bag", tint: KindStyle("product").color,
-                                 detail: count(collections.count, "collection") + " · " + count(collectedSaves.count, "save"))
-                        shelfRow("Lifestyle", route: .lifestyle, saves: lifestyleSaves, symbol: "sparkles", tint: KindStyle("recipe").color,
-                                 detail: lifestyleSaves.isEmpty ? "Places, recipes, workouts and more" : count(lifestyleViews, "view") + " · " + count(lifestyleSaves.count, "save"))
+                        ForEach(sectionOrder, id: \.self) { section in
+                            Group {
+                                if section == "collections" {
+                                    shelfRow("Collections", route: .collections, saves: collectedSaves, symbol: "bag", tint: KindStyle("product").color,
+                                             detail: count(collections.count, "collection") + " · " + count(collectedSaves.count, "save"))
+                                } else {
+                                    shelfRow("Lifestyle", route: .lifestyle, saves: lifestyleSaves, symbol: "sparkles", tint: KindStyle("recipe").color,
+                                             detail: lifestyleSaves.isEmpty ? "Places, recipes, workouts and more" : count(lifestyleViews, "view") + " · " + count(lifestyleSaves.count, "save"))
+                                }
+                            }
+                            .reorderable(section, in: $sectionOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set(HomeSections.key, $0) }
+                        }
                     }
                     if let save = comeBackTo { comeBack(save).padding(.top, 6) }
                 }
@@ -62,6 +75,11 @@ struct HomeScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $settings) { SettingsScreen() }
         .task(id: model.saves.count) { collections = (try? model.library?.collections()) ?? [] }
+        .onAppear { sectionOrder = HomeSections.order() }
+        // The newest eight, in your order; a new save joins at the front.
+        .onChange(of: model.saves.prefix(8).map(\.id), initial: true) { _, latest in
+            recentOrder = latest.arranged(by: SavedOrder.get("recentOrder"), newFirst: true) { $0 }
+        }
     }
 
     private func count(_ n: Int, _ noun: String) -> String { n == 1 ? "1 \(noun)" : "\(n) \(noun)s" }
@@ -114,11 +132,13 @@ struct HomeScreen: View {
             section("Recent")
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 16) {
-                    ForEach(model.saves.prefix(8)) { save in
+                    ForEach(recentOrder.compactMap { id in model.saves.first { $0.id == id } }) { save in
                         NavigationLink(value: save) {
                             SaveObject(save).frame(width: min(shelfWidth, 320)).matchedTransitionSource(id: save.id, in: zoom)
                         }
                         .buttonStyle(PressStyle())
+                        // Hold and slide to put Recent in your own order.
+                        .reorderable(save.id, in: $recentOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set("recentOrder", $0) }
                         // Long press: the same menu as the Library's cards.
                         .contextMenu {
                             Button("Move to Trash", systemImage: "trash", role: .destructive) { Task { await model.trash(save) } }
@@ -145,5 +165,14 @@ struct HomeScreen: View {
 
     private func section(_ title: String) -> some View {
         Text(title).font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Home's two sections (and the Library's), in the order you've put them: Collections first unless
+/// you've dragged Lifestyle above it.
+enum HomeSections {
+    static let key = "homeSectionOrder"
+    static func order(_ saved: String? = nil) -> [String] {
+        ["collections", "lifestyle"].arranged(by: saved.map { $0.split(separator: "\n").map(String.init) } ?? SavedOrder.get(key)) { $0 }
     }
 }

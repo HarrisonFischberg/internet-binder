@@ -27,7 +27,7 @@ final class ScrollPerformanceTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Keepsake"].waitForExistence(timeout: 60))
         let start = Date()
         app.tabBars.buttons["Library"].tap()
-        XCTAssertTrue(app.staticTexts["5,000 saves, kept on this iPhone"].waitForExistence(timeout: 60))
+        XCTAssertTrue(app.staticTexts["5,000 saves"].waitForExistence(timeout: 60))
         print("PERF Library tab shown in \(Date().timeIntervalSince(start)) s")
         let scroll = app.scrollViews.firstMatch
         measure(metrics: [XCTOSSignpostMetric.scrollingAndDecelerationMetric]) {

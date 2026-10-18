@@ -21,8 +21,6 @@ public enum Haptic {
     public static func pageTurned() { impact(.light, 1) }
     public static func trashed() { impact(.rigid, 1) }
     public static func warning() { notify(.warning) }
-    /// Hold-to-stamp: a tick rising with progress (0…1), then `stamped()`.
-    public static func holdTick(_ progress: Double) { impact(.light, 0.2 + 0.5 * progress) }
     public static func stamped() { impact(.heavy, 1); tick() }
     public static func tick() { if sound { AudioServicesPlaySystemSound(1104) } }
 
