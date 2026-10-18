@@ -28,6 +28,7 @@ struct RootView: View {
         .overlay(alignment: .bottom) {
             ToastView().frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 128)
         }
+        .overlay { CelebrationView() }
         .task { await model.start() }
         .onChange(of: phase) { _, now in
             if now == .active {
@@ -123,6 +124,39 @@ struct ToastView: View {
             }
         }
         .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: model.toast)
+    }
+}
+
+/// "🎉 Cooked!" in the middle of the screen when a stamp lands: pops in, stays a moment, fades.
+/// It never takes a tap (the screen under it keeps working); VoiceOver reads it.
+struct CelebrationView: View {
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    var body: some View {
+        ZStack {
+            if let c = model.celebration {
+                HStack(spacing: 10) {
+                    Text("🎉").font(.system(size: 34))
+                    Text(c.text).font(KSFont.name(.title2)).foregroundStyle(t.ink)
+                }
+                .padding(.horizontal, 26).padding(.vertical, 16)
+                .background(t.paper, in: Capsule())
+                .overlay(Capsule().strokeBorder(t.stamp.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])).padding(4))
+                .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+                .rotationEffect(.degrees(reduce ? 0 : -3))
+                .transition(reduce ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
+                .task(id: c.id) {
+                    UIAccessibility.post(notification: .announcement, argument: c.text)
+                    try? await Task.sleep(for: .seconds(1.3))
+                    if model.celebration?.id == c.id { model.celebration = nil }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(KSMotion.or(KSMotion.stamp, reduce: reduce), value: model.celebration)
     }
 }
 

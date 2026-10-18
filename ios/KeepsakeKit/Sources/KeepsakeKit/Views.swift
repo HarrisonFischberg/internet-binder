@@ -149,6 +149,9 @@ extension Library {
     /// Renames a collection, changes its keywords (what files saves there) or pins it.
     public func updateCollection(_ id: String, _ patch: [String: Any]) async throws { try await core.call("store.updateCollection", [id, patch]) }
 
+    /// Puts collections in this order (Chrome's drag-to-reorder; pinned ones still lead).
+    public func reorderCollections(_ ids: [String]) async throws { try await core.call("store.reorderCollections", [ids]) }
+
     /// Deletes a collection; its saves go back to Review (Chrome's rule).
     public func deleteCollection(_ id: String) async throws { try await core.call("store.deleteCollection", [id]) }
 

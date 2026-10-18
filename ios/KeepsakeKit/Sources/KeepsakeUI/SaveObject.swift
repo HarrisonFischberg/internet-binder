@@ -251,6 +251,49 @@ public struct SaveObject: View {
     }
 }
 
+/// A save on Home's Recent shelf: every card the same size (picture, kind, name, one fact), so the
+/// row reads as one even line. The kind still shows in its stamp and label.
+public struct ShelfCard: View {
+    let save: Save
+    let width: CGFloat
+    @Environment(\.ks) private var t
+    /// Grows with Dynamic Type, so the name and fact keep their room.
+    @ScaledMetric(relativeTo: .headline) private var textHeight: CGFloat = 80
+    public init(_ save: Save, width: CGFloat) { self.save = save; self.width = width }
+
+    private var done: Bool { save.status == "done" || save.purchased == true }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SaveImage(save, symbolSize: 28)
+                .frame(height: width * 0.72).frame(maxWidth: .infinity).clipped()
+                .overlay(alignment: .topTrailing) { Stamp(kind: save.kind, size: 26).padding(6) }
+                .overlay(alignment: .topLeading) {
+                    if done {
+                        Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(t.ink)
+                            .frame(width: 22, height: 22).background(t.paper.opacity(0.94), in: Circle()).padding(7)
+                    }
+                }
+            VStack(alignment: .leading, spacing: 3) {
+                KindLabel(kind: save.kind)
+                Text(save.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2, reservesSpace: true)
+                    .fixedSize(horizontal: false, vertical: true)   // never squeezed to one line
+                if let fact = save.fact, !fact.isEmpty { Text(fact).font(KSFont.fact).foregroundStyle(t.inkMuted).lineLimit(1) }
+            }
+            .padding(.horizontal, 3)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .padding(7)
+        .frame(width: width, height: width * 0.72 + textHeight + 22)
+        .background(t.paper)
+        .saturation(done ? 0.4 : 1)
+        .resting()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([save.title, KindStyle(save.kind).label, save.fact ?? "", done ? "Done" : ""].filter { !$0.isEmpty }.joined(separator: ", "))
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 /// The kind as a small coloured label: icon and word (colour is never the only signal).
 public struct KindLabel: View {
     let kind: String

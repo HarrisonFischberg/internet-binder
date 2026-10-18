@@ -232,7 +232,7 @@ This requires a Google Cloud service account with Chrome Web Store access, store
 ```
 manifest.json                MV3 manifest
 background.js                service worker: context menu, message hub, saving, content-script registration
-icons/                       original bookmark mark (16/32/48/128 PNG + SVG source)
+icons/                       felt pocket icon, light (16/32/48/128 PNG) and icons/dark/ for dark toolbars; rendered by tools/icons/make-icons.py
 src/shared/                  util, url, taxonomy, categorizer, storage (schema 3 + migrations), db (IndexedDB records), messages, base.css
 src/extract/extract.js       page extractor (JSON-LD → OG/Twitter → microdata → visible heuristics)
 src/content/                 toast.js (Shadow DOM toast), detector.js (card detection), floating.js (hover button)
@@ -240,6 +240,7 @@ src/instagram/               adapter.js (all Instagram selectors), scan.js (scro
                              post.js (post-page parsing), post-page.js (in-tab reader), enrich.js (read details for a scan)
 src/ai/provider.js           optional BYOK provider boundary
 src/popup/                   toolbar popup
+src/toolbar/                 swaps the toolbar icon to icons/dark/ when the browser is dark
 src/dashboard/               dashboard page, ui primitives, settings/AI/privacy pages, Instagram importer
 ```
 

@@ -24,6 +24,8 @@ final class LibraryModel {
     private(set) var problem: String?
     private(set) var loaded = false
     var toast: Toast?
+    /// "🎉 Cooked!": a moment in the middle of the screen when a stamp lands.
+    var celebration: Toast?
     /// Theme, density, cards, haptics and sound (Settings → Appearance), shared with the extensions.
     var appearance = LibraryModel.startingAppearance() {
         didSet {
@@ -142,6 +144,11 @@ final class LibraryModel {
 
     func show(_ text: String, undo: (@MainActor () async -> Void)? = nil) {
         toast = Toast(text: text, undo: undo)
+    }
+
+    /// "Cooked!", "Been!", "Purchased!": shown big in the middle of the screen for a moment.
+    func celebrate(_ text: String) {
+        celebration = Toast(text: text)
     }
 
     func importFile(_ url: URL) async {

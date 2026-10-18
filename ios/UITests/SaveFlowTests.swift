@@ -37,7 +37,7 @@ final class SaveFlowTests: XCTestCase {
         XCTAssertTrue(app.buttons["Directions"].waitForExistence(timeout: 5), "a place's one primary action")
         let been = app.buttons["Been"]
         XCTAssertTrue(been.exists)
-        been.press(forDuration: 0.8)
+        been.tap()
         XCTAssertTrue(app.buttons["Been, stamped"].waitForExistence(timeout: 3))
     }
 

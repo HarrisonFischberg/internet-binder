@@ -9,8 +9,10 @@ import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice } from '../
 import { isRestrictedUrl } from '../shared/url.js';
 import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
+import { followColorScheme } from '../toolbar/icon.js';
 
 const store = createStore(chromeBackend(), idbBackend());
+followColorScheme();
 const $ = (id) => document.getElementById(id);
 const send = (msg) => new Promise((resolve) => {
   try {

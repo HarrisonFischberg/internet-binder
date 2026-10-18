@@ -12,6 +12,7 @@ import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { searchItems } from '../shared/search.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { placeState, placeReviewReasons } from '../shared/places.js';
+import { followColorScheme } from '../toolbar/icon.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
@@ -21,6 +22,7 @@ import { renderTabsImport } from './tabsImport.js';
 import { runAiCleanup, renderAiLog, undoEntries } from './aiCleanup.js';
 
 const store = createStore(chromeBackend(), idbBackend());
+followColorScheme();
 const $ = (id) => document.getElementById(id);
 
 // Labels for the "import method" filter — keys match item.type in shared/storage.js.

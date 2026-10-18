@@ -22,6 +22,9 @@ struct SaveDetailScreen: View {
     private var current: Save { model.saves.first { $0.id == save.id } ?? save }
     private var d: JSONValue? { current.details }
     private var isDone: Bool { current.status == "done" }
+    private var isPurchased: Bool { current.purchased == true }
+    /// Things to buy: products, and anything filed in a collection.
+    private var canBuy: Bool { current.kind == "product" || !(current.collectionId ?? "").isEmpty }
     private var isInstagram: Bool { (current.host ?? "").hasSuffix("instagram.com") }
     /// The recipe's steps, without wordless lines (older saves kept Instagram's "." spacers).
     private var steps: [String] { (d?["steps"]?.array?.compactMap(\.string) ?? []).filter { $0.contains(where: { $0.isLetter || $0.isNumber }) } }
@@ -62,16 +65,12 @@ struct SaveDetailScreen: View {
                             }
                         }
                     }
-                    if current.kind == "product" {
-                        Button(current.purchased == true ? "Not purchased" : "Mark purchased", systemImage: "bag.badge.checkmark") {
-                            Task {
-                                try? await model.library?.update(current.id, ["purchased": !(current.purchased ?? false)])
-                                Haptic.stamped()
-                                model.refresh()
-                            }
-                        }
+                    if canBuy {
+                        Button(isPurchased ? "Not purchased" : "Mark purchased", systemImage: "bag.badge.checkmark") { togglePurchased() }
                     }
-                    if let url = current.url.flatMap(URL.init(string:)) { ShareLink(item: url) }
+                    if current.url != nil {
+                        Button("Share", systemImage: "square.and.arrow.up") { SaveSharing.present(current) }
+                    }
                     Button("Move to Trash", systemImage: "trash", role: .destructive) {
                         Task { await model.trash(current); dismiss() }
                     }
@@ -89,6 +88,7 @@ struct SaveDetailScreen: View {
             CookingView(save: current, steps: steps,
                         ingredients: d?["ingredients"]?.array?.compactMap(\.string) ?? []) {
                 Task { await model.setDone(current, true) }
+                model.celebrate("Cooked!")
             }
         }
         .sheet(isPresented: $goalSheet) {
@@ -307,13 +307,13 @@ struct SaveDetailScreen: View {
         HStack(spacing: 12) {
             switch current.kind {
             case "place":
-                HoldToStamp("Been", done: isDone) { Task { await model.setDone(current, !isDone) } }
+                StampButton("Been", done: isDone) { toggleDone("Been!") }
                 PrimarySlab("Directions", symbol: "arrow.triangle.turn.up.right.diamond.fill") {
                     if let mapsLink { openURL(mapsLink) }
                 }
                 .disabled(mapsLink == nil)
             case "recipe":
-                HoldToStamp("Cooked", done: isDone) { Task { await model.setDone(current, !isDone) } }
+                StampButton("Cooked", done: isDone) { toggleDone("Cooked!") }
                 if !steps.isEmpty {
                     PrimarySlab("Start cooking", symbol: "flame.fill") { cooking = true }
                 } else if let url = current.url.flatMap(URL.init(string:)) {
@@ -321,7 +321,7 @@ struct SaveDetailScreen: View {
                 }
             case "workout":
                 if let goal, goal.progress.status == "active" {
-                    HoldToStamp("Done today", done: false) { Task { await checkIn() } }
+                    StampButton("Done today", done: false) { Task { await checkIn() }; model.celebrate("Done today!") }
                     if let url = current.url.flatMap(URL.init(string:)) {
                         PrimarySlab("Open workout", symbol: "safari") { openURL(url) }
                     }
@@ -329,13 +329,34 @@ struct SaveDetailScreen: View {
                     PrimarySlab("Make it a goal", symbol: "target") { goalSheet = true }
                 }
             default:
+                if canBuy {
+                    StampButton("Purchased", done: isPurchased, edge: .scallop, symbol: "bag", doneSymbol: "bag.fill",
+                                tint: KindStyle("product").color) { togglePurchased() }
+                }
                 if let url = current.url.flatMap(URL.init(string:)) {
                     PrimarySlab(openTitle, symbol: "safari") { openURL(url) }
                 }
             }
+            if current.url != nil { ShareStamp { SaveSharing.present(current) } }
         }
         .padding(.horizontal, 16).padding(.bottom, 6)
         .background(alignment: .bottom) { BottomScrim() }
+    }
+
+    /// One tap stamps it (and says so in the middle of the screen); another takes the stamp off.
+    private func toggleDone(_ cheer: String) {
+        let on = !isDone
+        Task { await model.setDone(current, on) }
+        if on { model.celebrate(cheer) }
+    }
+
+    private func togglePurchased() {
+        let on = !isPurchased
+        Task {
+            try? await model.library?.update(current.id, ["purchased": on])
+            model.refresh()
+        }
+        if on { model.celebrate("Purchased!") }
     }
 
     private var openTitle: String {

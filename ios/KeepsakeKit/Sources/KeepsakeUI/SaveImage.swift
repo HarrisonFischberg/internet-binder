@@ -16,15 +16,18 @@ public struct SaveImage: View {
 
     public var body: some View {
         let kind = KindStyle(save.kind)
-        if let local = Self.dataImage(save.image) {
+        if let local = Self.dataImage(save.image, id: save.id) {
             filled(local)
         } else if let s = save.image, let url = URL(string: s), url.scheme == "https" || url.scheme == "http" {
             // The local copy if there is one (so the picture outlives its site), else the site's, kept as it loads.
+            // A picture already in memory shows on the first frame, so a card scrolled back into view
+            // never flashes its tile; anything else is read and decoded off the main thread.
+            let ready = kept ?? ThumbnailStore.shared.memory(save.id)
             ZStack {
-                if let kept { filled(kept).transition(.opacity) } else { tile(kind) }
+                if let ready { filled(ready).transition(.opacity) } else { tile(kind) }
             }
             .task(id: save.id) {
-                if let img = ThumbnailStore.shared.cached(save.id) { kept = img; return }
+                guard ready == nil else { return }
                 let img = await ThumbnailStore.shared.load(save.id, from: url)
                 withAnimation(KSMotion.quiet) { kept = img }
             }
@@ -52,10 +55,18 @@ public struct SaveImage: View {
         .accessibilityHidden(true)
     }
 
-    static func dataImage(_ s: String?) -> UIImage? {
-        guard let s, s.hasPrefix("data:image/"), let comma = s.firstIndex(of: ","), s[..<comma].hasSuffix(";base64"),
-              let data = Data(base64Encoded: String(s[s.index(after: comma)...])) else { return nil }
-        return UIImage(data: data)
+    /// Decoded once per picture (not on every redraw while scrolling), ready to draw.
+    nonisolated(unsafe) private static let decoded = NSCache<NSString, UIImage>()
+
+    static func dataImage(_ s: String?, id: String) -> UIImage? {
+        guard let s, s.hasPrefix("data:image/") else { return nil }
+        let key = "\(id):\(s.utf8.count)" as NSString
+        if let img = decoded.object(forKey: key) { return img }
+        guard let comma = s.firstIndex(of: ","), s[..<comma].hasSuffix(";base64"),
+              let data = Data(base64Encoded: String(s[s.index(after: comma)...])), let img = UIImage(data: data) else { return nil }
+        let ready = img.preparingForDisplay() ?? img
+        decoded.setObject(ready, forKey: key)
+        return ready
     }
 }
 #endif

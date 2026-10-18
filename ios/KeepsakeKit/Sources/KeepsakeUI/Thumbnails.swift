@@ -24,11 +24,16 @@ public final class ThumbnailStore: @unchecked Sendable {
 
     private func file(_ id: String) -> URL? { dir?.appendingPathComponent("\(id).jpg") }
 
+    /// Only what's already decoded in memory: cheap enough to ask while drawing.
+    public func memory(_ id: String) -> UIImage? { cache.object(forKey: id as NSString) }
+
+    /// From memory, else the local copy on disk (decoded here, so call it off the main thread).
     public func cached(_ id: String) -> UIImage? {
         if let img = cache.object(forKey: id as NSString) { return img }
         guard let url = file(id), let img = UIImage(contentsOfFile: url.path) else { return nil }
-        cache.setObject(img, forKey: id as NSString)
-        return img
+        let ready = img.preparingForDisplay() ?? img
+        cache.setObject(ready, forKey: id as NSString)
+        return ready
     }
 
     /// Loads the picture from its site (as a web page would), keeps a small copy, returns it.
@@ -39,8 +44,9 @@ public final class ThumbnailStore: @unchecked Sendable {
               let full = UIImage(data: data) else { return nil }
         let small = Self.downscale(full, to: 640)
         if let url = file(id), let jpeg = small.jpegData(compressionQuality: 0.8) { try? jpeg.write(to: url, options: .atomic) }
-        cache.setObject(small, forKey: id as NSString)
-        return small
+        let ready = small.preparingForDisplay() ?? small
+        cache.setObject(ready, forKey: id as NSString)
+        return ready
     }
 
     /// Erase everything: every local picture goes too.
