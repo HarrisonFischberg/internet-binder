@@ -63,10 +63,10 @@ struct AppearanceScreen: View {
     }
 }
 
-/// Alternate app icons: Postcard (default), Linen, Ink.
+/// App icon: Automatic (default, follows light/dark/tinted home screens), or always Light or always Dark.
 struct IconPicker: View {
     @State private var current = UIApplication.shared.alternateIconName
-    private let icons: [(name: String?, label: String)] = [(nil, "Postcard"), ("AppIconLinen", "Linen"), ("AppIconInk", "Ink")]
+    private let icons: [(name: String?, label: String)] = [(nil, "Automatic"), ("AppIconLight", "Light"), ("AppIconDark", "Dark")]
     var body: some View {
         ForEach(icons, id: \.label) { icon in
             Button {
