@@ -30,7 +30,11 @@ public struct GroupTile: View {
                         tint.opacity(0.10)
                         t.well.opacity(0.6)
                         if let cover, cover.hasImage { SaveImage(cover, showsSymbol: false) }
-                        else { Image(systemName: symbol).font(.system(size: 30, weight: .light)).foregroundStyle(tint) }
+                        else { Image(systemName: symbol).font(.system(size: compact ? 22 : 30, weight: .light)).foregroundStyle(tint.opacity(cover == nil ? 0.7 : 1)) }
+                        // Nothing in it yet: a dashed place where its pictures will go.
+                        if cover == nil {
+                            RoundedRectangle(cornerRadius: 2).strokeBorder(tint.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3])).padding(compact ? 6 : 10)
+                        }
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))

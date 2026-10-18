@@ -141,6 +141,23 @@ struct LibraryScreen: View {
     private var filters: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
+                Menu {
+                    Picker("Status", selection: $status) {
+                        Text("Any status").tag(String?.none)
+                        ForEach(["todo", "done", "purchased"], id: \.self) { Text(statusNames[$0]!).tag(String?.some($0)) }
+                    }
+                    Picker("Source", selection: $source) {
+                        Text("Any site").tag(String?.none)
+                        ForEach(topSources, id: \.self) { Text($0).tag(String?.some($0)) }
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease").font(.subheadline.weight(.semibold))
+                        .foregroundStyle(status != nil || source != nil ? t.onAccent : t.ink)
+                        .frame(width: 44, height: 44)
+                        .background(status != nil || source != nil ? AnyShapeStyle(t.ink) : AnyShapeStyle(t.paper), in: Circle())
+                        .overlay(Circle().strokeBorder(t.rule, lineWidth: 0.75))
+                }
+                .accessibilityLabel("Filter")
                 Chip("All", selected: filter == .all) { set(.all) }
                 Chip("Collections", symbol: "bag", tint: KindStyle("product").color, selected: filter == .collections) { set(.collections) }
                 Chip("Lifestyle", symbol: "sparkles", tint: KindStyle("recipe").color, selected: filter == .lifestyle) { set(.lifestyle) }
@@ -154,20 +171,6 @@ struct LibraryScreen: View {
                 if let source {
                     Chip("\(source)  ✕", selected: true) { self.source = nil }
                         .accessibilityLabel("Remove filter \(source)")
-                }
-                Menu {
-                    Picker("Status", selection: $status) {
-                        Text("Any status").tag(String?.none)
-                        ForEach(["todo", "done", "purchased"], id: \.self) { Text(statusNames[$0]!).tag(String?.some($0)) }
-                    }
-                    Picker("Source", selection: $source) {
-                        Text("Any site").tag(String?.none)
-                        ForEach(topSources, id: \.self) { Text($0).tag(String?.some($0)) }
-                    }
-                } label: {
-                    Label("Filter", systemImage: "line.3.horizontal.decrease").font(.subheadline.weight(.medium)).foregroundStyle(t.ink)
-                        .padding(.horizontal, 14).frame(minHeight: 44)
-                        .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
                 }
                 divider
                 ForEach(collections) { c in
@@ -186,7 +189,7 @@ struct LibraryScreen: View {
         .padding(.horizontal, -18)
     }
 
-    /// A hairline between the chip groups: the two libraries and Filter, your collections, then the kinds.
+    /// A hairline between the chip groups: the two libraries, your collections, then the kinds.
     private var divider: some View {
         Rectangle().fill(t.rule).frame(width: 1, height: 22).padding(.horizontal, 2).accessibilityHidden(true)
     }
