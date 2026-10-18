@@ -39,8 +39,8 @@ struct LifestyleTiles: View {
                 let items = model.saves.filter { $0.kind == kind }
                 let k = KindStyle(kind)
                 NavigationLink(value: Route.kind(kind)) {
-                    GroupTile(k.plural, subtitle: items.count == 1 ? "1 save" : "\(items.count) saves",
-                              cover: items.first(where: \.hasImage), symbol: k.symbol, tint: k.color, kind: kind)
+                    GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
+                              cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind)
                 }
                 .buttonStyle(PressStyle())
             }
@@ -60,8 +60,8 @@ struct CollectionTiles: View {
             ForEach(collections) { c in
                 let items = model.saves.filter { $0.collectionId == c.id }
                 NavigationLink(value: Route.collection(c.id, c.name)) {
-                    GroupTile(c.name, subtitle: items.count == 1 ? "1 save" : "\(items.count) saves",
-                              cover: items.first(where: \.hasImage), symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
+                    GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
+                              cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
                 }
                 .buttonStyle(PressStyle())
             }

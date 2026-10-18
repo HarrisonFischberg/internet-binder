@@ -12,11 +12,13 @@ public struct GroupTile: View {
     let tint: Color
     let kind: String?
     let selected: Bool
+    /// Three across (the Share card): a smaller name that shrinks before it breaks a word.
+    let compact: Bool
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
 
-    public init(_ title: String, subtitle: String, cover: Save?, symbol: String, tint: Color, kind: String? = nil, selected: Bool = false) {
-        self.title = title; self.subtitle = subtitle; self.cover = cover; self.symbol = symbol; self.tint = tint; self.kind = kind; self.selected = selected
+    public init(_ title: String, subtitle: String, cover: Save?, symbol: String, tint: Color, kind: String? = nil, selected: Bool = false, compact: Bool = false) {
+        self.title = title; self.subtitle = subtitle; self.cover = cover; self.symbol = symbol; self.tint = tint; self.kind = kind; self.selected = selected; self.compact = compact
     }
 
     public var body: some View {
@@ -28,15 +30,20 @@ public struct GroupTile: View {
                         tint.opacity(0.10)
                         t.well.opacity(0.6)
                         if let cover, cover.hasImage { SaveImage(cover, showsSymbol: false) }
-                        else { Image(systemName: symbol).font(.system(size: 30, weight: .light)).foregroundStyle(tint) }
+                        else { Image(systemName: symbol).font(.system(size: compact ? 22 : 30, weight: .light)).foregroundStyle(tint.opacity(cover == nil ? 0.7 : 1)) }
+                        // Nothing in it yet: a dashed place where its pictures will go.
+                        if cover == nil {
+                            RoundedRectangle(cornerRadius: 2).strokeBorder(tint.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3])).padding(compact ? 6 : 10)
+                        }
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                 .overlay(alignment: .topTrailing) {
-                    if let kind { Stamp(kind: kind, size: 28).padding(6) }
+                    if let kind { Stamp(kind: kind, size: compact ? 22 : 28).padding(compact ? 4 : 6) }
                 }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
+                Text(title).font(KSFont.name(compact ? .subheadline : .headline)).foregroundStyle(t.ink)
+                    .lineLimit(2).minimumScaleFactor(0.75).allowsTightening(true)
                 Text(subtitle).font(.footnote).foregroundStyle(t.inkMuted).lineLimit(1)
             }
             .padding(.horizontal, 2)

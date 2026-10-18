@@ -250,7 +250,7 @@ struct ShareCard: View {
                             .scaleEffect(appeared || reduce ? 1 : 0.85)
                             .opacity(appeared ? 1 : 0)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        Spacer(minLength: 4)
+                        Spacer(minLength: 12)
                     } else {
                         compact(save).transition(.opacity)
                     }
@@ -368,7 +368,7 @@ struct ShareCard: View {
             }
             HStack(spacing: 12) {
                 libraryCard(.collections, "Collections", "Things to buy", symbol: "bag", tint: KindStyle("product").color)
-                libraryCard(.lifestyle, "Lifestyle", "Recipes, places, workouts", symbol: "sparkles", tint: KindStyle("recipe").color)
+                libraryCard(.lifestyle, "Lifestyle", "Recipes, places & more", symbol: "sparkles", tint: KindStyle("recipe").color)
             }
             reviewRow
         }
@@ -380,14 +380,13 @@ struct ShareCard: View {
         return Button { state.open(shelf) } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
-                    CoverFan(state.members(shelf), symbol: symbol, tint: tint, size: 40)
+                    CoverFan(state.members(shelf), symbol: symbol, tint: tint, size: 58)
                     Spacer(minLength: 0)
                     if here {
                         Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(tint)
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
-                Spacer(minLength: 0)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink)
                     Text(here ? state.destinationLabel : caption).font(.footnote).foregroundStyle(here ? tint : t.inkMuted).lineLimit(1)
@@ -399,7 +398,8 @@ struct ShareCard: View {
                 .font(.caption.weight(.medium)).foregroundStyle(t.inkMuted)
             }
             .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
             .background {
                 ZStack {
                     Rectangle().fill(t.paper)
@@ -461,14 +461,18 @@ struct ShareCard: View {
             }
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 14)], spacing: 16) {
+                    if !lifestyle {
+                        Button { naming = true } label: { NewGroupTile("New collection") }
+                            .buttonStyle(PressStyle())
+                    }
                     ForEach(state.groups(shelf)) { d in
                         let items = state.members(d)
                         let k = d.kind.map(KindStyle.init)
                         let here = state.destination == d.value
                         Button { state.put(d) } label: {
                             GroupTile(d.label, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                                      cover: items.first(where: \.hasImage), symbol: k?.symbol ?? "bag",
-                                      tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here)
+                                      cover: items.first(where: \.hasImage) ?? items.first, symbol: k?.symbol ?? "bag",
+                                      tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here, compact: true)
                                 .overlay(alignment: .topLeading) {
                                     if here {
                                         Image(systemName: "checkmark.circle.fill").font(.title3)
@@ -479,14 +483,17 @@ struct ShareCard: View {
                         }
                         .buttonStyle(PressStyle())
                     }
-                    if !lifestyle {
-                        Button { naming = true } label: { NewGroupTile("New collection") }
-                            .buttonStyle(PressStyle())
-                    }
                 }
-                .padding(.horizontal, 4).padding(.vertical, 8)
+                .padding(.horizontal, 4).padding(.top, 8).padding(.bottom, 28)
             }
-            .scrollIndicators(.hidden)
+            .scrollIndicatorsFlash(onAppear: true)
+            // The last row fades under the Review row, so it reads as "scroll for more".
+            .mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 28)
+                }
+            }
             .frame(maxHeight: .infinity)
             reviewRow
         }

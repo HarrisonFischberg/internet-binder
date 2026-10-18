@@ -6,10 +6,13 @@ extension XCUIApplication {
     func chip(_ label: String) -> XCUIElement {
         let chip = scrollViews.buttons[label].firstMatch
         _ = chip.waitForExistence(timeout: 5)
-        let row = scrollViews.containing(.button, identifier: "All").firstMatch
         let screen = windows.firstMatch.frame
-        for _ in 0..<8 where chip.exists && !screen.insetBy(dx: 8, dy: 0).contains(chip.frame) {
-            if chip.frame.minX < screen.minX { row.swipeRight(velocity: .slow) } else { row.swipeLeft(velocity: .slow) }
+        let origin = coordinate(withNormalizedOffset: .zero)
+        for _ in 0..<12 where chip.exists && !screen.insetBy(dx: 8, dy: 0).contains(chip.frame) {
+            // Drag along the chip row itself (a swipe on the query lands on the page's own scroll view).
+            let y = chip.frame.midY, left = chip.frame.minX < screen.minX
+            let from = origin.withOffset(CGVector(dx: screen.width * (left ? 0.25 : 0.75), dy: y))
+            from.press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: screen.width * (left ? 0.75 : 0.25), dy: y)))
         }
         return chip
     }

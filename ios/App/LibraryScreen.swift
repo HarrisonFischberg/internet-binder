@@ -141,30 +141,6 @@ struct LibraryScreen: View {
     private var filters: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                Chip("All", selected: filter == .all) { set(.all) }
-                Chip("Collections", symbol: "bag", tint: KindStyle("product").color, selected: filter == .collections) { set(.collections) }
-                Chip("Lifestyle", symbol: "sparkles", tint: KindStyle("recipe").color, selected: filter == .lifestyle) { set(.lifestyle) }
-                if model.reviewCount > 0 {
-                    Chip("Review \(model.reviewCount)", symbol: "tray", selected: filter == .review) { set(.review) }
-                }
-                divider
-                ForEach(collections) { c in
-                    Chip(c.name, symbol: "bag", tint: KindStyle("product").color, selected: filter == .collection(c.id)) { set(.collection(c.id)) }
-                        .accessibilityLabel("Collection \(c.name)")
-                }
-                if !collections.isEmpty && !kinds.isEmpty { divider }
-                ForEach(kinds, id: \.self) { k in
-                    let s = KindStyle(k)
-                    Chip(plural(k), symbol: s.symbol, tint: s.color, selected: filter == .kind(k)) { set(.kind(k)) }
-                }
-                if let status {
-                    Chip("\(statusNames[status] ?? status)  ✕", selected: true) { self.status = nil }
-                        .accessibilityLabel("Remove filter \(statusNames[status] ?? status)")
-                }
-                if let source {
-                    Chip("\(source)  ✕", selected: true) { self.source = nil }
-                        .accessibilityLabel("Remove filter \(source)")
-                }
                 Menu {
                     Picker("Status", selection: $status) {
                         Text("Any status").tag(String?.none)
@@ -175,9 +151,36 @@ struct LibraryScreen: View {
                         ForEach(topSources, id: \.self) { Text($0).tag(String?.some($0)) }
                     }
                 } label: {
-                    Label("Filter", systemImage: "line.3.horizontal.decrease").font(.subheadline.weight(.medium)).foregroundStyle(t.ink)
-                        .padding(.horizontal, 14).frame(minHeight: 44)
-                        .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
+                    Image(systemName: "line.3.horizontal.decrease").font(.subheadline.weight(.semibold))
+                        .foregroundStyle(status != nil || source != nil ? t.onAccent : t.ink)
+                        .frame(width: 44, height: 44)
+                        .background(status != nil || source != nil ? AnyShapeStyle(t.ink) : AnyShapeStyle(t.paper), in: Circle())
+                        .overlay(Circle().strokeBorder(t.rule, lineWidth: 0.75))
+                }
+                .accessibilityLabel("Filter")
+                Chip("All", selected: filter == .all) { set(.all) }
+                Chip("Collections", symbol: "bag", tint: KindStyle("product").color, selected: filter == .collections) { set(.collections) }
+                Chip("Lifestyle", symbol: "sparkles", tint: KindStyle("recipe").color, selected: filter == .lifestyle) { set(.lifestyle) }
+                if model.reviewCount > 0 {
+                    Chip("Review \(model.reviewCount)", symbol: "tray", selected: filter == .review) { set(.review) }
+                }
+                if let status {
+                    Chip("\(statusNames[status] ?? status)  ✕", selected: true) { self.status = nil }
+                        .accessibilityLabel("Remove filter \(statusNames[status] ?? status)")
+                }
+                if let source {
+                    Chip("\(source)  ✕", selected: true) { self.source = nil }
+                        .accessibilityLabel("Remove filter \(source)")
+                }
+                divider
+                ForEach(collections) { c in
+                    Chip(c.name, symbol: "bag", tint: KindStyle("product").color, selected: filter == .collection(c.id)) { set(.collection(c.id)) }
+                        .accessibilityLabel("Collection \(c.name)")
+                }
+                if !collections.isEmpty && !kinds.isEmpty { divider }
+                ForEach(kinds, id: \.self) { k in
+                    let s = KindStyle(k)
+                    Chip(plural(k), symbol: s.symbol, tint: s.color, selected: filter == .kind(k)) { set(.kind(k)) }
                 }
             }
             .padding(.horizontal, 18)
