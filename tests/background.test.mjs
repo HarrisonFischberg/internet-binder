@@ -692,3 +692,104 @@ test('instagram scan: 289 posts reported every second fit a session area that ne
     await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
   }
 });
+
+test('instagram: "Import all collections" opens each collection in turn and merges its posts, noting their collections', async () => {
+  const { BULK } = await import('../keepsake/background.js');
+  const pause = BULK.pauseMs;
+  BULK.pauseMs = 0;
+  const tabId = 21;
+  const base = 'https://www.instagram.com/me/saved/';
+  const post = (code, caption = '') => ({ url: `https://www.instagram.com/p/${code}/`, shortcode: code, type: 'post', thumbnail: '', caption });
+  const pages = {
+    [`${base}recipes/111/`]: [post('RECIPE1'), post('BOTH001')],
+    [`${base}living-room/222/`]: [post('LAMP001'), post('BOTH001')],
+    [`${base}all-posts/`]: [post('RECIPE1'), post('LAMP001'), post('BOTH001'), post('LOOSE01')],
+  };
+  F.state.tabUrls[tabId] = base;
+  F.calls.executeScript.length = 0;
+  F.calls.tabsUpdated.length = 0;
+  F.state.executeScript = async (opts) => {
+    // The overview's tiles, as adapter.collectCollections reads them ("All posts" listed first, as Instagram does).
+    if (opts.func && !opts.args) return [{ result: [
+      { name: 'All posts', url: `${base}all-posts/`, kind: 'all' },
+      { name: 'Recipes', url: `${base}recipes/111/`, kind: 'collection' },
+      { name: 'Living room', url: `${base}living-room/222/`, kind: 'collection' },
+    ] }];
+    // The scan on a collection page: one progress report, then done.
+    if (opts.files?.includes('src/instagram/scan.js')) {
+      const url = F.state.tabUrls[tabId];
+      const sender = { tab: { id: tabId, url }, url };
+      setTimeout(async () => {
+        await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'scanning', posts: pages[url].slice(0, 1) }, sender);
+        await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', reason: 'end', posts: pages[url] }, sender);
+      }, 0);
+    }
+    return [{ result: null }];
+  };
+  try {
+    assert.equal((await F.send({ type: MSG.IG_START_ALL, tabId }, pageTab)).ok, false, 'only from Keepsake’s own pages');
+    const res = await F.send({ type: MSG.IG_START_ALL, tabId }, popup);
+    assert.equal(res.ok, true);
+    assert.deepEqual(res.collections, ['Recipes', 'Living room', 'All posts'], 'All posts last');
+    let scan;
+    for (let i = 0; i < 100; i++) {
+      scan = (await F.send({ type: MSG.IG_SCAN_STATE }, popup)).scan;
+      if (scan.status === 'done') break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(scan.status, 'done');
+    assert.equal(scan.reason, 'end');
+    assert.deepEqual(F.calls.tabsUpdated.map((u) => u.url), [`${base}recipes/111/`, `${base}living-room/222/`, `${base}all-posts/`]);
+    assert.deepEqual(scan.bulk.collections.map((c) => [c.name, c.count, c.status]), [['Recipes', 2, 'done'], ['Living room', 2, 'done'], ['All posts', 4, 'done']]);
+    const by = Object.fromEntries(scan.posts.map((p) => [p.shortcode, p.collections]));
+    assert.deepEqual(by, { RECIPE1: ['Recipes'], BOTH001: ['Recipes', 'Living room'], LAMP001: ['Living room'], LOOSE01: [] });
+    // The dashboard writes the list back after reading the posts: their collections survive.
+    await F.send({ type: MSG.IG_SCAN_SET_POSTS, posts: scan.posts.map((p) => ({ ...p, caption: 'read' })) }, popup);
+    assert.deepEqual((await F.send({ type: MSG.IG_SCAN_STATE }, popup)).scan.posts.find((p) => p.shortcode === 'BOTH001').collections, ['Recipes', 'Living room']);
+    // Not from a collection page: it needs the Saved overview.
+    F.state.tabUrls[tabId] = `${base}recipes/111/`;
+    assert.match((await F.send({ type: MSG.IG_START_ALL, tabId }, popup)).error, /Saved page/);
+  } finally {
+    BULK.pauseMs = pause;
+    F.state.executeScript = async () => [{ result: null }];
+    await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
+  }
+});
+
+test('instagram: stopping "Import all collections" keeps what was found and skips the rest', async () => {
+  const { BULK } = await import('../keepsake/background.js');
+  const pause = BULK.pauseMs;
+  BULK.pauseMs = 0;
+  const tabId = 22;
+  const base = 'https://www.instagram.com/me/saved/';
+  F.state.tabUrls[tabId] = base;
+  F.state.executeScript = async (opts) => {
+    if (opts.func && !opts.args) return [{ result: [{ name: 'A', url: `${base}a/1/`, kind: 'collection' }, { name: 'B', url: `${base}b/2/`, kind: 'collection' }] }];
+    if (opts.files?.includes('src/instagram/scan.js')) {
+      const url = F.state.tabUrls[tabId];
+      const sender = { tab: { id: tabId, url }, url };
+      setTimeout(async () => {
+        await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'scanning', posts: [{ url: 'https://www.instagram.com/p/AAAAA1/', shortcode: 'AAAAA1', type: 'post' }] }, sender);
+        await F.send({ type: MSG.IG_STOP_SCAN }, popup);
+        await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', reason: 'stopped', posts: [{ url: 'https://www.instagram.com/p/AAAAA1/', shortcode: 'AAAAA1', type: 'post' }] }, sender);
+      }, 0);
+    }
+    return [{ result: null }];
+  };
+  try {
+    assert.equal((await F.send({ type: MSG.IG_START_ALL, tabId }, popup)).ok, true);
+    let scan;
+    for (let i = 0; i < 100; i++) {
+      scan = (await F.send({ type: MSG.IG_SCAN_STATE }, popup)).scan;
+      if (scan.status === 'done') break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.equal(scan.reason, 'stopped');
+    assert.deepEqual(scan.bulk.collections.map((c) => c.status), ['done', 'skipped']);
+    assert.equal(scan.posts.length, 1);
+  } finally {
+    BULK.pauseMs = pause;
+    F.state.executeScript = async () => [{ result: null }];
+    await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
+  }
+});

@@ -11,6 +11,7 @@ export const MSG = {
   FLOATING_CONFIG: 'keepsake:floating-config', // { host } -> { ok, enabled, settings, collections }
   FLOATING_REFRESH: 'keepsake:floating-refresh', // background -> content scripts when settings change
   IG_START_SCAN: 'keepsake:ig-start', // { tabId } -> { ok }
+  IG_START_ALL: 'keepsake:ig-start-all', // { tabId } on the Saved overview -> { ok, collections } (scans every collection in turn)
   IG_STOP_SCAN: 'keepsake:ig-stop', // { tabId } -> { ok }
   IG_SCAN_UPDATE: 'keepsake:ig-update', // from page -> background (progress/results, no pictures)
   IG_SCAN_THUMB: 'keepsake:ig-thumb', // from page -> background { shortcode, data }: one captured thumbnail
