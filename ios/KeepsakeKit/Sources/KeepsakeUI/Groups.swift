@@ -27,17 +27,19 @@ public struct GroupTile: View {
                 .aspectRatio(1, contentMode: .fit)
                 .overlay {
                     ZStack {
-                        tint.opacity(0.10)
-                        t.well.opacity(0.6)
+                        if t.style == .pantry, let kind { t.kindFill(kind) } else { t.well }
                         if let cover, cover.hasImage { SaveImage(cover, showsSymbol: false) }
-                        else { Image(systemName: symbol).font(.system(size: compact ? 22 : 30, weight: .light)).foregroundStyle(tint.opacity(cover == nil ? 0.7 : 1)) }
+                        else {
+                            Image(systemName: symbol).font(.system(size: compact ? 22 : 30, weight: .semibold))
+                                .foregroundStyle(t.style == .pantry && kind != nil ? t.onKind : tint)
+                        }
                         // Nothing in it yet: a dashed place where its pictures will go.
                         if cover == nil {
-                            RoundedRectangle(cornerRadius: 2).strokeBorder(tint.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3])).padding(compact ? 6 : 10)
+                            RoundedRectangle(cornerRadius: max(t.radius - 8, 2)).strokeBorder(t.inkMuted.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3])).padding(compact ? 6 : 10)
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: max(t.radius - 6, 0), style: .continuous))
                 .overlay(alignment: .topTrailing) {
                     if let kind { Stamp(kind: kind, size: compact ? 22 : 28).padding(compact ? 4 : 6) }
                 }
@@ -49,19 +51,10 @@ public struct GroupTile: View {
             .padding(.horizontal, 2)
         }
         .padding(8)
-        .background(t.paper)
+        .ksSurface(nil, stroke: selected ? t.ink : nil)
         .overlay {
-            if selected { Rectangle().strokeBorder(tint, lineWidth: 2) }
+            if selected && t.outline == 0 { RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(t.ink, lineWidth: 2) }
         }
-        // The cards underneath: a group is a stack, not a single save.
-        .background {
-            ZStack {
-                Rectangle().fill(t.paper).rotationEffect(.degrees(reduce ? 0 : -2.4)).offset(x: -3, y: 4)
-                Rectangle().fill(t.paper).rotationEffect(.degrees(reduce ? 0 : 1.6)).offset(x: 3, y: 2)
-            }
-            .shadow(color: .black.opacity(0.10), radius: 1, y: 0.5)
-        }
-        .resting()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title), \(subtitle)")
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
@@ -80,7 +73,7 @@ public struct NewGroupTile: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minHeight: 120)
-        .background(Rectangle().strokeBorder(t.ink.opacity(0.28), style: StrokeStyle(lineWidth: 1.25, dash: [5, 4])))
+        .background(RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(t.ink.opacity(0.4), style: StrokeStyle(lineWidth: t.style == .pantry ? 2 : 1.25, dash: [5, 4])))
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
@@ -102,15 +95,13 @@ public struct CoverFan: View {
             if shown.isEmpty {
                 Image(systemName: symbol).font(.system(size: size * 0.42, weight: .medium)).foregroundStyle(tint)
                     .frame(width: size, height: size)
-                    .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .ksSurface(t.well, radius: 8, scale: 0.5)
             }
             ForEach(Array(shown.enumerated()), id: \.element.id) { i, save in
                 let angle = shown.count == 1 ? 0 : (Double(i) - Double(shown.count - 1) / 2) * 9
                 SaveImage(save, symbolSize: size * 0.3)
                     .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-                    .padding(2.5).background(t.paper)
-                    .shadow(color: .black.opacity(0.16), radius: 1.5, y: 1)
+                    .ksSurface(radius: min(t.radius, 8), scale: 0.5)
                     .rotationEffect(.degrees(angle), anchor: .bottom)
                     .offset(x: CGFloat(i) * size * 0.32 - CGFloat(shown.count - 1) * size * 0.16)
                     .zIndex(Double(i))

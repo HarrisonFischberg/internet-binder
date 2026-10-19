@@ -8,11 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		846E4D9D3082138100BA0257 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846E4D9C3082138100BA0257 /* AppDelegate.swift */; };
-		846E4DA13082138100BA0257 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 846E4D9F3082138100BA0257 /* Main.html */; };
-		846E4DA33082138100BA0257 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DA23082138100BA0257 /* Icon.png */; };
-		846E4DF13082138100BA0257 /* Icon-dark.png in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DF23082138100BA0257 /* Icon-dark.png */; };
-		846E4DA53082138100BA0257 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DA43082138100BA0257 /* Style.css */; };
-		846E4DA73082138100BA0257 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DA63082138100BA0257 /* Script.js */; };
 		846E4DA93082138100BA0257 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846E4DA83082138100BA0257 /* ViewController.swift */; };
 		846E4DAC3082138100BA0257 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DAA3082138100BA0257 /* Main.storyboard */; };
 		846E4DAE3082138200BA0257 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DAD3082138200BA0257 /* Assets.xcassets */; };
@@ -53,11 +48,6 @@
 /* Begin PBXFileReference section */
 		846E4D993082138100BA0257 /* Keepsake.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsake.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		846E4D9C3082138100BA0257 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		846E4DA03082138100BA0257 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
-		846E4DA23082138100BA0257 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
-		846E4DF23082138100BA0257 /* Icon-dark.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "Icon-dark.png"; sourceTree = "<group>"; };
-		846E4DA43082138100BA0257 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
-		846E4DA63082138100BA0257 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
 		846E4DA83082138100BA0257 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		846E4DAB3082138100BA0257 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		846E4DAD3082138200BA0257 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -123,11 +113,6 @@
 		846E4D9E3082138100BA0257 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				846E4D9F3082138100BA0257 /* Main.html */,
-				846E4DA23082138100BA0257 /* Icon.png */,
-				846E4DF23082138100BA0257 /* Icon-dark.png */,
-				846E4DA43082138100BA0257 /* Style.css */,
-				846E4DA63082138100BA0257 /* Script.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -238,13 +223,8 @@
 		846E4D973082138100BA0257 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
-				846E4DA33082138100BA0257 /* Icon.png in Resources */,
-				846E4DF13082138100BA0257 /* Icon-dark.png in Resources */,
 				846E4DAC3082138100BA0257 /* Main.storyboard in Resources */,
-				846E4DA73082138100BA0257 /* Script.js in Resources */,
-				846E4DA13082138100BA0257 /* Main.html in Resources */,
 				846E4DAE3082138200BA0257 /* Assets.xcassets in Resources */,
-				846E4DA53082138100BA0257 /* Style.css in Resources */,
 			);
 		};
 		846E4DB23082138200BA0257 /* Resources */ = {
@@ -306,14 +286,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
-		846E4D9F3082138100BA0257 /* Main.html */ = {
-			isa = PBXVariantGroup;
-			children = (
-				846E4DA03082138100BA0257 /* Base */,
-			);
-			name = Main.html;
-			sourceTree = "<group>";
-		};
 		846E4DAA3082138100BA0257 /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (

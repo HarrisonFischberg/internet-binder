@@ -29,6 +29,9 @@ struct SaveDetailScreen: View {
     /// The recipe's steps, without wordless lines (older saves kept Instagram's "." spacers).
     private var steps: [String] { (d?["steps"]?.array?.compactMap(\.string) ?? []).filter { $0.contains(where: { $0.isLetter || $0.isNumber }) } }
 
+    /// Body text: serif in Field Notebook and Gallery, the style's sans everywhere else.
+    private var reading: Font { t.style == .notebook || t.style == .gallery ? .system(.body, design: .serif) : .body }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             TableBackground()
@@ -36,6 +39,7 @@ struct SaveDetailScreen: View {
                 VStack(alignment: .leading, spacing: 22) {
                     hero
                     titleBlock
+                    marks
                     if current.needsCollection && current.purchased != true { FilingPanel(save: current) }
                     panel
                     if let note = current.note, !note.isEmpty {
@@ -44,10 +48,12 @@ struct SaveDetailScreen: View {
                     source
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 140)
+                .padding(.bottom, 24)
             }
-            actions
         }
+        // One layer at the bottom: the save's primary action, docked. The tabs step aside on a save.
+        .safeAreaInset(edge: .bottom, spacing: 0) { dock }
+        .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -127,8 +133,7 @@ struct SaveDetailScreen: View {
                 .accessibilityLabel("Map of \(current.title)")
                 .accessibilityHint("Use Directions below to go there.")
             }
-            .padding(8).background(t.paper).resting()
-            .rotationEffect(.degrees(-0.6))
+            .ksSurface()
             .padding(.top, 8)
         } else if current.hasImage {
             // The picture opens where it came from: an Instagram reel's thumbnail (with its play
@@ -138,8 +143,7 @@ struct SaveDetailScreen: View {
             } label: {
                 SaveImage(current, symbolSize: 48)
                     .frame(height: 300).frame(maxWidth: .infinity).clipped()
-                    .padding(current.kind == "recipe" ? 0 : 8)
-                    .background(t.paper).resting()
+                    .ksSurface()
             }
             .buttonStyle(PressStyle())
             .disabled(current.url == nil)
@@ -154,6 +158,7 @@ struct SaveDetailScreen: View {
         VStack(alignment: .leading, spacing: 6) {
             KindLabel(kind: current.kind)
             Text(current.title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                .fixedSize(horizontal: false, vertical: true)
             if let fact = current.fact, !fact.isEmpty { Text(fact).font(.subheadline).foregroundStyle(t.inkMuted) }
         }
     }
@@ -167,7 +172,7 @@ struct SaveDetailScreen: View {
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         default:
             if let text = [current.description, current.instagram?.caption].compactMap({ $0 }).first(where: { !$0.isEmpty }) {
-                Text(text).font(.system(.body, design: .serif)).foregroundStyle(t.ink).lineSpacing(4)
+                Text(text).font(reading).foregroundStyle(t.ink).lineSpacing(4)
             }
         }
     }
@@ -206,12 +211,12 @@ struct SaveDetailScreen: View {
                             HStack(spacing: 12) {
                                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                                     .font(.title3).foregroundStyle(on ? KindStyle("recipe").color : t.inkMuted)
-                                Text(line).font(.system(.body, design: .serif)).foregroundStyle(on ? t.inkMuted : t.ink)
+                                Text(line).font(reading).foregroundStyle(on ? t.inkMuted : t.ink)
                                     .strikethrough(on, color: t.inkMuted)
                                 Spacer(minLength: 0)
                             }
                             .frame(minHeight: 44)
-                            .overlay(alignment: .bottom) { Rectangle().fill(t.accent.opacity(0.18)).frame(height: 0.75) }
+                            .overlay(alignment: .bottom) { rule }
                         }
                         .buttonStyle(PressStyle())
                         .accessibilityAddTraits(on ? .isSelected : [])
@@ -222,8 +227,8 @@ struct SaveDetailScreen: View {
                 card("Method", drafted: isDrafted("steps")) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text("\(i + 1)").font(.system(.headline, design: .serif)).foregroundStyle(t.stamp)
-                            Text(step).font(.system(.body, design: .serif)).foregroundStyle(t.ink).lineSpacing(3)
+                            Text("\(i + 1)").font(KSFont.name(.headline)).foregroundStyle(t.stamp)
+                            Text(step).font(reading).foregroundStyle(t.ink).lineSpacing(3)
                         }
                         .padding(.vertical, 6)
                     }
@@ -242,9 +247,9 @@ struct SaveDetailScreen: View {
             if !exercises.isEmpty {
                 card("Exercises", drafted: isDrafted("exercises")) {
                     ForEach(Array(exercises.enumerated()), id: \.offset) { _, line in
-                        Text(line).font(.system(.body, design: .serif)).foregroundStyle(t.ink)
+                        Text(line).font(reading).foregroundStyle(t.ink)
                             .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                            .overlay(alignment: .bottom) { Rectangle().fill(t.accent.opacity(0.18)).frame(height: 0.75) }
+                            .overlay(alignment: .bottom) { rule }
                     }
                 }
             } else if detail != nil {
@@ -292,19 +297,23 @@ struct SaveDetailScreen: View {
             content()
         }
         .padding(16)
-        .background(t.paper)
-        .overlay(alignment: .top) { Rectangle().fill(t.stamp.opacity(0.6)).frame(height: 1.5) }
-        .resting()
+        .ksSurface()
+    }
+
+    /// A row's hairline: dashed in Pantry Pop, solid elsewhere.
+    private var rule: some View {
+        Rectangle().fill(.clear).frame(height: 1)
+            .overlay { Line().stroke(t.rule, style: StrokeStyle(lineWidth: t.style == .pantry ? 1.5 : 1, dash: t.style == .pantry ? [5, 4] : [])) }
     }
 
     private func ruled(_ symbol: String, _ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: symbol).foregroundStyle(KindStyle("place").color).frame(width: 22).accessibilityHidden(true)
-            Text(text).font(.system(.body, design: .serif)).foregroundStyle(t.ink)
+            Text(text).font(reading).foregroundStyle(t.ink)
             Spacer(minLength: 0)
         }
         .padding(.vertical, 12)
-        .overlay(alignment: .bottom) { Rectangle().fill(t.accent.opacity(0.2)).frame(height: 0.75) }
+        .overlay(alignment: .bottom) { rule }
     }
 
     @ViewBuilder private var source: some View {
@@ -315,50 +324,68 @@ struct SaveDetailScreen: View {
         }
     }
 
-    // MARK: the primary action
+    // MARK: actions
 
-    private var actions: some View {
-        HStack(spacing: 12) {
-            switch current.kind {
-            case "place":
-                StampButton("Been", done: isDone) { toggleDone("Cool!") }
-                PrimarySlab("Directions", symbol: "arrow.triangle.turn.up.right.diamond.fill") {
-                    if let mapsLink { openURL(mapsLink) }
-                }
-                .disabled(mapsLink == nil)
-            case "recipe":
-                StampButton("Cooked", done: isDone) { toggleDone("Cooked!") }
-                if !steps.isEmpty {
-                    PrimarySlab("Start cooking", symbol: "flame.fill") { cooking = true }
-                } else if let url = current.url.flatMap(URL.init(string:)) {
-                    PrimarySlab("Open recipe", symbol: "safari") { openURL(url) }
-                }
-            case "workout":
-                if let goal, goal.progress.status == "active" {
-                    StampButton("Done today", done: !(goal.today ?? []).isEmpty) { toggleCheckIn(today: goal.today ?? []) }
-                    if let url = current.url.flatMap(URL.init(string:)) {
-                        PrimarySlab("Open workout", symbol: "safari") { openURL(url) }
-                    }
-                } else {
-                    PrimarySlab("Make it a goal", symbol: "target") { goalSheet = true }
-                }
-            default:
-                if canBuy {
-                    StampButton("Purchased", done: isPurchased, edge: .scallop, symbol: "bag", doneSymbol: "bag.fill",
-                                tint: KindStyle("product").color) { togglePurchased() }
-                }
-                if let url = current.url.flatMap(URL.init(string:)) {
-                    PrimarySlab(openTitle, symbol: "safari") { openURL(url) }
-                }
+    /// The save's mark (Been, Cooked, Purchased, Done today) and Share, as pills under the title.
+    @ViewBuilder private var marks: some View {
+        let stamp = stampButton
+        if stamp != nil || current.url != nil {
+            HStack(spacing: 10) {
+                stamp
+                if current.url != nil { ShareStamp { SaveSharing.present(current) } }
             }
-            if current.url != nil { ShareStamp { SaveSharing.present(current) } }
+            .dynamicTypeSize(...DynamicTypeSize.large)
+            .accessibilityShowsLargeContentViewer()
         }
-        // The stamps and buttons stay their usual size at every text size, so they never crowd the
-        // page; with big text, a long press shows the label large (the Large Content Viewer).
-        .dynamicTypeSize(...DynamicTypeSize.large)
-        .accessibilityShowsLargeContentViewer()
-        .padding(.horizontal, 16).padding(.bottom, 6)
-        .background(alignment: .bottom) { BottomScrim() }
+    }
+
+    private var stampButton: StampButton? {
+        switch current.kind {
+        case "place": StampButton("Been", done: isDone) { toggleDone("Cool!") }
+        case "recipe": StampButton("Cooked", done: isDone) { toggleDone("Cooked!") }
+        case "workout":
+            if let goal, goal.progress.status == "active" {
+                StampButton("Done today", done: !(goal.today ?? []).isEmpty, symbol: "calendar.badge.checkmark") { toggleCheckIn(today: goal.today ?? []) }
+            } else { nil }
+        default:
+            canBuy ? StampButton("Purchased", done: isPurchased, symbol: "bag") { togglePurchased() } : nil
+        }
+    }
+
+    /// The one primary action, docked at the bottom edge with nothing over the page.
+    @ViewBuilder private var dock: some View {
+        if let primary = primaryAction {
+            primary
+                // The action row keeps its usual size at every text size, so it never crowds the page;
+                // with big text, a long press shows the label large (the Large Content Viewer).
+                .dynamicTypeSize(...DynamicTypeSize.large)
+                .accessibilityShowsLargeContentViewer()
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
+                .background(t.table.ignoresSafeArea(edges: .bottom))
+                .overlay(alignment: .top) { Rectangle().fill(t.style == .pantry ? t.line : t.rule).frame(height: t.style == .pantry ? 2 : 1) }
+        }
+    }
+
+    private var primaryAction: PrimarySlab? {
+        let url = current.url.flatMap(URL.init(string:))
+        switch current.kind {
+        case "place":
+            if let mapsLink {
+                return PrimarySlab("Directions", symbol: "arrow.triangle.turn.up.right.diamond.fill", kind: "place") { openURL(mapsLink) }
+            }
+            return url.map { u in PrimarySlab("Open", symbol: "safari", kind: "place") { openURL(u) } }
+        case "recipe":
+            if !steps.isEmpty { return PrimarySlab("Start cooking", symbol: "flame.fill", kind: "recipe") { cooking = true } }
+            return url.map { u in PrimarySlab("Open recipe", symbol: "safari", kind: "recipe") { openURL(u) } }
+        case "workout":
+            if let goal, goal.progress.status == "active" {
+                return url.map { u in PrimarySlab("Open workout", symbol: "safari", kind: "workout") { openURL(u) } }
+            }
+            return PrimarySlab("Make it a goal", symbol: "target", kind: "workout") { goalSheet = true }
+        default:
+            return url.map { u in PrimarySlab(openTitle, symbol: "safari", kind: current.kind) { openURL(u) } }
+        }
     }
 
     /// One tap stamps it (and says so in the middle of the screen); another takes the stamp off.

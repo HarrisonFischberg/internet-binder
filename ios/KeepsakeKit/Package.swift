@@ -17,8 +17,8 @@ let package = Package(
             dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
             resources: [.copy("Resources/keepsake-core.js"), .copy("Resources/ios-bridge.js")]
         ),
-        // The Postcard identity (replica/m3/decisions.md D14): palette, kind objects, controls, haptics.
-        .target(name: "KeepsakeUI", dependencies: ["KeepsakeKit"]),
+        // The look: five styles (Pantry Pop by default), cards, controls, haptics, the bundled title face.
+        .target(name: "KeepsakeUI", dependencies: ["KeepsakeKit"], resources: [.copy("Resources/Fonts")]),
         .testTarget(
             name: "KeepsakeKitTests",
             dependencies: ["KeepsakeKit", "KeepsakeUI"],

@@ -16,11 +16,19 @@ final class ScreenshotTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
     }
 
+    /// The Library's Recipes, reached through its Lifestyle stack: the kind chips run off the screen's
+    /// edge, so a chip far along the row is not on screen to tap.
+    func openRecipes(_ app: XCUIApplication) {
+        let recipes = card(app, "Recipes,")
+        for _ in 0..<5 where !(recipes.exists && recipes.isHittable) { app.swipeUp() }
+        recipes.tap()
+    }
+
     func testEveryScreenEveryTheme() throws {
         guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
         try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
         let env = ProcessInfo.processInfo.environment
-        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["postcard", "linen", "ink"]
+        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry", "notebook", "gallery", "atlas", "swiss"]
         let modes: [XCUIDevice.Appearance] = (env["KEEPSAKE_SHOT_MODES"] ?? "light,dark").split(separator: ",").map { $0 == "dark" ? .dark : .light }
         let regular = UIDevice.current.userInterfaceIdiom == .pad   // iPad: sidebar, not tabs
         for theme in themes {
@@ -38,7 +46,7 @@ final class ScreenshotTests: XCTestCase {
                 try shoot(app, folder, "\(tag)-review")
                 if regular { app.cells.containing(.staticText, identifier: "Library").firstMatch.tap() } else { app.tabBars.buttons["Library"].tap() }
                 try shoot(app, folder, "\(tag)-library")
-                app.buttons["Recipes"].tap()
+                openRecipes(app)
                 card(app, "Brown butter pasta").tap()
                 _ = app.buttons["Start cooking"].waitForExistence(timeout: 5)
                 try shoot(app, folder, "\(tag)-recipe")
@@ -67,10 +75,10 @@ final class ScreenshotTests: XCTestCase {
         let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
         for mode in [XCUIDevice.Appearance.light, .dark] {
             XCUIDevice.shared.appearance = mode
-            let tag = "postcard-\(mode == .dark ? "dark" : "light")"
+            let tag = "pantry-\(mode == .dark ? "dark" : "light")"
             let app = XCUIApplication()
             app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
-            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "postcard"]
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "pantry"]
             app.launch()
             XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
             sleep(2)   // pictures load
@@ -103,10 +111,10 @@ final class ScreenshotTests: XCTestCase {
         let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
         for mode in [XCUIDevice.Appearance.light, .dark] {
             XCUIDevice.shared.appearance = mode
-            let tag = "postcard-\(mode == .dark ? "dark" : "light")"
+            let tag = "pantry-\(mode == .dark ? "dark" : "light")"
             let app = XCUIApplication()
             app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
-            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "postcard"]
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "pantry"]
             app.launch()
             XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
             sleep(2)   // pictures load
@@ -123,7 +131,7 @@ final class ScreenshotTests: XCTestCase {
             app.buttons["Cooked"].tap()
             usleep(450_000)   // the 🎉 has landed; it leaves after 1.3 s
             try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(tag)-cooked-toast.png"))
-            app.buttons["Cooked, stamped"].tap()   // leave the demo as it was
+            app.buttons["Cooked, done"].tap()   // leave the demo as it was
             app.navigationBars.buttons.element(boundBy: 0).tap()
             app.navigationBars.buttons.element(boundBy: 0).tap()
             let kitchen = card(app, "Kitchen,")
@@ -152,7 +160,7 @@ final class ScreenshotTests: XCTestCase {
         app.terminate()
         for mode in [XCUIDevice.Appearance.light, .dark] {
             XCUIDevice.shared.appearance = mode
-            let tag = "postcard-\(mode == .dark ? "dark" : "light")"
+            let tag = "pantry-\(mode == .dark ? "dark" : "light")"
             let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
             safari.launch()
             safari.open(URL(string: "https://example.com/?shot=\(UUID().uuidString.prefix(6))")!)
@@ -178,6 +186,61 @@ final class ScreenshotTests: XCTestCase {
             try shoot(safari, folder, "\(tag)-share-lifestyle")
             safari.buttons["Undo"].firstMatch.tap()
             safari.terminate()
+        }
+        XCUIDevice.shared.appearance = .light
+    }
+
+    /// Every style, light and dark, from the demo library: Home, Review, Library, a recipe, Places and
+    /// Appearance. Files are <style>-<mode>-<screen>.png; KEEPSAKE_SHOT_THEMES picks the styles.
+    func testStyles() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let env = ProcessInfo.processInfo.environment
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry", "notebook", "gallery", "atlas", "swiss"]
+        let modes: [XCUIDevice.Appearance] = (env["KEEPSAKE_SHOT_MODES"] ?? "light,dark").split(separator: ",").map { $0 == "dark" ? .dark : .light }
+        let regular = UIDevice.current.userInterfaceIdiom == .pad
+        let device = regular ? "ipad" : "iphone"
+        func go(_ app: XCUIApplication, _ section: String) {
+            if regular { app.cells.containing(.staticText, identifier: section).firstMatch.tap() } else { app.tabBars.buttons[section].tap() }
+        }
+        func back(_ app: XCUIApplication) { app.navigationBars.buttons.element(boundBy: 0).tap() }
+        for theme in themes {
+            for mode in modes {
+                XCUIDevice.shared.appearance = mode
+                let tag = "\(device)-\(theme)-\(mode == .dark ? "dark" : "light")"
+                let app = XCUIApplication()
+                app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+                app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme]
+                app.launch()
+                XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+                sleep(2)   // pictures load
+                try shoot(app, folder, "\(tag)-home")
+                let nudge = app.buttons.matching(NSPredicate(format: "label CONTAINS 'need a collection' OR label CONTAINS 'needs a collection'")).firstMatch
+                if nudge.exists && !regular {   // iPad has Review in its sidebar
+                    nudge.tap()
+                    sleep(1)
+                    try shoot(app, folder, "\(tag)-review")
+                    back(app)
+                }
+                go(app, "Library")
+                sleep(1)
+                try shoot(app, folder, "\(tag)-library")
+                if regular { go(app, "Recipes") } else { openRecipes(app) }
+                sleep(1)
+                try shoot(app, folder, "\(tag)-library-recipes")
+                card(app, "Spaghetti alla carbonara").tap()
+                XCTAssertTrue(app.buttons["Start cooking"].waitForExistence(timeout: 5))
+                sleep(1)
+                try shoot(app, folder, "\(tag)-recipe")
+                app.swipeUp()
+                try shoot(app, folder, "\(tag)-recipe-scrolled")
+                if !regular { back(app) }
+                go(app, "Places")
+                sleep(2)
+                try shoot(app, folder, "\(tag)-places")
+                app.terminate()
+            }
         }
         XCUIDevice.shared.appearance = .light
     }

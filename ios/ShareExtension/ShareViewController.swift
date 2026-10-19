@@ -246,7 +246,7 @@ struct ShareCard: View {
                         SaveObject(save)
                             .frame(maxWidth: 210)
                             .frame(maxWidth: .infinity)
-                            .rotationEffect(.degrees(appeared || reduce ? -1.5 : -8))
+                            .rotationEffect(.degrees(appeared || reduce ? (t.style == .pantry ? -2 : 0) : -8))
                             .scaleEffect(appeared || reduce ? 1 : 0.85)
                             .opacity(appeared ? 1 : 0)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -272,8 +272,7 @@ struct ShareCard: View {
                     TextField("Add a note", text: $state.note, axis: .vertical)
                         .focused($noteFocused)
                         .font(KSFont.note)
-                        .padding(12).background(t.paper, in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(t.rule))
+                        .padding(12).ksSurface(radius: min(t.radius, 12), scale: 0)
                 }
                 HStack(spacing: 10) {
                     if case .saved = state.phase, !writing {
@@ -340,7 +339,7 @@ struct ShareCard: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(10).background(t.paper).resting()
+        .padding(10).ksSurface()
     }
 
     private func icon(_ value: String?) -> String {
@@ -392,7 +391,7 @@ struct ShareCard: View {
                     Text(here ? state.destinationLabel : caption).font(.footnote).foregroundStyle(here ? tint : t.inkMuted).lineLimit(1)
                 }
                 HStack(spacing: 4) {
-                    Text(count == 1 ? "1 group" : "\(count) groups")
+                    Text(shelf == .lifestyle ? (count == 1 ? "1 kind" : "\(count) kinds") : (count == 1 ? "1 collection" : "\(count) collections"))
                     Image(systemName: "chevron.right").imageScale(.small)
                 }
                 .font(.caption.weight(.medium)).foregroundStyle(t.inkMuted)
@@ -400,14 +399,8 @@ struct ShareCard: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .fixedSize(horizontal: false, vertical: true)
-            .background {
-                ZStack {
-                    Rectangle().fill(t.paper)
-                    if here { Rectangle().fill(tint.opacity(0.07)) }
-                }
-            }
-            .overlay { Rectangle().strokeBorder(here ? tint.opacity(0.9) : t.rule, lineWidth: here ? 1.5 : 0.75) }
-            .resting()
+            .ksSurface(stroke: here ? t.ink : nil)
+            .overlay { if here && t.outline == 0 { RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(t.ink, lineWidth: 2) } }
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
@@ -431,8 +424,8 @@ struct ShareCard: View {
                 if here { Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(t.accent) }
             }
             .padding(.horizontal, 14).frame(minHeight: 56)
-            .background(Rectangle().strokeBorder(here ? t.accent : t.ink.opacity(0.28), style: StrokeStyle(lineWidth: 1, dash: here ? [] : [4, 3])))
-            .background(here ? t.accent.opacity(0.08) : .clear)
+            .background(RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(here ? t.ink : t.ink.opacity(0.4), style: StrokeStyle(lineWidth: t.style == .pantry ? 2 : 1, dash: here ? [] : [4, 3])))
+            .background(here ? t.highlight.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: t.radius, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(PressStyle())
@@ -449,7 +442,7 @@ struct ShareCard: View {
             HStack(spacing: 6) {
                 Button { state.open(nil) } label: {
                     Image(systemName: "chevron.left").font(.headline).foregroundStyle(t.ink)
-                        .frame(width: 44, height: 44).background(t.paper, in: Circle()).overlay(Circle().strokeBorder(t.rule, lineWidth: 0.75))
+                        .frame(width: 44, height: 44).ksSurface(radius: 22, scale: 0.5)
                 }
                 .accessibilityLabel("Back")
                 VStack(alignment: .leading, spacing: 0) {
@@ -503,7 +496,7 @@ struct ShareCard: View {
         Button(action: action) {
             Label(title, systemImage: symbol).font(.subheadline.weight(.medium)).foregroundStyle(t.ink)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(RoundedRectangle(cornerRadius: 6).fill(t.paper).resting())
+                .ksSurface(radius: t.controlRadius.isInfinite ? 24 : t.controlRadius, scale: 0.75)
         }
         .buttonStyle(PressStyle())
     }

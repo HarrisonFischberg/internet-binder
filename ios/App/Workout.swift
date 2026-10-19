@@ -33,7 +33,8 @@ struct GoalCard: View {
                     ForEach(strip, id: \.week) { w in
                         VStack(spacing: 4) {
                             RoundedRectangle(cornerRadius: 3)
-                                .fill(w.met ? workout : w.count > 0 ? workout.opacity(0.35) : t.rule)
+                                .fill(w.met ? workout : w.count > 0 ? workout.opacity(0.35) : t.well)
+                                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(w.met || w.count > 0 ? .clear : t.inkMuted.opacity(0.6), lineWidth: 1))
                                 .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(w.current ? t.ink : .clear, lineWidth: 1.5))
                                 .frame(height: 22)
                             Text("\(w.week)").font(.caption2).foregroundStyle(t.inkMuted)
@@ -45,9 +46,7 @@ struct GoalCard: View {
             }
         }
         .padding(16)
-        .background(t.paper)
-        .overlay(alignment: .leading) { Perforated(bite: 3.2, spacing: 13, edges: .leading).fill(workout.opacity(0.85)).frame(width: 10) }
-        .resting()
+        .ksSurface()
         .accessibilityElement(children: .contain)
     }
 }

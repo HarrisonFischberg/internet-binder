@@ -40,9 +40,9 @@ struct HomeScreen: View {
                     HStack(alignment: .top) {
                         ScreenHeader(title: "Keepsake", subtitle: nil)
                         if size != .regular { Button { settings = true } label: {
-                            Image(systemName: "gearshape").font(.body.weight(.semibold)).foregroundStyle(t.ink)
-                                .padding(12).frame(minWidth: 44, minHeight: 44)
-                                .background(t.paper, in: Circle()).overlay(Circle().strokeBorder(t.rule, lineWidth: 0.75))
+                            Image(systemName: "gearshape").font(.body.weight(.bold)).foregroundStyle(t.ink)
+                                .frame(width: 44, height: 44)
+                                .ksSurface(radius: 22, scale: 0.75)
                         }
                         .accessibilityLabel("Settings")
                         .padding(.top, 8) }
@@ -56,11 +56,11 @@ struct HomeScreen: View {
                         ForEach(sectionOrder, id: \.self) { section in
                             Group {
                                 if section == "collections" {
-                                    shelfRow("Collections", route: .collections, saves: collectedSaves, symbol: "bag", tint: KindStyle("product").color,
+                                    shelfRow("Collections", route: .collections, saves: collectedSaves, symbol: "bag", tint: KindStyle("product").color, fill: "place",
                                              detail: count(collections.count, "collection") + " · " + count(collectedSaves.count, "save"))
                                 } else {
-                                    shelfRow("Lifestyle", route: .lifestyle, saves: lifestyleSaves, symbol: "sparkles", tint: KindStyle("recipe").color,
-                                             detail: lifestyleSaves.isEmpty ? "Places, recipes, workouts and more" : count(lifestyleViews, "view") + " · " + count(lifestyleSaves.count, "save"))
+                                    shelfRow("Lifestyle", route: .lifestyle, saves: lifestyleSaves, symbol: "sparkles", tint: KindStyle("recipe").color, fill: "video",
+                                             detail: lifestyleSaves.isEmpty ? "Places, recipes, workouts and more" : count(lifestyleViews, "kind") + " · " + count(lifestyleSaves.count, "save"))
                                 }
                             }
                             .reorderable(section, in: $sectionOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set(HomeSections.key, $0) }
@@ -85,20 +85,22 @@ struct HomeScreen: View {
     private func count(_ n: Int, _ noun: String) -> String { n == 1 ? "1 \(noun)" : "\(n) \(noun)s" }
 
     /// A folded section: a fan of its pictures, its name and what it holds. One tap opens its page.
-    private func shelfRow(_ title: String, route: Route, saves: [Save], symbol: String, tint: Color, detail: String) -> some View {
-        NavigationLink(value: route) {
+    private func shelfRow(_ title: String, route: Route, saves: [Save], symbol: String, tint: Color, fill: String, detail: String) -> some View {
+        // Pantry Pop paints the two shelves in kind colours (teal and pink), with ink text.
+        let bold = t.style == .pantry
+        return NavigationLink(value: route) {
             HStack(spacing: 14) {
                 CoverFan(saves, symbol: symbol, tint: tint)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink)
-                    Text(detail).font(.subheadline).foregroundStyle(t.inkMuted).lineLimit(2)
+                    Text(title).font(KSFont.name(.title2)).foregroundStyle(bold ? t.onKind : t.ink)
+                    Text(detail).font(.subheadline.weight(bold ? .bold : .regular)).foregroundStyle(bold ? t.onKind : t.inkMuted).lineLimit(2)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted)
+                Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).foregroundStyle(bold ? t.onKind : t.inkMuted)
             }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
-            .background(t.paper).resting()
+            .padding(.horizontal, 14).padding(.vertical, 14)
+            .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+            .ksSurface(bold ? t.kindFill(fill) : nil)
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
@@ -109,20 +111,22 @@ struct HomeScreen: View {
 
     private var reviewBanner: some View {
         NavigationLink(value: Route.review) {
+            // What needs you, in the style's one loud colour (mustard, highlighter, amber, signal red).
+            let ink = t.style == .gallery ? t.ink : t.onHighlight
             HStack(spacing: 14) {
-                Image(systemName: "tray.full").font(.title3).foregroundStyle(t.accent)
+                Image(systemName: "tray.full").font(.title3.weight(.semibold)).foregroundStyle(t.style == .pantry ? t.ink : ink)
+                    .frame(width: 40, height: 40)
+                    .background { if t.style == .pantry { RoundedRectangle(cornerRadius: 10).fill(t.paper).overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(t.line, lineWidth: 2)) } }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.reviewCount == 1 ? "1 save needs a collection" : "\(model.reviewCount) saves need a collection")
-                        .font(.headline).foregroundStyle(t.ink)
-                    Text("Keepsake wasn't sure where these go.").font(.subheadline).foregroundStyle(t.inkMuted)
+                        .font(t.style == .pantry ? KSFont.name(.headline) : .headline).foregroundStyle(ink)
+                    Text("One tap each, and Keepsake learns.").font(.subheadline.weight(t.style == .pantry ? .semibold : .regular)).foregroundStyle(ink)
                 }
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(t.inkMuted)
+                Image(systemName: "chevron.right").font(.body.weight(.bold)).foregroundStyle(ink)
             }
-            .padding(16)
-            .background(t.paper)
-            .overlay(alignment: .leading) { Rectangle().fill(t.accent).frame(width: 3) }
-            .resting()
+            .padding(14)
+            .ksSurface(t.style == .gallery ? t.well : t.highlight)
         }
         .buttonStyle(PressStyle())
     }

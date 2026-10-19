@@ -38,7 +38,7 @@ final class SaveFlowTests: XCTestCase {
         let been = app.buttons["Been"]
         XCTAssertTrue(been.exists)
         been.tap()
-        XCTAssertTrue(app.buttons["Been, stamped"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Been, done"].waitForExistence(timeout: 3))
     }
 
     func testPasteALinkThenUndo() {

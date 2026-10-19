@@ -108,7 +108,7 @@ struct GoalWidgetView: View {
 
 struct GoalWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "goal", provider: SnapshotProvider()) { GoalWidgetView(entry: $0).environment(\.ks, KSTheme.named(Appearance.load().theme)) }
+        StaticConfiguration(kind: "goal", provider: SnapshotProvider()) { GoalWidgetView(entry: $0).environment(\.ks, widgetTheme()) }
             .configurationDisplayName("Workout goal")
             .description("This week's check-ins for your goal.")
             .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular])
@@ -140,7 +140,7 @@ struct LatestWidgetView: View {
 
 struct LatestWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "latest", provider: SnapshotProvider()) { LatestWidgetView(entry: $0).environment(\.ks, KSTheme.named(Appearance.load().theme)) }
+        StaticConfiguration(kind: "latest", provider: SnapshotProvider()) { LatestWidgetView(entry: $0).environment(\.ks, widgetTheme()) }
             .configurationDisplayName("Latest save")
             .description("The last thing you kept.")
             .supportedFamilies([.systemSmall])
@@ -160,4 +160,12 @@ struct AnyLabelStyle: LabelStyle {
     private let make: (Configuration) -> AnyView
     init<S: LabelStyle>(_ style: S) { make = { AnyView(style.makeBody(configuration: $0)) } }
     func makeBody(configuration: Configuration) -> some View { make(configuration) }
+}
+
+/// The style the app uses, for the widgets (fonts and kind colours read it too).
+func widgetTheme() -> KSTheme {
+    let t = KSTheme.named(Appearance.load().theme)
+    KSTheme.current = t
+    _ = KSFont.registered
+    return t
 }
