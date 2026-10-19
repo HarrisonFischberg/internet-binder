@@ -89,6 +89,8 @@ public struct GoalView: Decodable, Sendable {
     }
     public let goal: Goal
     public let progress: Progress
+    /// Today's check-ins: Done today is stamped while there are any.
+    public let today: [String]?
 }
 
 extension Library {

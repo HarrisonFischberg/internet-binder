@@ -399,10 +399,16 @@
     },
     // Undoing a save that just happened removes it outright (background.js UNDO_SAVE).
     async undoSave(id) { await store.deleteForever([id]); },
-    // A workout's goals with their progress (goals.js goalProgress).
+    // A workout's goals with their progress (goals.js goalProgress), and today's check-ins so a second
+    // tap on Done today can take today back off the goal.
     async goals(itemId) {
       const goals = await store.getGoals({ itemId });
-      return Promise.all(goals.map(async (g) => ({ goal: g, progress: K.goals.goalProgress(g, await store.getCheckins(g.id)) })));
+      const today = K.goals.localDay();
+      return Promise.all(goals.map(async (g) => {
+        const checkins = await store.getCheckins(g.id);
+        return { goal: g, progress: K.goals.goalProgress(g, checkins),
+          today: checkins.filter((c) => K.goals.localDay(new Date(c.at)) === today).map((c) => c.id) };
+      }));
     },
   };
 

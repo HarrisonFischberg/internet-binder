@@ -29,7 +29,7 @@ final class CardActionsTests: XCTestCase {
         let been = app.buttons["Been"]
         XCTAssertTrue(been.waitForExistence(timeout: 5))
         been.tap()
-        XCTAssertTrue(app.staticTexts["Been!"].waitForExistence(timeout: 2), "the 🎉 in the middle of the screen")
+        XCTAssertTrue(app.staticTexts["Cool!"].waitForExistence(timeout: 2), "the 🎉 in the middle of the screen")
         XCTAssertTrue(app.buttons["Been, stamped"].waitForExistence(timeout: 3))
         app.buttons["Been, stamped"].tap()
         XCTAssertTrue(app.buttons["Been"].waitForExistence(timeout: 3), "a second tap takes the stamp off")
