@@ -567,7 +567,7 @@ function renderToolbar() {
   else if (r.name === 'purchased') title = 'Purchased';
   else if (r.name === 'trash') title = 'Trash';
   else if (r.name === 'kind') title = kindInfo(r.id).plural;
-  else if (r.name === 'review') title = 'Review queue';
+  else if (r.name === 'review') title = 'Review';
   else if (r.name === 'import') title = 'Instagram import';
   else if (r.name === 'tabsimport') title = 'Import from tabs';
   else if (r.name === 'settings') title = 'Settings';
@@ -603,7 +603,7 @@ function aiCheckHint(r) {
       : 'Have your AI provider check every place: fill in a missing street, city or state (nothing you have is replaced); Lookups add the pins';
   }
   if (r.name === 'kind') return `Have your AI provider fill in what’s missing in your ${kindInfo(r.id).plural.toLowerCase()}`;
-  const what = r.name === 'c' ? 'this collection' : r.name === 'favorites' ? 'your favorites' : r.name === 'review' ? 'the Review queue' : 'your shopping saves';
+  const what = r.name === 'c' ? 'this collection' : r.name === 'favorites' ? 'your favorites' : r.name === 'review' ? 'Review' : 'your shopping saves';
   return `Have your AI provider check ${what}: tidy titles, confirm prices and file them. Every change can be undone.`;
 }
 
