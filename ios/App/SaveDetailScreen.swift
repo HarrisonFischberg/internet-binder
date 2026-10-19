@@ -353,6 +353,8 @@ struct SaveDetailScreen: View {
             }
             if current.url != nil { ShareStamp { SaveSharing.present(current) } }
         }
+        // The stamps and buttons grow with text size only so far, so they never crowd the page.
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .padding(.horizontal, 16).padding(.bottom, 6)
         .background(alignment: .bottom) { BottomScrim() }
     }
