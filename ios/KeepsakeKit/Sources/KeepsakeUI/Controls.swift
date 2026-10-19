@@ -94,17 +94,17 @@ public struct StampButton: View {
             Haptic.stamped()
             action()
         } label: {
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 // A smaller mark when the label takes two lines, so both fit inside the ring.
-                Image(systemName: done ? doneSymbol : symbol).font((twoWords ? Font.body : .title3).weight(.semibold))
+                Image(systemName: done ? doneSymbol : symbol).font((twoWords ? Font.footnote : .title3).weight(.semibold))
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.bounce, value: done)
-                // Kept inside the circle: one word stays whole and shrinks to fit ("Purchased", never
+                // Kept inside the inner ring: one word stays whole and shrinks to fit ("Purchased", never
                 // "Pur-chased"); two words go on two lines ("Done / today").
                 Text(twoWords ? label.replacingOccurrences(of: " ", with: "\n") : label)
-                    .font(.caption2.weight(.semibold)).lineLimit(twoWords ? 2 : 1).minimumScaleFactor(0.6)
+                    .font(.caption2.weight(.semibold)).lineLimit(twoWords ? 2 : 1).minimumScaleFactor(0.5)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: side * 0.72)
+                    .frame(maxWidth: side * (twoWords ? 0.6 : 0.66))
             }
             .foregroundStyle(done ? t.onAccent : ink)
             .frame(width: side, height: side)
