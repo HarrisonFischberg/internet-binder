@@ -1,0 +1,371 @@
+{
+ "_about": "Keepsake tokens, style gallery (Gallery), dark. Role names are identical across styles. Contrast is checked by tests/design-tokens.test.mjs.",
+ "style": "gallery",
+ "mode": "dark",
+ "color": {
+  "bg": "#0E0E0E",
+  "surface": "#161616",
+  "surface-2": "#1E1E1D",
+  "border": "#2A2927",
+  "border-input": "#8C877E",
+  "line": "#2A2927",
+  "text": "#F2EDE4",
+  "text-muted": "#A7A196",
+  "accent": "#F2EDE4",
+  "accent-soft": "#24231F",
+  "on-accent": "#0E0E0E",
+  "highlight": "#E0C79A",
+  "highlight-soft": "#2A2620",
+  "danger": "#FF8A7A",
+  "danger-soft": "#3A1F1C",
+  "success": "#8FD19E",
+  "success-soft": "#1D2B21",
+  "warning": "#E0C79A",
+  "warning-soft": "#2A2620",
+  "focus": "#F2EDE4",
+  "kind-product": "#F2EDE4",
+  "kind-product-soft": "#1C1A17",
+  "kind-product-fill": "#1C1A17",
+  "kind-place": "#F2EDE4",
+  "kind-place-soft": "#171B18",
+  "kind-place-fill": "#171B18",
+  "kind-recipe": "#F2EDE4",
+  "kind-recipe-soft": "#1D1915",
+  "kind-recipe-fill": "#1D1915",
+  "kind-video": "#F2EDE4",
+  "kind-video-soft": "#17191D",
+  "kind-video-fill": "#17191D",
+  "kind-article": "#F2EDE4",
+  "kind-article-soft": "#1B1A17",
+  "kind-article-fill": "#1B1A17",
+  "kind-workout": "#F2EDE4",
+  "kind-workout-soft": "#161B1A",
+  "kind-workout-fill": "#161B1A",
+  "kind-film": "#F2EDE4",
+  "kind-film-soft": "#1C181A",
+  "kind-film-fill": "#1C181A",
+  "kind-book": "#F2EDE4",
+  "kind-book-soft": "#1C1A15",
+  "kind-book-fill": "#1C1A15",
+  "kind-link": "#F2EDE4",
+  "kind-link-soft": "#1E1E1D",
+  "kind-link-fill": "#1E1E1D",
+  "on-kind-fill": "#F2EDE4"
+ },
+ "pairs": [
+  [
+   "text",
+   "bg"
+  ],
+  [
+   "text",
+   "surface"
+  ],
+  [
+   "text",
+   "surface-2"
+  ],
+  [
+   "text-muted",
+   "bg"
+  ],
+  [
+   "text-muted",
+   "surface"
+  ],
+  [
+   "text-muted",
+   "surface-2"
+  ],
+  [
+   "on-accent",
+   "accent"
+  ],
+  [
+   "accent",
+   "bg"
+  ],
+  [
+   "accent",
+   "surface"
+  ],
+  [
+   "accent",
+   "accent-soft"
+  ],
+  [
+   "highlight",
+   "surface"
+  ],
+  [
+   "highlight",
+   "highlight-soft"
+  ],
+  [
+   "danger",
+   "surface"
+  ],
+  [
+   "danger",
+   "danger-soft"
+  ],
+  [
+   "success",
+   "surface"
+  ],
+  [
+   "success",
+   "success-soft"
+  ],
+  [
+   "warning",
+   "surface"
+  ],
+  [
+   "warning",
+   "warning-soft"
+  ],
+  [
+   "border-input",
+   "surface",
+   "ui"
+  ],
+  [
+   "border-input",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "surface",
+   "ui"
+  ],
+  [
+   "kind-product",
+   "kind-product-soft"
+  ],
+  [
+   "kind-product",
+   "surface"
+  ],
+  [
+   "kind-place",
+   "kind-place-soft"
+  ],
+  [
+   "kind-place",
+   "surface"
+  ],
+  [
+   "kind-recipe",
+   "kind-recipe-soft"
+  ],
+  [
+   "kind-recipe",
+   "surface"
+  ],
+  [
+   "kind-video",
+   "kind-video-soft"
+  ],
+  [
+   "kind-video",
+   "surface"
+  ],
+  [
+   "kind-article",
+   "kind-article-soft"
+  ],
+  [
+   "kind-article",
+   "surface"
+  ],
+  [
+   "kind-workout",
+   "kind-workout-soft"
+  ],
+  [
+   "kind-workout",
+   "surface"
+  ],
+  [
+   "kind-film",
+   "kind-film-soft"
+  ],
+  [
+   "kind-film",
+   "surface"
+  ],
+  [
+   "kind-book",
+   "kind-book-soft"
+  ],
+  [
+   "kind-book",
+   "surface"
+  ],
+  [
+   "kind-link",
+   "kind-link-soft"
+  ],
+  [
+   "kind-link",
+   "surface"
+  ],
+  [
+   "on-kind-fill",
+   "kind-product-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-place-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-recipe-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-video-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-article-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-workout-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-film-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-book-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-link-fill"
+  ]
+ ],
+ "display": {
+  "font": "'Instrument Serif', ui-serif, 'New York', Georgia, serif",
+  "weight": 400,
+  "tracking": "-0.01em",
+  "stretch": "100%",
+  "ios": "New York regular at display sizes"
+ },
+ "radius": {
+  "xs": 0,
+  "sm": 0,
+  "md": 2,
+  "lg": 2,
+  "xl": 4,
+  "pill": 999
+ },
+ "shadow": {
+  "card": "0 0 0 rgba(0,0,0,0)",
+  "raised": "0 10px 30px rgba(0,0,0,.5)",
+  "overlay": "0 24px 60px rgba(0,0,0,.6)"
+ },
+ "font": {
+  "display": "'Instrument Serif', ui-serif, 'New York', Georgia, serif",
+  "sans": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  "mono": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+ },
+ "type": {
+  "caption": {
+   "size": 12,
+   "line": 16,
+   "weight": 500,
+   "ios": "caption"
+  },
+  "footnote": {
+   "size": 13,
+   "line": 18,
+   "weight": 400,
+   "ios": "footnote"
+  },
+  "body-web": {
+   "size": 14,
+   "line": 20,
+   "weight": 400,
+   "ios": "-"
+  },
+  "subhead": {
+   "size": 15,
+   "line": 20,
+   "weight": 500,
+   "ios": "subheadline"
+  },
+  "body": {
+   "size": 17,
+   "line": 22,
+   "weight": 400,
+   "ios": "body"
+  },
+  "title3": {
+   "size": 20,
+   "line": 25,
+   "weight": 600,
+   "ios": "title3"
+  },
+  "title2": {
+   "size": 22,
+   "line": 28,
+   "weight": 600,
+   "font": "display",
+   "ios": "title2 (serif)"
+  },
+  "title": {
+   "size": 28,
+   "line": 34,
+   "weight": 600,
+   "font": "display",
+   "ios": "title (serif)"
+  },
+  "large": {
+   "size": 34,
+   "line": 41,
+   "weight": 600,
+   "font": "display",
+   "ios": "largeTitle (serif)"
+  }
+ },
+ "space": [
+  0,
+  2,
+  4,
+  8,
+  12,
+  16,
+  20,
+  24,
+  32,
+  40,
+  56
+ ],
+ "size": {
+  "target-min-ios": 44,
+  "target-min-web": 32,
+  "popup-width": 400,
+  "sidebar": 248,
+  "content-max": 1240,
+  "card-min": 220
+ },
+ "motion": {
+  "fast": "120ms",
+  "base": "200ms",
+  "slow": "320ms",
+  "ease": "cubic-bezier(.2,.7,.2,1)",
+  "ios-spring": "spring(response 0.35, damping 0.86)",
+  "reduced": "opacity cross-fade only"
+ },
+ "stroke": 1
+}

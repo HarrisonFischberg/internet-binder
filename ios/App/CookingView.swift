@@ -36,8 +36,9 @@ struct CookingView: View {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, text in
                         ScrollView {
                             VStack(alignment: .leading, spacing: 16) {
-                                Text("\(i + 1)").font(.system(size: 64, weight: .semibold, design: .serif)).foregroundStyle(t.stamp)
-                                Text(text).font(.system(.title2, design: .serif)).foregroundStyle(t.ink).lineSpacing(6)
+                                Text("\(i + 1)").font(KSFont.display()).scaleEffect(1.6, anchor: .leading).foregroundStyle(t.stamp)
+                                    .accessibilityHidden(true)
+                                Text(text).font(t.style == .notebook || t.style == .gallery ? .system(.title2, design: .serif) : .title2.weight(.medium)).foregroundStyle(t.ink).lineSpacing(6)
                             }
                             .padding(24)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -50,15 +51,15 @@ struct CookingView: View {
                 HStack(spacing: 12) {
                     if step > 0 {
                         Button { withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { step -= 1 } } label: {
-                            Image(systemName: "chevron.left").font(.headline).frame(width: 56, height: 56)
-                                .background(t.paper, in: Circle()).overlay(Circle().strokeBorder(t.rule))
+                            Image(systemName: "chevron.left").font(.headline).foregroundStyle(t.ink).frame(width: 56, height: 56)
+                                .ksSurface(radius: 28, scale: 0.75)
                         }
                         .accessibilityLabel("Previous step")
                     }
                     if step < steps.count - 1 {
                         PrimarySlab("Next step", symbol: "arrow.right") { withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { step += 1 } }
                     } else {
-                        PrimarySlab("Mark as cooked", symbol: "checkmark.seal.fill") {
+                        PrimarySlab("Mark as cooked", symbol: "checkmark.circle.fill", kind: "recipe") {
                             Haptic.stamped()
                             cooked()
                             dismiss()

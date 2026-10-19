@@ -108,24 +108,22 @@ struct ReviewScreen: View {
                 }
             }
             .buttonStyle(PressStyle())
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(suggestions[save.id]?.picks ?? []) { pick in
-                        Chip(pick.label, symbol: pick.isNew ? "plus" : "bag", selected: false) { file(save, pick.value, pick.label) }
-                            .accessibilityLabel("File in \(pick.label)")
-                    }
-                    Menu {
-                        ForEach(destinations) { d in Button(d.label) { file(save, d.value, d.label) } }
-                    } label: {
-                        Label("More", systemImage: "ellipsis").font(.subheadline.weight(.medium)).foregroundStyle(t.ink)
-                            .padding(.horizontal, 14).frame(minHeight: 44)
-                            .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
-                    }
+            // The best guess filled (one tap files it), the others outlined, then any other home.
+            Flow(spacing: 8) {
+                ForEach(Array((suggestions[save.id]?.picks ?? []).prefix(3).enumerated()), id: \.element.id) { i, pick in
+                    Chip(pick.label, symbol: pick.isNew ? "plus" : "bag", selected: false, prominent: i == 0) { file(save, pick.value, pick.label) }
+                        .accessibilityLabel("File in \(pick.label)")
                 }
+                Menu {
+                    ForEach(destinations) { d in Button(d.label) { file(save, d.value, d.label) } }
+                } label: {
+                    Text("Another collection…").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted)
+                        .underline(t.style != .pantry).padding(.horizontal, 6).frame(minHeight: 44)
+                }
+                .accessibilityLabel("More")
             }
-            .scrollIndicators(.hidden)
         }
-        .padding(14).background(t.paper).resting()
+        .padding(14).ksSurface()
     }
 
     private func file(_ save: Save, _ target: String, _ label: String) { model.file(save, into: target, label: label) }
@@ -242,9 +240,7 @@ struct FilingPanel: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(t.paper)
-        .overlay(alignment: .top) { Rectangle().fill(t.accent.opacity(0.7)).frame(height: 1.5) }
-        .resting()
+        .ksSurface()
         .task(id: save.id) {
             guard let lib = model.library else { return }
             async let s = try? lib.suggestions(for: save.id)

@@ -17,7 +17,7 @@ T = {  # target key: (name, product, productType, folder, bundle id, extra setti
             'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone': '"UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"',
             'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad': '"UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"',
             'CODE_SIGN_ENTITLEMENTS': 'Config/Keepsake.entitlements', 'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon',
-            'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES': '"AppIconLight AppIconDark"',
+            'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES': '"AppIconNotebook AppIconGallery AppIconAtlas AppIconSwiss"',
             'LD_RUNPATH_SEARCH_PATHS': '("$(inherited)", "@executable_path/Frameworks")'}),
  'share': ('KeepsakeShare', 'KeepsakeShare.appex', 'com.apple.product-type.app-extension', 'ShareExtension', 'com.harrisonfischberg.keepsake.share',
            {'INFOPLIST_FILE': 'Config/Share-Info.plist', 'INFOPLIST_KEY_CFBundleDisplayName': 'Keepsake', 'CODE_SIGN_ENTITLEMENTS': 'Config/Share.entitlements',

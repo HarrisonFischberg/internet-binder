@@ -30,8 +30,8 @@ final class CardActionsTests: XCTestCase {
         XCTAssertTrue(been.waitForExistence(timeout: 5))
         been.tap()
         XCTAssertTrue(app.staticTexts["Cool!"].waitForExistence(timeout: 2), "the 🎉 in the middle of the screen")
-        XCTAssertTrue(app.buttons["Been, stamped"].waitForExistence(timeout: 3))
-        app.buttons["Been, stamped"].tap()
+        XCTAssertTrue(app.buttons["Been, done"].waitForExistence(timeout: 3))
+        app.buttons["Been, done"].tap()
         XCTAssertTrue(app.buttons["Been"].waitForExistence(timeout: 3), "a second tap takes the stamp off")
     }
 
@@ -46,7 +46,7 @@ final class CardActionsTests: XCTestCase {
         XCTAssertTrue(purchased.waitForExistence(timeout: 5), "a thing to buy has Purchased on the card itself")
         purchased.tap()
         XCTAssertTrue(app.staticTexts["Purchased!"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.buttons["Purchased, stamped"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Purchased, done"].waitForExistence(timeout: 3))
         app.buttons["Share"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["Copy"].firstMatch.waitForExistence(timeout: 5), "the system Share Sheet")
     }

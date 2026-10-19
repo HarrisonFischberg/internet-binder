@@ -206,7 +206,7 @@ function reviewScreen(ctx, page) {
     colSel.dataset.key = r.key;
     if (colSel.value !== sel.collectionId) { colSel.value = NONE; sel.collectionId = NONE; }
     const price = priceLabel(r.product);
-    const conf = r.cls.isInbox ? 'Not sure — leave uncategorized' : `${Math.round(r.cls.confidence * 100)}% · ${r.cls.reason}`;
+    const conf = r.cls.isInbox ? 'Not sure yet (leave it in Review)' : `${Math.round(r.cls.confidence * 100)}% · ${r.cls.reason}`;
     card.append(
       cb,
       UI.pictureNode({ src: r.product.image, title: r.product.title }),

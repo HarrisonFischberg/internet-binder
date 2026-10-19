@@ -95,6 +95,12 @@ public struct TagShape: Shape {
     }
 }
 
+/// A horizontal line through the middle (a dashed row rule).
+public struct Line: Shape {
+    public init() {}
+    public func path(in r: CGRect) -> Path { var p = Path(); p.move(to: CGPoint(x: r.minX, y: r.midY)); p.addLine(to: CGPoint(x: r.maxX, y: r.midY)); return p }
+}
+
 struct VLine: Shape {
     func path(in r: CGRect) -> Path { var p = Path(); p.move(to: CGPoint(x: r.midX, y: r.minY)); p.addLine(to: CGPoint(x: r.midX, y: r.maxY)); return p }
 }

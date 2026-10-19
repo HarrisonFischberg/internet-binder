@@ -1,23 +1,23 @@
 {
   "manifest_version": 3,
   "name": "Keepsake",
-  "version": "1.4.5",
+  "version": "2.0.0",
   "description": "Save products, places, recipes, workouts, videos and more from any site. Sorted for you and kept on your device. No account.",
   "minimum_chrome_version": "121",
   "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/styles/pantry/icon16.png",
+    "32": "icons/styles/pantry/icon32.png",
+    "48": "icons/styles/pantry/icon48.png",
+    "128": "icons/styles/pantry/icon128.png"
   },
   "action": {
     "default_title": "Save to Keepsake",
     "default_popup": "src/popup/popup.html",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/styles/pantry/icon16.png",
+      "32": "icons/styles/pantry/icon32.png",
+      "48": "icons/styles/pantry/icon48.png",
+      "128": "icons/styles/pantry/icon128.png"
     }
   },
   "background": {

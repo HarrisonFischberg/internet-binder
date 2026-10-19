@@ -11,8 +11,8 @@ enum Route: Hashable {
     case collection(String, String)
 }
 
-/// The app's frame: Home, Library and Places tabs, each with its own stack, and the Undo toast.
-/// Search lives at the bottom of the Library (under the thumb), so it has no tab of its own (D20).
+/// The app's frame: Home, Library, Places and Search tabs, each with its own stack, and the Undo
+/// toast. Library keeps its own search field too.
 struct RootView: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.scenePhase) private var phase
@@ -30,6 +30,7 @@ struct RootView: View {
         }
         .overlay { CelebrationView() }
         .task { await model.start() }
+        .task { IconPicker.retireOldIcons() }
         // A Keepsake export sent by AirDrop, or opened from Files with "Open in Keepsake": imported
         // the way Settings → Import from Chrome does (merged; saves already here are skipped).
         .onOpenURL { url in
@@ -50,6 +51,8 @@ struct RootView: View {
                 .badge(model.reviewCount)
             Tab("Library", systemImage: "books.vertical", value: "library") { Stack(name: "library") { LibraryScreen(zoom: $0) } }
             Tab("Places", systemImage: "map", value: "places") { Stack(name: "places") { PlacesScreen(zoom: $0) } }
+            // The system's search tab: its own button at the end of the tab bar.
+            Tab(value: "search", role: .search) { Stack(name: "search") { SearchScreen(zoom: $0) } }
         }
         .onChange(of: tab) { Perf.mark("tab \(tab)") }
         // keepsake://save/<id> (widgets): open that save in the Library.
@@ -68,21 +71,26 @@ struct Stack<Root: View>: View {
     @Namespace private var zoom
     @State private var path = NavigationPath()
     @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
 
     var body: some View {
         NavigationStack(path: $path) {
             root(zoom)
                 .navigationDestination(for: Save.self) { save in
                     SaveDetailScreen(save: save).navigationTransition(.zoom(sourceID: save.id, in: zoom))
+                        .modifier(PageBar(t: t))
                 }
                 .navigationDestination(for: Route.self) { route in
-                    switch route {
-                    case .kind(let k): KindScreen(kind: k, zoom: zoom)
-                    case .review: ReviewScreen(zoom: zoom)
-                    case .collections: CollectionsScreen(zoom: zoom)
-                    case .lifestyle: LifestyleScreen(zoom: zoom)
-                    case .collection(let id, let name): CollectionScreen(id: id, name: name, zoom: zoom)
+                    Group {
+                        switch route {
+                        case .kind(let k): KindScreen(kind: k, zoom: zoom)
+                        case .review: ReviewScreen(zoom: zoom)
+                        case .collections: CollectionsScreen(zoom: zoom)
+                        case .lifestyle: LifestyleScreen(zoom: zoom)
+                        case .collection(let id, let name): CollectionScreen(id: id, name: name, zoom: zoom)
+                        }
                     }
+                    .modifier(PageBar(t: t))
                 }
         }
         .onChange(of: model.opening?.id) {
@@ -91,6 +99,17 @@ struct Stack<Root: View>: View {
             path.append(save)
             model.opening = nil
         }
+    }
+}
+
+/// A pushed page's navigation bar: solid in the page's own colour, so scrolled content never runs
+/// under the back button.
+struct PageBar: ViewModifier {
+    let t: KSTheme
+    func body(content: Content) -> some View {
+        content
+            .toolbarBackground(t.table, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
     }
 }
 
@@ -117,9 +136,8 @@ struct ToastView: View {
                     }
                 }
                 .padding(.horizontal, 18).frame(minHeight: 48)
-                .background(t.paper, in: Capsule())
-                .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
-                .shadow(color: .black.opacity(0.15), radius: 14, y: 6)
+                .ksSurface(radius: 24)
+                .shadow(color: .black.opacity(t.style == .pantry ? 0 : 0.15), radius: 14, y: 6)
                 .transition(reduce ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .task(id: toast.id) {
                     UIAccessibility.post(notification: .announcement, argument: toast.text)
@@ -144,13 +162,13 @@ struct CelebrationView: View {
         ZStack {
             if let c = model.celebration {
                 HStack(spacing: 10) {
-                    Text("🎉").font(.system(size: 34))
-                    Text(c.text).font(KSFont.name(.title2)).foregroundStyle(t.ink)
+                    Image(systemName: "party.popper.fill").font(.title.weight(.semibold)).foregroundStyle(t.style == .pantry ? t.onHighlight : t.stamp)
+                        .accessibilityHidden(true)
+                    Text(c.text).font(KSFont.name(.title2)).foregroundStyle(t.style == .pantry ? t.onHighlight : t.ink)
                 }
                 .padding(.horizontal, 26).padding(.vertical, 16)
-                .background(t.paper, in: Capsule())
-                .overlay(Capsule().strokeBorder(t.stamp.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])).padding(4))
-                .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+                .ksSurface(t.style == .pantry ? t.highlight : nil, radius: 36)
+                .shadow(color: .black.opacity(t.style == .pantry ? 0 : 0.18), radius: 18, y: 8)
                 .rotationEffect(.degrees(reduce ? 0 : -3))
                 .transition(reduce ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
                 .task(id: c.id) {

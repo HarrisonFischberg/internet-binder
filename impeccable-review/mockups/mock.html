@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><title>mock</title>
+<link rel="stylesheet" href="fonts.css"><style>html,body{margin:0;padding:0}*{box-sizing:border-box} .frame{position:relative;overflow:hidden}</style>
+<style id="dircss"></style></head><body>
+<div id="root"></div>
+<script src="data.js"></script>
+<script src="kit.js"></script>
+<script>
+const q = new URLSearchParams(location.search);
+const dir = q.get('dir'), screen = q.get('screen'), mode = q.get('mode') || 'light';
+const s = document.createElement('script'); s.src = `dir${dir}.js`;
+s.onload = () => {
+  const D = window.KS_DIR;
+  document.getElementById('dircss').textContent = D.css(mode);
+  document.documentElement.dataset.mode = mode;
+  const size = KS.sizes[screen.split('-')[0]];
+  const root = document.getElementById('root');
+  root.className = `frame ${screen.split('-')[0]} ${mode}`;
+  root.style.width = size.w + 'px'; if (size.h) root.style.height = size.h + 'px';
+  root.innerHTML = D.screens[screen](mode, KS);
+  setTimeout(() => document.fonts.ready.then(() => { window.KS_READY = true; }), 50);
+};
+document.head.appendChild(s);
+</script></body></html>

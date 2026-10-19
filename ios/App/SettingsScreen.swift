@@ -26,7 +26,6 @@ struct SettingsScreen: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { NavigationLink("Appearance") { AppearanceScreen() } }
                 aiSection
                 lookupsSection
                 instagramSection

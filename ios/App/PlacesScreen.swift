@@ -94,8 +94,8 @@ struct PlacesScreen: View {
     private func row(_ place: Save) -> some View {
         NavigationLink(value: model.saves.first { $0.id == place.id } ?? place) {
             HStack(spacing: 14) {
-                SaveImage(place, symbolSize: 18).frame(width: 52, height: 62).clipped()
-                    .padding(3).background(t.paper).resting().rotationEffect(.degrees(-2))
+                SaveImage(place, symbolSize: 18).frame(width: 56, height: 56).clipped()
+                    .ksSurface(radius: min(t.radius, 10), scale: 0.5)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(place.title).font(KSFont.name(.headline)).foregroundStyle(t.ink)
                     if let fact = place.fact, !fact.isEmpty { Text(fact).font(.footnote).foregroundStyle(t.inkMuted) }
@@ -107,7 +107,7 @@ struct PlacesScreen: View {
                 }
             }
             .padding(10)
-            .background(t.paper.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+            .ksSurface()
             .matchedTransitionSource(id: place.id, in: zoom)
         }
         .buttonStyle(PressStyle())
@@ -127,12 +127,15 @@ struct PlacesScreen: View {
             ForEach(pinned, id: \.0.id) { place, pin in
                 Annotation(place.title, coordinate: pin) {
                     NavigationLink(value: model.saves.first { $0.id == place.id } ?? place) {
+                        // A 32 pt pin with a 44 pt target; the glyph is drawn in the colour that reads on the pin.
                         Image(systemName: place.status == "done" ? "checkmark" : "mappin")
-                            .font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                            .font(.subheadline.weight(.bold)).foregroundStyle(t.onKind)
                             .frame(width: 32, height: 32)
-                            .background(KindStyle("place").color, in: Circle())
-                            .overlay(Circle().strokeBorder(.white, lineWidth: 2))
+                            .background(t.kindFill("place"), in: Circle())
+                            .overlay(Circle().strokeBorder(t.style == .pantry ? t.onKind : .white, lineWidth: 2))
                             .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
                     }
                     .accessibilityLabel(place.title)
                 }
@@ -142,7 +145,7 @@ struct PlacesScreen: View {
         .overlay {
             if pinned.isEmpty {
                 Text("Places with a pin show up here.").font(KSFont.note).foregroundStyle(t.ink)
-                    .padding(14).background(t.paper, in: Capsule())
+                    .padding(14).ksSurface(radius: 24)
             }
         }
     }
@@ -178,7 +181,7 @@ struct PlacesScreen: View {
                                 .accessibilityLabel("Fix \(w.item.title)")
                         }
                     }
-                    .padding(14).background(t.paper).resting()
+                    .padding(14).ksSurface()
                 }
             }
             .padding(.horizontal, 18).padding(.bottom, 40)

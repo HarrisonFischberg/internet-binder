@@ -10,9 +10,10 @@ struct SplitRootView: View {
     @State private var section: Section? = .home
     @State private var collections: [SaveCollection] = []
     @State private var settings = false
+    @State private var appearance = false
     @State private var dropTarget: String?
 
-    enum Section: Hashable { case home, library, review, places, kind(String), collections, collection(String, String) }
+    enum Section: Hashable { case home, library, search, review, places, kind(String), collections, collection(String, String) }
 
     var body: some View {
         NavigationSplitView {
@@ -23,6 +24,7 @@ struct SplitRootView: View {
                     if model.reviewCount > 0 {
                         Label("Review", systemImage: "tray").badge(model.reviewCount).tag(Section.review)
                     }
+                    Label("Search", systemImage: "magnifyingglass").tag(Section.search)
                     Label("Places", systemImage: "map").tag(Section.places)
                         .dropDestination(for: String.self) { ids, _ in put(ids, "kind:place", "Places") } isTargeted: { dropTarget = $0 ? "kind:place" : nil }
                 }
@@ -45,6 +47,7 @@ struct SplitRootView: View {
             }
             .navigationTitle("Keepsake")
             .toolbar {
+                ToolbarItem { Button("Appearance", systemImage: "paintpalette") { appearance = true } }
                 ToolbarItem { Button("Settings", systemImage: "gearshape") { settings = true }.keyboardShortcut(",", modifiers: .command) }
             }
         } detail: {
@@ -52,6 +55,7 @@ struct SplitRootView: View {
                 switch section ?? .home {
                 case .home: HomeScreen(zoom: zoom)
                 case .library: LibraryScreen(zoom: zoom)
+                case .search: SearchScreen(zoom: zoom)
                 case .review: ReviewScreen(zoom: zoom)
                 case .places: PlacesScreen(zoom: zoom)
                 case .kind(let k): KindScreen(kind: k, zoom: zoom)
@@ -63,6 +67,7 @@ struct SplitRootView: View {
         }
         .tint(t.accent)
         .sheet(isPresented: $settings) { SettingsScreen() }
+        .sheet(isPresented: $appearance) { AppearanceSheet() }
         .background {
             // ⌘F: the Library, with its search field focused.
             Button("Search") { section = .library; model.focusSearch = true }

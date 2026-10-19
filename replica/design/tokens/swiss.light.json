@@ -1,0 +1,371 @@
+{
+ "_about": "Keepsake tokens, style swiss (Swiss Index), light. Role names are identical across styles. Contrast is checked by tests/design-tokens.test.mjs.",
+ "style": "swiss",
+ "mode": "light",
+ "color": {
+  "bg": "#FAFAF7",
+  "surface": "#FFFFFF",
+  "surface-2": "#F0F0EA",
+  "border": "#D6D6CE",
+  "border-input": "#5C5C56",
+  "line": "#D6D6CE",
+  "text": "#0A0A0A",
+  "text-muted": "#5C5C56",
+  "accent": "#CC2A1E",
+  "accent-soft": "#FFF3F1",
+  "on-accent": "#FFFFFF",
+  "highlight": "#B42318",
+  "highlight-soft": "#FBE6E4",
+  "danger": "#B42318",
+  "danger-soft": "#FBE6E4",
+  "success": "#1E6B35",
+  "success-soft": "#E5F0E8",
+  "warning": "#6F5000",
+  "warning-soft": "#F5EED9",
+  "focus": "#0A0A0A",
+  "kind-product": "#0A0A0A",
+  "kind-product-soft": "#F0F0EA",
+  "kind-product-fill": "#F0F0EA",
+  "kind-place": "#0A0A0A",
+  "kind-place-soft": "#F0F0EA",
+  "kind-place-fill": "#F0F0EA",
+  "kind-recipe": "#0A0A0A",
+  "kind-recipe-soft": "#F0F0EA",
+  "kind-recipe-fill": "#F0F0EA",
+  "kind-video": "#0A0A0A",
+  "kind-video-soft": "#F0F0EA",
+  "kind-video-fill": "#F0F0EA",
+  "kind-article": "#0A0A0A",
+  "kind-article-soft": "#F0F0EA",
+  "kind-article-fill": "#F0F0EA",
+  "kind-workout": "#0A0A0A",
+  "kind-workout-soft": "#F0F0EA",
+  "kind-workout-fill": "#F0F0EA",
+  "kind-film": "#0A0A0A",
+  "kind-film-soft": "#F0F0EA",
+  "kind-film-fill": "#F0F0EA",
+  "kind-book": "#0A0A0A",
+  "kind-book-soft": "#F0F0EA",
+  "kind-book-fill": "#F0F0EA",
+  "kind-link": "#0A0A0A",
+  "kind-link-soft": "#F0F0EA",
+  "kind-link-fill": "#F0F0EA",
+  "on-kind-fill": "#0A0A0A"
+ },
+ "pairs": [
+  [
+   "text",
+   "bg"
+  ],
+  [
+   "text",
+   "surface"
+  ],
+  [
+   "text",
+   "surface-2"
+  ],
+  [
+   "text-muted",
+   "bg"
+  ],
+  [
+   "text-muted",
+   "surface"
+  ],
+  [
+   "text-muted",
+   "surface-2"
+  ],
+  [
+   "on-accent",
+   "accent"
+  ],
+  [
+   "accent",
+   "bg"
+  ],
+  [
+   "accent",
+   "surface"
+  ],
+  [
+   "accent",
+   "accent-soft"
+  ],
+  [
+   "highlight",
+   "surface"
+  ],
+  [
+   "highlight",
+   "highlight-soft"
+  ],
+  [
+   "danger",
+   "surface"
+  ],
+  [
+   "danger",
+   "danger-soft"
+  ],
+  [
+   "success",
+   "surface"
+  ],
+  [
+   "success",
+   "success-soft"
+  ],
+  [
+   "warning",
+   "surface"
+  ],
+  [
+   "warning",
+   "warning-soft"
+  ],
+  [
+   "border-input",
+   "surface",
+   "ui"
+  ],
+  [
+   "border-input",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "surface",
+   "ui"
+  ],
+  [
+   "kind-product",
+   "kind-product-soft"
+  ],
+  [
+   "kind-product",
+   "surface"
+  ],
+  [
+   "kind-place",
+   "kind-place-soft"
+  ],
+  [
+   "kind-place",
+   "surface"
+  ],
+  [
+   "kind-recipe",
+   "kind-recipe-soft"
+  ],
+  [
+   "kind-recipe",
+   "surface"
+  ],
+  [
+   "kind-video",
+   "kind-video-soft"
+  ],
+  [
+   "kind-video",
+   "surface"
+  ],
+  [
+   "kind-article",
+   "kind-article-soft"
+  ],
+  [
+   "kind-article",
+   "surface"
+  ],
+  [
+   "kind-workout",
+   "kind-workout-soft"
+  ],
+  [
+   "kind-workout",
+   "surface"
+  ],
+  [
+   "kind-film",
+   "kind-film-soft"
+  ],
+  [
+   "kind-film",
+   "surface"
+  ],
+  [
+   "kind-book",
+   "kind-book-soft"
+  ],
+  [
+   "kind-book",
+   "surface"
+  ],
+  [
+   "kind-link",
+   "kind-link-soft"
+  ],
+  [
+   "kind-link",
+   "surface"
+  ],
+  [
+   "on-kind-fill",
+   "kind-product-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-place-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-recipe-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-video-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-article-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-workout-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-film-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-book-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-link-fill"
+  ]
+ ],
+ "display": {
+  "font": "Archivo, 'Helvetica Neue', Arial, system-ui, sans-serif",
+  "weight": 800,
+  "tracking": "-0.01em",
+  "stretch": "72%",
+  "ios": "SF Pro condensed heavy (width .condensed)"
+ },
+ "radius": {
+  "xs": 0,
+  "sm": 0,
+  "md": 0,
+  "lg": 0,
+  "xl": 0,
+  "pill": 999
+ },
+ "shadow": {
+  "card": "0 0 0 rgba(0,0,0,0)",
+  "raised": "0 8px 24px rgba(10,10,10,.08)",
+  "overlay": "0 20px 50px rgba(10,10,10,.16)"
+ },
+ "font": {
+  "display": "Archivo, 'Helvetica Neue', Arial, system-ui, sans-serif",
+  "sans": "system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif",
+  "mono": "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
+ },
+ "type": {
+  "caption": {
+   "size": 12,
+   "line": 16,
+   "weight": 500,
+   "ios": "caption"
+  },
+  "footnote": {
+   "size": 13,
+   "line": 18,
+   "weight": 400,
+   "ios": "footnote"
+  },
+  "body-web": {
+   "size": 14,
+   "line": 20,
+   "weight": 400,
+   "ios": "-"
+  },
+  "subhead": {
+   "size": 15,
+   "line": 20,
+   "weight": 500,
+   "ios": "subheadline"
+  },
+  "body": {
+   "size": 17,
+   "line": 22,
+   "weight": 400,
+   "ios": "body"
+  },
+  "title3": {
+   "size": 20,
+   "line": 25,
+   "weight": 600,
+   "ios": "title3"
+  },
+  "title2": {
+   "size": 22,
+   "line": 28,
+   "weight": 600,
+   "font": "display",
+   "ios": "title2 (serif)"
+  },
+  "title": {
+   "size": 28,
+   "line": 34,
+   "weight": 600,
+   "font": "display",
+   "ios": "title (serif)"
+  },
+  "large": {
+   "size": 34,
+   "line": 41,
+   "weight": 600,
+   "font": "display",
+   "ios": "largeTitle (serif)"
+  }
+ },
+ "space": [
+  0,
+  2,
+  4,
+  8,
+  12,
+  16,
+  20,
+  24,
+  32,
+  40,
+  56
+ ],
+ "size": {
+  "target-min-ios": 44,
+  "target-min-web": 32,
+  "popup-width": 400,
+  "sidebar": 248,
+  "content-max": 1240,
+  "card-min": 220
+ },
+ "motion": {
+  "fast": "120ms",
+  "base": "200ms",
+  "slow": "320ms",
+  "ease": "cubic-bezier(.2,.7,.2,1)",
+  "ios-spring": "spring(response 0.35, damping 0.86)",
+  "reduced": "opacity cross-fade only"
+ },
+ "stroke": 1
+}

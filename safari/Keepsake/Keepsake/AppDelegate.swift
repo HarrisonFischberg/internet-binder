@@ -11,7 +11,14 @@ import Cocoa
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Override point for customization after application launch.
+        // The icon chosen in the window, in the Dock (the bundle keeps Pantry Pop).
+        if AppIcon.current != .pantry { AppIcon.current.apply() }
+        #if DEBUG
+        // Screenshots: -appearance light|dark, whatever the Mac is set to.
+        if let look = UserDefaults.standard.string(forKey: "appearance") {
+            NSApplication.shared.appearance = NSAppearance(named: look == "dark" ? .darkAqua : .aqua)
+        }
+        #endif
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -68,7 +68,7 @@ final class LifestyleTests: XCTestCase {
         app.buttons["Next step"].tap()
         XCTAssertTrue(app.staticTexts["Step 3 of 3"].waitForExistence(timeout: 3))
         app.buttons["Mark as cooked"].tap()
-        XCTAssertTrue(app.buttons["Cooked, stamped"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Cooked, done"].waitForExistence(timeout: 5))
     }
 
     func testWorkoutGoalAndCheckIn() {
@@ -84,9 +84,9 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["0 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
         // A second tap on the stamp takes today back off the goal.
         app.buttons["Done today"].tap()
-        XCTAssertTrue(app.buttons["Done today, stamped"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Done today, done"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["1 of 3 this week · week 1 of 4"].exists)
-        app.buttons["Done today, stamped"].tap()
+        app.buttons["Done today, done"].tap()
         XCTAssertTrue(app.staticTexts["0 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Done today"].exists)
     }

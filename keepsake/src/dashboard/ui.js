@@ -332,12 +332,15 @@ export function initialFor(text) {
 }
 
 // Image with graceful fallback to a text placeholder.
-// `tint` + `icon`: with no picture, a tile in the kind's colour with its icon (save cards).
+// `tint` + `icon`: with no picture, a jar label in the kind's colour: its icon and the title set big (save cards).
 export function pictureNode({ src, alt = '', aspect = null, title = '', className = '', tint = '', icon = null }) {
   const box = el('div', { class: `pic ${className}`.trim() });
   if (aspect) box.style.aspectRatio = String(Math.max(0.5, Math.min(2.2, aspect)));
   const placeholder = tint && icon
-    ? el('div', { class: `pic-placeholder pic-kind kind-${tint}`, 'aria-hidden': 'true' }, [icon])
+    ? el('div', { class: `pic-placeholder pic-kind kind-${tint}`, 'aria-hidden': 'true' }, [
+      el('span', { class: 'pic-kind-icon' }, [icon]),
+      el('span', { class: 'pic-jar-title' }, [String(title || '').slice(0, 90)]),
+    ])
     : el('div', { class: 'pic-placeholder', 'aria-hidden': 'true' }, [
       el('span', { class: 'pic-initial' }, [initialFor(title)]),
       el('span', { class: 'pic-title' }, [String(title || '').slice(0, 90)]),

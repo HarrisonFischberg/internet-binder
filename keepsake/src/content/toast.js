@@ -14,7 +14,7 @@
       font: var(--t-body-web); color: var(--c-text); pointer-events: none;
     }
     .card {
-      position: relative; pointer-events: auto; background: var(--c-surface); border-radius: var(--r-xl);
+      position: relative; pointer-events: auto; background: var(--c-surface); border-radius: var(--r-xl); border: var(--bw) solid var(--c-line);
       box-shadow: var(--shadow-overlay); padding: 14px; display: grid; gap: 10px;
       transform: translateY(8px); opacity: 0; transition: transform var(--m-base) var(--m-ease), opacity var(--m-base) var(--m-ease);
     }
@@ -25,7 +25,7 @@
     .card.tone-review .icon { background: var(--c-warning-soft); color: var(--c-warning); }
     .card.tone-error .icon { background: var(--c-danger-soft); color: var(--c-danger); }
     .card.tone-info .icon { background: var(--c-accent-soft); color: var(--c-accent); }
-    .heading { font: var(--t-subhead); font-weight: 600; color: var(--c-text); }
+    .heading { font: var(--t-subhead); font-family: var(--font-display); font-weight: var(--w-display); font-stretch: var(--stretch-display); letter-spacing: var(--track-display); color: var(--c-text); }
     .row { display: flex; gap: 12px; align-items: flex-start; min-width: 0; }
     .thumb { width: 52px; height: 52px; flex: none; border-radius: var(--r-md); overflow: hidden; background: var(--c-surface-2); }
     .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -91,7 +91,8 @@
   }
 
   function setLook(look) {
-    const style = look && ['moss', 'minimal'].includes(look.style) ? look.style : '';
+    // Styles other than the default (Pantry Pop), as in src/shared/storage.js.
+    const style = look && ['notebook', 'gallery', 'atlas', 'swiss'].includes(look.style) ? look.style : '';
     const theme = look && ['light', 'dark'].includes(look.theme) ? look.theme : '';
     if (style) host.setAttribute('data-style', style);
     else host.removeAttribute('data-style');

@@ -1,18 +1,18 @@
 {
   "images": [
     {
-      "filename": "preview.png",
-      "idiom": "universal"
+      "idiom": "universal",
+      "filename": "preview.png"
     },
     {
+      "idiom": "universal",
+      "filename": "preview-dark.png",
       "appearances": [
         {
           "appearance": "luminosity",
           "value": "dark"
         }
-      ],
-      "filename": "preview-dark.png",
-      "idiom": "universal"
+      ]
     }
   ],
   "info": {
