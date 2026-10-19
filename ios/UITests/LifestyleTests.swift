@@ -44,6 +44,9 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Portugal"].waitForExistence(timeout: 5), "Café Azulejo, by country")
         app.buttons["Review 1"].tap()
         XCTAssertTrue(app.staticTexts["Needs a state or country"].waitForExistence(timeout: 3))
+        // Read again answers even when the post has nothing new.
+        app.buttons["Read Ramen Kiri again"].tap()
+        XCTAssertTrue(app.staticTexts["Nothing new in the post. Tap Fix to add its state or country."].waitForExistence(timeout: 5))
         app.buttons["Fix Ramen Kiri"].tap()
         let region = app.textFields["State or region"]
         XCTAssertTrue(region.waitForExistence(timeout: 3))
@@ -79,6 +82,13 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["1 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
         app.buttons["Undo"].tap()
         XCTAssertTrue(app.staticTexts["0 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
+        // A second tap on the stamp takes today back off the goal.
+        app.buttons["Done today"].tap()
+        XCTAssertTrue(app.buttons["Done today, stamped"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 of 3 this week · week 1 of 4"].exists)
+        app.buttons["Done today, stamped"].tap()
+        XCTAssertTrue(app.staticTexts["0 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Done today"].exists)
     }
 
     func testHomeShowsReviewAndLifestyle() {

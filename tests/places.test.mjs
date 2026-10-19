@@ -36,6 +36,8 @@ test('placeNamed: a title of its own; not the start of its caption, an address, 
   assert.equal(placeNamed({ title: 'Example Café', details: {} }), true, 'a page’s own title');
   assert.deepEqual(placeReviewReasons(ig('MEET ANNA.', 'MEET ANNA. THE 93 YEAR OLD RESTAURANT OWNER')), ['no place name', 'no state']);
   assert.deepEqual(placeReviewReasons(ig('Example Pizza', '📍Example Pizza', { address: '7 Carmine St', region: 'NY' })), []);
+  const kept = { ...ig('Example Pizza', 'Example Pizza is the best slice in the city', { region: 'NY' }), userFields: ['title'] };
+  assert.deepEqual(placeReviewReasons(kept), [], 'a name you typed or kept in Fix counts, even when the caption starts with it');
 });
 
 test('placeFromText: captions as they come from a saved post’s grid (one line, emoji, handles, labels)', () => {

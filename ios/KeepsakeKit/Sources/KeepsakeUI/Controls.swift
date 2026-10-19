@@ -88,21 +88,26 @@ public struct StampButton: View {
 
     public var body: some View {
         let ink = tint ?? t.stamp
+        let side = max(60, size)
+        let twoWords = label.contains(" ")
         Button {
             Haptic.stamped()
             action()
         } label: {
-            VStack(spacing: 2) {
-                Image(systemName: done ? doneSymbol : symbol).font(.title3.weight(.semibold))
+            VStack(spacing: 0) {
+                // A smaller mark when the label takes two lines, so both fit inside the ring.
+                Image(systemName: done ? doneSymbol : symbol).font((twoWords ? Font.footnote : .title3).weight(.semibold))
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.bounce, value: done)
-                // One word stays whole ("Purchased", never "Pur-chased"); two may take two lines.
-                Text(label).font(.caption2.weight(.semibold)).lineLimit(label.contains(" ") ? 2 : 1).minimumScaleFactor(0.7)
+                // Kept inside the inner ring: one word stays whole and shrinks to fit ("Purchased", never
+                // "Pur-chased"); two words go on two lines ("Done / today").
+                Text(twoWords ? label.replacingOccurrences(of: " ", with: "\n") : label)
+                    .font(.caption2.weight(.semibold)).lineLimit(twoWords ? 2 : 1).minimumScaleFactor(0.5)
                     .multilineTextAlignment(.center)
+                    .frame(maxWidth: side * (twoWords ? 0.6 : 0.66))
             }
             .foregroundStyle(done ? t.onAccent : ink)
-            .padding(6)
-            .frame(width: max(60, size), height: max(60, size))
+            .frame(width: side, height: side)
             .background { outline(ink) }
             .rotationEffect(.degrees(done && !reduce ? -6 : 0))
             .shadow(color: .black.opacity(0.12), radius: 6, y: 3)

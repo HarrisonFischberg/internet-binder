@@ -12,6 +12,7 @@ struct PlacesScreen: View {
     @State private var mode: Mode = .list
     @State private var view: PlacesView?
     @State private var editing: Save?
+    @State private var reading: String?
 
     enum Mode: String, CaseIterable { case list = "List", map = "Map", review = "Review" }
 
@@ -164,14 +165,13 @@ struct PlacesScreen: View {
                         VStack(spacing: 6) {
                             // Chrome's Read again / Fix with AI: the caption read again on this iPhone, then
                             // your AI and Lookups if they're on. Never changes what you typed.
-                            Button("Read again") {
-                                Task {
-                                    _ = try? await model.library?.fixPlace(w.item.id)
-                                    model.refresh()
-                                    view = try? await model.library?.places()
-                                }
+                            Button {
+                                readAgain(w.item)
+                            } label: {
+                                if reading == w.item.id { ProgressView() } else { Text("Read again") }
                             }
                             .buttonStyle(.bordered).frame(minHeight: 44)
+                            .disabled(reading != nil)
                             .accessibilityLabel("Read \(w.item.title) again")
                             Button("Fix") { editing = w.item }
                                 .buttonStyle(.bordered).frame(minHeight: 44)
@@ -182,6 +182,27 @@ struct PlacesScreen: View {
                 }
             }
             .padding(.horizontal, 18).padding(.bottom, 40)
+        }
+    }
+
+    /// Reads the place again and says what came of it, so a tap that finds nothing new still answers.
+    private func readAgain(_ place: Save) {
+        reading = place.id
+        Task {
+            _ = try? await model.library?.fixPlace(place.id)
+            model.refresh()
+            view = try? await model.library?.places()
+            reading = nil
+            if let still = view?.review.first(where: { $0.item.id == place.id }) {
+                Haptic.detent()
+                model.show(still.reasons.contains("no place name")
+                           ? "Nothing new in the post. Tap Fix to name it yourself."
+                           : "Nothing new in the post. Tap Fix to add its state or country.")
+            } else {
+                Haptic.settled()
+                let state = view?.groups.first { $0.cities.contains { $0.items.contains { $0.id == place.id } } }?.state
+                model.show(state.map { "\(place.title) is now under \($0)" } ?? "\(place.title) is on your list now")
+            }
         }
     }
 
@@ -229,7 +250,10 @@ struct PlaceFixSheet: View {
                             details["locality"] = city
                             details["region"] = region
                             details["country"] = country
-                            try? await model.library?.update(save.id, ["title": name, "details": details])
+                            // Yours: Read again, AI and lookups leave the name and place alone, and a name
+                            // you keep as it was still counts as the place's name.
+                            details["source"] = "you"
+                            try? await model.library?.update(save.id, ["title": name, "details": details, "userFields": ["title"]])
                             model.refresh()
                             Haptic.settled()
                             done()
