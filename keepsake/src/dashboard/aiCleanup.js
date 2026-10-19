@@ -50,7 +50,7 @@ function scopeItems(ctx, scope) {
 }
 
 function scopeLabel(ctx, scope) {
-  if (scope === 'review') return 'the Review queue';
+  if (scope === 'review') return 'Review';
   if (scope === 'favorites') return 'your favorites';
   if (scope === 'all') return 'all saved items';
   return `“${ctx.collectionById(scope)?.name || 'this collection'}”`;
@@ -568,7 +568,7 @@ export function cleanupSection(ctx) {
     value: 'all',
     options: [
       { value: 'all', label: `All saved items (${scopeItems(ctx, 'all').length})` },
-      { value: 'review', label: `Review queue (${scopeItems(ctx, 'review').length})` },
+      { value: 'review', label: `Review (${scopeItems(ctx, 'review').length})` },
       ...ctx.regularCollections().map((c) => ({ value: c.id, label: `${c.name} (${scopeItems(ctx, c.id).length})` })),
     ],
     onChange: () => {},

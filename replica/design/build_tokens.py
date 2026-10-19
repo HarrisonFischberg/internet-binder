@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Generate tokens.css (Chrome) and Theme.swift (Apple) from tokens/<style>.<mode>.json.
 
-Styles: modern (default), moss, minimal. Modes: light, dark. Role names are identical in every
+Styles: pantry (Pantry Pop, the default), notebook (Field Notebook), gallery, atlas (Night Atlas),
+swiss (Swiss Index). Modes: light, dark. Role names are identical in every
 file, so components never know which style is active. Standard library only.
 
     python3 -I replica/design/build_tokens.py
 
-CSS contract: <html data-style="modern|moss|minimal" data-theme="light|dark"> where a missing
-data-style means modern and a missing data-theme means "follow the system".
+CSS contract: <html data-style="pantry|notebook|gallery|atlas|swiss" data-theme="light|dark"> where a
+missing data-style means pantry and a missing data-theme means "follow the system".
 """
 import json, os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STYLES = ["modern", "moss", "minimal"]   # first = default
+STYLES = ["pantry", "notebook", "gallery", "atlas", "swiss"]   # first = default
+TITLES = {"pantry": "Pantry Pop", "notebook": "Field Notebook", "gallery": "Gallery", "atlas": "Night Atlas", "swiss": "Swiss Index"}
 T = {(s, m): json.load(open(os.path.join(HERE, "tokens", f"{s}.{m}.json"))) for s in STYLES for m in ("light", "dark")}
 
 
@@ -25,7 +27,9 @@ def mode_vars(t):
 
 def style_vars(t):
     d = t["display"]
-    out = [f"--font-display: {d['font']};", f"--w-display: {d['weight']};", f"--track-display: {d['tracking']};"]
+    out = [f"--font-{k}: {v};" for k, v in t["font"].items()]
+    out += [f"--w-display: {d['weight']};", f"--track-display: {d['tracking']};", f"--stretch-display: {d['stretch']};"]
+    out.append(f"--bw: {t['stroke']}px;")
     out += [f"--r-{k}: {v}px;" for k, v in t["radius"].items()]
     return out
 
@@ -36,7 +40,7 @@ def block(sel, lines, indent="  "):
 
 def css():
     base = T[(STYLES[0], "light")]
-    shared = [f"--font-{k}: {v};" for k, v in base["font"].items() if k != "display"]
+    shared = []
     for k, t in base["type"].items():
         fam = "var(--font-display)" if t.get("font") == "display" else "var(--font-sans)"
         wt = "var(--w-display)" if t.get("font") == "display" else t["weight"]
@@ -71,9 +75,9 @@ def swift():
          "// PROPOSAL: not part of any Xcode target yet.",
          "import SwiftUI", "",
          "enum KSStyle: String, CaseIterable, Identifiable {",
-         "    case modern, moss, minimal",
+         "    case " + ", ".join(STYLES),
          "    var id: String { rawValue }",
-         "    var title: String { switch self { case .modern: \"Modern\"; case .moss: \"Moss\"; case .minimal: \"Minimalist\" } }",
+         "    var title: String { switch self { " + "; ".join(f'case .{x}: \"{TITLES[x]}\"' for x in STYLES) + " } }",
          "}", "",
          "private func dyn(_ l: (Double, Double, Double), _ d: (Double, Double, Double)) -> Color {",
          "    #if os(macOS)",
@@ -103,13 +107,15 @@ def swift():
         r = T[(s, "light")]["radius"]
         o.append(f"        case .{s}: return KSShape(sm: {r['sm']}, md: {r['md']}, lg: {r['lg']}, xl: {r['xl']})")
     o += ["        }", "    }", "}", "",
-          "/// Headings: Moss uses the system serif; Modern and Minimalist use the default design.",
+          "/// Headings per style (see each token file's display.ios).",
           "enum KSFont {",
           "    static func heading(_ style: KSStyle, _ text: Font.TextStyle) -> Font {",
           "        switch style {",
-          "        case .moss: return .system(text, design: .serif).weight(.semibold)",
-          "        case .modern: return .system(text).weight(.bold)",
-          "        case .minimal: return .system(text).weight(.medium)",
+          "        case .pantry: return .custom(\"BricolageGrotesque-ExtraBold\", size: 28, relativeTo: text)",
+          "        case .notebook: return .system(text, design: .serif).weight(.semibold)",
+          "        case .gallery: return .system(text, design: .serif)",
+          "        case .atlas: return .system(text).weight(.semibold)",
+          "        case .swiss: return .system(text).weight(.heavy).width(.condensed)",
           "        }", "    }",
           "    static let body = Font.body", "    static let subhead = Font.subheadline.weight(.medium)",
           "    static let footnote = Font.footnote", "    static let caption = Font.caption.weight(.medium)",

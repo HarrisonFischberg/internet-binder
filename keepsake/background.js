@@ -252,7 +252,7 @@ async function enrichItem(id) {
 // What the capture card on the page needs to look like the person's chosen style and theme.
 async function pageLook() {
   const st = await store.getSettings().catch(() => ({}));
-  return { style: st.style || 'modern', theme: st.theme || 'system' };
+  return { style: st.style || 'pantry', theme: st.theme || 'system' };
 }
 
 // Up to three likely collections for a save that went to Review. A default collection that doesn't
@@ -398,7 +398,7 @@ async function floatingConfig(host) {
   const collections = (await store.getCollections()).map((c) => ({ id: c.id, name: c.name }));
   const prefs = await store.getPrefs();
   const instantSave = !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
-  return { ok: true, enabled, settings: f, collections, threshold: prefs.confidenceThreshold, instantSave, look: { style: settings.style || 'modern', theme: settings.theme || 'system' } };
+  return { ok: true, enabled, settings: f, collections, threshold: prefs.confidenceThreshold, instantSave, look: { style: settings.style || 'pantry', theme: settings.theme || 'system' } };
 }
 
 // --- Instagram scan state ------------------------------------------------------------------------------

@@ -17,29 +17,29 @@
     EXTRACT_TAB: 'keepsake:extract-tab', PAGE_TOAST: 'keepsake:page-toast',
   };
   const SIZES = { small: 28, medium: 34, large: 42 };
+  // Styles other than the default (Pantry Pop), as in src/shared/storage.js.
+  const STYLES = ['notebook', 'gallery', 'atlas', 'swiss'];
+  // Colours and shape come from the Keepsake design tokens (tokens-content.js, injected first); the host
+  // carries data-style / data-theme from the person's settings, like the capture card.
   const CSS = `
     :host { all: initial; }
     .btn {
-      position: fixed; z-index: 2147483646; display: inline-flex; align-items: center; gap: 6px; height: var(--h, 34px); padding: 0 12px 0 9px;
-      border-radius: 999px; border: 1px solid rgba(42,41,38,.12); background: rgba(250,247,241,.96); color: #2A2926; cursor: pointer;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: calc(var(--h, 34px) * .38); font-weight: 600; letter-spacing: -.01em; line-height: 1;
-      box-shadow: 0 4px 14px rgba(42,41,38,.18), 0 1px 2px rgba(42,41,38,.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-      opacity: 0; transform: translateY(-4px) scale(.96); transition: opacity .14s ease, transform .14s ease, background .14s ease; pointer-events: none; white-space: nowrap;
+      position: fixed; z-index: 2147483646; display: inline-flex; align-items: center; gap: 6px; height: var(--h, 34px); padding: 0 12px 0 7px;
+      border-radius: var(--r-pill); border: var(--bw) solid var(--c-line); background: var(--c-surface); color: var(--c-text); cursor: pointer;
+      font-family: var(--font-sans); font-size: calc(var(--h, 34px) * .4); font-weight: 800; letter-spacing: -.01em; line-height: 1;
+      box-shadow: var(--shadow-raised);
+      opacity: 0; transform: translateY(-4px) scale(.96); transition: opacity .14s ease, transform .14s ease, background .14s ease, box-shadow .14s ease; pointer-events: none; white-space: nowrap;
     }
     .btn.show { opacity: 1; transform: none; pointer-events: auto; }
-    .btn:hover { background: #FFFFFF; }
-    .btn:active { transform: scale(.97); }
-    .btn:focus-visible { outline: 2px solid #5F6F5E; outline-offset: 2px; }
+    .btn:hover { background: var(--c-surface-2); }
+    .btn:active { transform: translate(2px, 2px); box-shadow: none; }
+    .btn:focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }
     .btn.busy { pointer-events: none; opacity: .7; }
-    .mark { width: calc(var(--h, 34px) * .56); height: calc(var(--h, 34px) * .56); border-radius: 30%; background: #5F6F5E; display: grid; place-items: center; flex: none; }
+    .mark { width: calc(var(--h, 34px) * .6); height: calc(var(--h, 34px) * .6); border-radius: 32%; background: var(--c-kind-recipe-fill); color: var(--c-on-kind-fill); display: grid; place-items: center; flex: none; }
+    :host([data-style]) .mark { background: var(--c-accent); color: var(--c-on-accent); }
     .mark svg { width: 58%; height: 58%; }
     .btn.compact { padding: 0; width: var(--h, 34px); justify-content: center; gap: 0; }
     .btn.compact .label { display: none; }
-    @media (prefers-color-scheme: dark) {
-      .btn { background: rgba(38,37,31,.96); color: #EFEAE1; border-color: rgba(255,255,255,.1); box-shadow: 0 4px 14px rgba(0,0,0,.4); }
-      .btn:hover { background: #33322B; }
-      .mark { background: #8A9A88; }
-    }
     @media (prefers-reduced-motion: reduce) { .btn { transition: opacity .01s; transform: none !important; } }
   `;
 
@@ -84,11 +84,11 @@
     const shadow = host.attachShadow({ mode: 'closed' });
     try {
       const sheet = new CSSStyleSheet();
-      sheet.replaceSync(CSS);
+      sheet.replaceSync((globalThis.__keepsakeTokenCss || '') + CSS);
       shadow.adoptedStyleSheets = [sheet];
     } catch {
       const style = document.createElement('style');
-      style.textContent = CSS;
+      style.textContent = (globalThis.__keepsakeTokenCss || '') + CSS;
       shadow.append(style);
     }
     button = document.createElement('button');
@@ -103,7 +103,7 @@
     svg.setAttribute('aria-hidden', 'true');
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', 'M6 3.5h12a1 1 0 0 1 1 1V21l-7-4.2L5 21V4.5a1 1 0 0 1 1-1z');
-    path.setAttribute('fill', '#FBF8F2');
+    path.setAttribute('fill', 'currentColor');
     svg.append(path);
     mark.append(svg);
     label = document.createElement('span');
@@ -125,8 +125,19 @@
     applySize();
   }
 
+  function applyLook() {
+    const look = config && config.look;
+    const style = look && STYLES.includes(look.style) ? look.style : '';
+    const theme = look && ['light', 'dark'].includes(look.theme) ? look.theme : '';
+    if (style) host.setAttribute('data-style', style);
+    else host.removeAttribute('data-style');
+    if (theme) host.setAttribute('data-theme', theme);
+    else host.removeAttribute('data-theme');
+  }
+
   function applySize() {
     if (!button || !config) return;
+    applyLook();
     const h = SIZES[config.settings.size] || SIZES.medium;
     button.style.setProperty('--h', `${h}px`);
     button.classList.toggle('compact', config.settings.size === 'small');
@@ -319,7 +330,7 @@
     if (cls.isInbox) {
       showCard({
         tone: 'review',
-        title: 'Not sure — saved for review',
+        title: 'Not sure, so it’s in Review',
         message: cls.suggested ? `Not sure where this belongs — maybe ${cls.suggested.collectionName}? Pick a collection or sort it later.` : 'Not sure where this belongs. Pick a collection now or sort it later.',
         picker: { options, selectedId: cls.suggested?.collectionId || options[0]?.id, label: 'Move to collection' },
         duration: 12000,

@@ -8,8 +8,9 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const DESIGN = '../replica/design/';
 const files = readdirSync(new URL(`${DESIGN}tokens/`, import.meta.url)).filter((f) => f.endsWith('.json'));
 
-test('six token sets: modern, moss and minimal, each light and dark, with identical roles', () => {
-  assert.deepEqual(files.sort(), ['minimal.dark.json', 'minimal.light.json', 'modern.dark.json', 'modern.light.json', 'moss.dark.json', 'moss.light.json']);
+test('ten token sets: pantry, notebook, gallery, atlas and swiss, each light and dark, with identical roles', () => {
+  const styles = ['atlas', 'gallery', 'notebook', 'pantry', 'swiss'];
+  assert.deepEqual(files.sort(), styles.flatMap((s) => [`${s}.dark.json`, `${s}.light.json`]));
   const roles = files.map((f) => Object.keys(JSON.parse(read(`${DESIGN}tokens/${f}`)).color).sort().join(','));
   assert.equal(new Set(roles).size, 1, 'every style defines the same colour roles');
 });
@@ -19,7 +20,7 @@ test('the extension ships the generated tokens unchanged (run replica/design/bui
   const js = read('../keepsake/src/content/tokens-content.js');
   const g = {};
   new Function('globalThis', js)(g);
-  assert.match(g.__keepsakeTokenCss, /:host\(\[data-style="moss"\]\[data-theme="dark"\]\)/);
+  assert.match(g.__keepsakeTokenCss, /:host\(\[data-style="swiss"\]\[data-theme="dark"\]\)/);
   assert.doesNotMatch(g.__keepsakeTokenCss, /:root/);
 });
 

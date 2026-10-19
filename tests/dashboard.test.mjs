@@ -99,18 +99,23 @@ test('deleting from Review moves the save to Trash, with Undo, and Trash can res
   assert.equal((await store.getTrash()).length, 0);
 });
 
-test('the Style setting restyles the page (Modern by default, no attribute)', async () => {
+test('the Style setting restyles the page (Pantry Pop by default, no attribute)', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
   assert.equal(window.document.documentElement.dataset.style, undefined);
   const text = await go('#settings');
   assert.match(text, /Style/);
-  assert.match(text, /Minimalist/);
-  await store.updateSettings({ style: 'moss', theme: 'dark' });
+  for (const name of ['Pantry Pop', 'Field Notebook', 'Gallery', 'Night Atlas', 'Swiss Index']) assert.match(text, new RegExp(name));
+  assert.match(text, /Toolbar icon/);
+  await store.updateSettings({ style: 'atlas', theme: 'dark' });
   await afterChange();
-  assert.equal(window.document.documentElement.dataset.style, 'moss');
+  assert.equal(window.document.documentElement.dataset.style, 'atlas');
   assert.equal(window.document.documentElement.dataset.theme, 'dark');
-  await store.updateSettings({ style: 'modern', theme: 'system' });
+  // A style from before 1.5 falls back to the default.
+  await store.updateSettings({ style: 'moss', theme: 'system' });
+  await afterChange();
+  assert.equal(window.document.documentElement.dataset.style, undefined);
+  await store.updateSettings({ style: 'pantry', theme: 'system' });
   await afterChange();
   assert.equal(window.document.documentElement.dataset.style, undefined);
   assert.equal(window.document.documentElement.dataset.theme, undefined);

@@ -1,46 +1,127 @@
 #if canImport(UIKit)
 import SwiftUI
 import UIKit
+import CoreText
 
-/// Keepsake's look: saves are drawn as the objects of their kind on a warm table; controls stay quiet
-/// and native so the objects are the only ornament (D14). Colours come from
-/// replica/m3/tokens/postcard.*.json and pass WCAG AA in light and dark (make_tokens.py).
+/// Keepsake's look: five styles, each with light and dark (impeccable-review/mockups dir1 to dir5).
+/// Pantry Pop is the default. A style is colour roles, a shape (corners, outlines, depth), a type
+/// voice and what a save without a picture becomes. Every text pair passes WCAG AA in both modes.
 public struct KSTheme: Sendable {
-    public let table: Color, paper: Color, well: Color, ink: Color, inkMuted: Color
-    public let accent: Color, onAccent: Color, stamp: Color, rule: Color
+    public enum Style: String, Sendable, CaseIterable { case pantry, notebook, gallery, atlas, swiss }
+    /// How things sit on the page: a hard offset shadow that collapses on press (Pantry Pop), a soft
+    /// contact shadow, a lifted panel, or nothing at all (hairlines do the work).
+    public enum Depth: Sendable { case hard(CGFloat), soft, lifted, flat }
 
-    private static func dyn(_ l: UInt32, _ d: UInt32) -> Color {
+    public let style: Style
+    public let name: String
+    /// The page, cards, a recessed well, text, quiet text.
+    public let table: Color, paper: Color, well: Color, ink: Color, inkMuted: Color
+    /// The tint (links, toggles) and the colour that reads on it.
+    public let accent: Color, onAccent: Color
+    /// Marks of done-ness (Cooked, Been) and numbers in steps.
+    public let stamp: Color
+    /// Hairlines between rows.
+    public let rule: Color
+    /// Outlines of cards and controls, and the colour of their shadow.
+    public let line: Color, shadow: Color
+    /// The one filled button on a screen.
+    public let primary: Color, onPrimary: Color
+    /// What needs you (the Review nudge, the active chip): mustard, highlighter, amber or signal red.
+    public let highlight: Color, onHighlight: Color
+    public let radius: CGFloat
+    /// Buttons and chips; `.infinity` is a capsule.
+    public let controlRadius: CGFloat
+    public let outline: CGFloat
+    public let depth: Depth
+    let kindText: [String: Color]
+    let kindFills: [String: Color]
+    public let onKind: Color
+
+    static func dyn(_ l: UInt32, _ d: UInt32) -> Color {
         Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: l) })
     }
+    static func dynA(_ l: UInt32, _ la: CGFloat, _ d: UInt32, _ da: CGFloat) -> Color {
+        Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d).withAlphaComponent(da) : UIColor(hex: l).withAlphaComponent(la) })
+    }
+    static func same(_ c: UInt32) -> Color { Color(uiColor: UIColor(hex: c)) }
 
-    public static let postcard = KSTheme(
-        table: dyn(0xEDE6DA, 0x15130F), paper: dyn(0xFBF8F2, 0x24211C), well: dyn(0xE4DCCD, 0x1D1A16),
-        ink: dyn(0x1E1C19, 0xF1ECE3), inkMuted: dyn(0x5C554B, 0xAEA698), accent: dyn(0x24439A, 0x9AB0F2),
-        onAccent: dyn(0xFFFFFF, 0x0E1630), stamp: dyn(0xA8342A, 0xF08E7E),
-        rule: Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.16) : UIColor(white: 0, alpha: 0.12) }))
+    /// A style's colour token (light, dark) from replica/design/tokens (StyleTokens.swift).
+    private static func tok(_ style: Style, _ key: String) -> Color {
+        guard let v = StyleTokens.values[style.rawValue]?[key] else { return .pink }
+        return dyn(v.0, v.1)
+    }
+    private static let kindKeys = ["product": "product", "place": "place", "recipe": "recipe", "video": "video", "article": "article",
+                                   "workout": "workout", "media": "film", "book": "book", "link": "link"]
 
-    public static let linen = KSTheme(
-        table: dyn(0xE6E9E3, 0x121513), paper: dyn(0xF8F9F6, 0x1D211E), well: dyn(0xDCE0D9, 0x181B19),
-        ink: dyn(0x1A1F1B, 0xE9EDE8), inkMuted: dyn(0x4F5750, 0xA3ACA4), accent: dyn(0x3F5B45, 0xA9C4AE),
-        onAccent: dyn(0xFFFFFF, 0x102014), stamp: dyn(0xA8342A, 0xF08E7E),
-        rule: Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.16) : UIColor(white: 0, alpha: 0.12) }))
+    private static func make(_ style: Style, _ name: String, primary: Color? = nil, onPrimary: Color? = nil, highlight: Color, onHighlight: Color,
+                             stamp: Color, line: Color? = nil, shadow: Color, radius: CGFloat, controlRadius: CGFloat, outline: CGFloat, depth: Depth) -> KSTheme {
+        let c = { (k: String) in tok(style, k) }
+        return KSTheme(
+            style: style, name: name,
+            table: c("bg"), paper: c("surface"), well: c("surface-2"), ink: c("text"), inkMuted: c("text-muted"),
+            accent: c("accent"), onAccent: c("on-accent"), stamp: stamp, rule: c("border"), line: line ?? c("line"), shadow: shadow,
+            primary: primary ?? c("accent"), onPrimary: onPrimary ?? c("on-accent"), highlight: highlight, onHighlight: onHighlight,
+            radius: radius, controlRadius: controlRadius, outline: outline, depth: depth,
+            kindText: kindKeys.mapValues { c("kind-\($0)") }, kindFills: kindKeys.mapValues { c("kind-\($0)-fill") }, onKind: c("on-kind-fill"))
+    }
 
-    public static let ink = KSTheme(
-        table: dyn(0xF4F4F2, 0x0B0B0B), paper: dyn(0xFFFFFF, 0x171717), well: dyn(0xEAEAE7, 0x121212),
-        ink: dyn(0x111111, 0xF2F2F2), inkMuted: dyn(0x5A5A5A, 0xA3A3A3), accent: dyn(0x111111, 0xF2F2F2),
-        onAccent: dyn(0xFFFFFF, 0x0B0B0B), stamp: dyn(0xA8342A, 0xF08E7E),
-        rule: Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.18) : UIColor(white: 0, alpha: 0.14) }))
+    /// Pantry Pop: labelled jars on a cream shelf. Thick ink outlines, hard shadows that squash when
+    /// pressed, one saturated colour per kind, always carrying ink text.
+    public static let pantry = make(.pantry, "Pantry Pop", highlight: tok(.pantry, "kind-product-fill"), onHighlight: tok(.pantry, "on-kind-fill"),
+                                    stamp: tok(.pantry, "danger"), shadow: dyn(0x16130F, 0x000000),
+                                    radius: 18, controlRadius: .infinity, outline: 2.5, depth: .hard(4))
 
-    /// The themes someone can pick (Settings → Appearance), with their names.
-    public static let all: [(id: String, name: String, theme: KSTheme)] = [("postcard", "Postcard", .postcard), ("linen", "Linen", .linen), ("ink", "Ink", .ink)]
-    public static func named(_ id: String) -> KSTheme { all.first { $0.id == id }?.theme ?? .postcard }
+    /// Field Notebook: graph paper, graphite ink, serif names, mono labels, one highlighter swipe for
+    /// what matters, red pencil for stamps.
+    public static let notebook = make(.notebook, "Field Notebook", highlight: tok(.notebook, "accent-soft"), onHighlight: tok(.notebook, "text"),
+                                      stamp: tok(.notebook, "danger"), shadow: dynA(0x2B2A27, 0.16, 0x000000, 0.5),
+                                      radius: 3, controlRadius: 10, outline: 0, depth: .soft)
 
-    public func kind(_ k: String) -> Color { KindStyle(k).color }
+    /// Gallery: white walls, photographs edge to edge, display serif titles, wall-label captions and
+    /// black as the only accent.
+    public static let gallery = make(.gallery, "Gallery", highlight: tok(.gallery, "accent"), onHighlight: tok(.gallery, "on-accent"),
+                                     stamp: tok(.gallery, "text"), shadow: .clear,
+                                     radius: 0, controlRadius: 2, outline: 0, depth: .flat)
 
-    /// For system controls that always draw a white glyph (PasteButton): the light-mode accent in both
-    /// modes, so the glyph keeps its contrast in dark mode too.
-    public var accentForWhiteGlyph: Color { Color(uiColor: accentUI.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))) }
-    private var accentUI: UIColor { UIColor(accent) }
+    /// Night Atlas: a deep ink room lit by your own photos, coordinates in mono, one amber action per
+    /// screen. "Dawn" is its light mode.
+    public static let atlas = make(.atlas, "Night Atlas", primary: same(0xFFB547), onPrimary: same(0x1A1204), highlight: same(0xFFB547), onHighlight: same(0x1A1204),
+                                   stamp: tok(.atlas, "highlight"), line: tok(.atlas, "border"), shadow: dynA(0x28220F, 0.14, 0x000000, 0.45),
+                                   radius: 14, controlRadius: 12, outline: 1, depth: .lifted)
+
+    /// Swiss Index: a strict grid, flush-left type, hairlines and one signal red for what needs you.
+    public static let swiss = make(.swiss, "Swiss Index", highlight: tok(.swiss, "accent"), onHighlight: tok(.swiss, "on-accent"),
+                                   stamp: tok(.swiss, "accent"), shadow: .clear,
+                                   radius: 0, controlRadius: 0, outline: 1, depth: .flat)
+
+    /// The styles someone can pick (Settings → Appearance), Pantry Pop first.
+    public static let all: [(id: String, name: String, theme: KSTheme)] = [pantry, notebook, gallery, atlas, swiss].map { ($0.style.rawValue, $0.name, $0) }
+    /// A saved id, including the retired Postcard, Linen and Ink (all now Pantry Pop).
+    public static func named(_ id: String) -> KSTheme { all.first { $0.id == id }?.theme ?? .pantry }
+    public static func canonical(_ id: String) -> String { all.contains { $0.id == id } ? id : "pantry" }
+
+    /// The style in use, for the few things drawn outside a view's environment (fonts, kind colours).
+    /// Set by `keepsakeAppearance`.
+    nonisolated(unsafe) public static var current: KSTheme = .pantry
+
+    /// A kind's colour for text and marks on the page (passes AA on `paper` and `table`).
+    public func kind(_ k: String) -> Color { kindText[k] ?? inkMuted }
+    /// A kind's colour as a filled block (a jar label, a sticker, a map pin); `onKind` reads on it.
+    public func kindFill(_ k: String) -> Color { kindFills[k] ?? kindFills["link"] ?? ink }
+
+    /// Labels in small uppercase mono ("RECIPE · 6 INGREDIENTS"): Field Notebook and Night Atlas.
+    public var monoLabels: Bool { style == .notebook || style == .atlas }
+    /// The body voice: SF Pro Rounded for Pantry Pop, SF Pro everywhere else.
+    public var bodyDesign: Font.Design { style == .pantry ? .rounded : .default }
+
+    /// For system controls that always draw a white glyph (PasteButton): a colour white reads on.
+    public var accentForWhiteGlyph: Color {
+        switch style {
+        case .pantry, .gallery, .notebook: Color(uiColor: UIColor(hex: 0x16130F))
+        case .atlas: Color(uiColor: UIColor(hex: 0x8A5200))
+        case .swiss: Color(uiColor: UIColor(hex: 0xD92D20))
+        }
+    }
 }
 
 extension UIColor {
@@ -49,7 +130,7 @@ extension UIColor {
     }
 }
 
-private struct ThemeKey: EnvironmentKey { static let defaultValue = KSTheme.postcard }
+private struct ThemeKey: EnvironmentKey { static let defaultValue = KSTheme.pantry }
 extension EnvironmentValues {
     public var ks: KSTheme {
         get { self[ThemeKey.self] }
@@ -57,17 +138,66 @@ extension EnvironmentValues {
     }
 }
 
-/// Type: names in New York (the system serif), everything you read or tap in SF. All text styles scale
-/// with Dynamic Type.
+/// Type. Every face scales with Dynamic Type through text styles. Pantry Pop sets titles in
+/// Bricolage Grotesque (bundled, OFL); Field Notebook and Gallery in New York; Night Atlas in SF Pro
+/// Display; Swiss Index in condensed SF Pro.
 public enum KSFont {
-    public static func name(_ style: Font.TextStyle = .title3) -> Font { .system(style, design: .serif).weight(.semibold) }
-    public static func display() -> Font { .system(.largeTitle, design: .serif).weight(.semibold) }
-    public static let fact = Font.footnote
-    public static let label = Font.caption.weight(.medium)
-    public static let note = Font.system(.subheadline, design: .serif).italic()
+    /// The screen's big title (in `theme`, or the style in use).
+    public static func display(_ theme: KSTheme? = nil) -> Font {
+        switch (theme ?? KSTheme.current).style {
+        case .pantry: bricolage(.largeTitle, display: true)
+        case .notebook: .system(.largeTitle, design: .serif).weight(.semibold)
+        case .gallery: .system(size: 40, weight: .regular, design: .serif)
+        case .atlas: .system(.largeTitle).weight(.bold)
+        case .swiss: .system(.largeTitle).weight(.bold).width(.condensed)
+        }
+    }
+    /// A save's or a group's name.
+    public static func name(_ style: Font.TextStyle = .title3, _ theme: KSTheme? = nil) -> Font {
+        switch (theme ?? KSTheme.current).style {
+        case .pantry: bricolage(style, display: style == .title || style == .title2 || style == .largeTitle)
+        case .notebook: .system(style, design: .serif).weight(.semibold)
+        case .gallery: .system(style, design: .serif)
+        case .atlas: .system(style).weight(.semibold)
+        case .swiss: .system(style).weight(.bold)
+        }
+    }
+    public static var fact: Font { fact(nil) }
+    public static func fact(_ theme: KSTheme?) -> Font { .system(.footnote, design: (theme ?? KSTheme.current).bodyDesign) }
+    /// Kind labels and small captions.
+    public static var label: Font { label(nil) }
+    public static func label(_ theme: KSTheme?) -> Font {
+        switch (theme ?? KSTheme.current).style {
+        case .pantry: .system(.caption, design: .rounded).weight(.heavy)
+        case .notebook, .atlas: .system(.caption2, design: .monospaced).weight(.medium)
+        case .gallery: .caption
+        case .swiss: .caption.weight(.semibold)
+        }
+    }
+    /// A quiet line: a note, a subtitle.
+    public static var note: Font {
+        switch KSTheme.current.style {
+        case .notebook, .gallery: .system(.subheadline, design: .serif).italic()
+        default: .system(.subheadline, design: KSTheme.current.bodyDesign)
+        }
+    }
+
+    private static let sizes: [Font.TextStyle: CGFloat] = [.largeTitle: 36, .title: 30, .title2: 24, .title3: 21, .headline: 17,
+                                                           .body: 17, .callout: 16, .subheadline: 15, .footnote: 13, .caption: 12, .caption2: 11]
+    private static func bricolage(_ style: Font.TextStyle, display: Bool) -> Font {
+        _ = registered
+        return .custom(display ? "BricolageGrotesque-Display" : "BricolageGrotesque-Text", size: sizes[style] ?? 17, relativeTo: style)
+    }
+
+    /// The bundled faces, registered once for this process (app, Share Extension, widgets).
+    public static let registered: Bool = {
+        let urls = Bundle.module.urls(forResourcesWithExtension: "ttf", subdirectory: "Fonts") ?? []
+        for url in urls { CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil) }
+        return !urls.isEmpty
+    }()
 }
 
-/// The kinds of save (kinds.js), with their Postcard colour and symbol.
+/// The kinds of save (kinds.js), with their colour and symbol in the current style.
 public struct KindStyle: Sendable {
     public let kind: String
     public init(_ kind: String) { self.kind = kind }
@@ -102,52 +232,104 @@ public struct KindStyle: Sendable {
         case "workout": "figure.strengthtraining.traditional"; default: "link"
         }
     }
-    public var color: Color {
-        func dyn(_ l: UInt32, _ d: UInt32) -> Color { Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: d) : UIColor(hex: l) }) }
-        return switch kind {
-        case "place": dyn(0xA8342A, 0xF08E7E); case "recipe": dyn(0x4A6E12, 0xA9D46A); case "media": dyn(0x4F3DBF, 0xADA2FF)
-        case "book": dyn(0x7E4519, 0xE3A878); case "product": dyn(0x8C5300, 0xF0B45A); case "video": dyn(0x8E1D9C, 0xE59CF0)
-        case "article": dyn(0x1D5AA8, 0x8DB8FF); case "workout": dyn(0x0C6E69, 0x5FD3CB); default: dyn(0x5C554B, 0xAEA698)
+    /// For text and marks on the page.
+    public var color: Color { KSTheme.current.kind(kind) }
+    /// As a filled block; `KSTheme.onKind` reads on it.
+    public var fill: Color { KSTheme.current.kindFill(kind) }
+    /// A two-letter code (Swiss Index's no-picture cells).
+    public var code: String {
+        switch kind {
+        case "product": "Pr"; case "place": "Pl"; case "recipe": "Rc"; case "video": "Vd"; case "article": "Ar"
+        case "workout": "Wk"; case "media": "Fm"; case "book": "Bk"; default: "Ln"
         }
     }
 }
 
-/// The table everything rests on: warm paper with a faint grain (gone with Reduce Transparency).
+/// The page everything rests on. Field Notebook rules it as graph paper; the others are plain.
 public struct TableBackground: View {
     @Environment(\.ks) private var t
-    @Environment(\.accessibilityReduceTransparency) private var reduce
     public init() {}
     public var body: some View {
         ZStack {
             t.table
-            if !reduce { Grain().opacity(0.06).blendMode(.multiply) }
+            if t.style == .notebook { GraphPaper(color: t.accent.opacity(0.08)) }
         }
         .ignoresSafeArea()
     }
 }
 
-struct Grain: View {
+struct GraphPaper: View {
+    let color: Color
     var body: some View {
         Canvas { ctx, size in
-            var state: UInt64 = 7
-            func next() -> UInt64 { state &+= 0x9E3779B97F4A7C15; var z = state; z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27)) &* 0x94D049BB133111EB; return z ^ (z >> 31) }
-            for _ in 0..<Int(size.width * size.height / 18) {
-                let x = Double(next() % 10_000) / 10_000 * size.width
-                let y = Double(next() % 10_000) / 10_000 * size.height
-                ctx.fill(Path(CGRect(x: x, y: y, width: 1, height: 1)), with: .color(white: Double(next() % 100) / 100))
-            }
+            var p = Path()
+            stride(from: 0, through: size.width, by: 24).forEach { x in p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height)) }
+            stride(from: 0, through: size.height, by: 24).forEach { y in p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y)) }
+            ctx.stroke(p, with: .color(color), lineWidth: 1)
         }
         .allowsHitTesting(false)
-        .drawingGroup()
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PressedKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// True while the control this view is inside is held down (PressStyle sets it).
+    public var ksPressed: Bool {
+        get { self[PressedKey.self] }
+        set { self[PressedKey.self] = newValue }
+    }
+}
+
+/// Depth in the current style. Pantry Pop's hard shadow collapses while pressed: the thing moves
+/// into its shadow.
+struct Resting: ViewModifier {
+    var scale: CGFloat = 1
+    @Environment(\.ks) private var t
+    @Environment(\.ksPressed) private var pressed
+    func body(content: Content) -> some View {
+        switch t.depth {
+        case .hard(let d):
+            let off = pressed ? 0 : d * scale
+            content
+                .offset(x: pressed ? d * scale : 0, y: pressed ? d * scale : 0)
+                .compositingGroup()
+                .shadow(color: t.shadow, radius: 0, x: off, y: off)
+        case .soft:
+            content.compositingGroup().shadow(color: t.shadow, radius: 1.5, x: 0, y: 1).shadow(color: t.shadow.opacity(0.5), radius: 8, y: 4)
+        case .lifted:
+            content.compositingGroup().shadow(color: t.shadow, radius: 16, y: 10)
+        case .flat:
+            content
+        }
+    }
+}
+
+/// A surface in the current style: its fill, corners, outline and depth.
+struct Surface: ViewModifier {
+    var fill: Color?
+    var radius: CGFloat?
+    var stroke: Color?
+    var scale: CGFloat = 1
+    var lifted = true
+    @Environment(\.ks) private var t
+    func body(content: Content) -> some View {
+        let r = radius ?? t.radius
+        let shape = RoundedRectangle(cornerRadius: r, style: .continuous)
+        content
+            .background(fill ?? t.paper, in: shape)
+            .clipShape(shape)
+            .overlay { if t.outline > 0 { shape.strokeBorder(stroke ?? t.line, lineWidth: t.outline * (t.style == .pantry ? max(scale, 0.8) : 1)) } }
+            .modifier(Resting(scale: lifted ? scale : 0))
     }
 }
 
 extension View {
-    /// An object resting on the table: a tight contact shadow and a soft ambient one, lit from the top left.
-    public func resting() -> some View {
-        self
-            .shadow(color: .black.opacity(0.14), radius: 0.8, x: 0.4, y: 1)
-            .shadow(color: .black.opacity(0.10), radius: 10, x: 2, y: 7)
+    /// Depth in the current style (Pantry Pop's hard shadow, a soft shadow, a lifted panel, or none).
+    public func resting(_ scale: CGFloat = 1) -> some View { modifier(Resting(scale: scale)) }
+    /// A card or panel in the current style: fill (paper by default), corners, outline and depth.
+    public func ksSurface(_ fill: Color? = nil, radius: CGFloat? = nil, stroke: Color? = nil, scale: CGFloat = 1, lifted: Bool = true) -> some View {
+        modifier(Surface(fill: fill, radius: radius, stroke: stroke, scale: scale, lifted: lifted))
     }
 }
 #endif
@@ -156,10 +338,12 @@ extension View {
 /// How someone likes Keepsake to look and feel. Kept in the App Group, so the Share Extension and the
 /// widgets match the app. Device settings: never synced, never exported.
 public struct Appearance: Sendable, Equatable {
-    public var theme = "postcard"
-    /// "comfortable" (objects in masonry) or "compact" (an even grid, more on screen).
+    public var theme = "pantry"
+    /// "system", "light" or "dark": the app's appearance, whatever the device is set to.
+    public var mode = "system"
+    /// "comfortable" (cards in masonry) or "compact" (an even grid, more on screen).
     public var density = "comfortable"
-    /// "objects" (each kind its object) or "plain" (simple cards).
+    /// Kept for older settings; every style draws its own cards.
     public var cardStyle = "objects"
     public var haptics = true
     public var sound = false
@@ -169,16 +353,20 @@ public struct Appearance: Sendable, Equatable {
     public static func load() -> Appearance {
         let d = defaults
         var a = Appearance()
-        a.theme = d.string(forKey: "ks.theme") ?? a.theme
+        a.theme = KSTheme.canonical(d.string(forKey: "ks.theme") ?? a.theme)
+        a.mode = d.string(forKey: "ks.mode") ?? a.mode
         a.density = d.string(forKey: "ks.density") ?? a.density
         a.cardStyle = d.string(forKey: "ks.cardStyle") ?? a.cardStyle
         a.haptics = d.object(forKey: "ks.haptics") as? Bool ?? true
         a.sound = d.object(forKey: "ks.sound") as? Bool ?? false
         return a
     }
+    /// nil follows the device.
+    public var colorScheme: ColorScheme? { mode == "light" ? .light : mode == "dark" ? .dark : nil }
+
     public func save() {
         let d = Self.defaults
-        d.set(theme, forKey: "ks.theme"); d.set(density, forKey: "ks.density"); d.set(cardStyle, forKey: "ks.cardStyle")
+        d.set(theme, forKey: "ks.theme"); d.set(mode, forKey: "ks.mode"); d.set(density, forKey: "ks.density"); d.set(cardStyle, forKey: "ks.cardStyle")
         d.set(haptics, forKey: "ks.haptics"); d.set(sound, forKey: "ks.sound")
     }
 }
@@ -192,11 +380,15 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Applies a whole appearance: theme, and the haptics and sound switches.
+    /// Applies a whole appearance: style, body voice, tint, and the haptics and sound switches.
     public func keepsakeAppearance(_ a: Appearance) -> some View {
+        let theme = KSTheme.named(a.theme)
+        KSTheme.current = theme
+        _ = KSFont.registered
         Haptic.enabled = a.haptics
         Haptic.sound = a.sound
-        return self.environment(\.ks, KSTheme.named(a.theme)).environment(\.appearance, a).tint(KSTheme.named(a.theme).accent)
+        return self.environment(\.ks, theme).environment(\.appearance, a).tint(theme.accent).fontDesign(theme.bodyDesign)
+            .preferredColorScheme(a.colorScheme)
     }
 }
 #endif

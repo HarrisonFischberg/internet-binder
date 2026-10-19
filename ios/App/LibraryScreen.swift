@@ -5,8 +5,8 @@ import KeepsakeUI
 
 /// Library: Home's shape with everything in it. Your Collections, then your Lifestyle views, each a
 /// stack you open to see its saves; chips narrow it to one group, and filtering, searching or
-/// selecting lays the saves out as objects. One primary action, finding a save, lives at the bottom
-/// under the thumb (the search dock); paste-a-link sits beside it.
+/// selecting lays the saves out as cards. Search sits at the top with paste-a-link beside it, so
+/// nothing floats over the saves.
 struct LibraryScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
@@ -80,15 +80,16 @@ struct LibraryScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                    if model.loaded { searchField }
                     if !model.saves.isEmpty && query.isEmpty { filters }
                     content
                 }
                 .padding(.horizontal, 18)
-                .padding(.bottom, 130)
+                .padding(.bottom, selecting ? 100 : 32)
             }
             .scrollDismissesKeyboard(.immediately)
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
-            if selecting { selectionBar } else { dock }
+            if selecting { selectionBar }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { DispatchQueue.main.async { Perf.done("Library on screen") } }
@@ -130,10 +131,9 @@ struct LibraryScreen: View {
                 }
                 Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
             } label: {
-                Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(t.ink)
-                    .padding(12).frame(minWidth: 44, minHeight: 44)
-                    .background(t.paper, in: Circle())
-                    .overlay(Circle().strokeBorder(t.rule, lineWidth: 0.75))
+                Image(systemName: "ellipsis").font(.body.weight(.bold)).foregroundStyle(t.ink)
+                    .frame(width: 44, height: 44)
+                    .ksSurface(radius: 22, scale: 0.75)
             }
             .accessibilityLabel("More")
         }
@@ -153,11 +153,11 @@ struct LibraryScreen: View {
                         ForEach(topSources, id: \.self) { Text($0).tag(String?.some($0)) }
                     }
                 } label: {
-                    Image(systemName: "line.3.horizontal.decrease").font(.subheadline.weight(.semibold))
-                        .foregroundStyle(status != nil || source != nil ? t.onAccent : t.ink)
+                    Image(systemName: "line.3.horizontal.decrease").font(.subheadline.weight(.bold))
+                        .foregroundStyle(status != nil || source != nil ? t.table : t.ink)
                         .frame(width: 44, height: 44)
-                        .background(status != nil || source != nil ? AnyShapeStyle(t.ink) : AnyShapeStyle(t.paper), in: Circle())
-                        .overlay(Circle().strokeBorder(t.rule, lineWidth: 0.75))
+                        .background(status != nil || source != nil ? t.ink : t.paper, in: Circle())
+                        .overlay(Circle().strokeBorder(t.style == .pantry ? t.line : t.rule, lineWidth: t.style == .pantry ? 2.5 : 1))
                 }
                 .accessibilityLabel("Filter")
                 Chip("All", selected: filter == .all) { set(.all) }
@@ -167,11 +167,11 @@ struct LibraryScreen: View {
                     Chip("Review \(model.reviewCount)", symbol: "tray", selected: filter == .review) { set(.review) }
                 }
                 if let status {
-                    Chip("\(statusNames[status] ?? status)  ✕", selected: true) { self.status = nil }
+                    Chip(statusNames[status] ?? status, trailing: "xmark", selected: true) { self.status = nil }
                         .accessibilityLabel("Remove filter \(statusNames[status] ?? status)")
                 }
                 if let source {
-                    Chip("\(source)  ✕", selected: true) { self.source = nil }
+                    Chip(source, trailing: "xmark", selected: true) { self.source = nil }
                         .accessibilityLabel("Remove filter \(source)")
                 }
                 divider
@@ -182,7 +182,7 @@ struct LibraryScreen: View {
                 if !collections.isEmpty && !kinds.isEmpty { divider }
                 ForEach(kinds, id: \.self) { k in
                     let s = KindStyle(k)
-                    Chip(plural(k), symbol: s.symbol, tint: s.color, selected: filter == .kind(k)) { set(.kind(k)) }
+                    Chip(plural(k), symbol: s.symbol, tint: s.color, kind: k, selected: filter == .kind(k)) { set(.kind(k)) }
                 }
             }
             .padding(.horizontal, 18)
@@ -274,7 +274,7 @@ struct LibraryScreen: View {
                 }
                 if section == "lifestyle", filter != .collections {
                     let lifestyle = model.saves.filter(\.hasOwnView)
-                    GroupSection(title: "Lifestyle", detail: "\(count(Set(lifestyle.map(\.kind)).count, "view")) · \(count(lifestyle.count, "save"))") {
+                    GroupSection(title: "Lifestyle", detail: "\(count(Set(lifestyle.map(\.kind)).count, "kind")) · \(count(lifestyle.count, "save"))") {
                         if lifestyle.isEmpty {
                             Text("Recipes, places, workouts, films and books land here.").font(KSFont.note).foregroundStyle(t.inkMuted)
                         } else {
@@ -291,16 +291,15 @@ struct LibraryScreen: View {
     private var reviewRow: some View {
         Button { set(.review) } label: {
             HStack(spacing: 12) {
-                Image(systemName: "tray.full").font(.title3).foregroundStyle(t.accent)
-                Text(model.reviewCount == 1 ? "1 save waiting in Review" : "\(model.reviewCount) saves waiting in Review")
-                    .font(.subheadline.weight(.medium)).foregroundStyle(t.ink)
+                Image(systemName: "tray.full").font(.title3)
+                Text(model.reviewCount == 1 ? "1 save needs a collection" : "\(model.reviewCount) saves need a collection")
+                    .font(.subheadline.weight(.bold))
                 Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted)
+                Image(systemName: "chevron.right").font(.footnote.weight(.bold))
             }
+            .foregroundStyle(t.style == .gallery ? t.ink : t.onHighlight)
             .padding(.horizontal, 14).frame(minHeight: 52)
-            .background(t.paper)
-            .overlay(alignment: .leading) { Rectangle().fill(t.accent).frame(width: 3) }
-            .resting()
+            .ksSurface(t.style == .gallery ? t.well : t.highlight)
         }
         .buttonStyle(PressStyle())
     }
@@ -325,8 +324,8 @@ struct LibraryScreen: View {
                     }
                 }
             } label: {
-                Label("Move to…", systemImage: "folder").font(.headline).foregroundStyle(t.onAccent)
-                    .frame(maxWidth: .infinity, minHeight: 54).background(t.accent, in: Capsule())
+                Label("Move to…", systemImage: "folder").font(.headline).foregroundStyle(t.onPrimary)
+                    .frame(maxWidth: .infinity, minHeight: 54).background(t.primary, in: ControlShapeView.shape(t))
             }
             .disabled(selected.isEmpty)
             Button {
@@ -344,17 +343,35 @@ struct LibraryScreen: View {
                 }
             } label: {
                 Image(systemName: "trash").font(.headline).foregroundStyle(t.stamp)
-                    .frame(width: 54, height: 54).background(t.paper, in: Circle()).overlay(Circle().strokeBorder(t.rule))
+                    .frame(width: 54, height: 54).ksSurface(radius: 27, scale: 0.75)
             }
             .disabled(selected.isEmpty)
             .accessibilityLabel("Move \(selected.count) to Trash")
         }
-        .padding(.horizontal, 16).padding(.bottom, 6)
-        .background(alignment: .bottom) { BottomScrim() }
+        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
+        .background(t.table.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { Rectangle().fill(t.rule).frame(height: 1) }
         .task { destinations = (try? await model.library?.destinations()) ?? [] }
     }
 
-    private var dock: some View {
+    /// Search, at the top, with paste-a-link beside it.
+    @ViewBuilder private var searchField: some View {
+        if model.saves.isEmpty {
+            // Nothing to search yet: paste is the way in, so it says what it does.
+            PasteButton(payloadType: URL.self) { urls in
+                Task { await model.pasteLink(urls.first?.absoluteString) }
+            }
+            .labelStyle(.titleAndIcon)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
+            .tint(t.accentForWhiteGlyph)
+            .accessibilityLabel("Save the link you copied")
+        } else {
+            searchRow
+        }
+    }
+
+    private var searchRow: some View {
         HStack(spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").font(.body.weight(.semibold)).foregroundStyle(t.inkMuted)
@@ -368,23 +385,26 @@ struct LibraryScreen: View {
                         .frame(minWidth: 44, minHeight: 44)
                 }
             }
-            .padding(.horizontal, 18)
-            .frame(minHeight: 54)
-            .background(t.paper, in: Capsule())
-            .overlay(Capsule().strokeBorder(t.rule, lineWidth: 0.75))
-            .shadow(color: .black.opacity(0.14), radius: 12, y: 6)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 50)
+            .ksSurface(radius: t.style == .pantry ? 16 : t.controlRadius.isInfinite ? 25 : t.controlRadius, lifted: false)
             // The system Paste button reads the clipboard only when tapped, so iOS never asks to allow it.
             PasteButton(payloadType: URL.self) { urls in
                 Task { await model.pasteLink(urls.first?.absoluteString) }
             }
             .labelStyle(.iconOnly)
             .buttonBorderShape(.circle)
-            .controlSize(.extraLarge)
+            .controlSize(.large)
             .tint(t.accentForWhiteGlyph)
             .accessibilityLabel("Save the link you copied")
         }
-        .padding(.horizontal, 16).padding(.bottom, 6)
-        .background(alignment: .bottom) { BottomScrim() }
+    }
+}
+
+/// A filled button's shape in the current style.
+enum ControlShapeView {
+    static func shape(_ t: KSTheme) -> RoundedRectangle {
+        RoundedRectangle(cornerRadius: t.controlRadius.isInfinite ? 27 : t.controlRadius, style: .continuous)
     }
 }
 
@@ -396,8 +416,8 @@ struct EmptyNote: View {
     @Environment(\.ks) private var t
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: symbol).font(.system(size: 34, weight: .light)).foregroundStyle(t.inkMuted)
-            Text(text).font(.system(.body, design: .serif)).foregroundStyle(t.ink).multilineTextAlignment(.center)
+            Image(systemName: symbol).font(.largeTitle.weight(.light)).foregroundStyle(t.inkMuted).accessibilityHidden(true)
+            Text(text).font(.body).foregroundStyle(t.ink).multilineTextAlignment(.center)
             if let action {
                 Button("Import from Chrome", action: action).buttonStyle(.bordered).frame(minHeight: 44)
             }

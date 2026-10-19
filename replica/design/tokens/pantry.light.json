@@ -1,0 +1,381 @@
+{
+ "_about": "Keepsake tokens, style pantry (Pantry Pop), light. Role names are identical across styles. Contrast is checked by tests/design-tokens.test.mjs.",
+ "style": "pantry",
+ "mode": "light",
+ "color": {
+  "bg": "#FFF7E8",
+  "surface": "#FFFFFF",
+  "surface-2": "#F6EAD3",
+  "border": "#E3D3B4",
+  "border-input": "#16130F",
+  "line": "#16130F",
+  "text": "#16130F",
+  "text-muted": "#5B5348",
+  "accent": "#16130F",
+  "accent-soft": "#FFE8AE",
+  "on-accent": "#FFF7E8",
+  "highlight": "#8A5A00",
+  "highlight-soft": "#FFEDBF",
+  "danger": "#B8301A",
+  "danger-soft": "#FFE3DA",
+  "success": "#2E6E14",
+  "success-soft": "#E4F4D2",
+  "warning": "#855600",
+  "warning-soft": "#FFEDBF",
+  "focus": "#16130F",
+  "kind-product": "#866725",
+  "kind-product-soft": "#FFF2D4",
+  "kind-product-fill": "#FFC23D",
+  "kind-place": "#137063",
+  "kind-place-soft": "#CBEAE6",
+  "kind-place-fill": "#12A08F",
+  "kind-recipe": "#AB4028",
+  "kind-recipe-soft": "#FFDBD3",
+  "kind-recipe-fill": "#FF5A36",
+  "kind-video": "#984D6D",
+  "kind-video-soft": "#FFE2EF",
+  "kind-video-fill": "#FF7AB6",
+  "kind-article": "#945C28",
+  "kind-article-soft": "#FFE9D4",
+  "kind-article-fill": "#FF9A3D",
+  "kind-workout": "#587225",
+  "kind-workout-soft": "#E9F5D4",
+  "kind-workout-fill": "#9BD13B",
+  "kind-film": "#6E59A5",
+  "kind-film-soft": "#E9E2FC",
+  "kind-film-fill": "#9B7DF2",
+  "kind-book": "#37699F",
+  "kind-book-soft": "#D8EBFF",
+  "kind-book-fill": "#4DA3FF",
+  "kind-link": "#746B5B",
+  "kind-link-soft": "#F9F5EF",
+  "kind-link-fill": "#E2D3B5",
+  "on-kind-fill": "#16130F"
+ },
+ "pairs": [
+  [
+   "text",
+   "bg"
+  ],
+  [
+   "text",
+   "surface"
+  ],
+  [
+   "text",
+   "surface-2"
+  ],
+  [
+   "text-muted",
+   "bg"
+  ],
+  [
+   "text-muted",
+   "surface"
+  ],
+  [
+   "text-muted",
+   "surface-2"
+  ],
+  [
+   "on-accent",
+   "accent"
+  ],
+  [
+   "accent",
+   "bg"
+  ],
+  [
+   "accent",
+   "surface"
+  ],
+  [
+   "accent",
+   "accent-soft"
+  ],
+  [
+   "highlight",
+   "surface"
+  ],
+  [
+   "highlight",
+   "highlight-soft"
+  ],
+  [
+   "danger",
+   "surface"
+  ],
+  [
+   "danger",
+   "danger-soft"
+  ],
+  [
+   "success",
+   "surface"
+  ],
+  [
+   "success",
+   "success-soft"
+  ],
+  [
+   "warning",
+   "surface"
+  ],
+  [
+   "warning",
+   "warning-soft"
+  ],
+  [
+   "border-input",
+   "surface",
+   "ui"
+  ],
+  [
+   "border-input",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "surface",
+   "ui"
+  ],
+  [
+   "kind-product",
+   "kind-product-soft"
+  ],
+  [
+   "kind-product",
+   "surface"
+  ],
+  [
+   "kind-place",
+   "kind-place-soft"
+  ],
+  [
+   "kind-place",
+   "surface"
+  ],
+  [
+   "kind-recipe",
+   "kind-recipe-soft"
+  ],
+  [
+   "kind-recipe",
+   "surface"
+  ],
+  [
+   "kind-video",
+   "kind-video-soft"
+  ],
+  [
+   "kind-video",
+   "surface"
+  ],
+  [
+   "kind-article",
+   "kind-article-soft"
+  ],
+  [
+   "kind-article",
+   "surface"
+  ],
+  [
+   "kind-workout",
+   "kind-workout-soft"
+  ],
+  [
+   "kind-workout",
+   "surface"
+  ],
+  [
+   "kind-film",
+   "kind-film-soft"
+  ],
+  [
+   "kind-film",
+   "surface"
+  ],
+  [
+   "kind-book",
+   "kind-book-soft"
+  ],
+  [
+   "kind-book",
+   "surface"
+  ],
+  [
+   "kind-link",
+   "kind-link-soft"
+  ],
+  [
+   "kind-link",
+   "surface"
+  ],
+  [
+   "line",
+   "bg",
+   "ui"
+  ],
+  [
+   "line",
+   "surface",
+   "ui"
+  ],
+  [
+   "on-kind-fill",
+   "kind-product-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-place-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-recipe-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-video-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-article-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-workout-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-film-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-book-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-link-fill"
+  ]
+ ],
+ "display": {
+  "font": "'Bricolage Grotesque', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif",
+  "weight": 800,
+  "tracking": "-0.02em",
+  "stretch": "100%",
+  "ios": "Bricolage Grotesque ExtraBold (bundled), SF Pro Rounded body"
+ },
+ "radius": {
+  "xs": 6,
+  "sm": 12,
+  "md": 18,
+  "lg": 22,
+  "xl": 28,
+  "pill": 999
+ },
+ "shadow": {
+  "card": "3px 3px 0 #16130F",
+  "raised": "5px 5px 0 #16130F",
+  "overlay": "8px 8px 0 #16130F"
+ },
+ "font": {
+  "display": "'Bricolage Grotesque', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif",
+  "sans": "Nunito, ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif",
+  "mono": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
+ },
+ "type": {
+  "caption": {
+   "size": 12,
+   "line": 16,
+   "weight": 500,
+   "ios": "caption"
+  },
+  "footnote": {
+   "size": 13,
+   "line": 18,
+   "weight": 400,
+   "ios": "footnote"
+  },
+  "body-web": {
+   "size": 14,
+   "line": 20,
+   "weight": 400,
+   "ios": "-"
+  },
+  "subhead": {
+   "size": 15,
+   "line": 20,
+   "weight": 500,
+   "ios": "subheadline"
+  },
+  "body": {
+   "size": 17,
+   "line": 22,
+   "weight": 400,
+   "ios": "body"
+  },
+  "title3": {
+   "size": 20,
+   "line": 25,
+   "weight": 600,
+   "ios": "title3"
+  },
+  "title2": {
+   "size": 22,
+   "line": 28,
+   "weight": 600,
+   "font": "display",
+   "ios": "title2 (serif)"
+  },
+  "title": {
+   "size": 28,
+   "line": 34,
+   "weight": 600,
+   "font": "display",
+   "ios": "title (serif)"
+  },
+  "large": {
+   "size": 34,
+   "line": 41,
+   "weight": 600,
+   "font": "display",
+   "ios": "largeTitle (serif)"
+  }
+ },
+ "space": [
+  0,
+  2,
+  4,
+  8,
+  12,
+  16,
+  20,
+  24,
+  32,
+  40,
+  56
+ ],
+ "size": {
+  "target-min-ios": 44,
+  "target-min-web": 32,
+  "popup-width": 400,
+  "sidebar": 248,
+  "content-max": 1240,
+  "card-min": 220
+ },
+ "motion": {
+  "fast": "120ms",
+  "base": "200ms",
+  "slow": "320ms",
+  "ease": "cubic-bezier(.2,.7,.2,1)",
+  "ios-spring": "spring(response 0.35, damping 0.86)",
+  "reduced": "opacity cross-fade only"
+ },
+ "stroke": 2.5
+}
