@@ -4503,3 +4503,30 @@ button.library-tab.on {
   height: auto;
   border-radius: 22%;
 }
+
+.setting-row + .look-picker-block {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+/* The chosen look carries a check so it reads at a glance, not only by its outline. */
+.look-card {
+  position: relative;
+}
+
+.look-card.on::after {
+  content: "✓";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c-text);
+  color: var(--c-bg);
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 0 0 2px var(--c-surface);
+}

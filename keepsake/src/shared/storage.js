@@ -60,11 +60,8 @@ export const STYLES = [
   { value: 'swiss', label: 'Swiss Index', about: 'Hairlines, condensed type, one signal red.', swatch: ['#FAFAF7', '#FFFFFF', '#CC2A1E', '#0A0A0A'] },
 ];
 
-// App icons for the toolbar (Settings → Appearance). Felt pocket is the original icon and the default.
-export const ICONS = [
-  { value: 'pocket', label: 'Felt pocket' },
-  ...STYLES.map((s) => ({ value: s.value, label: s.label })),
-];
+// Toolbar icons (Settings → Appearance): one per style. Pantry Pop is the default.
+export const ICONS = STYLES.map((s) => ({ value: s.value, label: s.label }));
 
 // Sets data-style / data-theme on <html> (or any element) from settings. Pantry Pop needs no attribute.
 // Styles from before 1.5 (modern, moss, minimal) fall back to the default.
@@ -80,7 +77,7 @@ export function applyLook(node, settings) {
 export const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
   style: 'pantry', // pantry | notebook | gallery | atlas | swiss: the look, per device (see src/shared/tokens.css)
-  icon: 'pocket', // toolbar icon: pocket or a style id (see ICONS and src/toolbar/icon.js)
+  icon: 'pantry', // toolbar icon: a style id (see ICONS and src/toolbar/icon.js)
   home: { comeBack: true }, // Home's "Come back to": saves not opened in 6+ weeks (worked out on this device)
   // Lookups (off until turned on, each needs its site granted): fill in places (OpenStreetMap), films and
   // shows (Wikidata) and books (Open Library) from free public sources. See src/shared/lookups.js.

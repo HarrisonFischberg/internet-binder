@@ -65,9 +65,10 @@ export function renderSettings(ctx, view) {
 function appearanceSection(ctx) {
   const s = ctx.state.settings;
   return UI.section('Appearance', '', [
+    UI.settingRow('Light or dark', UI.selectInput({ value: s.theme || 'system', options: [{ value: 'system', label: 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], onChange: (v) => ctx.store.updateSettings({ theme: v }), label: 'Theme' }), 'Also toggled from the sun icon in the toolbar.'),
     el('div', { class: 'look-picker-block' }, [
       el('div', { class: 'setting-label', id: 'styleLabel' }, ['Style']),
-      el('div', { class: 'help' }, ['Applies to the popup, the dashboard and the save card on pages.']),
+      el('div', { class: 'help' }, ['Changes the colours, type and shapes of the popup, the dashboard and the save card on pages. The change shows right away.']),
       lookPicker({ label: 'styleLabel', value: STYLES.some((x) => x.value === s.style) ? s.style : STYLES[0].value, options: STYLES, onChange: (v) => ctx.store.updateSettings({ style: v }), face: styleFace }),
     ]),
     el('div', { class: 'look-picker-block' }, [
@@ -75,7 +76,6 @@ function appearanceSection(ctx) {
       el('div', { class: 'help' }, ['The Keepsake button in your browser’s toolbar. Each icon has a light and a dark version.']),
       lookPicker({ label: 'iconLabel', value: ICONS.some((x) => x.value === s.icon) ? s.icon : ICONS[0].value, options: ICONS, onChange: (v) => ctx.store.updateSettings({ icon: v }), face: iconFace }),
     ]),
-    UI.settingRow('Theme', UI.selectInput({ value: s.theme || 'system', options: [{ value: 'system', label: 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], onChange: (v) => ctx.store.updateSettings({ theme: v }), label: 'Theme' }), 'Also toggled from the sun icon in the toolbar.'),
     UI.settingRow('Show “Come back to” on Home', UI.switchInput({ checked: s.home?.comeBack !== false, onChange: (v) => ctx.store.updateSettings({ home: { ...(s.home || {}), comeBack: v } }), label: 'Show Come back to on Home' }), 'Saves you haven’t finished or opened for six weeks, worked out on this device.'),
     UI.settingRow('Keyboard shortcut', el('span', {}, [el('span', { class: 'kbd' }, ['Alt']), ' + ', el('span', { class: 'kbd' }, ['Shift']), ' + ', el('span', { class: 'kbd' }, ['K'])]), 'Opens Keepsake for the current page. Change it at chrome://extensions/shortcuts.'),
   ]);
