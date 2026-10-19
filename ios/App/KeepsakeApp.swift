@@ -159,7 +159,8 @@ final class LibraryModel {
             let before = saves.count
             _ = try await library.importExport(try Data(contentsOf: url), replace: false)
             refresh()
-            show("Imported \(max(0, saves.count - before)) saves from Chrome")
+            let added = max(0, saves.count - before)
+            show(added == 0 ? "Nothing new to import: those saves are already here" : "Imported \(added) \(added == 1 ? "save" : "saves")")
             Haptic.saved()
         } catch {
             show(error.localizedDescription)

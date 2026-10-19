@@ -10,6 +10,7 @@ import { isRestrictedUrl } from '../shared/url.js';
 import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
 import { followColorScheme, setActionIcon } from '../toolbar/icon.js';
+import { hasInstagramAccess, requestInstagramAccess } from '../instagram/enrich.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 followColorScheme();
@@ -658,24 +659,25 @@ function renderSuggestions(item, classification) {
 async function instagramPanel(ig) {
   show('state-instagram');
   const nameGuess = ig.isCollection ? ig.collectionName || 'this collection' : '';
-  if (!ig.isCollection) {
-    $('igTitle').textContent = 'Open a Saved collection';
-    $('igSubtitle').textContent = 'You’re on the Saved overview. Open one of your collections (or “All posts”), then click Keepsake again.';
-    $('igIdle').classList.add('hidden');
-    $('igRunning').classList.add('hidden');
-    $('igDone').classList.add('hidden');
-    $('igError').classList.add('hidden');
-    return;
+  const start = ig.isCollection ? startScan : startAll;
+  if (ig.isCollection) {
+    $('igTitle').textContent = `“${nameGuess}”`;
+    $('igSubtitle').textContent = ig.username ? `Saved collection · @${ig.username}` : 'Saved collection';
+    $('igName').textContent = nameGuess;
+  } else {
+    // The Saved overview: every collection in turn, then "All posts" for the rest.
+    $('igTitle').textContent = 'All your Saved collections';
+    $('igSubtitle').textContent = ig.username ? `Saved · @${ig.username}` : 'Saved';
+    $('igExplain').textContent = 'Keepsake will open each of your collections in this tab, one after another, scroll each to the end, then “All posts” for anything in no collection. You review everything before it is saved, and each collection becomes a group with the same name. Nothing is sent anywhere.';
+    $('igStart').textContent = 'Import all collections';
+    $('igHelp').textContent = 'Keep this tab open while it runs; it moves at a browsing pace and you can stop at any time. Needs access to instagram.com. Your login, cookies and messages are never read.';
   }
-  $('igTitle').textContent = `“${nameGuess}”`;
-  $('igSubtitle').textContent = ig.username ? `Saved collection · @${ig.username}` : 'Saved collection';
-  $('igName').textContent = nameGuess;
 
-  $('igStart').addEventListener('click', startScan);
-  $('igRetry').addEventListener('click', startScan);
+  $('igStart').addEventListener('click', start);
+  $('igRetry').addEventListener('click', start);
   $('igAgain').addEventListener('click', async () => {
     await send({ type: MSG.IG_SCAN_CLEAR });
-    startScan();
+    start();
   });
   $('igStop').addEventListener('click', async () => {
     $('igStop').disabled = true;
@@ -721,12 +723,48 @@ async function startScan() {
   }
 }
 
+// "Import all collections": needs instagram.com access, since the tab moves from collection to collection.
+async function startAll() {
+  const granted = (await hasInstagramAccess()) || (await requestInstagramAccess());
+  if (!granted) {
+    $('igErrorNotice').textContent = 'Importing every collection needs access to instagram.com, so Keepsake can open each one in this tab. You can still import one collection at a time: open it, then click Keepsake.';
+    igView('error');
+    return;
+  }
+  igView('running');
+  $('igStop').disabled = false;
+  $('igCount').textContent = '0';
+  $('igStatus').textContent = 'Finding your collections…';
+  const res = await send({ type: MSG.IG_START_ALL, tabId: state.tab.id });
+  if (!res.ok) {
+    $('igErrorNotice').textContent = res.error || 'Could not start. Reload your Saved page and try again.';
+    igView('error');
+  }
+}
+
 function renderScan(scan) {
   // From the worker the scan has its posts; the session copy it watches has only their count.
   const n = scan.posts ? scan.posts.length : scan.count || 0;
+  if (scan.bulk) {
+    $('igTitle').textContent = 'All your Saved collections';
+    if (scan.status === 'scanning' || scan.status === 'starting') {
+      igView('running');
+      $('igCount').textContent = String(n);
+      $('igStatus').textContent = scan.bulk.current ? `Collection ${Math.min(scan.bulk.index + 1, scan.bulk.total)} of ${scan.bulk.total}: “${scan.bulk.current}”` : 'Finding your collections…';
+      return;
+    }
+    if (scan.status === 'done') {
+      igView('done');
+      const read = scan.bulk.collections.filter((c) => c.status === 'done').length;
+      const why = { stopped: 'stopped by you', limit: `reached the limit of ${n} posts`, interrupted: 'interrupted', error: scan.error || 'stopped by a problem' }[scan.reason] || 'all done';
+      $('igDoneNotice').textContent = n ? `Found ${pluralize(n, 'post', 'posts')} in ${pluralize(read, 'collection', 'collections')} (${why}).` : `No posts were found (${why}).`;
+      $('igReview').textContent = n ? `Review ${pluralize(n, 'post', 'posts')}` : 'Open import';
+      return;
+    }
+  }
   if (scan.collectionName) {
     $('igTitle').textContent = `“${scan.collectionName}”`;
-    $('igName').textContent = scan.collectionName;
+    if ($('igName')) $('igName').textContent = scan.collectionName;
   }
   if (scan.status === 'scanning' || scan.status === 'starting') {
     igView('running');

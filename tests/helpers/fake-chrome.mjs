@@ -51,12 +51,12 @@ function areaOf(data, name, notify, quota = () => ({ bytes: Infinity })) {
 const event = (set) => ({ addListener: (fn) => set.add(fn), removeListener: (fn) => set.delete(fn), hasListener: (fn) => set.has(fn) });
 
 export function fakeChrome() {
-  const L = { storage: new Set(), message: new Set(), installed: new Set(), startup: new Set(), menu: new Set(), permAdded: new Set(), permRemoved: new Set(), tabUpdated: new Set() };
+  const L = { storage: new Set(), message: new Set(), installed: new Set(), startup: new Set(), menu: new Set(), permAdded: new Set(), permRemoved: new Set(), tabUpdated: new Set(), tabRemoved: new Set() };
   const local = {};
   const session = {};
   const notify = (changes, area) => L.storage.forEach((fn) => fn(changes, area));
-  const calls = { executeScript: [], tabsCreated: [], tabsRemoved: [], contextMenus: [], registered: [] };
-  const state = { granted: [], executeScript: async () => [{ result: null }], registered: [], sessionQuota: { bytes: Infinity } };
+  const calls = { executeScript: [], tabsCreated: [], tabsRemoved: [], tabsUpdated: [], contextMenus: [], registered: [] };
+  const state = { granted: [], executeScript: async () => [{ result: null }], registered: [], sessionQuota: { bytes: Infinity }, tabUrls: {} };
   let nextTab = 100;
 
   const chrome = {
@@ -94,10 +94,18 @@ export function fakeChrome() {
     tabs: {
       create: async (opts) => { const tab = { id: nextTab++, ...opts, status: 'complete' }; calls.tabsCreated.push(tab); return tab; },
       remove: async (id) => { calls.tabsRemoved.push(id); },
-      get: async (id) => ({ id, status: 'complete' }),
+      get: async (id) => ({ id, status: 'complete', url: state.tabUrls[id] }),
+      // A navigation: "loading" then "complete", a moment later.
+      update: async (id, props) => {
+        calls.tabsUpdated.push({ id, ...props });
+        if (props.url) state.tabUrls[id] = props.url;
+        setTimeout(() => { for (const status of ['loading', 'complete']) L.tabUpdated.forEach((fn) => fn(id, { status })); }, 0);
+        return { id, ...props };
+      },
       query: async () => [],
       sendMessage: (id, msg, cb) => cb && cb(),
       onUpdated: event(L.tabUpdated),
+      onRemoved: event(L.tabRemoved),
     },
   };
 
