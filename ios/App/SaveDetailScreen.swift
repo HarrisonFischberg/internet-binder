@@ -253,6 +253,20 @@ struct SaveDetailScreen: View {
         }
     }
 
+    /// One tap checks in for today; another takes today's check-in back off the goal.
+    private func toggleCheckIn(today: [String]) {
+        if today.isEmpty {
+            Task { await checkIn() }
+            model.celebrate("Done today!")
+        } else {
+            Task {
+                guard let lib = model.library else { return }
+                for id in today { try? await lib.undoCheckIn(id) }
+                await reload()
+            }
+        }
+    }
+
     private func checkIn() async {
         guard let goal, let lib = model.library, let id = try? await lib.checkIn(goalId: goal.goal.id) else { return }
         await reload()
@@ -307,7 +321,7 @@ struct SaveDetailScreen: View {
         HStack(spacing: 12) {
             switch current.kind {
             case "place":
-                StampButton("Been", done: isDone) { toggleDone("Been!") }
+                StampButton("Been", done: isDone) { toggleDone("Cool!") }
                 PrimarySlab("Directions", symbol: "arrow.triangle.turn.up.right.diamond.fill") {
                     if let mapsLink { openURL(mapsLink) }
                 }
@@ -321,7 +335,7 @@ struct SaveDetailScreen: View {
                 }
             case "workout":
                 if let goal, goal.progress.status == "active" {
-                    StampButton("Done today", done: false) { Task { await checkIn() }; model.celebrate("Done today!") }
+                    StampButton("Done today", done: !(goal.today ?? []).isEmpty) { toggleCheckIn(today: goal.today ?? []) }
                     if let url = current.url.flatMap(URL.init(string:)) {
                         PrimarySlab("Open workout", symbol: "safari") { openURL(url) }
                     }

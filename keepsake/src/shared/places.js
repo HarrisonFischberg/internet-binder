@@ -134,7 +134,10 @@ export function placeNamed(item = {}) {
   const d = item.details || {};
   const raw = String(item.title || '').trim();
   const title = norm(raw);
-  if (!title || genericTitle(raw) || /^(?:instagram|instagram post|reel by|post by)\b/.test(title) || looksLikeAddress(raw)) return false;
+  if (!title) return false;
+  // A name you typed or kept in Fix is the place's name, even when the post's caption starts with it.
+  if ((item.userFields || []).includes('title')) return true;
+  if (genericTitle(raw) || /^(?:instagram|instagram post|reel by|post by)\b/.test(title) || looksLikeAddress(raw)) return false;
   const parts = raw.split(/\s*,\s*/);
   if (parts.length >= 2 && parts.length <= 3 && (stateCode(parts[parts.length - 1]) || stateFromCity(parts[0])) && !/\d/.test(raw)) return false;
   if (/^(?:this|that|the) (?:spot|place|restaurant|shop|cafe)\b|:$/.test(raw.toLowerCase())) return false;

@@ -146,7 +146,7 @@ final class LibraryModel {
         toast = Toast(text: text, undo: undo)
     }
 
-    /// "Cooked!", "Been!", "Purchased!": shown big in the middle of the screen for a moment.
+    /// "Cooked!", "Cool!", "Purchased!": shown big in the middle of the screen for a moment.
     func celebrate(_ text: String) {
         celebration = Toast(text: text)
     }
