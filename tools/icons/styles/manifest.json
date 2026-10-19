@@ -1,0 +1,29 @@
+{
+  "default": "pocket",
+  "icons": [
+    {
+      "id": "pocket",
+      "label": "Felt pocket"
+    },
+    {
+      "id": "pantry",
+      "label": "Pantry Pop"
+    },
+    {
+      "id": "notebook",
+      "label": "Field Notebook"
+    },
+    {
+      "id": "gallery",
+      "label": "Gallery"
+    },
+    {
+      "id": "atlas",
+      "label": "Night Atlas"
+    },
+    {
+      "id": "swiss",
+      "label": "Swiss Index"
+    }
+  ]
+}
