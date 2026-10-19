@@ -353,8 +353,10 @@ struct SaveDetailScreen: View {
             }
             if current.url != nil { ShareStamp { SaveSharing.present(current) } }
         }
-        // The stamps and buttons grow with text size only so far, so they never crowd the page.
-        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        // The stamps and buttons stay their usual size at every text size, so they never crowd the
+        // page; with big text, a long press shows the label large (the Large Content Viewer).
+        .dynamicTypeSize(...DynamicTypeSize.large)
+        .accessibilityShowsLargeContentViewer()
         .padding(.horizontal, 16).padding(.bottom, 6)
         .background(alignment: .bottom) { BottomScrim() }
     }
