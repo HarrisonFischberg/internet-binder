@@ -67,3 +67,50 @@ test('import: a save gets the thumbnail the scan stored, else Instagram\'s link'
   assert.equal(saved['https://www.instagram.com/p/NONE1xx/'].image, 'https://scontent.cdninstagram.com/NONE1xx.jpg');
   await clearScanStore();
 });
+
+test('adapter: the Saved overview lists each collection once, "All posts" included, Instagram\'s own folders left out', async () => {
+  const dom = new JSDOM(`<html><body><main>
+    <a href="/me/saved/all-posts/"><span>All posts</span></a>
+    <a href="/me/saved/dinner-ideas/17841000000000001/"><img alt=""><span>Dinner ideas</span></a>
+    <a href="/me/saved/living-room/17841000000000002/" aria-label="Living room"><img alt=""></a>
+    <a href="/me/saved/dinner-ideas/17841000000000001/">again</a>
+    <a href="/me/saved/audio/">Audio</a>
+    <a href="/p/NOTACOLL1/">a post</a>
+  </main></body></html>`, { url: 'https://www.instagram.com/me/saved/', runScripts: 'outside-only' });
+  const w = dom.window;
+  w.eval(readFileSync(new URL('src/instagram/adapter.js', ROOT), 'utf8'));
+  assert.deepEqual(JSON.parse(JSON.stringify(w.KeepsakeInstagram.collectCollections(w.document))), [
+    { name: 'All posts', url: 'https://www.instagram.com/me/saved/all-posts/', kind: 'all' },
+    { name: 'Dinner ideas', url: 'https://www.instagram.com/me/saved/dinner-ideas/17841000000000001/', kind: 'collection' },
+    { name: 'Living room', url: 'https://www.instagram.com/me/saved/living-room/17841000000000002/', kind: 'collection' },
+  ]);
+});
+
+test('import all collections: each Instagram collection becomes a group; recipes still go to Recipes; loose posts are sorted', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const { importPosts } = await import('../keepsake/src/dashboard/importer.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  await store.init();
+  const ctx = { store, state: { collections: await store.getCollections(), prefs: await store.getPrefs(), settings: await store.getSettings() }, send: async () => ({ ok: true }) };
+  const post = (code, caption, collections) => ({ url: `https://www.instagram.com/p/${code}/`, shortcode: code, type: 'post', thumbnail: '', caption, collections });
+  const scan = { collectionName: 'All collections', bulk: { collections: [] } };
+  const summary = await importPosts(ctx, scan, [
+    post('GRP0001', 'Linen lampshade for the bedroom', ['Cozy corner', 'Wishlist']),
+    post('GRP0002', 'Walnut side table', ['Cozy corner']),
+    post('GRP0003', 'Weeknight pasta', ['Dinner ideas']),
+    post('GRP0004', 'Two-person ultralight backpacking tent', []),
+  ]);
+  const saved = Object.fromEntries((await store.db.all('items')).map((i) => [i.url.split('/')[4], i]));
+  const cols = Object.fromEntries((await store.getCollections()).map((c) => [c.id, c.name]));
+  assert.equal(cols[saved.GRP0001.collectionId], 'Cozy corner', 'the first collection it was in');
+  assert.equal(saved.GRP0002.collectionId, saved.GRP0001.collectionId, 'one group per collection');
+  assert.equal(saved.GRP0001.instagram.collectionName, 'Cozy corner');
+  assert.equal(saved.GRP0003.kind, 'recipe', '“Dinner ideas” sounds like recipes');
+  assert.equal(cols[saved.GRP0004.collectionId], 'Camping & Outdoors', 'in no collection: sorted as usual');
+  assert.equal(summary.imported, 4);
+  // Turned off: everything is sorted by Keepsake.
+  ctx.state.igKeepGroups = false;
+  await importPosts(ctx, scan, [post('GRP0005', 'Two-person ultralight backpacking tent, green', ['Cozy corner'])]);
+  const tent = (await store.db.all('items')).find((i) => i.url.includes('GRP0005'));
+  assert.equal((await store.getCollection(tent.collectionId)).name, 'Camping & Outdoors');
+});

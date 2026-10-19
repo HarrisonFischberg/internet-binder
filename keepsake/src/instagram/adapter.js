@@ -121,5 +121,32 @@
     return out;
   }
 
-  globalThis.KeepsakeInstagram = { parseSavedUrl, parsePostUrl, parseAlt, detectCollectionName, collectPosts, slugToName, bestImageSrc };
+  // The collections listed on the Saved overview (/<user>/saved/): [{ name, url, kind }], "All posts"
+  // included when it is shown. Tiles without a numeric id (Audio, Instagram's own folders) are left out.
+  function collectCollections(doc, baseUrl) {
+    const base = baseUrl || (doc.location && doc.location.href) || 'https://www.instagram.com/';
+    const scope = doc.querySelector('main') || doc.body || doc;
+    const out = [];
+    const seen = new Set();
+    for (const a of scope.querySelectorAll('a[href*="/saved/"]')) {
+      let href;
+      try {
+        href = new URL(a.getAttribute('href') || '', base).href.split(/[?#]/)[0];
+      } catch {
+        continue;
+      }
+      const parsed = parseSavedUrl(href);
+      if (!parsed || !parsed.isCollection || (parsed.kind === 'collection' && !parsed.collectionId)) continue;
+      const url = href.endsWith('/') ? href : href + '/';
+      if (seen.has(url)) continue;
+      seen.add(url);
+      // The tile's label is its visible text; an image-only tile falls back to its aria label, then the link.
+      const label = text(a.textContent) || text(a.getAttribute('aria-label')) || text(a.querySelector('img')?.getAttribute('alt'));
+      const name = parsed.kind === 'all' ? 'All posts' : label && label.length <= 80 ? label : parsed.collectionName;
+      out.push({ name, url, kind: parsed.kind });
+    }
+    return out;
+  }
+
+  globalThis.KeepsakeInstagram = { parseSavedUrl, parsePostUrl, parseAlt, detectCollectionName, collectPosts, collectCollections, slugToName, bestImageSrc };
 })();

@@ -30,6 +30,12 @@ struct RootView: View {
         }
         .overlay { CelebrationView() }
         .task { await model.start() }
+        // A Keepsake export sent by AirDrop, or opened from Files with "Open in Keepsake": imported
+        // the way Settings → Import from Chrome does (merged; saves already here are skipped).
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            Task { await model.importFile(url) }
+        }
         .onChange(of: phase) { _, now in
             if now == .active {
                 model.refresh()
