@@ -452,6 +452,7 @@ async function clearScan() {
 }
 
 async function startInstagramScan(tabId) {
+  if (bulk && !bulk.finished) throw new Error('“Import all collections” is still running. Stop it first.');
   const settings = await store.getSettings();
   const ig = settings.instagram;
   await clearScan();
@@ -463,6 +464,156 @@ async function startInstagramScan(tabId) {
   });
   await chrome.scripting.executeScript({ target: { tabId }, files: ['src/instagram/adapter.js', 'src/instagram/scan.js'] });
   return { ok: true };
+}
+
+// --- every Saved collection in turn ("Import all collections" on the Saved overview) ---------------------
+// The overview's collection tiles are read, then the same tab opens each collection and the usual scan
+// runs there, then "All posts" last for posts in no collection. Posts are merged into one scan, each
+// remembering the collections it was in. Needs instagram.com access (the tab moves between pages).
+// A pause between collections keeps the pace close to someone browsing.
+export const BULK = { perCollection: 2000, maxPosts: 5000, pauseMs: 2500, loadTimeoutMs: 30000, scanTimeoutMs: 20 * 60 * 1000 };
+let bulk = null; // { tabId, collections: [{ name, url, kind, count, status }], index, posts: Map, stopped, waiter }
+
+const bulkSummary = (b) => ({
+  index: b.index, total: b.collections.length, current: b.collections[b.index]?.name || '',
+  collections: b.collections.map(({ name, kind, count, status }) => ({ name, kind, count, status })),
+});
+
+async function startInstagramBulk(tabId) {
+  if (bulk && !bulk.finished) throw new Error('An import is already running. Stop it first.');
+  const tab = await chrome.tabs.get(tabId);
+  const overview = String(tab?.url || '').match(/^https:\/\/www\.instagram\.com\/([^/?#]+)\/saved\/?(?:[?#].*)?$/);
+  if (!overview) throw new Error('Open your Saved page on Instagram (instagram.com/<you>/saved/) first.');
+  await clearScan();
+  await chrome.scripting.executeScript({ target: { tabId }, files: ['src/instagram/adapter.js'] });
+  // The overview lists collections lazily: scroll until no new tiles appear.
+  const results = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: async () => {
+      const ig = globalThis.KeepsakeInstagram;
+      let list = [];
+      for (let round = 0, stable = 0; round < 30 && stable < 3; round++) {
+        const next = ig.collectCollections(document, location.href);
+        stable = next.length === list.length ? stable + 1 : 0;
+        list = next;
+        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'auto' });
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return list;
+    },
+  });
+  const found = (results && Array.isArray(results[0]?.result) ? results[0].result : [])
+    .filter((c) => c && /^https:\/\/www\.instagram\.com\/[^/]+\/saved\//.test(String(c.url)))
+    .slice(0, 200)
+    .map((c) => ({ name: sanitizeText(c.name, 80) || 'Collection', url: sanitizeText(c.url, 300), kind: c.kind === 'all' ? 'all' : 'collection', count: 0, status: 'waiting' }));
+  // Named collections first; "All posts" last, for the posts in none of them.
+  const collections = [...found.filter((c) => c.kind !== 'all'), ...found.filter((c) => c.kind === 'all').slice(0, 1)];
+  if (!collections.length) throw new Error('No collections were found on this page. Wait for your Saved page to load, then try again.');
+  bulk = { tabId, username: decodeURIComponent(overview[1]), collections, index: 0, posts: new Map(), stopped: false, finished: false, waiter: null };
+  await setScan({ tabId, status: 'scanning', bulk: bulkSummary(bulk), posts: [], collectionName: 'All collections', username: bulk.username, startedAt: Date.now() });
+  const job = bulk;
+  runBulk(job).catch(async (e) => {
+    job.finished = true;
+    if (job.cleared) return;
+    // Whatever was found is kept for review; the error says where it stopped.
+    await saveBulk(job, 'done', 'error').catch(() => {});
+    lastSummary = '';
+    await writeScan({ ...summaryOf({ posts: [...job.posts.values()] }), tabId, status: 'done', reason: 'error', error: friendlyError(e), bulk: bulkSummary(job), collectionName: 'All collections', username: job.username, updatedAt: Date.now() }).catch(() => {});
+  });
+  return { ok: true, collections: collections.map((c) => c.name) };
+}
+
+// Closing the Instagram tab ends the run; what was found so far is kept.
+chrome.tabs.onRemoved?.addListener((tabId) => {
+  if (!bulk || bulk.finished || bulk.tabId !== tabId) return;
+  bulk.stopped = true;
+  if (bulk.waiter) bulk.waiter('error');
+});
+
+async function runBulk(job) {
+  const settings = await store.getSettings();
+  const ig = settings.instagram;
+  for (job.index = 0; job.index < job.collections.length && !job.stopped; job.index++) {
+    const col = job.collections[job.index];
+    col.status = 'scanning';
+    await saveBulk(job, 'scanning');
+    await navigateTab(job.tabId, col.url);
+    await new Promise((r) => setTimeout(r, BULK.pauseMs));
+    if (job.stopped) {
+      col.status = 'skipped';
+      break;
+    }
+    let guard;
+    const done = new Promise((resolve) => {
+      job.waiter = resolve;
+      guard = setTimeout(() => resolve('timeout'), BULK.scanTimeoutMs);
+    });
+    const room = Math.max(0, BULK.maxPosts - job.posts.size);
+    await chrome.scripting.executeScript({
+      target: { tabId: job.tabId },
+      func: (o) => { globalThis.__keepsakeIgScanOptions = o; if (globalThis.__keepsakeIgScan) { globalThis.__keepsakeIgScan.running = false; } },
+      args: [{ safetyLimit: Math.min(BULK.perCollection, room || 1), idleTimeoutMs: ig.idleTimeoutMs, storeThumbnails: ig.storeThumbnails, autoScroll: true }],
+    });
+    await chrome.scripting.executeScript({ target: { tabId: job.tabId }, files: ['src/instagram/adapter.js', 'src/instagram/scan.js'] });
+    const how = await done;
+    clearTimeout(guard);
+    job.waiter = null;
+    if (how === 'timeout') chrome.tabs.sendMessage(job.tabId, { type: MSG.IG_STOP_SCAN }, () => void chrome.runtime.lastError);
+    col.status = how === 'error' ? 'error' : 'done';
+    if (job.posts.size >= BULK.maxPosts) {
+      job.limited = true;
+      break;
+    }
+  }
+  for (const c of job.collections) if (c.status === 'waiting') c.status = 'skipped';
+  job.finished = true;
+  await saveBulk(job, 'done', job.stopped ? 'stopped' : job.limited ? 'limit' : 'end');
+}
+
+async function saveBulk(job, status, reason = '') {
+  if (job.cleared) return;
+  await setScan({
+    tabId: job.tabId, status, reason, bulk: bulkSummary(job), collectionName: 'All collections', username: job.username,
+    collectionUrl: `https://www.instagram.com/${job.username}/saved/`, posts: [...job.posts.values()], error: '',
+  });
+}
+
+// One collection's report: its posts join the merged list, each noting the collection it was in.
+function mergeBulkPosts(job, posts) {
+  const col = job.collections[job.index];
+  if (!col) return;
+  const named = col.kind !== 'all';
+  for (const p of posts) {
+    const had = job.posts.get(p.shortcode);
+    if (had) {
+      if (named && !had.collections.includes(col.name)) had.collections.push(col.name);
+      for (const k of ['caption', 'creator', 'alt', 'originalThumbnail']) if (!had[k] && p[k]) had[k] = p[k];
+      had.captured = had.captured || p.captured;
+    } else if (job.posts.size < BULK.maxPosts) job.posts.set(p.shortcode, { ...p, collections: named ? [col.name] : [] });
+  }
+  col.count = posts.length;
+}
+
+// Opens a page in the tab and waits for it to finish loading (or for the timeout: the scan copes with a
+// page still settling).
+function navigateTab(tabId, url) {
+  return new Promise((resolve, reject) => {
+    let started = false;
+    const finish = (fn, v) => {
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      clearTimeout(timer);
+      fn(v);
+    };
+    const onUpdated = (id, info) => {
+      if (id !== tabId) return;
+      if (info.status === 'loading') started = true;
+      else if (info.status === 'complete' && started) finish(resolve);
+    };
+    const timer = setTimeout(() => finish(resolve), BULK.loadTimeoutMs);
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.update(tabId, { url }).catch((e) => finish(reject, new Error(`The Instagram tab was closed (${friendlyError(e)}).`)));
+  });
 }
 
 function sanitizePost(p) {
@@ -478,6 +629,7 @@ function sanitizePost(p) {
     links: list(p.links, 10, (l) => (l && typeof l === 'object' && l.url ? { url: str(l.url, 2000), label: str(l.label, 80) } : null)),
     products: list(p.products, 10, (x) => (x && typeof x === 'object' && x.name ? { name: str(x.name, 160), price: Number.isFinite(x.price) ? x.price : null, currency: str(x.currency, 8), url: str(x.url, 2000), retailer: str(x.retailer, 80) } : null)),
     linkInBio: !!p.linkInBio, details: !!p.details, detailsVia: str(p.detailsVia, 10), detailsError: str(p.detailsError, 200),
+    ...(Array.isArray(p.collections) ? { collections: list(p.collections, 20, (c) => str(c, 80)) } : {}),
   };
 }
 
@@ -635,7 +787,12 @@ async function handleMessage(msg, sender) {
       if (!fromExtensionPage) throw new Error('Not allowed.');
       return startInstagramScan(msg.tabId);
     }
+    case MSG.IG_START_ALL: {
+      if (!fromExtensionPage) throw new Error('Not allowed.');
+      return startInstagramBulk(msg.tabId);
+    }
     case MSG.IG_STOP_SCAN: {
+      if (bulk && !bulk.finished) bulk.stopped = true;
       const scan = await getScan();
       const tabId = msg.tabId || (scan && scan.tabId);
       if (tabId) chrome.tabs.sendMessage(tabId, { type: MSG.IG_STOP_SCAN }, () => void chrome.runtime.lastError);
@@ -650,6 +807,13 @@ async function handleMessage(msg, sender) {
         collectionUrl: sanitizeText(msg.collectionUrl, 300), username: sanitizeText(msg.username, 80), posts, updatedAt: Date.now(),
       };
       try {
+        if (bulk && !bulk.finished && bulk.tabId === sender.tab.id) {
+          // One collection of "Import all collections": merged into the whole, then on to the next.
+          mergeBulkPosts(bulk, posts);
+          await saveBulk(bulk, 'scanning');
+          if (scan.status !== 'scanning' && bulk.waiter) bulk.waiter(scan.status);
+          return { ok: true };
+        }
         await setScan(scan);
       } catch (e) {
         // Say so instead of leaving the last good update ("Scanning…") showing for ever.
@@ -672,13 +836,21 @@ async function handleMessage(msg, sender) {
       await putThumbs(new Map([[key, data]]));
       return { ok: true };
     }
-    case MSG.IG_SCAN_STATE:
-      return { ok: true, scan: await getScan() };
+    case MSG.IG_SCAN_STATE: {
+      const scan = await getScan();
+      // The worker was restarted mid-way through "Import all collections": what it found is kept.
+      if (scan && scan.bulk && scan.status === 'scanning' && !(bulk && !bulk.finished)) {
+        const done = { ...scan, status: 'done', reason: 'interrupted' };
+        await setScan(done);
+        return { ok: true, scan: done };
+      }
+      return { ok: true, scan };
+    }
     case MSG.IG_SCAN_SET_POSTS: {
       if (!fromExtensionPage) throw new Error('Not allowed.');
       const scan = await getScan();
       if (!scan) throw new Error('There is no scan to update.');
-      const posts = (Array.isArray(msg.posts) ? msg.posts : []).slice(0, 2000).map(sanitizePost);
+      const posts = (Array.isArray(msg.posts) ? msg.posts : []).slice(0, BULK.maxPosts).map(sanitizePost);
       await setScan({ ...scan, posts, updatedAt: Date.now() });
       return { ok: true };
     }
@@ -687,6 +859,11 @@ async function handleMessage(msg, sender) {
       return readPostInTab(msg.url);
     }
     case MSG.IG_SCAN_CLEAR:
+      if (bulk && !bulk.finished) {
+        Object.assign(bulk, { stopped: true, finished: true, cleared: true });
+        if (bulk.waiter) bulk.waiter('stopped');
+        chrome.tabs.sendMessage(bulk.tabId, { type: MSG.IG_STOP_SCAN }, () => void chrome.runtime.lastError);
+      }
       await clearScan();
       return { ok: true };
     default:
