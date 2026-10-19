@@ -76,13 +76,15 @@ struct AppearanceScreen: View {
 
     /// Two of your own saves for the previews: one with a picture and, if there is one, one without,
     /// so each style shows how it draws both.
-    private var samples: [Save] {
-        let settled = model.saves.filter { !$0.needsCollection && $0.status != "done" && $0.purchased != true }
-        let pictured = settled.first(where: \.hasImage)
-        let plain = settled.first { !$0.hasImage }
-        let picks = [pictured, plain].compactMap { $0 }
-        return picks.isEmpty ? Array(model.saves.prefix(2)) : picks
-    }
+    /// The same two sample saves in every preview (a recipe with its photo, a book as a jar label), so
+    /// each style is shown with the same things whatever is in the library, and never empty.
+    private var samples: [Save] { Self.sampleSaves }
+
+    static let sampleSaves: [Save] = {
+        guard let url = Bundle.main.url(forResource: "StyleSamples", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else { return [] }
+        return (try? JSONDecoder().decode([Save].self, from: data)) ?? []
+    }()
 
     private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -92,7 +94,7 @@ struct AppearanceScreen: View {
     }
 }
 
-/// One style, large: a few of your saves drawn in it, its name in its own title face, a line on what
+/// One style, large: two sample saves drawn in it, its name in its own title face, a line on what
 /// it's like, and an unmistakable mark when it's the one in use.
 struct StyleCard: View {
     let theme: KSTheme
@@ -135,7 +137,7 @@ struct StyleCard: View {
         .accessibilityAddTraits(chosen ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// Your saves on the style's own page, in its own colours, type and depth.
+    /// The sample saves on the style's own page, in its own colours, type and depth.
     private var preview: some View {
         HStack(alignment: .top, spacing: 12) {
             if saves.isEmpty {
