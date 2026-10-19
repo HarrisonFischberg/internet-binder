@@ -153,8 +153,8 @@ struct ContainerView: View {
     }
 }
 
-/// App icon: the felt pocket, or one per style. macOS keeps an app's icon in its bundle, so this
-/// changes the Dock icon while Keepsake is open; Finder and Launchpad keep the felt pocket.
+/// App icon: one per style. macOS keeps an app's icon in its bundle, so this changes the Dock icon
+/// while Keepsake is open; Finder and Launchpad keep Pantry Pop.
 struct IconChooser: View {
     @State private var chosen = AppIcon.current
     var body: some View {
@@ -183,21 +183,22 @@ struct IconChooser: View {
 }
 
 enum AppIcon: String, CaseIterable, Identifiable {
-    case pocket, pantry, notebook, gallery, atlas, swiss
+    case pantry, notebook, gallery, atlas, swiss
     var id: String { rawValue }
     var asset: String { "Icon-\(rawValue)" }
     var label: String {
         switch self {
-        case .pocket: "Felt pocket"; case .pantry: "Pantry Pop"; case .notebook: "Field Notebook"
+        case .pantry: "Pantry Pop"; case .notebook: "Field Notebook"
         case .gallery: "Gallery"; case .atlas: "Night Atlas"; case .swiss: "Swiss Index"
         }
     }
-    static var current: AppIcon { AppIcon(rawValue: UserDefaults.standard.string(forKey: "appIcon") ?? "") ?? .pocket }
+    /// Pantry Pop is the bundle's own icon; a saved "pocket" (now gone) lands on it too.
+    static var current: AppIcon { AppIcon(rawValue: UserDefaults.standard.string(forKey: "appIcon") ?? "") ?? .pantry }
 
     @MainActor func apply() {
         UserDefaults.standard.set(rawValue, forKey: "appIcon")
-        // nil puts back the bundle's own icon (the felt pocket).
-        NSApplication.shared.applicationIconImage = self == .pocket ? nil : NSImage(named: asset)
+        // nil puts back the bundle's own icon (Pantry Pop).
+        NSApplication.shared.applicationIconImage = self == .pantry ? nil : NSImage(named: asset)
     }
 }
 

@@ -66,6 +66,34 @@ final class SaveFlowTests: XCTestCase {
         XCTAssertTrue(card(app, "Café Azulejo").exists)
     }
 
+    func testSearchTabFindsASave() {
+        let app = launch(seeded: true)
+        tab(app, "Search")
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Kinds"].waitForExistence(timeout: 5), "nothing typed: the kinds you have")
+        search.tap()
+        search.typeText("lisbon")
+        XCTAssertTrue(card(app, "Café Azulejo").waitForExistence(timeout: 5))
+    }
+
+    func testAppearanceFromHome() {
+        let app = launch(seeded: true)
+        let button = app.buttons["Appearance"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "Appearance sits next to Settings on Home")
+        button.tap()
+        let notebook = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Field Notebook.'")).firstMatch
+        XCTAssertTrue(notebook.waitForExistence(timeout: 5))
+        notebook.tap()
+        XCTAssertEqual(notebook.value as? String, "Selected")
+        app.buttons["Dark"].tap()
+        XCTAssertTrue(app.buttons["Dark"].isSelected)
+        app.buttons["System"].tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Pantry Pop.'")).firstMatch.tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 3))
+    }
+
     func testReviewShowsWhatNeedsACollection() {
         let app = launch(seeded: true)
         tab(app, "Library")

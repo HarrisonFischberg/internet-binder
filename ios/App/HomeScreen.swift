@@ -9,6 +9,7 @@ struct HomeScreen: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @State private var settings = false
+    @State private var appearance = false
     @State private var collections: [SaveCollection] = []
     /// Recent and the two sections, in the order you've dragged them into.
     @State private var recentOrder: [String] = []
@@ -39,13 +40,13 @@ struct HomeScreen: View {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack(alignment: .top) {
                         ScreenHeader(title: "Keepsake", subtitle: nil)
-                        if size != .regular { Button { settings = true } label: {
-                            Image(systemName: "gearshape").font(.body.weight(.bold)).foregroundStyle(t.ink)
-                                .frame(width: 44, height: 44)
-                                .ksSurface(radius: 22, scale: 0.75)
+                        if size != .regular {
+                            HStack(spacing: 10) {
+                                headerButton("paintpalette", "Appearance") { appearance = true }
+                                headerButton("gearshape", "Settings") { settings = true }
+                            }
+                            .padding(.top, 8)
                         }
-                        .accessibilityLabel("Settings")
-                        .padding(.top, 8) }
                     }
                     if model.reviewCount > 0 { reviewBanner }
                     if model.saves.isEmpty && model.loaded {
@@ -74,12 +75,23 @@ struct HomeScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $settings) { SettingsScreen() }
+        .sheet(isPresented: $appearance) { AppearanceSheet() }
         .task(id: model.saves.count) { collections = (try? model.library?.collections()) ?? [] }
         .onAppear { sectionOrder = HomeSections.order() }
         // The newest eight, in your order; a new save joins at the front.
         .onChange(of: model.saves.prefix(8).map(\.id), initial: true) { _, latest in
             recentOrder = latest.arranged(by: SavedOrder.get("recentOrder"), newFirst: true) { $0 }
         }
+    }
+
+    private func headerButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.body.weight(.bold)).foregroundStyle(t.ink)
+                .frame(width: 44, height: 44)
+                .ksSurface(radius: 22, scale: 0.75)
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityLabel(label)
     }
 
     private func count(_ n: Int, _ noun: String) -> String { n == 1 ? "1 \(noun)" : "\(n) \(noun)s" }

@@ -142,11 +142,9 @@ extension EnvironmentValues {
 /// Bricolage Grotesque (bundled, OFL); Field Notebook and Gallery in New York; Night Atlas in SF Pro
 /// Display; Swiss Index in condensed SF Pro.
 public enum KSFont {
-    private static var t: KSTheme { KSTheme.current }
-
-    /// The screen's big title.
-    public static func display() -> Font {
-        switch t.style {
+    /// The screen's big title (in `theme`, or the style in use).
+    public static func display(_ theme: KSTheme? = nil) -> Font {
+        switch (theme ?? KSTheme.current).style {
         case .pantry: bricolage(.largeTitle, display: true)
         case .notebook: .system(.largeTitle, design: .serif).weight(.semibold)
         case .gallery: .system(size: 40, weight: .regular, design: .serif)
@@ -155,8 +153,8 @@ public enum KSFont {
         }
     }
     /// A save's or a group's name.
-    public static func name(_ style: Font.TextStyle = .title3) -> Font {
-        switch t.style {
+    public static func name(_ style: Font.TextStyle = .title3, _ theme: KSTheme? = nil) -> Font {
+        switch (theme ?? KSTheme.current).style {
         case .pantry: bricolage(style, display: style == .title || style == .title2 || style == .largeTitle)
         case .notebook: .system(style, design: .serif).weight(.semibold)
         case .gallery: .system(style, design: .serif)
@@ -164,10 +162,12 @@ public enum KSFont {
         case .swiss: .system(style).weight(.bold)
         }
     }
-    public static var fact: Font { .system(.footnote, design: t.bodyDesign) }
+    public static var fact: Font { fact(nil) }
+    public static func fact(_ theme: KSTheme?) -> Font { .system(.footnote, design: (theme ?? KSTheme.current).bodyDesign) }
     /// Kind labels and small captions.
-    public static var label: Font {
-        switch t.style {
+    public static var label: Font { label(nil) }
+    public static func label(_ theme: KSTheme?) -> Font {
+        switch (theme ?? KSTheme.current).style {
         case .pantry: .system(.caption, design: .rounded).weight(.heavy)
         case .notebook, .atlas: .system(.caption2, design: .monospaced).weight(.medium)
         case .gallery: .caption
@@ -176,9 +176,9 @@ public enum KSFont {
     }
     /// A quiet line: a note, a subtitle.
     public static var note: Font {
-        switch t.style {
+        switch KSTheme.current.style {
         case .notebook, .gallery: .system(.subheadline, design: .serif).italic()
-        default: .system(.subheadline, design: t.bodyDesign)
+        default: .system(.subheadline, design: KSTheme.current.bodyDesign)
         }
     }
 
@@ -339,6 +339,8 @@ extension View {
 /// widgets match the app. Device settings: never synced, never exported.
 public struct Appearance: Sendable, Equatable {
     public var theme = "pantry"
+    /// "system", "light" or "dark": the app's appearance, whatever the device is set to.
+    public var mode = "system"
     /// "comfortable" (cards in masonry) or "compact" (an even grid, more on screen).
     public var density = "comfortable"
     /// Kept for older settings; every style draws its own cards.
@@ -352,15 +354,19 @@ public struct Appearance: Sendable, Equatable {
         let d = defaults
         var a = Appearance()
         a.theme = KSTheme.canonical(d.string(forKey: "ks.theme") ?? a.theme)
+        a.mode = d.string(forKey: "ks.mode") ?? a.mode
         a.density = d.string(forKey: "ks.density") ?? a.density
         a.cardStyle = d.string(forKey: "ks.cardStyle") ?? a.cardStyle
         a.haptics = d.object(forKey: "ks.haptics") as? Bool ?? true
         a.sound = d.object(forKey: "ks.sound") as? Bool ?? false
         return a
     }
+    /// nil follows the device.
+    public var colorScheme: ColorScheme? { mode == "light" ? .light : mode == "dark" ? .dark : nil }
+
     public func save() {
         let d = Self.defaults
-        d.set(theme, forKey: "ks.theme"); d.set(density, forKey: "ks.density"); d.set(cardStyle, forKey: "ks.cardStyle")
+        d.set(theme, forKey: "ks.theme"); d.set(mode, forKey: "ks.mode"); d.set(density, forKey: "ks.density"); d.set(cardStyle, forKey: "ks.cardStyle")
         d.set(haptics, forKey: "ks.haptics"); d.set(sound, forKey: "ks.sound")
     }
 }
@@ -382,6 +388,7 @@ extension View {
         Haptic.enabled = a.haptics
         Haptic.sound = a.sound
         return self.environment(\.ks, theme).environment(\.appearance, a).tint(theme.accent).fontDesign(theme.bodyDesign)
+            .preferredColorScheme(a.colorScheme)
     }
 }
 #endif

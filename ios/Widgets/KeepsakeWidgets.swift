@@ -108,7 +108,7 @@ struct GoalWidgetView: View {
 
 struct GoalWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "goal", provider: SnapshotProvider()) { GoalWidgetView(entry: $0).environment(\.ks, widgetTheme()) }
+        StaticConfiguration(kind: "goal", provider: SnapshotProvider()) { GoalWidgetView(entry: $0).environment(\.ks, widgetTheme()).modifier(WidgetMode()) }
             .configurationDisplayName("Workout goal")
             .description("This week's check-ins for your goal.")
             .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular])
@@ -140,7 +140,7 @@ struct LatestWidgetView: View {
 
 struct LatestWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "latest", provider: SnapshotProvider()) { LatestWidgetView(entry: $0).environment(\.ks, widgetTheme()) }
+        StaticConfiguration(kind: "latest", provider: SnapshotProvider()) { LatestWidgetView(entry: $0).environment(\.ks, widgetTheme()).modifier(WidgetMode()) }
             .configurationDisplayName("Latest save")
             .description("The last thing you kept.")
             .supportedFamilies([.systemSmall])
@@ -168,4 +168,12 @@ func widgetTheme() -> KSTheme {
     KSTheme.current = t
     _ = KSFont.registered
     return t
+}
+
+/// Light or dark as chosen in Appearance; System follows the Home Screen.
+struct WidgetMode: ViewModifier {
+    @Environment(\.colorScheme) private var system
+    func body(content: Content) -> some View {
+        content.environment(\.colorScheme, Appearance.load().colorScheme ?? system)
+    }
 }

@@ -23,7 +23,10 @@ final class ShareViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .clear
         state.finish = { [weak self] in self?.extensionContext?.completeRequest(returningItems: nil) }
-        let host = UIHostingController(rootView: ShareCard(state: state).keepsakeAppearance(Appearance.load()))
+        let look = Appearance.load()
+        let host = UIHostingController(rootView: ShareCard(state: state).keepsakeAppearance(look))
+        // Light or dark as chosen in Appearance (System follows the device).
+        host.overrideUserInterfaceStyle = look.mode == "light" ? .light : look.mode == "dark" ? .dark : .unspecified
         host.view.backgroundColor = .clear
         addChild(host)
         host.view.frame = view.bounds

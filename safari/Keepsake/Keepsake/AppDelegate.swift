@@ -11,8 +11,8 @@ import Cocoa
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The icon chosen in the window, in the Dock (the bundle keeps the felt pocket).
-        if AppIcon.current != .pocket { AppIcon.current.apply() }
+        // The icon chosen in the window, in the Dock (the bundle keeps Pantry Pop).
+        if AppIcon.current != .pantry { AppIcon.current.apply() }
         #if DEBUG
         // Screenshots: -appearance light|dark, whatever the Mac is set to.
         if let look = UserDefaults.standard.string(forKey: "appearance") {

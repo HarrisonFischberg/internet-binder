@@ -104,10 +104,10 @@ struct SaveCard: View {
     private var caption: some View {
         VStack(alignment: .leading, spacing: 3) {
             if t.style != .pantry { KindLabel(kind: save.kind, fact: t.monoLabels ? fact : nil) }
-            Text(save.title).font(KSFont.name(compact ? .subheadline : .headline)).foregroundStyle(t.ink)
+            Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(t.ink)
                 .lineLimit(compact || fixedHeight != nil ? 2 : 3).fixedSize(horizontal: false, vertical: true)
             if !fact.isEmpty && !t.monoLabels && !compact {
-                Text(fact).font(KSFont.fact).foregroundStyle(t.inkMuted).lineLimit(2)
+                Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -132,7 +132,7 @@ struct SaveCard: View {
             Label(kind.label.uppercased(), systemImage: kind.symbol)
                 .font(.caption.weight(.black)).tracking(1.2).labelStyle(.titleAndIcon)
             Spacer(minLength: 12)
-            Text(save.title).font(KSFont.name(compact ? .headline : .title2)).lineLimit(4).minimumScaleFactor(0.8)
+            Text(save.title).font(KSFont.name(compact ? .headline : .title2, t)).lineLimit(4).minimumScaleFactor(0.8)
             if !fact.isEmpty { Text(fact).font(.footnote.weight(.bold)).lineLimit(2) }
         }
         .foregroundStyle(t.onKind)
@@ -146,9 +146,9 @@ struct SaveCard: View {
     private func indexCard(_ minH: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             KindLabel(kind: save.kind, fact: nil)
-            Text(save.title).font(KSFont.name(compact ? .subheadline : .title3)).foregroundStyle(t.ink).lineLimit(4)
+            Text(save.title).font(KSFont.name(compact ? .subheadline : .title3, t)).foregroundStyle(t.ink).lineLimit(4)
             Spacer(minLength: 0)
-            if !fact.isEmpty { Text(fact.uppercased()).font(KSFont.label).foregroundStyle(t.inkMuted).lineLimit(2) }
+            if !fact.isEmpty { Text(fact.uppercased()).font(KSFont.label(t)).foregroundStyle(t.inkMuted).lineLimit(2) }
         }
         .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 12)
         .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
@@ -193,10 +193,10 @@ struct SaveCard: View {
     /// Night Atlas: a dark monogram card with a dotted route in the kind's colour.
     private func monogram(_ minH: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(String(save.title.prefix(1)).uppercased()).font(.system(size: compact ? 34 : 52, weight: .bold)).foregroundStyle(kind.color)
+            Text(String(save.title.prefix(1)).uppercased()).font(.system(size: compact ? 34 : 52, weight: .bold)).foregroundStyle(t.kind(save.kind))
                 .accessibilityHidden(true)
             Path { p in p.move(to: CGPoint(x: 0, y: 6)); p.addCurve(to: CGPoint(x: 120, y: 2), control1: CGPoint(x: 40, y: -6), control2: CGPoint(x: 80, y: 16)) }
-                .stroke(kind.color.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 5]))
+                .stroke(t.kind(save.kind).opacity(0.7), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 5]))
                 .frame(height: 14)
             Spacer(minLength: 0)
             caption
@@ -212,8 +212,8 @@ struct SaveCard: View {
             KindLabel(kind: save.kind, fact: nil)
             Spacer(minLength: 8)
             Text(kind.code).font(.system(size: compact ? 40 : 64, weight: .bold).width(.condensed)).foregroundStyle(t.ink).accessibilityHidden(true)
-            Text(save.title).font(KSFont.name(compact ? .subheadline : .headline)).foregroundStyle(t.ink).lineLimit(3)
-            if !fact.isEmpty && !compact { Text(fact).font(KSFont.fact).foregroundStyle(t.inkMuted).lineLimit(2) }
+            Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(t.ink).lineLimit(3)
+            if !fact.isEmpty && !compact { Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2) }
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
@@ -286,9 +286,9 @@ public struct KindLabel: View {
         case .pantry: Sticker(kind: kind)
         case .notebook, .atlas:
             Text(([k.label] + [fact].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " · ").uppercased())
-                .font(KSFont.label).tracking(0.8).foregroundStyle(t.style == .atlas ? k.color : t.inkMuted).lineLimit(1)
-        case .gallery: Text(k.label).font(KSFont.label).foregroundStyle(t.inkMuted)
-        case .swiss: Text(k.label.uppercased()).font(KSFont.label).tracking(0.9).foregroundStyle(t.inkMuted)
+                .font(KSFont.label(t)).tracking(0.8).foregroundStyle(t.style == .atlas ? t.kind(kind) : t.inkMuted).lineLimit(1)
+        case .gallery: Text(k.label).font(KSFont.label(t)).foregroundStyle(t.inkMuted)
+        case .swiss: Text(k.label.uppercased()).font(KSFont.label(t)).tracking(0.9).foregroundStyle(t.inkMuted)
         }
     }
 }
@@ -304,7 +304,7 @@ public struct Stamp: View {
         let pantry = t.style == .pantry
         Image(systemName: k.symbol)
             .font(.system(size: size * 0.42, weight: .bold))
-            .foregroundStyle(pantry ? t.onKind : k.color)
+            .foregroundStyle(pantry ? t.onKind : t.kind(kind))
             .frame(width: size, height: size)
             .background(pantry ? t.kindFill(kind) : t.paper, in: Circle())
             .overlay(Circle().strokeBorder(pantry ? t.onKind : t.rule, lineWidth: pantry ? 2 : 1))

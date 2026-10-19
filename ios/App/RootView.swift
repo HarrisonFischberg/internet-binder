@@ -11,8 +11,8 @@ enum Route: Hashable {
     case collection(String, String)
 }
 
-/// The app's frame: Home, Library and Places tabs, each with its own stack, and the Undo toast.
-/// Search lives at the bottom of the Library (under the thumb), so it has no tab of its own (D20).
+/// The app's frame: Home, Library, Places and Search tabs, each with its own stack, and the Undo
+/// toast. Library keeps its own search field too.
 struct RootView: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.scenePhase) private var phase
@@ -30,6 +30,7 @@ struct RootView: View {
         }
         .overlay { CelebrationView() }
         .task { await model.start() }
+        .task { IconPicker.retireOldIcons() }
         .onChange(of: phase) { _, now in
             if now == .active {
                 model.refresh()
@@ -44,6 +45,8 @@ struct RootView: View {
                 .badge(model.reviewCount)
             Tab("Library", systemImage: "books.vertical", value: "library") { Stack(name: "library") { LibraryScreen(zoom: $0) } }
             Tab("Places", systemImage: "map", value: "places") { Stack(name: "places") { PlacesScreen(zoom: $0) } }
+            // The system's search tab: its own button at the end of the tab bar.
+            Tab(value: "search", role: .search) { Stack(name: "search") { SearchScreen(zoom: $0) } }
         }
         .onChange(of: tab) { Perf.mark("tab \(tab)") }
         // keepsake://save/<id> (widgets): open that save in the Library.

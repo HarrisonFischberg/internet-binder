@@ -244,4 +244,48 @@ final class ScreenshotTests: XCTestCase {
         }
         XCUIDevice.shared.appearance = .light
     }
+
+    /// The Appearance sheet (Pantry Pop and Field Notebook) and the Search tab, light and dark.
+    func testAppearanceAndSearch() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        for mode in [XCUIDevice.Appearance.light, .dark] {
+            XCUIDevice.shared.appearance = mode
+            let tag = "iphone-\(mode == .dark ? "dark" : "light")"
+            let app = XCUIApplication()
+            app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "pantry"]
+            app.launch()
+            XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+            sleep(2)
+            try shoot(app, folder, "\(tag)-home")
+            app.buttons["Appearance"].tap()
+            sleep(2)
+            try shoot(app, folder, "\(tag)-pantry-appearance")
+            app.swipeUp()
+            try shoot(app, folder, "\(tag)-pantry-appearance-styles")
+            let notebook = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Field Notebook.'")).firstMatch
+            notebook.tap()
+            sleep(1)
+            try shoot(app, folder, "\(tag)-notebook-appearance-styles")
+            for _ in 0..<3 { app.swipeUp() }
+            sleep(1)
+            try shoot(app, folder, "\(tag)-notebook-appearance-icons")
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Pantry Pop.'")).firstMatch.tap()
+            for _ in 0..<2 { app.swipeUp() }
+            try shoot(app, folder, "\(tag)-pantry-appearance-icons")
+            app.buttons["Done"].tap()
+            app.tabBars.buttons["Search"].tap()
+            sleep(2)
+            try shoot(app, folder, "\(tag)-search")
+            let field = app.searchFields.firstMatch
+            field.tap()
+            field.typeText("pasta")
+            sleep(2)
+            try shoot(app, folder, "\(tag)-search-results")
+            app.terminate()
+        }
+        XCUIDevice.shared.appearance = .light
+    }
 }
