@@ -9,7 +9,7 @@ import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice } from '../
 import { isRestrictedUrl } from '../shared/url.js';
 import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
-import { followColorScheme } from '../toolbar/icon.js';
+import { followColorScheme, setActionIcon } from '../toolbar/icon.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 followColorScheme();
@@ -57,7 +57,9 @@ function openDashboard(hash = '') {
 
 async function applyTheme() {
   try {
-    applyLook(document.documentElement, await store.getSettings());
+    const settings = await store.getSettings();
+    applyLook(document.documentElement, settings);
+    setActionIcon(settings.icon);
   } catch {
     /* defaults */
   }
@@ -290,7 +292,7 @@ function renderCollectionPicker() {
   clear(sel);
   const cls = state.classification;
   // Anywhere you like: a Lifestyle view (the save becomes that kind) or a collection (shopping).
-  if (cls.isInbox) sel.append(el('option', { value: '', text: 'Not sure — leave for Review' }));
+  if (cls.isInbox) sel.append(el('option', { value: '', text: 'Not sure yet (leave it in Review)' }));
   sel.append(el('optgroup', { label: 'Lifestyle' }, LIFESTYLE().map((k) => el('option', { value: `kind:${k.value}`, text: k.plural }))));
   const cols = el('optgroup', { label: 'Collections' }, state.collections.map((c) => el('option', { value: c.id, text: c.name })));
   if (cls.isNew && cls.taxonomyKey) cols.append(el('option', { value: `new:${cls.taxonomyKey}`, text: `${cls.collectionName} (new collection)` }));
@@ -332,7 +334,7 @@ function updateConfidencePill() {
     pill.textContent = 'Needs sorting';
     pill.classList.add('pill-warn');
     pill.title = cls.reason || '';
-    reason.textContent = cls.suggested ? `Not sure — maybe ${cls.suggested.collectionName}? You can pick a collection above or sort it later.` : 'Not enough signals to place this automatically. Pick a collection above or sort it later from Review.';
+    reason.textContent = cls.suggested ? `Maybe ${cls.suggested.collectionName}? You can pick a collection above or sort it later.` : 'Keepsake couldn’t tell where this goes. Pick a collection above or sort it later from Review.';
   } else {
     const level = cls.confidence >= 0.75 ? 'High' : cls.confidence >= state.threshold ? 'Good' : 'Low';
     pill.textContent = `${level} · ${pct}%`;
@@ -440,7 +442,7 @@ function setBusy(busy) {
     const b = $(id);
     b.disabled = busy;
   }
-  $('saveBtn').textContent = busy ? 'Saving…' : 'Save item';
+  $('saveBtn').textContent = busy ? 'Saving…' : 'Save';
 }
 
 async function save({ force }) {

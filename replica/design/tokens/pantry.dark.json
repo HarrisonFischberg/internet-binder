@@ -1,45 +1,56 @@
 {
- "_about": "Keepsake tokens, style minimal, light. Role names are identical across styles. Check: python3 contrast.py <file>",
- "style": "minimal",
- "mode": "light",
+ "_about": "Keepsake tokens, style pantry (Pantry Pop), dark. Role names are identical across styles. Contrast is checked by tests/design-tokens.test.mjs.",
+ "style": "pantry",
+ "mode": "dark",
  "color": {
-  "bg": "#FFFFFF",
-  "surface": "#FFFFFF",
-  "surface-2": "#F4F4F4",
-  "border": "#E6E6E6",
-  "border-input": "#8A8A8A",
-  "text": "#111111",
-  "text-muted": "#5E5E5E",
-  "accent": "#111111",
-  "accent-soft": "#F0F0F0",
-  "on-accent": "#FFFFFF",
-  "highlight": "#7A5A00",
-  "highlight-soft": "#F6F0E0",
-  "danger": "#B42318",
-  "danger-soft": "#FBEAE8",
-  "success": "#1E6B3A",
-  "success-soft": "#E8F3EC",
-  "warning": "#8A5300",
-  "warning-soft": "#F8EEDC",
-  "focus": "#1F5FD1",
-  "kind-product": "#6E5A2E",
-  "kind-product-soft": "#F3F3F1",
-  "kind-place": "#7A4636",
-  "kind-place-soft": "#F3F3F1",
-  "kind-recipe": "#4F5E2C",
-  "kind-recipe-soft": "#F3F3F1",
-  "kind-video": "#6A4462",
-  "kind-video-soft": "#F3F3F1",
-  "kind-article": "#3F5268",
-  "kind-article-soft": "#F3F3F1",
-  "kind-workout": "#2F5E5C",
-  "kind-workout-soft": "#F3F3F1",
-  "kind-film": "#4E4B72",
-  "kind-film-soft": "#F3F3F1",
-  "kind-book": "#61493E",
-  "kind-book-soft": "#F3F3F1",
-  "kind-link": "#5E5E5E",
-  "kind-link-soft": "#F3F3F1"
+  "bg": "#1B1A17",
+  "surface": "#26241F",
+  "surface-2": "#302D27",
+  "border": "#46413A",
+  "border-input": "#CFC6B4",
+  "line": "#FFF7E8",
+  "text": "#FFF7E8",
+  "text-muted": "#CFC6B4",
+  "accent": "#FFC23D",
+  "accent-soft": "#3D3320",
+  "on-accent": "#16130F",
+  "highlight": "#FFC23D",
+  "highlight-soft": "#3D3320",
+  "danger": "#FF8E78",
+  "danger-soft": "#40241D",
+  "success": "#A9DB52",
+  "success-soft": "#283219",
+  "warning": "#FFC23D",
+  "warning-soft": "#3D3320",
+  "focus": "#FFC23D",
+  "kind-product": "#FFC23D",
+  "kind-product-soft": "#564726",
+  "kind-product-fill": "#FFC23D",
+  "kind-place": "#4BB7AA",
+  "kind-place-soft": "#223F38",
+  "kind-place-fill": "#12A08F",
+  "kind-recipe": "#FF8266",
+  "kind-recipe-soft": "#563024",
+  "kind-recipe-fill": "#FF5A36",
+  "kind-video": "#FF85BC",
+  "kind-video-soft": "#563740",
+  "kind-video-fill": "#FF7AB6",
+  "kind-article": "#FF9A3D",
+  "kind-article-soft": "#563E26",
+  "kind-article-fill": "#FF9A3D",
+  "kind-workout": "#9BD13B",
+  "kind-workout-soft": "#404A25",
+  "kind-workout-fill": "#9BD13B",
+  "kind-film": "#B19AF5",
+  "kind-film-soft": "#40384D",
+  "kind-film-fill": "#9B7DF2",
+  "kind-book": "#66B0FF",
+  "kind-book-soft": "#2F4050",
+  "kind-book-fill": "#4DA3FF",
+  "kind-link": "#E2D3B5",
+  "kind-link-soft": "#4F4A40",
+  "kind-link-fill": "#E2D3B5",
+  "on-kind-fill": "#16130F"
  },
  "pairs": [
   [
@@ -205,31 +216,78 @@
   [
    "kind-link",
    "surface"
+  ],
+  [
+   "line",
+   "bg",
+   "ui"
+  ],
+  [
+   "line",
+   "surface",
+   "ui"
+  ],
+  [
+   "on-kind-fill",
+   "kind-product-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-place-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-recipe-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-video-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-article-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-workout-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-film-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-book-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-link-fill"
   ]
  ],
  "display": {
-  "font": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
-  "weight": 500,
-  "tracking": "-0.01em",
-  "ios": "default design, medium"
+  "font": "'Bricolage Grotesque', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif",
+  "weight": 800,
+  "tracking": "-0.02em",
+  "stretch": "100%",
+  "ios": "Bricolage Grotesque ExtraBold (bundled), SF Pro Rounded body"
  },
  "radius": {
-  "xs": 2,
-  "sm": 4,
-  "md": 6,
-  "lg": 8,
-  "xl": 12,
+  "xs": 6,
+  "sm": 12,
+  "md": 18,
+  "lg": 22,
+  "xl": 28,
   "pill": 999
  },
  "shadow": {
-  "card": "0 0 0 1px #E6E6E6",
-  "raised": "0 0 0 1px #E6E6E6, 0 4px 16px rgba(0,0,0,.06)",
-  "overlay": "0 0 0 1px #E6E6E6, 0 12px 40px rgba(0,0,0,.12)"
+  "card": "3px 3px 0 #000000",
+  "raised": "5px 5px 0 #000000",
+  "overlay": "8px 8px 0 #000000"
  },
  "font": {
-  "display": "ui-serif, \"New York\", \"Iowan Old Style\", \"Palatino Linotype\", Georgia, serif",
-  "sans": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
-  "mono": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+  "display": "'Bricolage Grotesque', ui-rounded, 'SF Pro Rounded', system-ui, sans-serif",
+  "sans": "Nunito, ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', sans-serif",
+  "mono": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
  },
  "type": {
   "caption": {
@@ -306,7 +364,7 @@
  "size": {
   "target-min-ios": 44,
   "target-min-web": 32,
-  "popup-width": 380,
+  "popup-width": 400,
   "sidebar": 248,
   "content-max": 1240,
   "card-min": 220
@@ -318,5 +376,6 @@
   "ease": "cubic-bezier(.2,.7,.2,1)",
   "ios-spring": "spring(response 0.35, damping 0.86)",
   "reduced": "opacity cross-fade only"
- }
+ },
+ "stroke": 2.5
 }

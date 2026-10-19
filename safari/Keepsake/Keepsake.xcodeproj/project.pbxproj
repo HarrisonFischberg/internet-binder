@@ -22,6 +22,7 @@
 		846E4DCE3082138200BA0257 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DC73082138200BA0257 /* background.js */; };
 		846E4DCF3082138200BA0257 /* PRIVACY.md in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DC83082138200BA0257 /* PRIVACY.md */; };
 		846E4DD03082138200BA0257 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DC93082138200BA0257 /* icons */; };
+		67BF4C79E6A18B25F18F5579 /* fonts in Resources */ = {isa = PBXBuildFile; fileRef = 355409EACB707643FA01BC10 /* fonts */; };
 		846E4DD13082138200BA0257 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DCA3082138200BA0257 /* manifest.json */; };
 		846E4DD23082138200BA0257 /* vendor in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DCB3082138200BA0257 /* vendor */; };
 		846E4DD33082138200BA0257 /* src in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DCC3082138200BA0257 /* src */; };
@@ -68,6 +69,7 @@
 		846E4DC73082138200BA0257 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = ../../dist/background.js; sourceTree = "<group>"; };
 		846E4DC83082138200BA0257 /* PRIVACY.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = PRIVACY.md; path = ../../dist/PRIVACY.md; sourceTree = "<group>"; };
 		846E4DC93082138200BA0257 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = ../../dist/icons; sourceTree = "<group>"; };
+		355409EACB707643FA01BC10 /* fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = fonts; path = ../../dist/fonts; sourceTree = "<group>"; };
 		846E4DCA3082138200BA0257 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../dist/manifest.json; sourceTree = "<group>"; };
 		846E4DCB3082138200BA0257 /* vendor */ = {isa = PBXFileReference; lastKnownFileType = folder; name = vendor; path = ../../dist/vendor; sourceTree = "<group>"; };
 		846E4DCC3082138200BA0257 /* src */ = {isa = PBXFileReference; lastKnownFileType = folder; name = src; path = ../../dist/src; sourceTree = "<group>"; };
@@ -147,6 +149,7 @@
 				846E4DC73082138200BA0257 /* background.js */,
 				846E4DC83082138200BA0257 /* PRIVACY.md */,
 				846E4DC93082138200BA0257 /* icons */,
+				355409EACB707643FA01BC10 /* fonts */,
 				846E4DCA3082138200BA0257 /* manifest.json */,
 				846E4DCB3082138200BA0257 /* vendor */,
 				846E4DCC3082138200BA0257 /* src */,
@@ -250,6 +253,7 @@
 				846E4DD23082138200BA0257 /* vendor in Resources */,
 				846E4DCE3082138200BA0257 /* background.js in Resources */,
 				846E4DD03082138200BA0257 /* icons in Resources */,
+				67BF4C79E6A18B25F18F5579 /* fonts in Resources */,
 				846E4DD13082138200BA0257 /* manifest.json in Resources */,
 				846E4DCD3082138200BA0257 /* LICENSE in Resources */,
 				846E4DD33082138200BA0257 /* src in Resources */,

@@ -51,25 +51,36 @@ const CAPTURE_STATES = ['pending', 'complete', 'failed'];
 export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024, maxGoals: 2000, maxCheckins: 50000, maxCheckinsPerGoal: 2000 };
 
 // Styles a person can pick in Settings → Appearance. The first is the default.
+// `about` and `swatch` (page, card, accent, a kind colour) are for the picker in Settings.
 export const STYLES = [
-  { value: 'modern', label: 'Modern' },
-  { value: 'moss', label: 'Moss' },
-  { value: 'minimal', label: 'Minimalist' },
+  { value: 'pantry', label: 'Pantry Pop', about: 'Bold outlines, hard shadows, a bright colour per kind.', swatch: ['#FFF7E8', '#FFFFFF', '#FFC23D', '#FF5A36'] },
+  { value: 'notebook', label: 'Field Notebook', about: 'Graph paper, serif names, a highlighter swipe.', swatch: ['#F6F2E7', '#FFFDF7', '#F7EBA8', '#A63A28'] },
+  { value: 'gallery', label: 'Gallery', about: 'White walls, big serif titles, photos first.', swatch: ['#FFFFFF', '#F6F6F4', '#111111', '#E4E4E4'] },
+  { value: 'atlas', label: 'Night Atlas', about: 'Dark panels, lamp-lit photos, one amber action.', swatch: ['#0B0F17', '#1B2433', '#FFB547', '#6FE3E8'] },
+  { value: 'swiss', label: 'Swiss Index', about: 'Hairlines, condensed type, one signal red.', swatch: ['#FAFAF7', '#FFFFFF', '#CC2A1E', '#0A0A0A'] },
 ];
 
-// Sets data-style / data-theme on <html> (or any element) from settings. Modern needs no attribute.
+// App icons for the toolbar (Settings → Appearance). Felt pocket is the original icon and the default.
+export const ICONS = [
+  { value: 'pocket', label: 'Felt pocket' },
+  ...STYLES.map((s) => ({ value: s.value, label: s.label })),
+];
+
+// Sets data-style / data-theme on <html> (or any element) from settings. Pantry Pop needs no attribute.
+// Styles from before 1.5 (modern, moss, minimal) fall back to the default.
 export function applyLook(node, settings) {
   const theme = settings?.theme || 'system';
-  const style = STYLES.some((s) => s.value === settings?.style) ? settings.style : 'modern';
+  const style = STYLES.some((s) => s.value === settings?.style) ? settings.style : STYLES[0].value;
   if (theme === 'light' || theme === 'dark') node.dataset.theme = theme;
   else delete node.dataset.theme;
-  if (style === 'modern') delete node.dataset.style;
+  if (style === STYLES[0].value) delete node.dataset.style;
   else node.dataset.style = style;
 }
 
 export const DEFAULT_SETTINGS = {
   theme: 'system', // system | light | dark
-  style: 'modern', // modern | moss | minimal: the look, per device (see src/shared/tokens.css)
+  style: 'pantry', // pantry | notebook | gallery | atlas | swiss: the look, per device (see src/shared/tokens.css)
+  icon: 'pocket', // toolbar icon: pocket or a style id (see ICONS and src/toolbar/icon.js)
   home: { comeBack: true }, // Home's "Come back to": saves not opened in 6+ weeks (worked out on this device)
   // Lookups (off until turned on, each needs its site granted): fill in places (OpenStreetMap), films and
   // shows (Wikidata) and books (Open Library) from free public sources. See src/shared/lookups.js.

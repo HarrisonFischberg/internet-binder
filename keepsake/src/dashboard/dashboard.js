@@ -12,7 +12,7 @@ import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { searchItems } from '../shared/search.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { placeState, placeReviewReasons } from '../shared/places.js';
-import { followColorScheme } from '../toolbar/icon.js';
+import { followColorScheme, setActionIcon } from '../toolbar/icon.js';
 import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '../shared/goals.js';
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
@@ -148,6 +148,7 @@ function sortCollections(list) {
 function applyTheme() {
   const theme = state.settings?.theme || 'system';
   applyLook(document.documentElement, state.settings);
+  setActionIcon(state.settings?.icon);
   const btn = $('themeToggle');
   if (btn) btn.title = `Theme: ${theme}`;
 }
@@ -2562,7 +2563,7 @@ async function openItem(id) {
   renderKindPanel();
 
   await UI.openModal({
-    title: 'Item details',
+    title: 'Edit save',
     body,
     wide: true,
     actions: [

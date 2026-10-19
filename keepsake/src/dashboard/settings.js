@@ -1,6 +1,7 @@
 // Settings, Optional AI and Privacy views for the dashboard.
 
-import { LIMITS, STYLES } from '../shared/storage.js';
+import { LIMITS, STYLES, ICONS } from '../shared/storage.js';
+import { iconPath } from '../toolbar/icon.js';
 import { MSG } from '../shared/messages.js';
 import { el, clear, pluralize } from '../shared/util.js';
 import { originPattern, hostFromPattern } from '../shared/url.js';
@@ -64,10 +65,75 @@ export function renderSettings(ctx, view) {
 function appearanceSection(ctx) {
   const s = ctx.state.settings;
   return UI.section('Appearance', '', [
-    UI.settingRow('Style', UI.selectInput({ value: s.style || 'modern', options: STYLES, onChange: (v) => ctx.store.updateSettings({ style: v }), label: 'Style' }), 'Modern is crisp and cool, Moss is the original warm Keepsake look, Minimalist is black and white. Applies to the popup, the dashboard and the save card on pages.'),
+    el('div', { class: 'look-picker-block' }, [
+      el('div', { class: 'setting-label', id: 'styleLabel' }, ['Style']),
+      el('div', { class: 'help' }, ['Applies to the popup, the dashboard and the save card on pages.']),
+      lookPicker({ label: 'styleLabel', value: STYLES.some((x) => x.value === s.style) ? s.style : STYLES[0].value, options: STYLES, onChange: (v) => ctx.store.updateSettings({ style: v }), face: styleFace }),
+    ]),
+    el('div', { class: 'look-picker-block' }, [
+      el('div', { class: 'setting-label', id: 'iconLabel' }, ['Toolbar icon']),
+      el('div', { class: 'help' }, ['The Keepsake button in your browser’s toolbar. Each icon has a light and a dark version.']),
+      lookPicker({ label: 'iconLabel', value: ICONS.some((x) => x.value === s.icon) ? s.icon : ICONS[0].value, options: ICONS, onChange: (v) => ctx.store.updateSettings({ icon: v }), face: iconFace }),
+    ]),
     UI.settingRow('Theme', UI.selectInput({ value: s.theme || 'system', options: [{ value: 'system', label: 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], onChange: (v) => ctx.store.updateSettings({ theme: v }), label: 'Theme' }), 'Also toggled from the sun icon in the toolbar.'),
     UI.settingRow('Show “Come back to” on Home', UI.switchInput({ checked: s.home?.comeBack !== false, onChange: (v) => ctx.store.updateSettings({ home: { ...(s.home || {}), comeBack: v } }), label: 'Show Come back to on Home' }), 'Saves you haven’t finished or opened for six weeks, worked out on this device.'),
     UI.settingRow('Keyboard shortcut', el('span', {}, [el('span', { class: 'kbd' }, ['Alt']), ' + ', el('span', { class: 'kbd' }, ['Shift']), ' + ', el('span', { class: 'kbd' }, ['K'])]), 'Opens Keepsake for the current page. Change it at chrome://extensions/shortcuts.'),
+  ]);
+}
+
+// A row of cards to pick one look from (radio group, arrow keys move the choice).
+function lookPicker({ label, value, options, onChange, face }) {
+  const group = el('div', { class: 'look-picker', role: 'radiogroup', 'aria-labelledby': label });
+  const cards = options.map((o) => {
+    const on = o.value === value;
+    const card = el('button', { type: 'button', class: `look-card ${on ? 'on' : ''}`, role: 'radio', 'aria-checked': on ? 'true' : 'false', tabindex: on ? '0' : '-1', 'data-value': o.value }, [
+      face(o),
+      el('span', { class: 'look-name' }, [o.label]),
+      o.about ? el('span', { class: 'look-about' }, [o.about]) : null,
+    ]);
+    card.addEventListener('click', () => pick(o.value));
+    return card;
+  });
+  const pick = (v) => {
+    for (const c of cards) {
+      const on = c.dataset.value === v;
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-checked', on ? 'true' : 'false');
+      c.tabIndex = on ? 0 : -1;
+    }
+    onChange(v);
+  };
+  group.addEventListener('keydown', (ev) => {
+    const i = cards.indexOf(document.activeElement);
+    if (i < 0) return;
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[ev.key];
+    if (!step) return;
+    ev.preventDefault();
+    const next = cards[(i + step + cards.length) % cards.length];
+    next.focus();
+    pick(next.dataset.value);
+  });
+  group.append(...cards);
+  return group;
+}
+
+// A tiny page in the style's own colours: page, a card, the accent and a kind colour.
+function styleFace(o) {
+  const face = el('span', { class: 'look-face', 'aria-hidden': 'true' }, [
+    el('span', { class: 'look-face-card' }, [el('span', { class: 'look-face-dot' }), el('span', { class: 'look-face-bar' })]),
+  ]);
+  const [page, card, accent, kind] = o.swatch;
+  face.style.setProperty('--sw-page', page);
+  face.style.setProperty('--sw-card', card);
+  face.style.setProperty('--sw-accent', accent);
+  face.style.setProperty('--sw-kind', kind);
+  return face;
+}
+
+function iconFace(o) {
+  return el('span', { class: 'look-face look-face-icon', 'aria-hidden': 'true' }, [
+    el('img', { src: iconPath(o.value, 'light', 128), alt: '' }),
+    el('img', { src: iconPath(o.value, 'dark', 128), alt: '' }),
   ]);
 }
 

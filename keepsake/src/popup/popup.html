@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <title>Keepsake</title>
+  <link rel="stylesheet" href="../shared/fonts.css" />
   <link rel="stylesheet" href="../shared/tokens.css" />
   <link rel="stylesheet" href="../shared/base.css" />
   <link rel="stylesheet" href="popup.css" />
+  <link rel="stylesheet" href="../shared/looks.css" />
 </head>
 <body>
   <header class="topbar">
@@ -159,13 +161,13 @@
           <span id="dupText" class="small"></span>
         </div>
         <div class="dup-actions">
-          <button class="btn btn-sm btn-primary" id="dupUpdate" type="button">Update existing item</button>
+          <button class="btn btn-sm btn-primary" id="dupUpdate" type="button">Update the saved one</button>
           <button class="btn btn-sm" id="dupCopy" type="button">Save another copy</button>
         </div>
       </div>
 
       <div class="actions" id="saveActions">
-        <button class="btn btn-primary btn-save" id="saveBtn" type="button">Save item</button>
+        <button class="btn btn-primary btn-save" id="saveBtn" type="button">Save</button>
       </div>
       <p class="notice notice-danger hidden" id="saveError" role="alert"></p>
     </section>

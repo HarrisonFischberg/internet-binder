@@ -1,7 +1,8 @@
 /* Keepsake shared tokens + base styles (popup and dashboard). */
 
 /* The colour, shape, type and motion values come from tokens.css (generated from the design
-   tokens: Modern, Moss and Minimalist, each light and dark; loaded before this file). These
+   tokens: Pantry Pop, Field Notebook, Gallery, Night Atlas and Swiss Index, each light and dark; loaded
+   before this file; looks.css adds each style's details after the page's own CSS). These
    names are the ones the existing components use; they now point at the token roles, so the
    Style setting (data-style on <html>) and the theme (data-theme) restyle every page at once. */
 :root {
@@ -509,13 +510,7 @@ button {
   flex: none;
 }
 
-/* Minimalist: the bookmark alone, drawn as a line in the text colour, with no tile. */
-:root[data-style="minimal"] .mark {
-  background: transparent;
-  color: var(--c-text);
-}
-
-:root[data-style="minimal"] .mark svg {
+.mark svg {
   width: 20px;
   height: 20px;
 }

@@ -1,45 +1,56 @@
 {
- "_about": "Keepsake tokens, style modern, dark. Role names are identical across styles. Check: python3 contrast.py <file>",
- "style": "modern",
+ "_about": "Keepsake tokens, style atlas (Night Atlas), dark. Role names are identical across styles. Contrast is checked by tests/design-tokens.test.mjs.",
+ "style": "atlas",
  "mode": "dark",
  "color": {
-  "bg": "#0D0F13",
-  "surface": "#16191F",
-  "surface-2": "#1F232B",
-  "border": "#2A2F39",
-  "border-input": "#737B89",
-  "text": "#EEF0F4",
-  "text-muted": "#A3AAB7",
-  "accent": "#7C9BFF",
-  "accent-soft": "#1C2643",
-  "on-accent": "#0B1020",
-  "highlight": "#F5B54A",
-  "highlight-soft": "#33270F",
+  "bg": "#0B0F17",
+  "surface": "#141B27",
+  "surface-2": "#1B2433",
+  "border": "#263043",
+  "border-input": "#6D7A8E",
+  "line": "#263043",
+  "text": "#EEF1F6",
+  "text-muted": "#A3AEBF",
+  "accent": "#FFB547",
+  "accent-soft": "#33281A",
+  "on-accent": "#1A1204",
+  "highlight": "#FFC266",
+  "highlight-soft": "#33281A",
   "danger": "#FF8A80",
-  "danger-soft": "#3A1A1A",
-  "success": "#5FD39A",
-  "success-soft": "#12301F",
-  "warning": "#F2B451",
-  "warning-soft": "#33260F",
-  "focus": "#7C9BFF",
-  "kind-product": "#F5B54A",
-  "kind-product-soft": "#33270F",
-  "kind-place": "#FF8F7A",
-  "kind-place-soft": "#3A1D18",
-  "kind-recipe": "#A3D65C",
-  "kind-recipe-soft": "#22301A",
-  "kind-video": "#E58BF0",
-  "kind-video-soft": "#33193A",
-  "kind-article": "#7FB2FF",
-  "kind-article-soft": "#172A45",
-  "kind-workout": "#4FD1C9",
-  "kind-workout-soft": "#11302E",
-  "kind-film": "#A797FF",
-  "kind-film-soft": "#241F45",
-  "kind-book": "#E3A578",
-  "kind-book-soft": "#36241A",
-  "kind-link": "#A3AAB7",
-  "kind-link-soft": "#1F232B"
+  "danger-soft": "#3A1C1E",
+  "success": "#9BE58A",
+  "success-soft": "#1C2E22",
+  "warning": "#FFC266",
+  "warning-soft": "#33281A",
+  "focus": "#6FE3E8",
+  "kind-product": "#FFC266",
+  "kind-product-soft": "#433C34",
+  "kind-product-fill": "#433C34",
+  "kind-place": "#6FE3E8",
+  "kind-place-soft": "#26434E",
+  "kind-place-fill": "#26434E",
+  "kind-recipe": "#FF9F7A",
+  "kind-recipe-soft": "#433538",
+  "kind-recipe-fill": "#433538",
+  "kind-video": "#FF8FB1",
+  "kind-video-soft": "#433243",
+  "kind-video-fill": "#433243",
+  "kind-article": "#E3D7BE",
+  "kind-article-soft": "#3D4145",
+  "kind-article-fill": "#3D4145",
+  "kind-workout": "#9BE58A",
+  "kind-workout-soft": "#2F433B",
+  "kind-workout-fill": "#2F433B",
+  "kind-film": "#8FB3FF",
+  "kind-film-soft": "#2D3952",
+  "kind-film-fill": "#2D3952",
+  "kind-book": "#C9A7FF",
+  "kind-book-soft": "#383752",
+  "kind-book-fill": "#383752",
+  "kind-link": "#A3AEBF",
+  "kind-link-soft": "#313845",
+  "kind-link-fill": "#313845",
+  "on-kind-fill": "#EEF1F6"
  },
  "pairs": [
   [
@@ -205,31 +216,68 @@
   [
    "kind-link",
    "surface"
+  ],
+  [
+   "on-kind-fill",
+   "kind-product-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-place-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-recipe-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-video-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-article-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-workout-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-film-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-book-fill"
+  ],
+  [
+   "on-kind-fill",
+   "kind-link-fill"
   ]
  ],
  "display": {
-  "font": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
-  "weight": 700,
+  "font": "'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif",
+  "weight": 600,
   "tracking": "-0.02em",
-  "ios": "default design, bold"
+  "stretch": "100%",
+  "ios": "SF Pro Display semibold, SF Mono for coordinates"
  },
  "radius": {
   "xs": 4,
   "sm": 8,
   "md": 12,
   "lg": 16,
-  "xl": 24,
+  "xl": 22,
   "pill": 999
  },
  "shadow": {
-  "card": "0 0 0 1px rgba(255,255,255,.06)",
-  "raised": "0 8px 24px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06)",
-  "overlay": "0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.08)"
+  "card": "0 1px 0 rgba(255,255,255,.04) inset, 0 18px 40px rgba(0,0,0,.35)",
+  "raised": "0 18px 40px rgba(0,0,0,.45)",
+  "overlay": "0 30px 70px rgba(0,0,0,.6)"
  },
  "font": {
-  "display": "ui-serif, \"New York\", \"Iowan Old Style\", \"Palatino Linotype\", Georgia, serif",
-  "sans": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif",
-  "mono": "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+  "display": "'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif",
+  "sans": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  "mono": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
  },
  "type": {
   "caption": {
@@ -306,7 +354,7 @@
  "size": {
   "target-min-ios": 44,
   "target-min-web": 32,
-  "popup-width": 380,
+  "popup-width": 400,
   "sidebar": 248,
   "content-max": 1240,
   "card-min": 220
@@ -318,5 +366,6 @@
   "ease": "cubic-bezier(.2,.7,.2,1)",
   "ios-spring": "spring(response 0.35, damping 0.86)",
   "reduced": "opacity cross-fade only"
- }
+ },
+ "stroke": 1
 }
