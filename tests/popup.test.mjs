@@ -32,6 +32,8 @@ async function openPopup(product) {
   window.matchMedia = window.matchMedia || (() => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
   globalThis.matchMedia = window.matchMedia;
   window.chrome = F.chrome;
+  window.eval(readFileSync(new URL('src/instagram/adapter.js', ROOT), 'utf8'));
+  globalThis.KeepsakeInstagram = window.KeepsakeInstagram;
   await import(`../keepsake/src/popup/popup.js?run=${++runs}`);
   page = window.document;
   await ready();
@@ -130,4 +132,28 @@ test('popup: an Instagram post with 📍 in its caption is saved as a place, nam
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const saved = await createStore(chromeBackend(), idbBackend()).findByUrl(post.url);
   assert.deepEqual([saved.kind, saved.title, saved.details.locality], ['place', 'Peter Pan Donut & Pastry Shop', 'Greenpoint']);
+});
+
+test('popup: the Saved overview asks for instagram.com access up front, and the hint goes once it is granted', async () => {
+  F.state.granted = F.state.granted.filter((o) => !/instagram|\*:\/\/\*\//.test(o));
+  await openPopup({ title: 'Saved', url: 'https://www.instagram.com/someone/saved/', images: [], image: '', price: null, schemaTypes: [] });
+  assert.ok(visible('igAccess'), 'the hint shows on the overview');
+  assert.match(page.getElementById('igAccess').textContent, /doesn’t have access to instagram\.com/);
+  const realRequest = F.chrome.permissions.request;
+  F.chrome.permissions.request = async () => false;
+  try {
+    page.querySelector('#igAccess button').click();
+    await settle(50);
+    assert.match(page.getElementById('igAccess').textContent, /Access wasn’t granted\. To allow it yourself: right-click the Keepsake icon/);
+  } finally {
+    F.chrome.permissions.request = realRequest;
+  }
+  page.querySelector('#igAccess button').click();
+  await settle(50);
+  assert.equal(page.getElementById('igAccess'), null, 'granted, so the hint is gone');
+  assert.ok(F.state.granted.includes('https://www.instagram.com/*'));
+  // With access already granted, the overview opens without the hint.
+  await openPopup({ title: 'Saved', url: 'https://www.instagram.com/someone/saved/', images: [], image: '', price: null, schemaTypes: [] });
+  assert.equal(page.getElementById('igAccess'), null);
+  F.state.granted = F.state.granted.filter((o) => o !== 'https://www.instagram.com/*');
 });

@@ -17,10 +17,20 @@ export async function hasInstagramAccess() {
   try {
     const p = await chrome.permissions.getAll();
     const o = p.origins || [];
-    return o.includes(INSTAGRAM_ORIGIN) || o.includes('*://www.instagram.com/*') || o.includes('*://*.instagram.com/*') || o.includes('*://*/*') || o.includes('<all_urls>');
+    if (o.includes(INSTAGRAM_ORIGIN) || o.includes('*://www.instagram.com/*') || o.includes('*://*.instagram.com/*') || o.includes('*://*/*') || o.includes('<all_urls>')) return true;
+    // Safari grants sites from its own settings and may not list them in getAll().
+    return await chrome.permissions.contains({ origins: [INSTAGRAM_ORIGIN] });
   } catch {
     return false;
   }
+}
+
+// Where to allow the site by hand when the browser won't show its prompt (or it was declined).
+export function instagramAccessHelp() {
+  const safari = typeof location !== 'undefined' && location.protocol === 'safari-web-extension:';
+  return safari
+    ? 'To allow it yourself: Safari → Settings → Extensions → Keepsake → Edit Websites…, then set instagram.com to Allow.'
+    : 'To allow it yourself: right-click the Keepsake icon → Manage extension → Site access, and add https://www.instagram.com.';
 }
 
 export async function requestInstagramAccess() {

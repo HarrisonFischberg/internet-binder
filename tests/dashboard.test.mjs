@@ -720,6 +720,32 @@ test('Instagram import: already-saved posts are skipped; without instagram.com a
   }
 });
 
+test('Settings: instagram.com access has a Grant access button that asks the browser, explains where to allow it if declined, and flips to Granted', async () => {
+  const row = () => [...view().querySelectorAll('.setting-row, .row, div')].reverse().find((n) => /^instagram\.com access/.test(n.textContent.trim()) && n.querySelector('button'));
+  const button = (label) => [...row().querySelectorAll('button')].find((b) => b.textContent === label);
+  await chrome.permissions.remove({ origins: ['https://www.instagram.com/*'] });
+  const realRequest = chrome.permissions.request;
+  chrome.permissions.request = async () => false;
+  try {
+    await go('#settings');
+    await settle();
+    assert.match(row().textContent, /Not granted/);
+    button('Grant access').click();
+    await settle();
+    assert.match(window.document.body.textContent, /instagram\.com access wasn’t granted\. To allow it yourself/);
+    assert.match(row().textContent, /Not granted/);
+  } finally {
+    chrome.permissions.request = realRequest;
+  }
+  button('Grant access').click();
+  await settle();
+  assert.match(row().textContent, /Granted/);
+  assert.doesNotMatch(row().textContent, /Not granted/);
+  button('Revoke').click();
+  await settle();
+  assert.match(row().textContent, /Not granted/);
+});
+
 test('background checks: a progress bar under the header with Stop, then what changed; Check with AI only where saves are, with AI on', async () => {
   const bar = () => window.document.getElementById('jobbar');
   await chrome.storage.session.set({ keepsake_fillJob: { id: 'job1', label: 'Fixing places with AI', total: 52, done: 12, ready: 7, changed: 9, running: true, stopped: false, finishedAt: '' } });
