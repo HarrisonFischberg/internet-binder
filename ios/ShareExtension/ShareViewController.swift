@@ -102,7 +102,11 @@ final class ShareState {
         return d.group == "lifestyle" ? .lifestyle : .collections
     }
 
-    func groups(_ shelf: Shelf) -> [Destination] { destinations.filter { $0.group == (shelf == .lifestyle ? "lifestyle" : "collection") } }
+    /// One library's groups, most saves first (a tie A–Z), as in the app.
+    func groups(_ shelf: Shelf) -> [Destination] {
+        destinations.filter { $0.group == (shelf == .lifestyle ? "lifestyle" : "collection") }
+            .mostFirst(count: { members($0).count }, name: \.label)
+    }
 
     /// What's already in a group (not counting this save), for its tile.
     func members(_ d: Destination) -> [Save] {

@@ -580,6 +580,39 @@ test('Collections fold: closed, only pinned collections (and the one you’re on
   await afterChange();
 });
 
+test('groups sort by size: the Lifestyle menu and the sidebar collections list most saves first, a tie A–Z', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const { kindOf, LIFESTYLE } = await import('../keepsake/src/shared/kinds.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  await go('#home');
+  const live = (await store.getItems()).filter((i) => !i.purchased);
+  const bySize = (rows) => rows.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { sensitivity: 'base', numeric: true })).map((r) => r[0]);
+  const kinds = [...window.document.querySelectorAll('#navKinds .nav-item span:not(.count):not(.kind-icon)')].map((n) => n.textContent).filter(Boolean);
+  assert.deepEqual(kinds, bySize(LIFESTYLE().map((k) => [k.plural, live.filter((i) => kindOf(i) === k.value).length])));
+  const cols = (await store.getCollections()).filter((c) => !c.pinned);
+  const names = [...window.document.querySelectorAll('#collectionList .collection-item:not(.collection-all) .collection-name')].map((n) => n.textContent);
+  assert.deepEqual(names, bySize(cols.map((c) => [c.name, live.filter((i) => i.collectionId === c.id).length])).slice(0, names.length));
+  await go('#collections');
+  assert.equal(view().querySelector('select[aria-label="Sort collections"]').value, 'size', 'All collections opens on Most saves');
+});
+
+test('Refresh: the toolbar button and ⌘R read the library again and redraw in place', async () => {
+  await go('#all');
+  const btn = window.document.getElementById('refreshBtn');
+  assert.ok(btn, 'a Refresh button in the toolbar');
+  const ev = new window.KeyboardEvent('keydown', { key: 'r', code: 'KeyR', metaKey: true, bubbles: true, cancelable: true });
+  window.document.dispatchEvent(ev);
+  assert.equal(ev.defaultPrevented, true, '⌘R is handled by the page');
+  await settle();
+  assert.match(window.document.body.textContent, /Refreshed/);
+  const hard = new window.KeyboardEvent('keydown', { key: 'R', code: 'KeyR', metaKey: true, shiftKey: true, bubbles: true, cancelable: true });
+  window.document.dispatchEvent(hard);
+  assert.equal(hard.defaultPrevented, false, '⇧⌘R is left to the browser');
+  btn.click();
+  await settle();
+  assert.equal(window.location.hash, '#all', 'stays where you were');
+});
+
 test('Privacy lives in Settings as a dialog; the menu has no Privacy row; Trash is last', async () => {
   assert.ok(!window.document.querySelector('.sidebar a[href="#privacy"]'));
   const tools = [...window.document.querySelectorAll('.nav-bottom .nav-item')].map((a) => a.textContent.trim().replace(/\d+$/, ''));

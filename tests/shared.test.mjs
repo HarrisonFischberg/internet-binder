@@ -161,3 +161,11 @@ test('collection name similarity', () => {
   assert.equal(normalizeName('Home Décor'), 'home decor');
   assert.ok(findSimilarCollection('home decor', starter()));
 });
+
+test('mostFirst: most saves first, a tie A–Z (case and numbers read naturally)', async () => {
+  const { mostFirst } = await import('../keepsake/src/shared/util.js');
+  const rows = [['tools', 2], ['Kitchen', 5], ['Bags 10', 2], ['Bags 9', 2], ['Art', 0]];
+  const input = [...rows];
+  assert.deepEqual(mostFirst(rows, (r) => r[1], (r) => r[0]).map((r) => r[0]), ['Kitchen', 'Bags 9', 'Bags 10', 'tools', 'Art']);
+  assert.deepEqual(rows, input, 'leaves the list it was given alone');
+});

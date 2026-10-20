@@ -4,7 +4,7 @@
 
 import { createStore, chromeBackend, idbBackend, TRASH_DAYS, applyLook } from '../shared/storage.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
-import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer } from '../shared/util.js';
+import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer, mostFirst } from '../shared/util.js';
 import { classify, nearMatchCollection } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
 import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection, hasOwnView, LIFESTYLE, kindChangePatch, shoppingKindFor, detailsForKind } from '../shared/kinds.js';
@@ -42,7 +42,7 @@ const state = {
   retailer: '',
   sourceType: '',
   colSearch: '',
-  colSort: 'recent',
+  colSort: 'size',
   topic: '',
   kinds: new Set(),
   status: '',
@@ -143,6 +143,23 @@ async function reload() {
   for (const id of [...state.selected]) if (!data.items[id]) state.selected.delete(id);
 }
 
+let refreshing = false;
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  const btn = $('refreshBtn');
+  btn?.classList.add('is-spinning');
+  try {
+    await reload();
+    applyTheme();
+    render({ keepScroll: true });
+    UI.toast('Refreshed', { duration: 1200 });
+  } finally {
+    refreshing = false;
+    setTimeout(() => btn?.classList.remove('is-spinning'), 400);
+  }
+}
+
 function sortCollections(list) {
   return list.sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
 }
@@ -203,6 +220,14 @@ function bindChrome() {
     e.preventDefault();
     if (!isGridRoute()) navigate('#all');
     $('searchInput').focus();
+  });
+  // Refresh (the button, or ⌘R / Ctrl+R): read the library again and redraw this view in place, keeping
+  // where you are. Safari may reload the whole page on ⌘R itself, which lands in the same place.
+  $('refreshBtn').addEventListener('click', () => refresh());
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.code !== 'KeyR') return;
+    e.preventDefault();
+    refresh();
   });
   $('selectToggle').addEventListener('click', () => (state.selecting ? exitSelection(true) : enterSelection()));
   $('aiCheck').addEventListener('click', () => checkWithAI());
@@ -307,10 +332,12 @@ function renderKindNav(live) {
   if (!box) return;
   clear(box);
   // Every Lifestyle view is listed, so you can see what Keepsake can hold; empty ones are dimmed.
+  // Most saves first (a tie A–Z), so the views you use most sit at the top.
+  const counts = new Map();
+  for (const i of live) counts.set(kindOf(i), (counts.get(kindOf(i)) || 0) + 1);
   let shown = 0;
-  for (const k of KINDS) {
-    if (k.value === 'product' || k.value === 'link') continue;
-    const n = live.filter((i) => kindOf(i) === k.value).length;
+  for (const k of mostFirst(LIFESTYLE(), (k) => counts.get(k.value) || 0, (k) => k.plural)) {
+    const n = counts.get(k.value) || 0;
     shown++;
     const active = state.route.name === 'kind' && state.route.id === k.value;
     box.append(el('a', { class: `nav-item ${active ? 'active' : ''} ${n ? '' : 'is-empty'}`, href: `#kind/${k.value}`, 'aria-current': active ? 'page' : null }, [
@@ -347,6 +374,9 @@ function collectionStats() {
   return stats;
 }
 
+// Unpinned collections with the most saves first; a tie goes A–Z.
+const bySize = (list, stats) => mostFirst(list, (c) => stats.get(c.id)?.count || 0, (c) => c.name);
+
 // Unpinned collections, the ones saved into most recently first; collections with
 // nothing in them go last, biggest then A–Z.
 function byRecentActivity(list, stats) {
@@ -365,22 +395,22 @@ const HOME_TILES = 5;
 
 // The sidebar can't list hundreds of collections, so it shows every pinned one, in
 // the order the user dragged them into, then fills up to SIDEBAR_COLLECTIONS with the
-// ones saved into most recently. The open collection is always listed.
+// biggest ones (most saves first). The open collection is always listed.
 function sidebarOrder(stats = collectionStats()) {
   const pinned = state.collections.filter((c) => c.pinned);
   const room = Math.max(0, SIDEBAR_COLLECTIONS - pinned.length);
-  const recent = byRecentActivity(state.collections.filter((c) => !c.pinned), stats).slice(0, room);
+  const recent = bySize(state.collections.filter((c) => !c.pinned), stats).slice(0, room);
   const shown = [...pinned, ...recent];
   const open = state.route.name === 'c' ? ctx.collectionById(state.route.id) : null;
   if (open && !shown.includes(open)) shown.push(open);
   return shown;
 }
 
-// Home's tiles: pinned collections first (up to HOME_TILES), then the ones saved
-// into most recently. Empty unpinned collections are left out; fewer tiles is fine.
+// Home's tiles: pinned collections first (up to HOME_TILES), then the biggest ones.
+// Empty unpinned collections are left out; fewer tiles is fine.
 function homeCollections(stats) {
   const pinned = state.collections.filter((c) => c.pinned).slice(0, HOME_TILES);
-  const recent = byRecentActivity(state.collections.filter((c) => !c.pinned && stats.get(c.id)?.count), stats);
+  const recent = bySize(state.collections.filter((c) => !c.pinned && stats.get(c.id)?.count), stats);
   return [...pinned, ...recent].slice(0, HOME_TILES);
 }
 
@@ -3170,9 +3200,9 @@ function collectionTile(c, stats) {
 // --- all collections ---------------------------------------------------------------------------------
 
 const COLLECTION_SORTS = {
+  size: 'Most saves',
   recent: 'Recently saved to',
   name: 'A–Z',
-  size: 'Most saves',
 };
 
 // Every collection, pinned first. Built for hundreds: a name search, three sorts, and
@@ -3195,8 +3225,8 @@ function renderCollections(view) {
     const pinned = list.filter((c) => c.pinned);
     let rest = list.filter((c) => !c.pinned);
     if (state.colSort === 'name') rest.sort((a, b) => a.name.localeCompare(b.name));
-    else if (state.colSort === 'size') rest.sort((a, b) => (stats.get(b.id)?.count || 0) - (stats.get(a.id)?.count || 0) || a.name.localeCompare(b.name));
-    else rest = byRecentActivity(rest, stats);
+    else if (state.colSort === 'recent') rest = byRecentActivity(rest, stats);
+    else rest = bySize(rest, stats);
     list = [...pinned, ...rest];
     if (!list.length) {
       grid.append(UI.emptyState({ title: 'No matching collections', message: `Nothing is called “${state.colSearch}”.`, icon: UI.folderIcon() }));

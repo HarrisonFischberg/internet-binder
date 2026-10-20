@@ -63,6 +63,16 @@ extension Array {
     }
 }
 
+extension Array {
+    /// Groups (collections, Lifestyle views) with the most saves first; a tie goes A–Z by name, the
+    /// way Chrome sorts them (`mostFirst` in util.js).
+    public func mostFirst(count: (Element) -> Int, name: (Element) -> String) -> [Element] {
+        map { ($0, count($0), name($0)) }
+            .sorted { a, b in a.1 != b.1 ? a.1 > b.1 : a.2.localizedStandardCompare(b.2) == .orderedAscending }
+            .map(\.0)
+    }
+}
+
 /// A saved order of ids in the app's settings (Recent, the Lifestyle views, Home's sections).
 /// UI tests (a fresh library in KEEPSAKE_DB) each get their own orders.
 public enum SavedOrder {

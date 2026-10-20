@@ -35,36 +35,51 @@ struct LifestyleScreen: View {
 /// The grid both pages and the Library use: two stacks across on iPhone, more on iPad.
 let groupColumns = [GridItem(.adaptive(minimum: 150), spacing: 16)]
 
-/// Each Lifestyle view with saves, as a stack linking to its view: Chrome's order until you drag them
-/// into your own (kept on this iPhone).
+/// Each Lifestyle view with saves, as a stack linking to its view: most saves first (a tie A–Z), until
+/// you drag them into your own order (kept on this iPhone). "Sort by most saves" goes back.
 struct LifestyleTiles: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var order: [String] = []
     @State private var dragging: String?
+    @State private var manual = !SavedOrder.get(Self.key).isEmpty
     static let key = "lifestyleOrder"
 
-    private var present: [String] { KindStyle.lifestyle.filter { k in model.saves.contains { $0.kind == k } } }
+    private var counts: [String: Int] { Dictionary(model.saves.map { ($0.kind, 1) }, uniquingKeysWith: +) }
+    private var present: [String] {
+        let counts = counts
+        return KindStyle.lifestyle.filter { counts[$0] != nil }.mostFirst(count: { counts[$0] ?? 0 }, name: { KindStyle($0).plural })
+    }
 
     var body: some View {
-        LazyVGrid(columns: groupColumns, spacing: 20) {
-            ForEach(order, id: \.self) { kind in
-                let items = model.saves.filter { $0.kind == kind }
-                let k = KindStyle(kind)
-                NavigationLink(value: Route.kind(kind)) {
-                    GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                              cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind)
+        VStack(alignment: .leading, spacing: 12) {
+            LazyVGrid(columns: groupColumns, spacing: 20) {
+                ForEach(order, id: \.self) { kind in
+                    let items = model.saves.filter { $0.kind == kind }
+                    let k = KindStyle(kind)
+                    NavigationLink(value: Route.kind(kind)) {
+                        GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
+                                  cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind)
+                    }
+                    .buttonStyle(PressStyle())
+                    .reorderable(kind, in: $order, dragging: $dragging, reduce: reduce) { SavedOrder.set(Self.key, $0); manual = true }
                 }
-                .buttonStyle(PressStyle())
-                .reorderable(kind, in: $order, dragging: $dragging, reduce: reduce) { SavedOrder.set(Self.key, $0) }
+            }
+            if manual {
+                SortByMostButton {
+                    SavedOrder.set(Self.key, [])
+                    manual = false
+                    withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = present }
+                }
             }
         }
-        .onChange(of: present, initial: true) { _, kinds in order = kinds.arranged(by: SavedOrder.get(Self.key)) { $0 } }
+        .onChange(of: present, initial: true) { _, kinds in order = manual ? kinds.arranged(by: SavedOrder.get(Self.key)) { $0 } : kinds }
     }
 }
 
 /// Each collection as a stack with one of its pictures on top, linking to the collection. Pinned
-/// collections come first, then your order (Chrome's, which dragging here changes for every device).
+/// collections come first, then the rest with the most saves first (a tie A–Z). Drag them and your
+/// order is kept instead (Chrome's order, which dragging here changes), until "Sort by most saves".
 struct CollectionTiles: View {
     let collections: [SaveCollection]
     var onNew: (() -> Void)?
@@ -72,26 +87,72 @@ struct CollectionTiles: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var order: [String] = []
     @State private var dragging: String?
+    @State private var manual = !SavedOrder.get(Self.key).isEmpty
+    /// Set once you drag a collection: Keepsake stops sorting them by size on this iPhone.
+    static let key = "collectionOrderManual"
+
+    private var counts: [String: Int] { Dictionary(model.saves.compactMap { $0.collectionId.map { ($0, 1) } }, uniquingKeysWith: +) }
+
+    /// Pinned first, then by size; once you've dragged, the stored order as it is.
+    private func arranged(manual: Bool) -> [String] {
+        guard !manual else { return collections.map(\.id) }
+        let counts = counts
+        let pinned = collections.filter { $0.pinned == true }
+        let rest = collections.filter { $0.pinned != true }.mostFirst(count: { counts[$0.id] ?? 0 }, name: \.name)
+        return (pinned + rest).map(\.id)
+    }
+
+    /// What the order depends on (not whether you've dragged: the drag itself sets the order).
+    private var signature: [String] {
+        let counts = counts
+        return collections.map { "\($0.id)|\($0.pinned == true)|\(counts[$0.id] ?? 0)" }
+    }
 
     var body: some View {
-        LazyVGrid(columns: groupColumns, spacing: 20) {
-            ForEach(order.compactMap { id in collections.first { $0.id == id } }) { c in
-                let items = model.saves.filter { $0.collectionId == c.id }
-                NavigationLink(value: Route.collection(c.id, c.name)) {
-                    GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                              cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
+        VStack(alignment: .leading, spacing: 12) {
+            LazyVGrid(columns: groupColumns, spacing: 20) {
+                ForEach(order.compactMap { id in collections.first { $0.id == id } }) { c in
+                    let items = model.saves.filter { $0.collectionId == c.id }
+                    NavigationLink(value: Route.collection(c.id, c.name)) {
+                        GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
+                                  cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
+                    }
+                    .buttonStyle(PressStyle())
+                    .reorderable(c.id, in: $order, dragging: $dragging, reduce: reduce) { ids in
+                        SavedOrder.set(Self.key, ["on"])
+                        manual = true
+                        Task { try? await model.library?.reorderCollections(ids) }
+                    }
                 }
-                .buttonStyle(PressStyle())
-                .reorderable(c.id, in: $order, dragging: $dragging, reduce: reduce) { ids in
-                    Task { try? await model.library?.reorderCollections(ids) }
+                if let onNew {
+                    Button(action: onNew) { NewGroupTile("New collection") }
+                        .buttonStyle(PressStyle())
                 }
             }
-            if let onNew {
-                Button(action: onNew) { NewGroupTile("New collection") }
-                    .buttonStyle(PressStyle())
+            if manual && collections.count > 1 {
+                SortByMostButton {
+                    SavedOrder.set(Self.key, [])
+                    manual = false
+                    withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = arranged(manual: false) }
+                }
             }
         }
-        .onChange(of: collections.map(\.id), initial: true) { _, ids in order = ids }
+        .onChange(of: signature, initial: true) { order = arranged(manual: manual) }
+    }
+}
+
+/// Puts a row of stacks you dragged into your own order back to most saves first.
+struct SortByMostButton: View {
+    let action: () -> Void
+    @Environment(\.ks) private var t
+
+    var body: some View {
+        Button(action: action) {
+            Label("Sort by most saves", systemImage: "arrow.up.arrow.down")
+                .font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted)
+                .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
     }
 }
 

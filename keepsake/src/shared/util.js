@@ -263,3 +263,9 @@ export function deepMerge(target, patch) {
 export function pluralize(n, one, many) {
   return n === 1 ? `${n} ${one}` : `${n} ${many || one + 's'}`;
 }
+
+// Groups (collections, Lifestyle views) with the most saves first; a tie goes A–Z by name.
+// Returns a new array.
+export function mostFirst(list, count, name) {
+  return [...list].sort((a, b) => count(b) - count(a) || String(name(a)).localeCompare(String(name(b)), undefined, { sensitivity: 'base', numeric: true }));
+}
