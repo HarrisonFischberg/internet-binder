@@ -6,7 +6,7 @@
 
 import { createStore, chromeBackend, idbBackend, applyLook } from '../shared/storage.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
-import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice } from '../shared/util.js';
+import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice, mostFirst } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
 import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection } from '../shared/categorizer.js';
@@ -351,12 +351,15 @@ function openShelf(shelf) {
     }, [box, el('span', { class: 'group-title' }, [title]), el('span', { class: 'group-sub' }, [saves(members.length)])]);
     return node;
   };
+  // Most saves first (a tie A–Z), as in the dashboard and on iPhone.
   if (lifestyle) {
-    for (const k of LIFESTYLE()) grid.append(tile(`kind:${k.value}`, k.plural, state.items.filter((it) => kindOf(it) === k.value && !it.collectionId), k.value, true));
+    const groups = LIFESTYLE().map((k) => [k, state.items.filter((it) => kindOf(it) === k.value && !it.collectionId)]);
+    for (const [k, members] of mostFirst(groups, (g) => g[1].length, (g) => g[0].plural)) grid.append(tile(`kind:${k.value}`, k.plural, members, k.value, true));
   } else {
     grid.append(el('button', { type: 'button', class: 'group group-new', dataset: { value: '__new' }, onClick: () => choose('__new') }, [plusIcon(), el('span', { class: 'group-title' }, ['New collection'])]));
     if (cls.isNew && cls.taxonomyKey) grid.append(tile(`new:${cls.taxonomyKey}`, cls.collectionName, [], 'product', false));
-    for (const c of state.collections) grid.append(tile(c.id, c.name, state.items.filter((it) => it.collectionId === c.id), 'product', false));
+    const groups = state.collections.map((c) => [c, state.items.filter((it) => it.collectionId === c.id)]);
+    for (const [c, members] of mostFirst(groups, (g) => g[1].length, (g) => g[0].name)) grid.append(tile(c.id, c.name, members, 'product', false));
   }
   renderHome();
   setTimeout(() => {

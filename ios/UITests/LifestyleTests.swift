@@ -34,7 +34,10 @@ final class LifestyleTests: XCTestCase {
         app.chip("Collection Clothing").tap()
         XCTAssertTrue(app.buttons["Collection Clothing"].isSelected, "a collection is a chip too")
         app.chip("All").tap()
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Workouts,'")).firstMatch.tap()
+        // Stacks sort by most saves: Workouts (1 save) sits low in the grid, so scroll to it.
+        let workouts = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Workouts,'")).firstMatch
+        for _ in 0..<5 where !workouts.isHittable { app.swipeUp() }
+        workouts.tap()
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Push-up ladder'")).firstMatch.waitForExistence(timeout: 3))
     }
 

@@ -4654,3 +4654,10 @@ button.library-tab.on {
   font-weight: 900;
   box-shadow: 0 0 0 2px var(--c-surface);
 }
+
+/* Refresh: the arrow turns once while the library is read again. */
+#refreshBtn.is-spinning svg { animation: refresh-turn 0.5s ease-out; }
+@keyframes refresh-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #refreshBtn.is-spinning svg { animation: none; }
+}
