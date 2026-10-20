@@ -160,9 +160,14 @@ test('recipes get their own view, a kind badge, and a recipe panel', async () =>
   assert.match(rv.textContent, /Method/);
   assert.match(rv.textContent, /Toss\./);
   assert.match(rv.textContent, /15 min/);
+  // No step names udon or miso, so they wait on step 1; checking one in the list checks it there too.
+  const firstStep = rv.querySelector('.recipe-steps li');
+  assert.match(firstStep.querySelector('.step-ings').textContent, /200 gudon/);
   const box = rv.querySelector('.recipe-ingredients input');
   box.click();
   assert.match(rv.textContent, /1 of 2/);
+  assert.equal(firstStep.querySelector('.step-ing input').checked, true);
+  assert.ok(!firstStep.classList.contains('is-done'), 'checking an ingredient does not finish the step');
   [...window.document.querySelectorAll('.modal-recipe button')].find((b) => b.textContent === 'Mark cooked').click();
   await afterChange();
   assert.equal((await store.getItem(it.id)).status, 'done');

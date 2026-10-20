@@ -452,3 +452,42 @@
   font-size: 28px;
   line-height: 0.98;
 }
+
+/* Cooking: the ingredients under each recipe step, in each style. */
+:root:not([data-style]) .step-ing,
+:root:not([data-style]) .step-carry {
+  border: 2px solid var(--c-line);
+  font-weight: 600;
+}
+:root:not([data-style]) .step-ing {
+  box-shadow: 2px 2px 0 var(--c-line);
+}
+:root:not([data-style]) .step-ing:has(input:checked) {
+  background: var(--c-kind-recipe-fill);
+  color: var(--c-on-kind-fill, var(--c-text));
+  box-shadow: none;
+  transform: translate(2px, 2px);
+}
+:root[data-style="notebook"] .recipe-steps-big .step-mark {
+  background: linear-gradient(100deg, transparent 2%, var(--c-accent-soft) 6%, var(--c-accent-soft) 94%, transparent 98%);
+  padding: 0 2px;
+  margin: 0 -2px;
+}
+:root[data-style="notebook"] .step-ing b,
+:root[data-style="atlas"] .step-ing b {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+:root[data-style="atlas"] .step-ing b {
+  color: var(--c-accent);
+}
+:root[data-style="swiss"] .step-ing,
+:root[data-style="swiss"] .step-carry {
+  border-radius: 0;
+}
+:root[data-style="swiss"] .step-ing:has(input:checked) {
+  background: var(--c-surface-2);
+}
+:root[data-style="swiss"] .step-ing:has(input:checked) span {
+  text-decoration-color: var(--c-accent);
+}
