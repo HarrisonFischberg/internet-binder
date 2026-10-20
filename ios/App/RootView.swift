@@ -216,9 +216,8 @@ struct SaveGrid: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.appearance) private var appearance
     var body: some View {
-        Masonry(saves, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: appearance.density == "compact" ? 105 : 170) { save in
+        Masonry(saves, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: 170) { save in
             NavigationLink(value: save) { SaveObject(save).matchedTransitionSource(id: save.id, in: zoom) }
                 .buttonStyle(PressStyle())
                 .draggable(save.id) { SaveObject(save).frame(width: 160) }
