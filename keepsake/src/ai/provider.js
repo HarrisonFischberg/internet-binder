@@ -16,19 +16,48 @@
 // Nothing else leaves the browser: no cookies, no account data, no history.
 
 export const PROVIDERS = {
+  anthropic: { label: 'Anthropic (Claude)', baseUrl: 'https://api.anthropic.com', model: 'claude-haiku-5-5' },
   openai: { label: 'OpenAI (chat completions)', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-  anthropic: { label: 'Anthropic (Messages API)', baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-5' },
   custom: { label: 'Custom OpenAI-compatible endpoint', baseUrl: '', model: '' },
 };
 
+// The Claude models offered in the picker, cheapest first. Every one takes an effort level.
+export const MODELS = {
+  anthropic: [
+    { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5', note: 'Fastest and cheapest. Plenty for tidying saves.' },
+    { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', note: 'Sharper at reading pictures and pages.' },
+    { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', note: 'Most careful. Costs more per save.' },
+    { id: 'claude-fable-5-1', label: 'Claude Fable 5.1', note: 'Most capable, and the most expensive.' },
+  ],
+};
+
+// How hard the model thinks before answering. Medium is the default.
+export const EFFORTS = [
+  { id: 'low', label: 'Low', note: 'Quickest answers, fewest tokens.' },
+  { id: 'medium', label: 'Medium', note: 'A good balance for most saves.' },
+  { id: 'high', label: 'High', note: 'Thinks longer; slower and costs more.' },
+];
+export const DEFAULT_EFFORT = 'medium';
+
 export function providerConfig(settings) {
   const ai = settings?.ai || {};
-  const base = PROVIDERS[ai.provider] || PROVIDERS.openai;
+  const provider = PROVIDERS[ai.provider] ? ai.provider : 'anthropic';
+  const base = PROVIDERS[provider];
+  const model = ai.model || base.model;
+  // Effort is only sent for models known to take it, so a typed-in older model still works.
+  const effort = (MODELS[provider] || []).some((m) => m.id === model) ? (EFFORTS.some((e) => e.id === ai.effort) ? ai.effort : DEFAULT_EFFORT) : '';
   return {
-    provider: ai.provider || 'openai',
+    provider,
     baseUrl: (ai.baseUrl || base.baseUrl || '').replace(/\/+$/, ''),
-    model: ai.model || base.model,
+    model,
+    effort,
   };
+}
+
+// The Anthropic request fields for the chosen model and effort. Claude models think before they
+// answer, and that thinking counts against max_tokens, so leave room for it on top of the answer.
+function anthropicParams(cfg, maxTokens) {
+  return { model: cfg.model, max_tokens: maxTokens + 8000, ...(cfg.effort ? { output_config: { effort: cfg.effort } } : {}) };
 }
 
 export function originFor(settings) {
@@ -66,7 +95,7 @@ async function callProvider(cfg, apiKey, { system, userText, imageDataUrl, maxTo
       const res = await fetch(`${cfg.baseUrl}/v1/messages`, {
         method: 'POST', signal: controller.signal,
         headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: cfg.model, max_tokens: maxTokens, system, messages: [{ role: 'user', content }] }),
+        body: JSON.stringify({ ...anthropicParams(cfg, maxTokens), system, messages: [{ role: 'user', content }] }),
       });
       const data = await readJson(res);
       return (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
@@ -167,7 +196,7 @@ async function findViaAnthropic(cfg, apiKey, userText, imageDataUrl, controller,
   const res = await fetch(`${cfg.baseUrl}/v1/messages`, {
     method: 'POST', signal: controller.signal,
     headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({ model: cfg.model, max_tokens: maxTokens, system, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: searches }], messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({ ...anthropicParams(cfg, maxTokens), system, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: searches }], messages: [{ role: 'user', content }] }),
   });
   const data = await readJson(res);
   const seen = new Set();

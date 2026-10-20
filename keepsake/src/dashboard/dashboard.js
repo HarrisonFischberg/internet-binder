@@ -1924,8 +1924,8 @@ async function openWorkout(id) {
     actions.push(el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: async () => {
       await store.deleteGoal(g.id);
       await renderGoals();
-      UI.toast('Goal ended.', { action: { label: 'Undo', onClick: async () => { await store.restoreGoal(g.id); await renderGoals(); } } });
-    } }, [finished ? 'Remove' : 'End goal']));
+      UI.toast('Goal removed.', { action: { label: 'Undo', onClick: async () => { await store.restoreGoal(g.id); await renderGoals(); } } });
+    } }, ['Remove goal']));
     card.append(el('div', { class: 'review-actions goal-actions' }, actions));
     return card;
   }
