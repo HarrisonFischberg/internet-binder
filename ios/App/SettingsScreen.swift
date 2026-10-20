@@ -22,6 +22,7 @@ struct SettingsScreen: View {
     @State private var importing = false
     @State private var erasing = false
     @State private var testResult: String?
+    @AppStorage(CookingMusic.enabledKey) private var cookingMusic = true
     @State private var fixingAll = false
 
     /// The Claude models on offer, cheapest first (provider.js MODELS). Haiku 5.5 is the default.
@@ -42,6 +43,9 @@ struct SettingsScreen: View {
                 aiSection
                 lookupsSection
                 instagramSection
+                Section {
+                    Toggle("Music while cooking", isOn: $cookingMusic)
+                } footer: { Text("Ten quiet, original tunes play while you follow a recipe step by step. They stay silent when your iPhone is on silent and never stop a podcast or song you're already playing.") }
                 Section {
                     NavigationLink("Change log") { ChangeLogScreen() }
                 } footer: { Text("Every change AI made, with Undo.") }
