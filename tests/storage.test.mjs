@@ -375,6 +375,23 @@ test('init upgrades old per-feature AI settings to the single switch', async () 
   assert.equal(s.ai.instantSave, undefined);
 });
 
+test('init moves a library that never set AI up from the old OpenAI default to Claude Haiku 5.5, once', async () => {
+  const untouched = { on: false, provider: 'openai', baseUrl: '', model: '' };
+  const { store, be } = await fresh({ [KEYS.meta]: { schemaVersion: 3 }, [KEYS.settings]: { ai: untouched } });
+  let s = await store.getSettings();
+  assert.equal(s.ai.provider, 'anthropic');
+  assert.equal(s.ai.effort, 'medium');
+  // Someone who picks OpenAI afterwards keeps it.
+  await store.updateSettings({ ai: { provider: 'openai' } });
+  await createStore(be, makeDb()).init();
+  assert.equal((await store.getSettings()).ai.provider, 'openai');
+  // A library with a key, a model or an address of its own is left alone.
+  for (const [ai, secrets] of [[untouched, { aiApiKey: 'sk-x' }], [{ ...untouched, model: 'gpt-4o' }, {}], [{ ...untouched, baseUrl: 'https://x.example/v1' }, {}]]) {
+    const r = await fresh({ [KEYS.meta]: { schemaVersion: 3 }, [KEYS.settings]: { ai }, [KEYS.secrets]: secrets });
+    assert.equal((await r.store.getSettings()).ai.provider, 'openai');
+  }
+});
+
 test('Instagram import history: trashed posts stay remembered; deleting forever frees the post', async () => {
   const { store } = await fresh();
   const it = await store.addItem({ title: 'Post', url: 'https://www.instagram.com/p/AbCdE1/', type: 'instagram' });

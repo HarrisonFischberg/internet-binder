@@ -348,7 +348,7 @@ struct SaveDetailScreen: View {
         }
     }
 
-        private func checkIn() async {
+    private func checkIn() async {
         guard let goal, let lib = model.library, let id = try? await lib.checkIn(goalId: goal.goal.id) else { return }
         await reload()
         model.show("Checked in for today") {
