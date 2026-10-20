@@ -260,7 +260,8 @@ final class ScreenshotTests: XCTestCase {
             let tag = "\(theme)-\(mode == .dark ? "dark" : "light")\(size == nil ? "" : "-large-text")"
             let app = XCUIApplication()
             app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
-            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme]
+            // The simulator doesn't always take XCUIDevice's appearance, so the app is told too.
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-ksMode", mode == .dark ? "dark" : "light"]
             if let size { app.launchArguments += ["-UIPreferredContentSizeCategoryName", size] }
             app.launch()
             XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
@@ -272,8 +273,10 @@ final class ScreenshotTests: XCTestCase {
             XCTAssertTrue(app.buttons["Next step"].waitForExistence(timeout: 5))
             app.buttons["Next step"].tap()
             sleep(1)
-            app.buttons["3 egg yolks"].tap()
-            app.buttons["50 g pecorino romano, grated"].tap()
+            // The recipe page behind the cover lists the same lines; tap the ones on the step.
+            for line in ["3 egg yolks", "50 g pecorino romano, grated"] {
+                (app.buttons.matching(identifier: line).allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons[line]).tap()
+            }
             sleep(1)
             try shoot(app, folder, "\(tag)-cooking-step2")
             if size == nil {

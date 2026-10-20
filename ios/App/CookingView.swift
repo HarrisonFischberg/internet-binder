@@ -195,8 +195,11 @@ private struct CookingStep: View {
     @Binding var checked: Set<Int>
     let jump: (Int) -> Void
     @Environment(\.ks) private var t
+    @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .largeTitle) private var numeral: CGFloat = 64
     @ScaledMetric(relativeTo: .body) private var amountWidth: CGFloat = 64
+    /// Field Notebook's amounts are small mono, so their column is narrower ("50 g", "1 tbsp").
+    @ScaledMetric(relativeTo: .footnote) private var noteAmountWidth: CGFloat = 48
 
     private var current: StepIngredients.Step { plan.steps.indices.contains(index) ? plan.steps[index] : .init() }
     private var groups: [(label: String, items: [Int])] {
@@ -338,19 +341,28 @@ private struct CookingStep: View {
             .font(t.style == .swiss ? .body.weight(.bold).monospacedDigit()
                   : .system(t.style == .atlas ? .subheadline : .footnote, design: .monospaced))
             .foregroundStyle(t.style == .atlas ? t.accent : t.style == .swiss && !done ? t.ink : t.inkMuted)
+        // Amount over name: when the row is too narrow, and always at accessibility sizes, where a
+        // scaled amount column would push the names to the far side.
+        let stacked = HStack(alignment: .top, spacing: 12) {
+            box(done)
+            VStack(alignment: .leading, spacing: 2) { if !item.amount.isEmpty { amount }; name }
+            Spacer(minLength: 0)
+        }
         return Button { toggle(i) } label: {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    switch t.style {
-                    case .atlas: box(done); name; Spacer(minLength: 8); amount
-                    case .swiss: amount.frame(width: amountWidth, alignment: .trailing); name; Spacer(minLength: 8); box(done)
-                    default: box(done); amount.frame(width: amountWidth, alignment: .leading); name; Spacer(minLength: 0)
+            Group {
+                if typeSize.isAccessibilitySize {
+                    stacked
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) {
+                            switch t.style {
+                            case .atlas: box(done); name; Spacer(minLength: 8); amount
+                            case .swiss: amount.frame(width: amountWidth, alignment: .trailing); name; Spacer(minLength: 8); box(done)
+                            default: box(done); amount.frame(width: noteAmountWidth, alignment: .leading); name; Spacer(minLength: 0)
+                            }
+                        }
+                        stacked
                     }
-                }
-                HStack(alignment: .top, spacing: 12) {
-                    box(done)
-                    VStack(alignment: .leading, spacing: 2) { if !item.amount.isEmpty { amount }; name }
-                    Spacer(minLength: 0)
                 }
             }
             .frame(minHeight: 50).contentShape(Rectangle())
@@ -363,7 +375,7 @@ private struct CookingStep: View {
 
     private func carriedRow(_ c: StepIngredients.Carried) -> some View {
         Button { jump(c.fromStep) } label: {
-            HStack(spacing: 12) {
+            HStack(alignment: t.style == .swiss ? .firstTextBaseline : .center, spacing: 12) {
                 if t.style == .swiss { Text("–").font(.body.weight(.bold)).foregroundStyle(t.inkMuted).frame(width: amountWidth, alignment: .trailing) }
                 else { Image(systemName: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted).frame(width: 24) }
                 VStack(alignment: .leading, spacing: 2) {
