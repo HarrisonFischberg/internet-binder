@@ -24,10 +24,13 @@ export const MSG = {
   FILL_KIND: 'keepsake:fill-kind', // extension pages -> background { kind }: the same for every save of that kind
   FILL_BATCH: 'keepsake:fill-batch', // extension pages -> background { itemIds, review, label } -> { ok, job }: fill in these, one at a time, with progress
   FILL_STOP: 'keepsake:fill-stop', // extension pages -> background: stop the batch after the current save
+  AI_BACKLOG_RUN: 'keepsake:ai-backlog-run', // extension pages -> background { itemIds?, label } -> { ok, job }: Run AI on imported saves (all flagged, or these)
+  AI_BACKLOG_PAUSE: 'keepsake:ai-backlog-pause', // extension pages -> background { cancel? }: pause (Resume later) or cancel the run
 };
 
 export const SESSION_KEYS = {
   igScan: 'keepsake_igScan',
   // The fill-in batch running now or last: { id, label, kind, total, done, ready, changed, running, stopped }.
+  // Run AI on imported saves adds { backlog: true, scope, failed, paused, waitingUntil, error }.
   fillJob: 'keepsake_fillJob',
 };

@@ -20,6 +20,8 @@ public struct Save: Identifiable, Hashable, Sendable, Decodable {
     public let status: String?
     public let captureState: String?
     public let needsReview: Bool?
+    /// Brought in by an import and not read by your AI provider yet: waits for Run AI on imported saves.
+    public let needsAi: Bool?
     public let createdAt: String?
     public let deletedAt: String?
     public let openedAt: String?

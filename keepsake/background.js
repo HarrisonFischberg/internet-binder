@@ -16,7 +16,8 @@ import { LOOKUP_SOURCES, lookupPlace, lookupAddressAt, lookupFilm, lookupBook, f
 import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 import { normalizeProduct, captureFacts, classifyCapture, saveCapture, FILLED_KINDS } from './src/shared/capture.js';
-import { fillSave, tidySave } from './src/shared/fill.js';
+import { fillSave, tidySave, readImported, pendingToTidy } from './src/shared/fill.js';
+import { runAiQueue } from './src/shared/aiQueue.js';
 import { understandItem } from './src/shared/understand.js';
 import { fetchPage, loadImage } from './src/ai/pages.js';
 import { placeNamed, placeReviewReasons, stateCode } from './src/shared/places.js';
@@ -193,6 +194,55 @@ async function startFillBatch(ids, { review = false, verify = false, understand 
   return { ok: true, job };
 }
 
+// --- Run AI on imported saves --------------------------------------------------------------------
+// Bulk imports (open tabs, Instagram) save without AI and flag each save (needsAi). This sends them to your
+// provider only when you ask: two at a time, waiting when it says to slow down, with Pause and Cancel.
+// Progress goes in the same session slot as a fill-in batch, so the bar under the header shows it. Saves
+// not read yet keep their flag, so Resume (or a later run) carries on, even after Chrome restarts.
+async function startAiBacklog(ids, { label = '' } = {}) {
+  if (fillJob?.running) return { ok: false, error: 'Something is already running. Let it finish or stop it first.', job: fillJob };
+  const settings = await store.getSettings();
+  if (!settings.ai?.on || !(await store.getSecret('aiApiKey'))) return { ok: false, error: 'Turn on Optional AI and add your API key in Settings first.' };
+  const flagged = (await store.getAiBacklog()).map((i) => i.id);
+  const want = ids ? new Set(ids) : null;
+  const todo = want ? flagged.filter((id) => want.has(id)) : flagged;
+  if (!todo.length) return { ok: false, error: 'Nothing here is waiting for AI.' };
+  const job = { id: uid(), backlog: true, label: sanitizeText(label, 80) || 'Running AI on imported saves', kind: '', scope: want ? todo : null,
+    total: todo.length, done: 0, ready: 0, changed: 0, failed: 0, running: true, paused: false, stopped: false, waitingUntil: '', error: '', startedAt: nowIso(), finishedAt: '' };
+  fillJob = job;
+  await publishFillJob();
+  const runId = `import-ai-${job.id}`;
+  (async () => {
+    const res = await runAiQueue(todo, {
+      work: (id) => readImported(store, id, { runId, fetchPage, loadImage, fetchFn: fetch, allowed: lookupAllowed, waitTurn: nominatimTurn }),
+      stopped: () => job.stopped,
+      // Saying where it's at every second of a wait also keeps Chrome from putting the worker to sleep.
+      sleep: async (ms) => { await new Promise((r) => setTimeout(r, ms)); await publishFillJob(); },
+      onProgress: (p) => {
+        Object.assign(job, { done: p.done, changed: p.changed, failed: p.failed, waitingUntil: p.waitingUntil ? new Date(p.waitingUntil).toISOString() : '' });
+        publishFillJob();
+      },
+    }).catch((e) => ({ reason: 'fatal', error: String((e && e.message) || e) }));
+    Object.assign(job, { running: false, waitingUntil: '', finishedAt: nowIso() });
+    // Your provider couldn't go on (a bad key, no credit) or kept saying it's busy: paused, to resume later.
+    if (res.reason) Object.assign(job, { paused: true, stopped: true, error: res.reason === 'busy' ? `Your AI provider is busy right now. ${res.error}` : res.error });
+    await publishFillJob();
+  })();
+  return { ok: true, job };
+}
+
+// A worker that starts with a run marked as going was stopped by Chrome mid-run: it shows as paused.
+(async () => {
+  try {
+    const job = (await chrome.storage.session.get(SESSION_KEYS.fillJob))?.[SESSION_KEYS.fillJob];
+    if (job?.running && !fillJob) {
+      await chrome.storage.session.set({ [SESSION_KEYS.fillJob]: { ...job, running: false, stopped: true, paused: !!job.backlog, waitingUntil: '', finishedAt: nowIso() } });
+    }
+  } catch {
+    /* no session storage */
+  }
+})();
+
 async function lookupAllowed(settings, which) {
   if (!settings.lookups?.[which]) return false;
   try {
@@ -205,12 +255,13 @@ async function lookupAllowed(settings, which) {
 // The fill-in itself is shared with iOS (src/shared/fill.js); this worker supplies the network, the
 // Lookups Chrome has granted, and OpenStreetMap's pace. understand: an Instagram import or Fix with AI,
 // where any save (not only a Lifestyle one) is read by your provider first; force reads it again.
+async function nominatimTurn() {
+  const wait = 1100 - (Date.now() - lastNominatim);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastNominatim = Date.now();
+}
 async function fillKind(id, opts = {}) {
-  const waitTurn = async () => {
-    const wait = 1100 - (Date.now() - lastNominatim);
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    lastNominatim = Date.now();
-  };
+  const waitTurn = nominatimTurn;
   if (opts.understand) {
     try {
       await understandItem(store, id, { force: !!opts.force }, { fetchPage, loadImage });
@@ -234,7 +285,8 @@ function queueEnrich(id) {
 
 async function enrichPending() {
   try {
-    for (const it of await store.getPendingItems()) queueEnrich(it.id);
+    // A handful at most; a pile left over from an older import waits for Run AI instead.
+    for (const it of await pendingToTidy(store)) queueEnrich(it.id);
   } catch {
     /* try again on the next wake */
   }
@@ -726,7 +778,7 @@ async function handleMessage(msg, sender) {
     }
     case MSG.SAVE_ITEM: {
       if (!msg.product || typeof msg.product !== 'object') throw new Error('Nothing to save.');
-      return saveProduct(msg.product, { collectionId: msg.collectionId || null, force: !!msg.force, source: msg.source || (sender.tab ? 'floating' : 'toolbar'), classification: msg.classification || null, note: msg.note || '', learn: msg.learn === 'strong' ? 'strong' : 'light', instant: !!msg.instant });
+      return saveProduct(msg.product, { collectionId: msg.collectionId || null, force: !!msg.force, source: msg.source || (sender.tab ? 'floating' : 'toolbar'), classification: msg.classification || null, note: msg.note || '', learn: msg.learn === 'strong' ? 'strong' : 'light', instant: !!msg.instant, deferAi: !!msg.deferAi });
     }
     case MSG.UPDATE_ITEM: {
       const item = await store.getItem(msg.itemId);
@@ -777,6 +829,23 @@ async function handleMessage(msg, sender) {
     }
     case MSG.FILL_STOP: {
       if (fillJob?.running) fillJob.stopped = true;
+      return { ok: true };
+    }
+    case MSG.AI_BACKLOG_RUN: {
+      if (!fromExtensionPage) throw new Error('Not allowed.');
+      const ids = Array.isArray(msg.itemIds) ? [...new Set(msg.itemIds.filter((x) => typeof x === 'string'))].slice(0, 20000) : null;
+      return startAiBacklog(ids, { label: msg.label });
+    }
+    case MSG.AI_BACKLOG_PAUSE: {
+      // Pause and Cancel both stop after the saves in flight; a paused run offers Resume.
+      if (fillJob?.running && fillJob.backlog) Object.assign(fillJob, { stopped: true, paused: !msg.cancel });
+      else if (msg.cancel) {
+        try {
+          await chrome.storage.session.remove(SESSION_KEYS.fillJob);
+        } catch {
+          /* nothing to clear */
+        }
+      }
       return { ok: true };
     }
     case MSG.FILL_KIND: {

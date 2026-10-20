@@ -2168,6 +2168,23 @@ body.modal-open {
   font-weight: 500;
 }
 
+/* Run AI on imported saves: the same quiet row, as a button (Home, a collection, a Lifestyle view). */
+button.home-attention {
+  width: 100%;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.home-attention + .home-attention {
+  margin-top: -8px;
+}
+
+.ai-backlog-note.is-inline {
+  margin: 0 0 16px;
+}
+
 .home-section-head {
   display: flex;
   align-items: baseline;

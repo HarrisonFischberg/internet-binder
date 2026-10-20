@@ -271,6 +271,8 @@ async function doImport(ctx, page) {
           : userChose ? null : r.cls,
         source: 'tabs-import',
         learn: 'light',
+        // A bulk import: nothing goes to your AI provider now (Run AI on imported saves, when you ask).
+        deferAi: true,
       });
       if (!res.ok) { failed++; continue; }
       if (res.duplicate) { skipped++; continue; }
@@ -282,6 +284,7 @@ async function doImport(ctx, page) {
   scan.rows = null;
   scan.error = '';
   selection.clear();
-  UI.toast(`Imported ${pluralize(added, 'item', 'items')}${skipped ? ` (${skipped} already saved)` : ''}${failed ? `, ${failed} failed` : ''}.`, { duration: 6000 });
+  const aiOn = !!ctx.state.settings?.ai?.on;
+  UI.toast(`Imported ${pluralize(added, 'item', 'items')}${skipped ? ` (${skipped} already saved)` : ''}${failed ? `, ${failed} failed` : ''}.${added && aiOn ? ' AI hasn’t read them yet: Run AI on imported saves is on Home.' : ''}`, { duration: 8000 });
   ctx.navigate('#all');
 }

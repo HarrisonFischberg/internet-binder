@@ -54,6 +54,12 @@ struct HomeScreen: View {
                         }
                     }
                     if model.reviewCount > 0 { reviewBanner }
+                    if model.aiReady && !model.aiBacklog.isEmpty {
+                        RunAIOnImportedButton()
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
+                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).padding(.horizontal, 16)
+                            .ksSurface(radius: 14)
+                    }
                     if model.saves.isEmpty && model.loaded {
                         EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Keepsake from any app.")
                     }

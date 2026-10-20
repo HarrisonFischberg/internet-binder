@@ -13,7 +13,7 @@ import { normalizeUrl } from '../shared/url.js';
 import { titleFromCaption } from '../instagram/post.js';
 import { enrichPosts, hasInstagramAccess, requestInstagramAccess } from '../instagram/enrich.js';
 import * as UI from './ui.js';
-import { runAiCleanup } from './aiCleanup.js';
+import { confirmAiRun } from './aiCleanup.js';
 
 
 function postTitle(post) {
@@ -348,6 +348,8 @@ export async function importPosts(ctx, scan, posts) {
       categorizationSource: 'local',
       categorizationReason: kind ? (fromName ? `From your Instagram collection “${postGroup}”` : `Imported into ${kindInfo(kind).plural}`) : cls ? cls.reason : `From your Instagram collection “${postGroup}”`,
       needsReview: !kind && !collectionId,
+      // Not sent to your AI provider now: Run AI on imported saves reads it when you ask.
+      needsAi: true,
     });
     created.push(item);
     entries.push([post.url, item.id]);
@@ -361,17 +363,15 @@ export async function importPosts(ctx, scan, posts) {
     const col = await ctx.store.getCollection(item.collectionId);
     if (col && !col.coverImage && item.image) await ctx.store.updateCollection(col.id, { coverImage: item.image });
   }
-  // With Optional AI on, your provider reads every imported post in the background (what it is, and its
-  // card's details: src/shared/understand.js), with progress under the header. Otherwise Lifestyle saves
-  // get the Lookups you turned on.
-  const aiOn = !!ctx.state.settings?.ai?.on;
-  const batch = aiOn && created.length ? await ctx.send({ type: MSG.FILL_BATCH, itemIds: created.map((i) => i.id), understand: true, label: `Reading ${scanTitle(scan)} with AI` }) : null;
-  if (!batch?.ok) for (const item of created) if (aiOn || LIFESTYLE().some((k) => k.value === item.kind)) ctx.send({ type: MSG.FILL_ITEM, itemId: item.id, understand: aiOn });
+  // Nothing goes to your AI provider here: a big import used to send every post at once and stall. Each
+  // save is flagged instead, and the summary offers Run AI on them. Lifestyle saves get the Lookups you
+  // turned on (no AI: fillSave leaves a flagged save for Run AI).
+  for (const item of created) if (LIFESTYLE().some((k) => k.value === item.kind)) ctx.send({ type: MSG.FILL_ITEM, itemId: item.id });
   const cols = await ctx.store.getCollections();
   const where = [...places.entries()].map(([key, count]) => (key.startsWith('kind:')
     ? { label: kindInfo(key.slice(5)).plural, count, kind: key.slice(5) }
     : { label: cols.find((c) => c.id === key)?.name || 'A collection', count, collectionId: key })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  return { total: posts.length, imported: created.length, where, review, skipped };
+  return { total: posts.length, imported: created.length, ids: created.map((i) => i.id), where, review, skipped };
 }
 
 async function showImportSummary(ctx, s, where) {
@@ -380,12 +380,14 @@ async function showImportSummary(ctx, s, where) {
     el('span', { class: 'import-dest-name' }, [w.label]), el('span', { class: 'import-dest-count' }, [String(w.count)]),
   ]));
   if (s.review) rows.push(el('li', { class: 'import-dest is-review' }, [el('span', { class: 'import-dest-name' }, ['Review: for you to sort', aiOn ? ' (or with AI)' : '']), el('span', { class: 'import-dest-count' }, [String(s.review)])]));
-  const hasPlaces = s.where.some((w) => w.kind === 'place') && (aiOn || !!ctx.state.settings?.lookups?.places);
+  const hasPlaces = s.where.some((w) => w.kind === 'place') && !!ctx.state.settings?.lookups?.places;
   const notes = [
     s.skipped ? `${pluralize(s.skipped, 'post was', 'posts were')} already in Keepsake, so ${s.skipped === 1 ? 'it was' : 'they were'} skipped.` : '',
     s.unread ? `${pluralize(s.unread, 'post', 'posts')} couldn’t be read${s.loginWalls ? ' (Instagram showed a login page)' : ''}, so ${s.unread === 1 ? 'it was' : 'they were'} imported with what the grid showed.` : '',
-    aiOn ? 'Your AI provider is reading each post in the background: recipes, workouts and places move to their Lifestyle views with their details as it goes (progress is under the header).' : '',
-    hasPlaces && !aiOn ? 'Places are being filled in (addresses and map pins) in the background, with the Lookups you turned on.' : '',
+    s.imported ? (aiOn
+      ? 'Nothing was sent to your AI provider yet. Run AI on them now, or later from Home: your provider works out what each post is, and recipes, workouts and places move to their Lifestyle views with their details.'
+      : 'Sorted on this device. To have AI read them later, turn on Optional AI in Settings; Home then offers Run AI on imported saves.') : '',
+    hasPlaces ? 'Places are being filled in (addresses and map pins) in the background, with the Lookups you turned on.' : '',
     s.bulk ? 'To bring them to your iPhone: Settings → Export JSON, then AirDrop the file to your iPhone and choose Keepsake.' : '',
   ].filter(Boolean);
   const choice = await UI.openModal({
@@ -397,13 +399,13 @@ async function showImportSummary(ctx, s, where) {
     ],
     actions: [
       ...(s.review ? [{ label: 'Open Review', quiet: true, value: 'review', onClick: (c) => c('review') }] : []),
-      ...(s.review && aiOn ? [{ label: 'Sort Review with AI', onClick: (c) => c('ai') }] : []),
+      ...(s.imported && aiOn ? [{ label: `Run AI on ${pluralize(s.imported, 'post', 'posts')}…`, onClick: (c) => c('ai') }] : []),
       { label: 'Done', primary: true, onClick: (c) => c('home') },
     ],
   });
   if (choice === 'review') ctx.navigate('#review');
   else if (choice === 'ai') {
-    ctx.navigate('#review');
-    runAiCleanup(ctx, { scope: 'review' });
+    ctx.navigate('#home');
+    confirmAiRun(ctx, s.ids, { label: `Running AI on ${where}` });
   } else ctx.navigate('#home');
 }

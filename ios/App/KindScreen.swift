@@ -198,6 +198,80 @@ extension LibraryModel {
     }
 }
 
+extension LibraryModel {
+    /// Run AI on imported saves: imports (a Chrome export AirDropped here) don't go to your provider by
+    /// themselves; this reads them when you ask, one at a time. When your provider says to slow down (429,
+    /// overloaded, a timeout) it waits, doubling each time, and tries again; a bad key or no credit stops it.
+    /// Pause stops after the save it's on; what's left stays waiting, so running it again resumes.
+    func runAIOnImported(_ saves: [Save]) async {
+        guard let lib = library, !saves.isEmpty, aiRun == nil else { return }
+        aiRun = AIRun(done: 0, total: saves.count, imported: true)
+        defer { aiRun = nil }
+        var changed = 0, failed = 0, busy = 0, readCount = 0
+        var error = ""
+        for save in saves {
+            if aiRun?.stopping == true { break }
+            var tries = 0
+            var read = false
+            while !read {
+                do {
+                    if try await lib.readImported(save.id) { changed += 1 }
+                    readCount += 1
+                    busy = 0
+                    read = true
+                } catch let e {
+                    error = e.localizedDescription
+                    // A bad key or no credit: every other save would fail the same way.
+                    if error.range(of: #"\((401|403)\)|API key|base URL|credit balance|billing"#, options: .regularExpression) != nil { aiRun?.stopping = true; break }
+                    let slow = error.range(of: #"\((408|409|429|5\d\d)\)|overloaded|timed out|network|offline"#, options: [.regularExpression, .caseInsensitive]) != nil
+                    tries += 1
+                    if !slow || tries >= 4 { failed += 1; read = true; break }
+                    busy += 1
+                    if busy >= 8 { aiRun?.stopping = true; error = "Your AI provider is busy right now. Try again later."; break }
+                    let wait = min(120.0, 4.0 * pow(2.0, Double(busy - 1))) + Double.random(in: 0...1)
+                    aiRun?.waitingUntil = Date().addingTimeInterval(wait)
+                    try? await Task.sleep(for: .seconds(wait))
+                    aiRun?.waitingUntil = nil
+                    if aiRun?.stopping == true { break }
+                }
+            }
+            if !read { break }
+            aiRun?.done += 1
+            if (aiRun?.done ?? 0) % 5 == 0 { refresh() }
+        }
+        refresh()
+        let left = aiBacklog.count
+        if readCount == 0 && !error.isEmpty { show("AI couldn't read them: \(error)"); Haptic.refused(); return }
+        Haptic.settled()
+        let leftText = left > 0 ? ". \(left) still waiting: run it again to carry on" : ""
+        show("AI read \(readCount) \(readCount == 1 ? "save" : "saves")\(changed > 0 ? ", \(changed) updated" : "")\(failed > 0 ? ", \(failed) couldn't be read" : "")\(leftText)")
+    }
+}
+
+/// "Run AI on N imported saves": on Home and in Settings while Optional AI is on and imports are waiting.
+/// Asks first, with how many and about how long, since each one is a request to your provider.
+struct RunAIOnImportedButton: View {
+    var label: String? = nil
+    @Environment(LibraryModel.self) private var model
+    @State private var confirming = false
+
+    var body: some View {
+        let waiting = model.aiBacklog
+        if model.aiReady && !waiting.isEmpty {
+            Button(label ?? "Run AI on \(waiting.count) imported \(waiting.count == 1 ? "save" : "saves")", systemImage: "sparkles") { confirming = true }
+                .disabled(model.aiRun != nil)
+                .accessibilityHint("Your AI provider reads the saves you imported, which it hasn't seen yet.")
+                .confirmationDialog("Run AI on \(waiting.count) imported \(waiting.count == 1 ? "save" : "saves")?", isPresented: $confirming, titleVisibility: .visible) {
+                    if waiting.count > 100 { Button("Newest 100") { Task { await model.runAIOnImported(Array(waiting.prefix(100))) } } }
+                    Button(waiting.count > 100 ? "All \(waiting.count)" : "Run AI") { Task { await model.runAIOnImported(waiting) } }
+                } message: {
+                    let minutes = max(1, Int((Double(waiting.count) * 7 / 60).rounded()))
+                    Text("Your AI provider reads each one: what it is, then its details or collection. About \(minutes) \(minutes == 1 ? "minute" : "minutes") with the app open. Pause any time; the rest stay waiting. Every change can be undone.")
+                }
+        }
+    }
+}
+
 /// "Fix with AI" for a set of saves, in a screen's toolbar: shows while Optional AI is on. More than one
 /// save asks first, since each one is a request to your provider.
 struct FixWithAIButton: View {
@@ -234,10 +308,11 @@ struct AIRunBar: View {
                 HStack(spacing: 12) {
                     ProgressView(value: Double(run.done), total: Double(max(run.total, 1)))
                         .progressViewStyle(.circular).controlSize(.small).tint(t.ink)
-                    Text(run.stopping ? "Stopping…" : run.total == 1 ? "Asking your AI…" : "Fixing \(min(run.done + 1, run.total)) of \(run.total) with AI")
+                    Text(run.stopping ? "Stopping…" : run.waitingUntil != nil ? "Your AI asked to slow down. Waiting…" : run.total == 1 ? "Asking your AI…"
+                         : "\(run.imported ? "Reading" : "Fixing") \(min(run.done + 1, run.total)) of \(run.total) with AI")
                         .font(.subheadline.weight(.medium)).foregroundStyle(t.ink).monospacedDigit()
                     if run.total > 1 && !run.stopping {
-                        Button("Stop") { model.aiRun?.stopping = true }
+                        Button(run.imported ? "Pause" : "Stop") { model.aiRun?.stopping = true }
                             .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
                     }
                 }
