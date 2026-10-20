@@ -67,9 +67,11 @@ extension Array {
     /// Groups (collections, Lifestyle views) with the most saves first; a tie goes A–Z by name, the
     /// way Chrome sorts them (`mostFirst` in util.js).
     public func mostFirst(count: (Element) -> Int, name: (Element) -> String) -> [Element] {
-        map { ($0, count($0), name($0)) }
-            .sorted { a, b in a.1 != b.1 ? a.1 > b.1 : a.2.localizedStandardCompare(b.2) == .orderedAscending }
-            .map(\.0)
+        let keyed: [(item: Element, count: Int, name: String)] = map { ($0, count($0), name($0)) }
+        return keyed.sorted { a, b in
+            if a.count != b.count { return a.count > b.count }
+            return a.name.localizedStandardCompare(b.name) == .orderedAscending
+        }.map { $0.item }
     }
 }
 
