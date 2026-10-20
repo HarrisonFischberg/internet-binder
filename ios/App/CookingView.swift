@@ -3,7 +3,8 @@ import KeepsakeKit
 import KeepsakeUI
 
 /// Cooking: one step fills the screen, in large type, and the screen stays awake. Swipe or tap Next;
-/// the ingredients are one tap away. The last step offers "Cooked".
+/// the ingredients are one tap away. The last step offers "Cooked". Quiet music plays along (CookingMusic),
+/// unless it is turned off here or in Settings.
 struct CookingView: View {
     let save: Save
     let steps: [String]
@@ -15,6 +16,9 @@ struct CookingView: View {
     @State private var step = 0
     @State private var showIngredients = false
     @State private var checked: Set<Int> = []
+    @State private var music = CookingMusic()
+    @AppStorage(CookingMusic.enabledKey) private var musicOn = true
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -32,6 +36,8 @@ struct CookingView: View {
                         .disabled(ingredients.isEmpty)
                 }
                 .padding(.horizontal, 12)
+                CookingMusicBar(music: music, on: $musicOn)
+                    .frame(maxWidth: .infinity).padding(.top, 2)
                 TabView(selection: $step) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, text in
                         ScrollView {
@@ -69,8 +75,18 @@ struct CookingView: View {
                 .padding(.horizontal, 16).padding(.bottom, 8)
             }
         }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            if musicOn { music.start() }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            music.stop()
+        }
+        .onChange(of: musicOn) { _, on in if on { music.start() } else { music.stop() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { music.resume() } else if phase == .background { music.suspend() }
+        }
         .sheet(isPresented: $showIngredients) {
             NavigationStack {
                 List(Array(ingredients.enumerated()), id: \.offset) { i, line in
