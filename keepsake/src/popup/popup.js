@@ -40,6 +40,8 @@ const state = {
   savedItem: null,
   savedMode: 'saved', // saved | updated | existing (a video, recipe… already saved: shown, not saved again)
   initialChoice: '', // the picker value for Keepsake's own guess
+  choice: null, // where you've said it lives on the home: a picker value ('' is Review), null until you pick
+  shelfOpen: null, // collections | lifestyle, while looking through a library's groups
   items: [],
   ig: null,
   igScanListener: null,
@@ -74,6 +76,7 @@ async function applyTheme() {
 
 async function boot() {
   $('openDashboard').addEventListener('click', () => openDashboard('#home'));
+  $('homeDashboard').addEventListener('click', () => openDashboard('#home'));
   $('importTabsBtn').addEventListener('click', () => openDashboard('#tabsimport'));
   $('openDashboardBrand').addEventListener('click', (e) => {
     e.preventDefault();
@@ -148,16 +151,18 @@ async function loadProduct() {
   showHome();
 }
 
-// --- home: the dashboard, or where this page lives ----------------------------------------------------
-// Opening Keepsake never saves. Open dashboard is one tap; saving is: pick a library (Collections or
-// Lifestyle), pick a group in it (or start a collection), tidy the title, Save. Or "Not sure? Put it in
-// Review". Keepsake's own guess is ticked at each step, as on the iPhone share sheet.
+// --- home: drawn like the iPhone share sheet -------------------------------------------------------
+// Opening Keepsake never saves. Open dashboard sits in the header. Under it the page is drawn as its object
+// with "Where does it live?": Collections or Lifestyle (tap one to see its groups, tap a group to put it
+// there, or start a collection), or "Not sure? Put it in Review". Once there's a place, the page shrinks to a
+// small card whose title you can tidy, and Save (with Add a note beside it) appears.
 
 const tintOf = (kind) => `var(--c-kind-${kind === 'media' ? 'film' : kind}-fill, var(--c-surface-2))`;
+const hasPhoto = (it) => /^https:\/\//.test(it.image || '');
 
 // The library a picker value belongs to: a Lifestyle view, a collection, or neither (Review).
 function shelfOf(value) {
-  if (!value) return null;
+  if (value === null || value === undefined || value === '') return null;
   return value.startsWith('kind:') ? 'lifestyle' : 'collections';
 }
 
@@ -165,8 +170,12 @@ function choiceLabel(value) {
   if (!value) return 'Review';
   if (value.startsWith('kind:')) return kindInfo(value.slice(5)).plural;
   if (value.startsWith('new:')) return state.classification.collectionName;
-  if (value === '__new') return 'A new collection';
+  if (value === '__new') return sanitizeText($('homeNewName').value, 80) || 'A new collection';
   return state.collections.find((c) => c.id === value)?.name || 'Review';
+}
+
+function choiceKind(value) {
+  return value && value.startsWith('kind:') ? value.slice(5) : 'product';
 }
 
 function pageKind() {
@@ -175,28 +184,49 @@ function pageKind() {
   return state.product.price !== null && state.product.price !== undefined && state.product.price !== '' ? 'product' : 'link';
 }
 
-function showHome(shelf = null) {
-  const p = state.product;
-  const all = state.items;
-  const toSort = all.filter((it) => it.needsReview).length;
-  $('homeCounts').textContent = all.length ? [pluralize(all.length, 'save', 'saves'), toSort ? `${toSort} to sort` : ''].filter(Boolean).join(' · ') : '';
+function picture(src, kind, onFail) {
+  if (!src) return kindIcon(kind);
+  return el('img', { src, alt: '', onError: (e) => e.target.replaceWith(onFail ? onFail() : kindIcon(kind)) });
+}
 
+const inShelf = (it, shelf) => (shelf === 'collections' ? !!it.collectionId : !it.collectionId && hasOwnView(kindOf(it)));
+
+// Opens the home fresh (reset) or as you left it (coming back from the editor).
+function showHome({ reset = true, shelf } = {}) {
+  if (reset) {
+    state.choice = null;
+    state.shelfOpen = null;
+    $('homeTitleInput').value = state.product.title || '';
+    $('homeNewName').value = '';
+    $('homeNote').value = '';
+    $('homeNote').classList.add('hidden');
+  }
+  if (shelf !== undefined) state.shelfOpen = shelf;
+  const p = state.product;
   const kind = pageKind();
+
+  // The page as its object.
+  const photo = $('homeObjectPhoto');
+  clear(photo);
+  photo.style.setProperty('--tint', tintOf(kind));
+  photo.hidden = !state.chosenImage;
+  if (state.chosenImage) photo.append(el('img', { src: state.chosenImage, alt: '', onError: () => { photo.hidden = true; } }));
+  const pill = $('homeObjectPill');
+  clear(pill);
+  pill.style.setProperty('--tint', tintOf(kind));
+  pill.append(kindIcon(kind), state.classification.isInbox ? 'Needs a place' : kindInfo(kind).label);
+  $('homeObjectTitle').textContent = p.title || p.host || '';
   const thumb = $('homeThumb');
   clear(thumb);
   thumb.style.setProperty('--tint', tintOf(kind));
-  if (state.chosenImage) {
-    thumb.append(el('img', { src: state.chosenImage, alt: '', onError: () => { clear(thumb); thumb.append(kindIcon(kind)); } }));
-  } else thumb.append(kindIcon(kind));
-  $('homeTitle').textContent = p.title || p.host || '';
-  $('homeHost').textContent = p.retailer || p.host || '';
+  thumb.append(picture(state.chosenImage, kind));
 
   const dup = state.duplicate;
   const dupCol = dup && dup.collectionId ? state.collections.find((c) => c.id === dup.collectionId) : null;
   $('homeAlready').textContent = dup ? `Already saved${dupCol ? ` in ${dupCol.name}` : ''}. Pick a place to update it or save a copy.` : '';
   $('homeAlready').classList.toggle('hidden', !dup);
 
-  // Keepsake's guess, said once and ticked on its library.
+  // Keepsake's guess, said once.
   const initial = state.initialChoice;
   const cls = state.classification;
   const guess = $('homeGuess');
@@ -204,82 +234,177 @@ function showHome(shelf = null) {
   if (initial) guess.append('Keepsake thinks ', el('strong', {}, [choiceLabel(initial)]), '.');
   else if (cls.suggested?.collectionName) guess.append('Keepsake isn’t sure. Maybe ', el('strong', {}, [cls.suggested.collectionName]), '?');
   else guess.append('Keepsake isn’t sure yet.');
+
+  // Each library with a fan of what's already in it.
   for (const [id, which] of [['libCollections', 'collections'], ['libLifestyle', 'lifestyle']]) {
     const card = $(id);
-    const mine = shelfOf(initial) === which;
-    card.classList.toggle('is-guess', mine);
-    card.querySelector('.library-caption').textContent = mine ? choiceLabel(initial) : which === 'collections' ? 'Things to buy' : 'Recipes, places & more';
+    const fan = card.querySelector('.fan');
+    clear(fan);
+    const members = state.items.filter((it) => inShelf(it, which));
+    const shown = [...members.filter(hasPhoto), ...members.filter((it) => !hasPhoto(it))].slice(0, 3).reverse();
+    const fallback = which === 'collections' ? ['product', 'product', 'product'] : ['place', 'recipe', 'video'];
+    for (let i = 0; i < 3; i++) {
+      const it = shown[i];
+      const k = it ? kindOf(it) : fallback[i];
+      const tile = el('span', {}, [picture(it && hasPhoto(it) ? it.image : '', k)]);
+      tile.style.setProperty('--tint', tintOf(k));
+      fan.append(tile);
+    }
     card.querySelector('.library-count').textContent = which === 'collections'
       ? pluralize(state.collections.length, 'collection', 'collections')
       : pluralize(LIFESTYLE().length, 'kind', 'kinds');
-    card.setAttribute('aria-label', `${which === 'collections' ? 'Collections' : 'Lifestyle'}${mine ? `, Keepsake thinks ${choiceLabel(initial)}` : ''}`);
     card.onclick = () => openShelf(which);
   }
-  $('pickReview').onclick = () => pick('');
-  $('groupsBack').onclick = () => showHome();
-  $('homeDashboard').onclick = () => openDashboard('#home');
+  $('pickReview').onclick = () => choose('');
+  $('groupsBack').onclick = () => { state.shelfOpen = null; renderHome(); };
+  $('homeAddNote').onclick = () => {
+    $('homeNote').classList.remove('hidden');
+    $('homeAddNote').classList.add('hidden');
+    $('homeNote').focus();
+  };
+  $('homeSave').onclick = () => saveFromHome();
+  $('homeNewName').oninput = () => renderHome();
+  for (const id of ['homeTitleInput', 'homeNewName']) {
+    $(id).onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && state.choice !== null) {
+        e.preventDefault();
+        saveFromHome();
+      }
+    };
+  }
+  $('homeTitleInput').oninput = () => autosize($('homeTitleInput'), 60);
 
-  $('homeLibraries').classList.remove('hidden');
-  $('homeGroups').classList.add('hidden');
   show('state-home');
-  if (shelf) openShelf(shelf);
-  else setTimeout(() => $('homeDashboard').focus(), 30);
+  if (state.shelfOpen) openShelf(state.shelfOpen);
+  else renderHome();
+  if (reset) setTimeout(() => $('homeDashboard').focus(), 30);
 }
 
-// One library's groups: Lifestyle's views, or your collections (plus a new one).
+// Draws what changes as you pick: the object or the small card, libraries or groups, ticks, Save.
+function renderHome() {
+  const choice = state.choice;
+  const picked = choice !== null && choice !== undefined;
+  const shelf = state.shelfOpen;
+  $('homeObject').classList.toggle('hidden', picked || !!shelf);
+  $('homeCompact').classList.toggle('hidden', !picked && !shelf);
+  $('homeLibraries').classList.toggle('hidden', !!shelf);
+  $('homeGroups').classList.toggle('hidden', !shelf);
+  $('homeActions').classList.toggle('hidden', !picked);
+  $('homeAddNote').classList.toggle('hidden', !$('homeNote').classList.contains('hidden'));
+  $('homeNewRow').classList.toggle('hidden', choice !== '__new');
+  $('homeError').classList.add('hidden');
+
+  const review = $('pickReview');
+  review.classList.toggle('is-here', choice === '');
+  review.setAttribute('aria-pressed', choice === '' ? 'true' : 'false');
+  $('reviewTitle').textContent = choice === '' ? 'Going to Review' : 'Not sure? Put it in Review';
+
+  const guess = state.initialChoice;
+  for (const [id, which, plain] of [['libCollections', 'collections', 'Things to buy'], ['libLifestyle', 'lifestyle', 'Recipes, places & more']]) {
+    const card = $(id);
+    const here = picked && shelfOf(choice) === which;
+    const guessed = !here && shelfOf(guess) === which;
+    card.classList.toggle('is-here', here);
+    card.classList.toggle('has-guess', guessed);
+    card.querySelector('.library-caption').textContent = here ? choiceLabel(choice) : guessed ? `Maybe ${choiceLabel(guess)}` : plain;
+    card.setAttribute('aria-label', `${which === 'collections' ? 'Collections' : 'Lifestyle'}, ${here ? `going to ${choiceLabel(choice)}` : plain}`);
+  }
+  for (const tile of $('groupGrid').querySelectorAll('.group')) {
+    tile.classList.toggle('is-here', tile.dataset.value === choice);
+    tile.setAttribute('aria-pressed', tile.dataset.value === choice ? 'true' : 'false');
+  }
+
+  const dest = $('homeDest');
+  clear(dest);
+  dest.classList.toggle('is-set', picked);
+  if (picked) {
+    const icon = choice === '' ? reviewIcon() : kindIcon(choiceKind(choice));
+    dest.style.setProperty('--dest-tint', choice === '' ? 'var(--c-highlight)' : tintOf(choiceKind(choice)));
+    dest.append(icon, `In ${choiceLabel(choice)}`);
+  } else dest.append('Pick where it goes');
+  $('homeSaveLabel').textContent = state.duplicate ? 'Continue' : 'Save';
+  autosize($('homeTitleInput'), 60);
+}
+
+// One library's groups, as cover tiles: Lifestyle's views, or your collections (plus a new one).
 function openShelf(shelf) {
   const lifestyle = shelf === 'lifestyle';
   const cls = state.classification;
+  state.shelfOpen = shelf;
   $('groupsTitle').textContent = lifestyle ? 'Lifestyle' : 'Collections';
-  $('groupsSub').textContent = lifestyle ? 'Pick the view it belongs in.' : 'Pick a collection, or start one.';
+  $('groupsSub').textContent = lifestyle ? 'Pick the view it belongs in' : 'Pick a collection, or start one';
   const grid = $('groupGrid');
   clear(grid);
-  const tile = (value, title, sub, icon, tint, extra = '') => {
-    const guess = value === state.initialChoice && value !== '__new';
+  const saves = (n) => (n ? pluralize(n, 'save', 'saves') : 'Empty');
+  const tile = (value, title, members, kind, stamp) => {
+    const cover = members.find(hasPhoto);
+    const box = el('span', { class: `group-cover ${members.length ? '' : 'is-empty'}`.trim() }, [cover ? picture(cover.image, kind) : kindIcon(kind)]);
+    box.style.setProperty('--tint', tintOf(kind));
+    if (stamp && cover) {
+      const st = el('span', { class: 'group-stamp', 'aria-hidden': 'true' }, [kindIcon(kind)]);
+      st.style.setProperty('--tint', tintOf(kind));
+      box.append(st);
+    }
     const node = el('button', {
-      type: 'button', class: `group ${extra} ${guess ? 'is-guess' : ''}`.trim(),
-      'aria-label': `${title}${guess ? ', Keepsake’s guess' : ''}`, onClick: () => pick(value),
-    }, [el('span', { class: 'group-icon', 'aria-hidden': 'true' }, [icon]), el('span', { class: 'group-title' }, [title]), sub ? el('span', { class: 'group-sub' }, [sub]) : null]);
-    node.style.setProperty('--tint', tint);
+      type: 'button', class: `group ${value === state.initialChoice ? 'is-guess' : ''}`.trim(), dataset: { value },
+      'aria-label': `${title}, ${saves(members.length)}`, onClick: () => choose(value),
+    }, [box, el('span', { class: 'group-title' }, [title]), el('span', { class: 'group-sub' }, [saves(members.length)])]);
     return node;
   };
-  const saves = (n) => (n ? pluralize(n, 'save', 'saves') : 'Empty');
   if (lifestyle) {
-    for (const k of LIFESTYLE()) grid.append(tile(`kind:${k.value}`, k.plural, saves(state.items.filter((it) => kindOf(it) === k.value && !it.collectionId).length), kindIcon(k.value), tintOf(k.value)));
+    for (const k of LIFESTYLE()) grid.append(tile(`kind:${k.value}`, k.plural, state.items.filter((it) => kindOf(it) === k.value && !it.collectionId), k.value, true));
   } else {
-    grid.append(tile('__new', 'New collection', 'Name it next', plusIcon(), 'transparent', 'group-new'));
-    if (cls.isNew && cls.taxonomyKey) grid.append(tile(`new:${cls.taxonomyKey}`, cls.collectionName, 'New', kindIcon('product'), tintOf('product')));
-    for (const c of state.collections) grid.append(tile(c.id, c.name, saves(state.items.filter((it) => it.collectionId === c.id).length), kindIcon('product'), tintOf('product')));
+    grid.append(el('button', { type: 'button', class: 'group group-new', dataset: { value: '__new' }, onClick: () => choose('__new') }, [plusIcon(), el('span', { class: 'group-title' }, ['New collection'])]));
+    if (cls.isNew && cls.taxonomyKey) grid.append(tile(`new:${cls.taxonomyKey}`, cls.collectionName, [], 'product', false));
+    for (const c of state.collections) grid.append(tile(c.id, c.name, state.items.filter((it) => it.collectionId === c.id), 'product', false));
   }
-  $('homeLibraries').classList.add('hidden');
-  $('homeGroups').classList.remove('hidden');
-  setTimeout(() => (grid.querySelector('.is-guess') || $('groupsBack')).focus(), 30);
+  renderHome();
+  setTimeout(() => {
+    const target = grid.querySelector('.is-here');
+    target?.scrollIntoView?.({ block: 'nearest' });
+  }, 0);
 }
 
-function plusIcon() {
+// A place picked: it's ticked, the page becomes a small card with its title ready to tidy, Save appears.
+function choose(value) {
+  state.choice = value;
+  renderHome();
+  setTimeout(() => (value === '__new' ? $('homeNewName') : $('homeTitleInput')).focus(), 30);
+}
+
+// Save from the sheet: hand the choice, title and note to the editor's save (which also handles a name
+// close to an existing collection and a page that's already saved, by showing the editor).
+function saveFromHome() {
+  if (state.choice === null || state.choice === undefined) return;
+  const sel = $('collectionSelect');
+  if (!state.choice && !sel.querySelector('option[value=""]')) sel.prepend(el('option', { value: '', text: 'Not sure yet (leave it in Review)' }));
+  sel.value = state.choice;
+  sel.onchange();
+  if (state.choice === '__new') {
+    const name = sanitizeText($('homeNewName').value, 80);
+    if (!name) {
+      $('homeNewName').focus();
+      return;
+    }
+    $('newCollectionInput').value = name;
+  }
+  $('titleInput').value = $('homeTitleInput').value;
+  $('noteInput').value = $('homeNote').value;
+  $('quickDest').textContent = choiceLabel(state.choice);
+  save({ force: false });
+}
+
+function svgIcon(d, width = '2.4') {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.4', 'stroke-linecap': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
+  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', 'M12 5v14M5 12h14');
+  path.setAttribute('d', d);
   svg.append(path);
   return svg;
 }
 
-// A place picked: the quick step says where it's going and offers the title to tidy before Save.
-function pick(value) {
-  const sel = $('collectionSelect');
-  if (!value && !sel.querySelector('option[value=""]')) sel.prepend(el('option', { value: '', text: 'Not sure yet (leave it in Review)' }));
-  sel.value = value;
-  sel.onchange();
-  $('quickDest').textContent = choiceLabel(value);
-  $('state-product').classList.add('quick');
-  show('state-product');
-  setTimeout(() => {
-    const field = value === '__new' ? $('newCollectionInput') : $('titleInput');
-    field.focus();
-    if (field === $('titleInput')) field.setSelectionRange(field.value.length, field.value.length);
-  }, 30);
-}
+const plusIcon = () => svgIcon('M12 5v14M5 12h14');
+const reviewIcon = () => svgIcon('M4 13h4l1.5 3h5L16 13h4M5.5 6h13L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5z', '2');
 
 function renderProduct() {
   const p = state.product;
@@ -359,7 +484,7 @@ function renderProduct() {
     state.userOverride = false;
     updateConfidencePill();
   });
-  $('quickChange').addEventListener('click', () => showHome(shelfOf($('collectionSelect').value)));
+  $('quickChange').addEventListener('click', () => showHome({ reset: false }));
   $('moreDetails').addEventListener('click', () => {
     $('state-product').classList.remove('quick');
     autosize($('titleInput'));
@@ -393,9 +518,9 @@ function setHeroImage(src) {
   img.src = src;
 }
 
-function autosize(ta) {
+function autosize(ta, max = 96) {
   ta.style.height = 'auto';
-  ta.style.height = Math.min(96, ta.scrollHeight + 2) + 'px';
+  ta.style.height = Math.min(max, ta.scrollHeight + 2) + 'px';
 }
 
 function renderCollectionPicker() {
@@ -550,14 +675,22 @@ function askNearMatch(name, near) {
 }
 
 function setBusy(busy) {
-  for (const id of ['saveBtn', 'dupUpdate', 'dupCopy']) {
+  for (const id of ['saveBtn', 'dupUpdate', 'dupCopy', 'homeSave']) {
     const b = $(id);
     b.disabled = busy;
   }
   $('saveBtn').textContent = busy ? 'Saving…' : 'Save';
+  $('homeSaveLabel').textContent = busy ? 'Saving…' : state.duplicate ? 'Continue' : 'Save';
 }
 
 async function save({ force }) {
+  // From the home sheet, anything that needs the editor (a near-match question, an error) shows it.
+  const fromHome = document.body.dataset.state === 'state-home';
+  const toEditor = () => {
+    if (!fromHome) return;
+    $('state-product').classList.add('quick');
+    show('state-product');
+  };
   const err = $('saveError');
   err.classList.add('hidden');
   setBusy(true);
@@ -583,6 +716,7 @@ async function save({ force }) {
     if (res.duplicate) {
       state.duplicate = res.existing;
       renderDuplicate();
+      toEditor();
       return;
     }
     state.savedItem = res.item;
@@ -592,9 +726,11 @@ async function save({ force }) {
     if (res.collection && !state.collections.some((c) => c.id === res.collection.id)) state.collections = await store.getCollections();
     showSaved(res.item, res.collection, res.classification);
   } catch (e) {
-    if (e === ASKED) return;
-    err.textContent = String((e && e.message) || e);
-    err.classList.remove('hidden');
+    if (e !== ASKED) {
+      err.textContent = String((e && e.message) || e);
+      err.classList.remove('hidden');
+    }
+    toEditor();
   } finally {
     setBusy(false);
   }

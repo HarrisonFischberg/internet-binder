@@ -700,9 +700,23 @@ body {
 }
 
 
-/* home: Open dashboard, then "Where does it live?" (the iOS share sheet's choice, in the popup) */
+/* home: drawn like the iPhone share sheet (ios/ShareExtension/ShareViewController.swift). Open dashboard
+   sits in the header; under it the page as its object, "Where does it live?", the two libraries, Review. */
+.door {
+  display: none;
+}
+
+body[data-state="state-home"] .door {
+  display: inline-flex;
+}
+
 body[data-state="state-home"] #openDashboard {
   display: none;
+}
+
+.door svg {
+  width: 15px;
+  height: 15px;
 }
 
 #state-home {
@@ -715,54 +729,122 @@ body[data-state="state-home"] #openDashboard {
   display: none;
 }
 
-.door {
-  width: 100%;
-  height: auto;
-  min-height: 56px;
-  padding: 10px 18px;
-  justify-content: space-between;
-  text-align: left;
-  border-radius: var(--r-lg);
+/* the page as its object, tilted a touch like a card set down on the table */
+.sheet-object {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 4px;
 }
 
-.door svg {
-  width: 20px;
-  height: 20px;
-}
-
-.door-text {
+.object-card {
+  width: 230px;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  background: var(--c-surface);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-raised);
+  transform: rotate(-2deg);
+  animation: set-down var(--m-slow) var(--m-ease);
 }
 
-.door-title {
+@keyframes set-down {
+  from {
+    transform: rotate(-7deg) scale(0.9);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .object-card {
+    animation: none;
+  }
+}
+
+.object-photo {
+  height: 92px;
+  margin: -2px -4px 0;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: var(--bw) solid var(--c-line);
+  background: var(--tint, var(--c-surface-2));
+  display: grid;
+  place-items: center;
+  color: var(--c-on-kind-fill);
+}
+
+.object-photo[hidden] {
+  display: none;
+}
+
+.object-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.object-photo svg {
+  width: 28px;
+  height: 28px;
+}
+
+.object-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 7px;
+  border-radius: var(--r-pill);
+  border: 1.5px solid var(--c-line);
+  font: var(--t-caption);
+  font-weight: 800;
+  background: var(--tint, var(--c-surface-2));
+  color: var(--c-on-kind-fill);
+}
+
+.object-pill svg {
+  width: 13px;
+  height: 13px;
+}
+
+.object-title {
+  margin: 0;
   font-family: var(--font-display);
   font-stretch: var(--stretch-display);
   font-weight: var(--w-display);
   letter-spacing: var(--track-display);
   font-size: 18px;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
-.door-sub {
-  font: var(--t-caption);
-  opacity: 0.85;
-}
-
-.door-sub:empty {
-  display: none;
-}
-
-.page-row {
+/* the page as a small card while you pick: the title is yours to tidy */
+.sheet-compact {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
+  padding: 10px;
+  background: var(--c-surface);
+  border: var(--bw) solid var(--c-line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
 }
 
-.page-thumb {
-  width: 44px;
-  height: 44px;
+.sheet-compact.hidden {
+  display: none;
+}
+
+.compact-thumb {
+  width: 52px;
+  height: 52px;
   flex: none;
   border-radius: var(--r-sm);
   overflow: hidden;
@@ -773,39 +855,72 @@ body[data-state="state-home"] #openDashboard {
   border: var(--bw) solid var(--c-line);
 }
 
-.page-thumb img {
+.compact-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.page-thumb svg {
-  width: 20px;
-  height: 20px;
+.compact-thumb svg {
+  width: 22px;
+  height: 22px;
 }
 
-.page-text {
+.compact-text {
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
-.page-title {
-  margin: 0;
-  font: var(--t-subhead);
-  font-weight: 700;
+.compact-title {
+  width: 100%;
+  margin: -3px 0 0 -6px;
+  padding: 3px 6px;
+  border: 1.5px dashed transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
   color: var(--c-text);
-  white-space: nowrap;
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-display);
+  font-weight: var(--w-display);
+  letter-spacing: var(--track-display);
+  font-size: 16px;
+  line-height: 1.2;
+  resize: none;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.page-meta {
-  margin: 0;
-  font: var(--t-caption);
+.compact-title:hover {
+  border-color: var(--c-border);
+}
+
+.compact-title:focus {
+  outline: none;
+  border-style: solid;
+  border-color: var(--c-line);
+  background: var(--c-bg);
+}
+
+.compact-dest {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: var(--t-footnote);
+  font-weight: 700;
   color: var(--c-text-muted);
+}
+
+.compact-dest.is-set {
+  color: var(--c-text);
+}
+
+.compact-dest svg {
+  width: 14px;
+  height: 14px;
+  color: var(--dest-tint, currentColor);
 }
 
 .where {
@@ -814,13 +929,17 @@ body[data-state="state-home"] #openDashboard {
   gap: 10px;
 }
 
+.where.hidden {
+  display: none;
+}
+
 .where h2 {
   margin: 0;
   font-family: var(--font-display);
   font-stretch: var(--stretch-display);
   font-weight: var(--w-display);
   letter-spacing: var(--track-display);
-  font-size: 19px;
+  font-size: 20px;
   line-height: 1.2;
 }
 
@@ -837,7 +956,7 @@ body[data-state="state-home"] #openDashboard {
 .libraries {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .library,
@@ -846,9 +965,7 @@ body[data-state="state-home"] #openDashboard {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
   min-width: 0;
-  padding: 12px;
   text-align: left;
   font: inherit;
   color: var(--c-text);
@@ -857,6 +974,11 @@ body[data-state="state-home"] #openDashboard {
   border-radius: var(--r-md);
   box-shadow: var(--shadow-card);
   transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.library {
+  gap: 1px;
+  padding: 12px 12px 10px;
 }
 
 .library:hover,
@@ -871,51 +993,72 @@ body[data-state="state-home"] #openDashboard {
   box-shadow: none;
 }
 
-.library-icon,
-.group-icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 8px;
-  border-radius: var(--r-sm);
-  border: var(--bw) solid var(--c-line);
+/* a fan of what's already in the library, like the iPhone's cover fan */
+.fan {
+  position: relative;
+  height: 56px;
+  width: 100px;
+  margin-bottom: 10px;
+}
+
+.fan > span {
+  position: absolute;
+  bottom: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-xs);
+  border: 2px solid var(--c-line);
   background: var(--tint, var(--c-surface-2));
   color: var(--c-on-kind-fill);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  box-shadow: 2px 2px 0 var(--c-line);
 }
 
-.library-icon svg,
-.group-icon svg {
-  width: 18px;
-  height: 18px;
+.fan > span img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
-#libCollections {
-  --tint: var(--c-kind-product-fill);
+.fan > span svg {
+  width: 20px;
+  height: 20px;
 }
 
-#libLifestyle {
-  --tint: var(--c-kind-recipe-fill);
+.fan > span:nth-child(1) {
+  left: 0;
+  transform: rotate(-8deg);
 }
 
-.library-title,
-.group-title {
+.fan > span:nth-child(2) {
+  left: 24px;
+  transform: rotate(-1deg);
+  z-index: 1;
+}
+
+.fan > span:nth-child(3) {
+  left: 48px;
+  width: 54px;
+  height: 54px;
+  transform: rotate(6deg);
+  z-index: 2;
+}
+
+.library-title {
   font-family: var(--font-display);
   font-stretch: var(--stretch-display);
   font-weight: var(--w-display);
   letter-spacing: var(--track-display);
-  font-size: 16px;
-  line-height: 1.2;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 19px;
+  line-height: 1.15;
 }
 
 .library-caption,
-.library-count,
-.group-sub {
-  font: var(--t-caption);
+.library-count {
+  font: var(--t-footnote);
   color: var(--c-text-muted);
   max-width: 100%;
   overflow: hidden;
@@ -924,25 +1067,39 @@ body[data-state="state-home"] #openDashboard {
 }
 
 .library-count {
-  margin-top: 4px;
+  margin-top: 6px;
+  font: var(--t-caption);
 }
 
-/* Keepsake's guess: ticked, like iOS */
-.library.is-guess::after,
-.group.is-guess::after {
+.library.has-guess .library-caption {
+  color: var(--c-text);
+  font-weight: 700;
+}
+
+/* where it's going: ticked, as on the iPhone */
+.library.is-here::after,
+.group.is-here::after,
+.review-row .review-check {
   content: "";
   position: absolute;
   top: 10px;
   right: 10px;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: var(--c-success) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4L18 8'/%3E%3C/svg%3E") center / 13px no-repeat;
+  border: 2px solid var(--c-line);
+  background: var(--c-success) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4L18 8'/%3E%3C/svg%3E") center / 13px no-repeat;
+  z-index: 3;
 }
 
-.library.is-guess .library-caption {
+.library.is-here,
+.group.is-here {
+  box-shadow: var(--shadow-raised);
+}
+
+.library.is-here .library-caption {
   color: var(--c-text);
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .groups-head {
@@ -952,11 +1109,17 @@ body[data-state="state-home"] #openDashboard {
 }
 
 .groups-back {
-  width: 36px;
-  height: 36px;
-  padding: 0;
+  width: 38px;
+  height: 38px;
   flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border-radius: 50%;
+  border: var(--bw) solid var(--c-line);
+  background: var(--c-surface);
+  color: var(--c-text);
+  box-shadow: 2px 2px 0 var(--c-line);
 }
 
 .groups-back svg {
@@ -964,56 +1127,141 @@ body[data-state="state-home"] #openDashboard {
   height: 18px;
 }
 
+.new-name.hidden {
+  display: none;
+}
+
 .groups {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  max-height: 232px;
+  gap: 12px;
+  max-height: 214px;
   overflow-y: auto;
-  padding: 2px 6px 6px 2px;
+  padding: 4px 6px 8px 2px;
+  margin: -4px -6px -8px -2px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
 }
 
 .group {
-  padding: 10px;
+  gap: 1px;
+  padding: 7px 7px 8px;
 }
 
-.group-icon {
-  width: 30px;
-  height: 30px;
+/* a group's cover: its first picture, else its kind's icon; an empty one is a dashed frame */
+.group-cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
   margin-bottom: 6px;
+  border-radius: var(--r-xs);
+  border: 2px solid var(--c-line);
+  background: var(--tint, var(--c-surface-2));
+  color: var(--c-on-kind-fill);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
 }
 
-.group-icon svg {
-  width: 16px;
-  height: 16px;
+.group-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.group-cover > svg {
+  width: 26px;
+  height: 26px;
+}
+
+.group-cover.is-empty {
+  border-style: dashed;
+  background: transparent;
+  color: var(--c-text-muted);
+}
+
+/* the kind's stamp on a Lifestyle cover */
+.group-stamp {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  border: 1.5px solid var(--c-line);
+  background: var(--tint);
+  color: var(--c-on-kind-fill);
+}
+
+.group-stamp svg {
+  width: 14px;
+  height: 14px;
 }
 
 .group-title {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-display);
+  font-weight: var(--w-display);
+  letter-spacing: var(--track-display);
   font-size: 14px;
-  white-space: normal;
+  line-height: 1.15;
+  max-width: 100%;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  overflow: hidden;
   overflow-wrap: anywhere;
+}
+
+.group-sub {
+  font: var(--t-caption);
+  color: var(--c-text-muted);
 }
 
 .group-new {
   border-style: dashed;
   box-shadow: none;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  min-height: 120px;
 }
 
-.group-new .group-icon {
-  background: transparent;
+.group-new > svg {
+  width: 26px;
+  height: 26px;
+}
+
+.group-new .group-title {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* Keepsake's guess says "Suggested" where the count would be */
+.group.is-guess:not(.is-here) .group-sub {
+  font-size: 0;
+}
+
+.group.is-guess:not(.is-here) .group-sub::before {
+  content: "Suggested";
+  font: var(--t-caption);
   color: var(--c-text);
+  font-weight: 800;
 }
 
 .review-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 52px;
-  padding: 8px 14px;
+  min-height: 54px;
+  padding: 8px 40px 8px 14px;
   text-align: left;
   font: inherit;
   color: var(--c-text);
@@ -1027,11 +1275,29 @@ body[data-state="state-home"] #openDashboard {
   background: var(--c-surface);
 }
 
-.review-row svg {
-  width: 20px;
-  height: 20px;
+.review-row > svg:first-child {
+  width: 22px;
+  height: 22px;
   flex: none;
   color: var(--c-highlight);
+}
+
+.review-row .review-check {
+  display: none;
+  top: 50%;
+  margin-top: -11px;
+  padding: 3px;
+  color: transparent;
+}
+
+.review-row.is-here {
+  border-style: solid;
+  border-color: var(--c-line);
+  background: var(--c-highlight-soft);
+}
+
+.review-row.is-here .review-check {
+  display: block;
 }
 
 .review-text {
@@ -1041,12 +1307,41 @@ body[data-state="state-home"] #openDashboard {
 
 .review-title {
   font: var(--t-subhead);
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .review-sub {
   font: var(--t-caption);
   color: var(--c-text-muted);
+}
+
+.home-note.hidden {
+  display: none;
+}
+
+.sheet-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 10px;
+}
+
+.sheet-actions.hidden {
+  display: none;
+}
+
+.sheet-actions .btn {
+  height: 46px;
+  font-size: 15px;
+  gap: 8px;
+}
+
+.sheet-actions .btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.sheet-primary {
+  font-size: 16px !important;
 }
 
 /* the quick step after picking a place: where it's going, and the title to tidy */
@@ -1117,4 +1412,20 @@ body[data-state="state-home"] #openDashboard {
 
 #state-product.quick .collection-row:not(:has(.new-collection:not(.hidden), .near-match:not(.hidden))) {
   display: none;
+}
+
+/* keep Save in view under the 600px popup limit while picking */
+#state-home:has(.sheet-actions:not(.hidden)) .groups {
+  max-height: 178px;
+}
+
+#state-home:has(.sheet-actions:not(.hidden)):has(.new-name:not(.hidden)) .groups {
+  max-height: 128px;
+}
+
+/* a group's tick sits top-left, clear of the kind's stamp (as on the iPhone) */
+.group.is-here::after {
+  left: 12px;
+  right: auto;
+  top: 12px;
 }

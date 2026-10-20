@@ -64,20 +64,21 @@ async function until(id) {
   for (let i = 0; i < 80 && !shown(id); i++) await settle(25);
   assert.ok(shown(id), `${id} is showing`);
 }
-const tiles = () => [...page.querySelectorAll('#groupGrid .group')];
-const tileNamed = (name) => tiles().find((t) => t.querySelector('.group-title').textContent === name);
 async function savedUrl(url) {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   return createStore(chromeBackend(), idbBackend()).findByUrl(url);
 }
 
-test('popup: opening it never saves; it offers the dashboard and asks where the page lives', async () => {
+const tileFor = (value) => page.querySelector(`#groupGrid .group[data-value="${value}"]`);
+
+test('popup: opening it never saves; Open dashboard is in the header and it asks where the page lives', async () => {
   await openPopup(video);
   assert.ok(shown('state-home'));
   assert.equal(await savedUrl(video.url), null, 'nothing saved just by opening it');
+  assert.ok(shown('homeObject') && !shown('homeCompact'), 'the page drawn as its object');
   assert.match(page.getElementById('homeGuess').textContent, /Keepsake thinks Videos\./);
-  assert.ok(page.getElementById('libLifestyle').classList.contains('is-guess'), 'its guess is ticked');
-  assert.ok(!page.getElementById('libCollections').classList.contains('is-guess'));
+  assert.equal(page.querySelector('#libLifestyle .library-caption').textContent, 'Maybe Videos');
+  assert.ok(!shown('homeActions'), 'no Save until a place is picked');
   F.calls.tabsCreated.length = 0;
   page.getElementById('homeDashboard').click();
   for (let i = 0; i < 40 && !F.calls.tabsCreated.length; i++) await settle(25);
@@ -88,15 +89,14 @@ test('popup: opening it never saves; it offers the dashboard and asks where the 
 test('popup: Lifestyle, then Videos, then a tidier title, then Save', async () => {
   await openPopup(video);
   page.getElementById('libLifestyle').click();
-  assert.ok(shown('homeGroups'));
-  assert.ok(tileNamed('Videos').classList.contains('is-guess'));
-  tileNamed('Videos').click();
-  await until('state-product');
-  assert.ok(page.getElementById('state-product').classList.contains('quick'), 'the quick step');
-  assert.equal(page.getElementById('quickDest').textContent, 'Videos');
-  assert.ok(page.querySelector('.price-row').classList.contains('hidden'), 'no price for a video');
-  page.getElementById('titleInput').value = 'Cold opens';
-  page.getElementById('saveBtn').click();
+  assert.ok(shown('homeGroups') && shown('homeCompact'));
+  assert.ok(tileFor('kind:video').classList.contains('is-guess'));
+  tileFor('kind:video').click();
+  assert.ok(tileFor('kind:video').classList.contains('is-here'), 'ticked');
+  assert.equal(page.getElementById('homeDest').textContent, 'In Videos');
+  assert.ok(shown('homeActions'));
+  page.getElementById('homeTitleInput').value = 'Cold opens';
+  page.getElementById('homeSave').click();
   await until('state-saved');
   assert.equal(page.getElementById('savedMove').value, 'kind:video');
   assert.ok(visible('savedUndo'));
@@ -117,30 +117,32 @@ test('popup: opening it again on a saved video shows that save, not the duplicat
   assert.match(F.calls.tabsCreated.at(-1)?.url || '', /dashboard\.html#kind\/video$/, 'Open in dashboard goes to Videos, not Review');
 });
 
-test('popup: Not sure goes to Review, and Undo comes back to the start', async () => {
+test('popup: Not sure goes to Review with a note, and Undo comes back to the start', async () => {
   const page2 = { title: 'Some notes', url: 'https://notes.example/popup-review', images: [], image: '', price: null, schemaTypes: [] };
   await openPopup(page2);
   page.getElementById('pickReview').click();
-  await until('state-product');
-  assert.equal(page.getElementById('quickDest').textContent, 'Review');
-  page.getElementById('saveBtn').click();
+  assert.ok(page.getElementById('pickReview').classList.contains('is-here'));
+  assert.equal(page.getElementById('homeDest').textContent, 'In Review');
+  page.getElementById('homeAddNote').click();
+  page.getElementById('homeNote').value = 'for later';
+  page.getElementById('homeSave').click();
   await until('state-saved');
   const saved = await savedUrl(page2.url);
-  assert.deepEqual([saved.collectionId, saved.needsReview], [null, true]);
+  assert.deepEqual([saved.collectionId, saved.needsReview, saved.note], [null, true, 'for later']);
   page.getElementById('savedUndo').click();
   await until('state-home');
+  assert.ok(shown('homeObject') && !shown('homeActions'), 'back to the start');
   assert.equal(await savedUrl(page2.url), null, 'undone');
 });
 
-test('popup: a new collection is named in the quick step', async () => {
+test('popup: a new collection is named right on the sheet', async () => {
   const mug = { title: 'Speckled mug', url: 'https://shop.example/mug-popup', price: 18, priceText: '$18.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] };
   await openPopup(mug);
   page.getElementById('libCollections').click();
-  tileNamed('New collection').click();
-  await until('state-product');
-  assert.ok(shown('newCollectionRow'));
-  page.getElementById('newCollectionInput').value = 'Pottery shelf';
-  page.getElementById('saveBtn').click();
+  tileFor('__new').click();
+  assert.ok(shown('homeNewRow'));
+  page.getElementById('homeNewName').value = 'Pottery shelf';
+  page.getElementById('homeSave').click();
   await until('state-saved');
   const saved = await savedUrl(mug.url);
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
@@ -148,13 +150,20 @@ test('popup: a new collection is named in the quick step', async () => {
   assert.equal(col.name, 'Pottery shelf');
 });
 
-test('popup: a product page still shows its price under Price, picture and note', async () => {
+test('popup: a page already saved goes to the editor to update it or save a copy, with its price', async () => {
   const lamp = { title: 'Lamp', url: 'https://shop.example/lamp-popup', price: 12, priceText: '$12.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] };
   await openPopup(lamp);
   page.getElementById('pickReview').click();
+  page.getElementById('homeSave').click();
+  await until('state-saved');
+  await openPopup(lamp);
+  assert.ok(shown('homeAlready'), 'says it is already saved');
+  page.getElementById('pickReview').click();
+  assert.equal(page.getElementById('homeSaveLabel').textContent, 'Continue');
+  page.getElementById('homeSave').click();
   await until('state-product');
+  assert.ok(shown('dupRow'), 'Update the saved one, or Save another copy');
   page.getElementById('moreDetails').click();
-  assert.ok(!page.getElementById('state-product').classList.contains('quick'));
   assert.ok(!page.querySelector('.price-row').classList.contains('hidden'));
   assert.equal(page.getElementById('priceInput').value, '12');
 });
@@ -164,9 +173,8 @@ test('popup: a saved post moved into Places becomes a place named from its capti
     description: '1,234 likes - nyceats: "Best donuts in the city 🍩 Try the glazed. #nyc"' };
   await openPopup(post);
   page.getElementById('libLifestyle').click();
-  tileNamed('Places').click();
-  await until('state-product');
-  page.getElementById('saveBtn').click();
+  tileFor('kind:place').click();
+  page.getElementById('homeSave').click();
   await until('state-saved');
   assert.equal(page.getElementById('savedMove').value, 'kind:place');
   const saved = await savedUrl(post.url);
@@ -180,8 +188,7 @@ test('popup: an Instagram post with 📍 in its caption is guessed as a place, n
   assert.match(page.getElementById('homeGuess').textContent, /Places/);
   page.getElementById('libLifestyle').click();
   page.querySelector('#groupGrid .group.is-guess').click();
-  await until('state-product');
-  page.getElementById('saveBtn').click();
+  page.getElementById('homeSave').click();
   await until('state-saved');
   assert.equal(page.getElementById('savedMove').value, 'kind:place');
   const saved = await savedUrl(post.url);
