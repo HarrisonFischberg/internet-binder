@@ -20,6 +20,7 @@ struct SettingsScreen: View {
     @State private var importing = false
     @State private var erasing = false
     @State private var testResult: String?
+    @State private var fixingAll = false
 
     enum Consent: Identifiable { case ai, lookup(String); var id: String { switch self { case .ai: "ai"; case .lookup(let k): k } } }
 
@@ -51,6 +52,11 @@ struct SettingsScreen: View {
                           defaultFilename: "keepsake-export-\(Date.now.formatted(.iso8601.year().month().day()))") { _ in exportDoc = nil }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { r in if case .success(let url) = r { Task { await model.importFile(url) } } }
             .sheet(isPresented: $erasing) { EraseSheet() }
+            .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
+                Button("Fix everything") { dismiss(); Task { await model.fixWithAI(model.saves) } }
+            } message: {
+                Text("Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone.")
+            }
         }
     }
 
@@ -59,7 +65,7 @@ struct SettingsScreen: View {
     private var aiSection: some View {
         Section {
             Toggle("Optional AI", isOn: Binding(get: { aiOn }, set: { on in
-                if on { consent = .ai } else { Task { aiOn = false; try? await model.library?.updateSettings(["ai": ["on": false]]) } }
+                if on { consent = .ai } else { Task { aiOn = false; try? await model.library?.updateSettings(["ai": ["on": false]]); await model.refreshAIReady() } }
             }))
             if aiOn {
                 Picker("Provider", selection: $provider) {
@@ -69,14 +75,19 @@ struct SettingsScreen: View {
                 .onChange(of: provider) { Task { try? await model.library?.updateSettings(["ai": ["provider": provider]]) } }
                 SecureField("Your API key", text: $key)
                     .textContentType(.password).autocorrectionDisabled().textInputAutocapitalization(.never)
-                    .onSubmit { Task { try? await model.library?.setAIKey(key) } }
+                    .onSubmit { Task { try? await model.library?.setAIKey(key); await model.refreshAIReady() } }
                 Button("Save key and test") {
                     Task {
                         try? await model.library?.setAIKey(key)
+                        await model.refreshAIReady()
                         do { try await model.library?.testAI(); testResult = "Connected." } catch { testResult = error.localizedDescription }
                     }
                 }
                 if let testResult { Text(testResult).font(.footnote).foregroundStyle(.secondary) }
+                if model.aiReady && !model.saves.isEmpty {
+                    Button("Fix every save with AI", systemImage: "sparkles") { fixingAll = true }
+                        .disabled(model.aiRun != nil)
+                }
             }
         } header: { Text("Optional AI") } footer: {
             Text("Off by default. Uses your own key, kept in this iPhone's Keychain and never exported. Sends only what each feature says, to the provider you choose.")
@@ -135,6 +146,7 @@ struct SettingsScreen: View {
         case .ai:
             try? await lib.updateSettings(["ai": ["on": true, "provider": provider]])
             aiOn = true
+            await model.refreshAIReady()
         case .lookup(let k):
             try? await lib.updateSettings(["lookups": [k: true]])
             lookups[k] = true
@@ -154,6 +166,7 @@ struct ConsentSheet: View {
     let consent: SettingsScreen.Consent
     let decide: (Bool) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.ks) private var t
 
     private var title: String {
         switch consent {
@@ -168,8 +181,9 @@ struct ConsentSheet: View {
         case .ai: [
             "Uses your own key with the provider you choose. Keepsake has no AI server.",
             "After a save: its title, caption or description, hashtags, location tag, site and the thumbnail stored on this iPhone, to work out what it is (a recipe, workout, place…) and fill in its card. What the post doesn't say is drafted and marked AI draft. You can undo every change.",
-            "Something to buy also gets its price, shop and your collection names, to tidy the title and pick a collection.",
-            "Nothing is fetched from the pages a post links to on this iPhone.",
+            "Something to buy (an Instagram or Facebook post of a product, say) is worked out from its picture, since a post's caption can be wrong. Your provider searches the web for the product, and Keepsake reads the one shop page it found, without cookies, for its name, price and details. The card shows the shop's facts first and the AI's summary beside them.",
+            "Its price, shop and your collection names also go, to tidy the title and pick a collection.",
+            "Nothing else is fetched from the pages a post links to on this iPhone.",
             "Nothing is sent until you add a key. Turning this off stops it at once.",
         ]
         case .lookup("places"): ["Each place's name and city (and street, if known) goes to nominatim.openstreetmap.org, at most one a second.", "Only a result with the same name in the same area is used.", "No cookies, no account."]
@@ -187,18 +201,27 @@ struct ConsentSheet: View {
                         Label(p, systemImage: "arrow.up.right.circle").font(.body)
                     }
                 }
+                .foregroundStyle(t.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
             }
-            .safeAreaInset(edge: .bottom) {
+            // The buttons sit on their own solid bar under the text, so the text scrolls above them and
+            // never runs underneath (the sheet's glass showed it through before).
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 12) {
                     Button("Not now") { decide(false); dismiss() }.buttonStyle(.bordered).frame(minHeight: 44)
                     PrimarySlab("Turn on", symbol: "checkmark") { decide(true); dismiss() }
                 }
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(t.table.ignoresSafeArea(edges: .bottom))
+                .overlay(alignment: .top) { Rectangle().fill(t.style == .pantry ? t.line : t.rule).frame(height: t.style == .pantry ? 2 : 1) }
             }
+            .background(t.table.ignoresSafeArea())
             .onAppear { Haptic.warning() }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
     }
 }
 

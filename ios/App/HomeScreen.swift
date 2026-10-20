@@ -10,6 +10,7 @@ struct HomeScreen: View {
     @Environment(\.ks) private var t
     @State private var settings = false
     @State private var appearance = false
+    @State private var fixingAll = false
     @State private var collections: [SaveCollection] = []
     /// Recent and the two sections, in the order you've dragged them into.
     @State private var recentOrder: [String] = []
@@ -42,6 +43,10 @@ struct HomeScreen: View {
                         ScreenHeader(title: "Keepsake", subtitle: nil)
                         if size != .regular {
                             HStack(spacing: 10) {
+                                if model.aiReady && !model.saves.isEmpty {
+                                    headerButton("sparkles", "Fix everything with AI") { fixingAll = true }
+                                        .disabled(model.aiRun != nil)
+                                }
                                 headerButton("paintpalette", "Appearance") { appearance = true }
                                 headerButton("gearshape", "Settings") { settings = true }
                             }
@@ -75,6 +80,11 @@ struct HomeScreen: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $settings) { SettingsScreen() }
+        .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
+            Button("Fix everything") { Task { await model.fixWithAI(model.saves) } }
+        } message: {
+            Text("Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone. Fix one collection or Lifestyle view from its own page.")
+        }
         .sheet(isPresented: $appearance) { AppearanceSheet() }
         .task(id: model.saves.count) { collections = (try? model.library?.collections()) ?? [] }
         .onAppear { sectionOrder = HomeSections.order() }

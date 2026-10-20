@@ -13,7 +13,7 @@ import { providerConfig, originFor, cleanupWithAI, CLEANUP_BATCH } from '../ai/p
 import * as UI from './ui.js';
 import { needsCollection, hasOwnView, kindOf, kindInfo } from '../shared/kinds.js';
 import { understandItem } from '../shared/understand.js';
-import { fetchPage } from '../ai/pages.js';
+import { fetchPage, loadImage } from '../ai/pages.js';
 
 // Saves read with your provider at once: one request each.
 const UNDERSTAND_AT_ONCE = 4;
@@ -162,7 +162,7 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
     for (let at = 0; at < all.length && !stopped; at += UNDERSTAND_AT_ONCE) {
       await Promise.all(all.slice(at, at + UNDERSTAND_AT_ONCE).map(async (item) => {
         try {
-          read.set(item.id, await understandItem(ctx.store, item.id, { force: true, runId }, { fetchPage: useLive ? fetchPage : async () => null }));
+          read.set(item.id, await understandItem(ctx.store, item.id, { force: true, runId }, { fetchPage: useLive ? fetchPage : async () => null, loadImage }));
         } catch (e) {
           read.set(item.id, { error: String((e && e.message) || e) });
         }
@@ -185,7 +185,7 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
           if (kindOf(item) !== r.kind) report.lifestyle[r.kind] = (report.lifestyle[r.kind] || 0) + 1;
           else report.details++;
         }
-      } else batch.push(item);
+      } else batch.push((await ctx.store.getItem(item.id)) || item);
     }
     update();
     if (!batch.length || stopped) continue;

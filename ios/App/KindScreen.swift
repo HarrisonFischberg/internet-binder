@@ -35,6 +35,11 @@ struct KindScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if model.aiReady && !saves.isEmpty {
+                ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) \(k.plural.lowercased())") }
+            }
+        }
     }
 }
 
@@ -47,8 +52,6 @@ struct ReviewScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var suggestions: [String: ReviewSuggestions] = [:]
     @State private var destinations: [Destination] = []
-    @State private var aiReady = false
-    @State private var asking = false
     private var saves: [Save] { model.saves.filter { $0.needsCollection && $0.purchased != true } }
 
     var body: some View {
@@ -57,10 +60,10 @@ struct ReviewScreen: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     ScreenHeader(title: "Review", subtitle: "Keepsake wasn't sure where these go")
-                    if aiReady && !saves.isEmpty {
+                    if model.aiReady && !saves.isEmpty {
+                        let asking = model.aiRun != nil
                         Button {
-                            asking = true
-                            Task { await model.fixWithAI(saves); asking = false }
+                            Task { await model.fixWithAI(saves) }
                         } label: {
                             HStack(spacing: 8) {
                                 if asking { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
@@ -88,7 +91,6 @@ struct ReviewScreen: View {
         .task(id: saves.map(\.id)) {
             guard let lib = model.library else { return }
             destinations = (try? await lib.destinations()) ?? []
-            aiReady = await lib.aiReady()
             for s in saves where suggestions[s.id] == nil { suggestions[s.id] = try? await lib.suggestions(for: s.id) }
         }
     }
@@ -144,32 +146,108 @@ extension LibraryModel {
         }
     }
 
-    /// Chrome's Fix with AI for saves in Review: files what the AI is confident about, with Undo.
+    /// Fix with AI for any saves (one, a collection, a Lifestyle view, everything): your provider reads each
+    /// again, a product from its picture and its shop page, and a save in Review is filed when it's sure.
+    /// A few at a time, so the bar at the bottom can count and Stop works. One Undo takes back the whole run.
     func fixWithAI(_ saves: [Save]) async {
-        guard let lib = library, !saves.isEmpty else { return }
-        do {
-            let r = try await lib.fixWithAI(saves.map(\.id))
+        guard let lib = library, !saves.isEmpty, aiRun == nil else { return }
+        aiRun = AIRun(done: 0, total: saves.count)
+        defer { aiRun = nil }
+        var changed = 0, products = 0
+        var filed: [AIFixReport.Filed] = []
+        var logIds: [String] = []
+        var error = ""
+        let ids = saves.map(\.id)
+        for start in stride(from: 0, to: ids.count, by: 3) {
+            if aiRun?.stopping == true { break }
+            let chunk = Array(ids[start..<min(start + 3, ids.count)])
+            do {
+                let r = try await lib.fixWithAI(chunk)
+                changed += r.changed
+                products += r.products ?? 0
+                filed += r.filed
+                logIds += r.logIds ?? []
+                if !r.error.isEmpty { error = r.error }
+            } catch let e {
+                error = e.localizedDescription
+            }
+            aiRun?.done = min(ids.count, start + chunk.count)
             refresh()
-            if !r.error.isEmpty { show("AI couldn't check: \(r.error)"); Haptic.refused(); return }
-            let logIds = r.logIds ?? []
-            var undo: (@MainActor () async -> Void)?
-            if !logIds.isEmpty {
-                undo = { @MainActor in
-                    _ = try? await lib.undoAI(logIds)
-                    self.refresh()
-                }
-            }
-            if saves.count == 1 {
-                if let f = r.filed.first { Haptic.dropped(); show("AI filed it in \(f.collection)", undo: undo) }
-                else { show("AI wasn't sure either, so it stays in Review.") }
-            } else {
-                Haptic.settled()
-                show(r.filed.isEmpty ? "AI wasn't sure about any of them." : "AI filed \(r.filed.count) of \(saves.count)", undo: undo)
-            }
-        } catch {
-            show(error.localizedDescription)
-            Haptic.refused()
+            // A bad key or no credit: every other save would fail the same way.
+            if error.range(of: #"\((401|403|429)\)|API key|base URL"#, options: .regularExpression) != nil { break }
         }
+        refresh()
+        var undo: (@MainActor () async -> Void)?
+        if !logIds.isEmpty {
+            let all = logIds
+            undo = { @MainActor in
+                _ = try? await lib.undoAI(all)
+                self.refresh()
+            }
+        }
+        if changed == 0 && !error.isEmpty { show("AI couldn't check: \(error)"); Haptic.refused(); return }
+        if saves.count == 1 {
+            if let f = filed.first { Haptic.dropped(); show("AI filed it in \(f.collection)", undo: undo) }
+            else if changed > 0 { Haptic.settled(); show("AI updated it", undo: undo) }
+            else if saves[0].needsCollection { show("AI wasn't sure either, so it stays in Review.") }
+            else { show("AI found nothing to change") }
+        } else {
+            Haptic.settled()
+            show(changed == 0 ? "AI found nothing to change" : "AI updated \(changed) of \(saves.count)", undo: undo)
+        }
+    }
+}
+
+/// "Fix with AI" for a set of saves, in a screen's toolbar: shows while Optional AI is on. More than one
+/// save asks first, since each one is a request to your provider.
+struct FixWithAIButton: View {
+    let saves: [Save]
+    let what: String
+    @Environment(LibraryModel.self) private var model
+    @State private var confirming = false
+
+    var body: some View {
+        if model.aiReady && !saves.isEmpty {
+            Button("Fix with AI", systemImage: "sparkles") {
+                if saves.count == 1 { Task { await model.fixWithAI(saves) } } else { confirming = true }
+            }
+            .disabled(model.aiRun != nil)
+            .accessibilityHint("Your AI provider reads \(saves.count == 1 ? "this save" : "these saves") again and fills in what's missing.")
+            .confirmationDialog("Fix \(saves.count) saves with AI?", isPresented: $confirming, titleVisibility: .visible) {
+                Button("Fix \(what)") { Task { await model.fixWithAI(saves) } }
+            } message: {
+                Text("Your AI provider reads each one again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone.")
+            }
+        }
+    }
+}
+
+/// The bar at the bottom while Fix with AI works through saves: how far it got, and Stop.
+struct AIRunBar: View {
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    var body: some View {
+        ZStack {
+            if let run = model.aiRun {
+                HStack(spacing: 12) {
+                    ProgressView(value: Double(run.done), total: Double(max(run.total, 1)))
+                        .progressViewStyle(.circular).controlSize(.small).tint(t.ink)
+                    Text(run.stopping ? "Stopping…" : run.total == 1 ? "Asking your AI…" : "Fixing \(min(run.done + 1, run.total)) of \(run.total) with AI")
+                        .font(.subheadline.weight(.medium)).foregroundStyle(t.ink).monospacedDigit()
+                    if run.total > 1 && !run.stopping {
+                        Button("Stop") { model.aiRun?.stopping = true }
+                            .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
+                    }
+                }
+                .padding(.horizontal, 18).frame(minHeight: 48)
+                .ksSurface(radius: 24)
+                .transition(reduce ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                .accessibilityElement(children: .contain)
+            }
+        }
+        .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: model.aiRun == nil)
     }
 }
 
@@ -181,8 +259,6 @@ struct FilingPanel: View {
     @Environment(\.ks) private var t
     @State private var suggestions: ReviewSuggestions?
     @State private var destinations: [Destination] = []
-    @State private var aiReady = false
-    @State private var asking = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -194,10 +270,10 @@ struct FilingPanel: View {
                     Text("It's waiting in Review. Pick a place and Keepsake learns from it.").font(.footnote).foregroundStyle(t.inkMuted)
                 }
             }
-            if aiReady {
+            if model.aiReady {
+                let asking = model.aiRun != nil
                 Button {
-                    asking = true
-                    Task { await model.fixWithAI([save]); asking = false }
+                    Task { await model.fixWithAI([save]) }
                 } label: {
                     HStack(spacing: 8) {
                         if asking { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
@@ -245,8 +321,7 @@ struct FilingPanel: View {
             guard let lib = model.library else { return }
             async let s = try? lib.suggestions(for: save.id)
             async let d = try? lib.destinations()
-            async let ready = lib.aiReady()
-            (suggestions, destinations, aiReady) = (await s, await d ?? [], await ready)
+            (suggestions, destinations) = (await s, await d ?? [])
         }
     }
 

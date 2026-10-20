@@ -51,11 +51,14 @@ struct SaveDetailScreen: View {
                 .padding(.bottom, 24)
             }
         }
-        // One layer at the bottom: the save's primary action, docked. The tabs step aside on a save.
+        // One layer at the bottom: the save's primary action, docked. The tabs step aside on a save (the
+        // stack hides them: RootView's Stack).
         .safeAreaInset(edge: .bottom, spacing: 0) { dock }
-        .toolbar(.hidden, for: .tabBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if model.aiReady {
+                ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: [current], what: "it") }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button("Edit", systemImage: "pencil") { editing = true }
@@ -170,6 +173,7 @@ struct SaveDetailScreen: View {
         case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placePanel }
         case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; recipePanel }
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
+        case "product": productPanel
         default:
             if let text = [current.description, current.instagram?.caption].compactMap({ $0 }).first(where: { !$0.isEmpty }) {
                 Text(text).font(reading).foregroundStyle(t.ink).lineSpacing(4)
@@ -181,6 +185,64 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var sourceNote: some View {
         if let label = detail?.sourceLabel, !label.isEmpty {
             Text(label).font(KSFont.note).foregroundStyle(t.inkMuted)
+        }
+    }
+
+    /// What your AI provider found the thing to be (understand.js understandProduct): the shop page's own
+    /// facts first, then the provider's summary, labelled as its own words, then what the post said.
+    @ViewBuilder private var productPanel: some View {
+        let brand = [d?["brand"]?.string, d?["category"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        let shopText = d?["shopDescription"]?.string ?? ""
+        let specs = d?["specs"]?.array ?? []
+        let features = d?["features"]?.array?.compactMap(\.string) ?? []
+        let summary = d?["summary"]?.string ?? ""
+        let shop = d?["shopName"]?.string ?? ""
+        let stock = d?["availability"]?.string ?? ""
+        let caption = [current.instagram?.caption, current.description].compactMap { $0 }.first(where: { !$0.isEmpty })
+        VStack(alignment: .leading, spacing: 18) {
+            if !brand.isEmpty || !shopText.isEmpty || !specs.isEmpty || !features.isEmpty || !stock.isEmpty {
+                card(shop.isEmpty ? "About it" : "From \(shop)") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if !brand.isEmpty { Text(brand).font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted) }
+                        if !shopText.isEmpty { Text(shopText).font(reading).foregroundStyle(t.ink).lineSpacing(3) }
+                        ForEach(Array(specs.enumerated()), id: \.offset) { _, s in
+                            if let label = s["label"]?.string, let value = s["value"]?.string {
+                                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                    Text(label).font(.subheadline).foregroundStyle(t.inkMuted).frame(minWidth: 90, alignment: .leading)
+                                    Text(value).font(reading).foregroundStyle(t.ink)
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.vertical, 4)
+                                .overlay(alignment: .bottom) { rule }
+                            }
+                        }
+                        ForEach(features, id: \.self) { f in
+                            Label(f, systemImage: "checkmark").font(reading).foregroundStyle(t.ink)
+                        }
+                        if !stock.isEmpty {
+                            Text(stock == "in_stock" ? "In stock" : "Out of stock").font(.subheadline.weight(.semibold))
+                                .foregroundStyle(stock == "in_stock" ? KindStyle("product").color : t.inkMuted)
+                        }
+                    }
+                }
+            }
+            if !summary.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("AI summary").font(.caption.weight(.semibold)).foregroundStyle(t.ink)
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(Capsule().fill(t.stamp.opacity(0.18)))
+                    Text(summary).font(reading).foregroundStyle(t.ink).lineSpacing(3)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            if let caption {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !summary.isEmpty || !shopText.isEmpty {
+                        Text(isInstagram ? "The post said" : "Saved with it").font(.caption.weight(.semibold)).foregroundStyle(t.inkMuted)
+                    }
+                    Text(caption).font(reading).foregroundStyle(summary.isEmpty && shopText.isEmpty ? t.ink : t.inkMuted).lineSpacing(4)
+                }
+            }
         }
     }
 
@@ -384,6 +446,12 @@ struct SaveDetailScreen: View {
             }
             return PrimarySlab("Make it a goal", symbol: "target", kind: "workout") { goalSheet = true }
         default:
+            // A product your AI provider found the shop page for: that's where the dock goes; the picture
+            // still opens the post.
+            if current.kind == "product", let shop = d?["shopUrl"]?.string.flatMap(URL.init(string:)), shop.scheme?.hasPrefix("http") == true {
+                let name = d?["shopName"]?.string ?? ""
+                return PrimarySlab(name.isEmpty ? "Visit shop" : "Visit \(name)", symbol: "bag", kind: current.kind) { openURL(shop) }
+            }
             return url.map { u in PrimarySlab(openTitle, symbol: "safari", kind: current.kind) { openURL(u) } }
         }
     }

@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem } from '../keepsake/src/shared/understand.js';
-import { understandWithAI } from '../keepsake/src/ai/provider.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct } from '../keepsake/src/shared/understand.js';
+import { understandWithAI, understandProductWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
 
@@ -142,4 +142,88 @@ test('understandItem: reads a save once, applies the answer with Undo, and reads
   assert.equal(calls, 1);
   await understandItem(store, it.id, { force: true });
   assert.equal(calls, 2, 'Fix with AI reads it again');
+});
+
+// --- Something to buy: the picture says what it is, the shop page says the rest -------------------------
+
+const SHOP = `<html><head><title>Orange Shower Caddy | Bathhaus</title>
+<meta property="og:site_name" content="Bathhaus">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Pole Shower Caddy, Tangerine","brand":{"@type":"Brand","name":"Bathhaus"},"description":"A tension-pole caddy with three powder-coated shelves.","sku":"BH-220","color":"Tangerine","material":"Aluminium","offers":{"@type":"Offer","price":"89.00","priceCurrency":"USD","availability":"https://schema.org/InStock"}}</script>
+</head><body>Shop</body></html>`;
+
+test('productFromHtml: a shop page\'s schema.org product, without a DOM', () => {
+  const p = productFromHtml(SHOP, 'https://bathhaus.example/caddy');
+  assert.deepEqual([p.name, p.brand, p.price, p.currency, p.availability, p.sku, p.siteName, p.structured], ['Pole Shower Caddy, Tangerine', 'Bathhaus', 89, 'USD', 'in_stock', 'BH-220', 'Bathhaus', true]);
+  assert.deepEqual(p.specs.map((s) => s.label), ['Colour', 'Material']);
+  const og = productFromHtml('<meta property="og:title" content="Lamp"><meta property="product:price:amount" content="40"><meta property="product:price:currency" content="EUR">');
+  assert.deepEqual([og.title, og.price, og.currency, og.structured], ['Lamp', 40, 'EUR', false]);
+});
+
+const igPost = (extra = {}) => ({ id: 'p2', type: 'instagram', kind: 'link', title: 'Your sign to add more color, every day ✨', url: 'https://www.instagram.com/reel/XYZ/', host: 'www.instagram.com', price: null, currency: '', details: {}, instagram: { caption: 'Your sign to add more color, every day ✨ #bathroom', creator: 'homes', hashtags: ['bathroom'] }, userFields: [], ...extra });
+const found = (extra = {}) => ({ name: 'Bathhaus Pole Shower Caddy', brand: 'Bathhaus', model: '', category: 'Shower caddy', summary: 'An orange tension-pole shower caddy with shelves.', features: ['Fits ceilings up to 9 ft'], specs: [{ label: 'Material', value: 'Steel' }, { label: 'Shelves', value: '3' }], listing: { url: 'https://bathhaus.example/caddy', retailer: 'Bathhaus', title: 'Pole Shower Caddy', price: 79, currency: 'USD', availability: '' }, confidence: 0.85, reason: 'The image shows it', searched: true, ...extra });
+
+test('planProduct: a post becomes a product named and priced from its shop page, with the AI summary alongside', () => {
+  const page = productFromHtml(SHOP, 'https://bathhaus.example/caddy');
+  const { patch, changes } = planProduct(igPost(), found(), page);
+  assert.equal(patch.kind, 'product');
+  assert.equal(patch.title, 'Pole Shower Caddy, Tangerine', 'the page\'s name wins over the caption and the AI');
+  assert.deepEqual([patch.price, patch.currency], [89, 'USD'], 'the page\'s price, not the search snippet\'s');
+  assert.equal(patch.details.source, 'page');
+  assert.equal(patch.details.summary, 'An orange tension-pole shower caddy with shelves.');
+  assert.equal(patch.details.shopUrl, 'https://bathhaus.example/caddy');
+  assert.equal(patch.details.shopDescription, 'A tension-pole caddy with three powder-coated shelves.');
+  assert.deepEqual(patch.details.specs.map((s) => `${s.label}: ${s.value}`), ['Colour: Tangerine', 'Material: Aluminium', 'Shelves: 3'], 'the page\'s specs first; the AI adds only new ones');
+  assert.deepEqual(changes.map((c) => c.field), ['kind', 'product details', 'title', 'price']);
+});
+
+test('planProduct: unsure, no page, or your own edits: only what is safe changes', () => {
+  const unsure = planProduct(igPost(), found({ confidence: 0.3 }), null);
+  assert.equal(unsure.patch.title, undefined, 'not renamed on a guess');
+  assert.equal(unsure.patch.price, undefined);
+  assert.equal(unsure.patch.details.shopUrl, '');
+  assert.equal(unsure.patch.details.source, 'ai');
+  const noPage = planProduct(igPost(), found(), null);
+  assert.deepEqual([noPage.patch.title, noPage.patch.price, noPage.patch.details.source], ['Bathhaus Pole Shower Caddy', 79, 'ai']);
+  const mine = planProduct(igPost({ userFields: ['title', 'price', 'kind'], price: 50 }), found(), null);
+  assert.deepEqual([mine.patch.kind, mine.patch.title, mine.patch.price], [undefined, undefined, undefined]);
+  const shopSave = planProduct({ ...igPost(), type: 'product', kind: 'product', title: 'Pole Caddy – Bathhaus', host: 'bathhaus.example', price: 89 }, found(), null);
+  assert.equal(shopSave.patch.title, undefined, 'a shop page\'s own title stays');
+});
+
+test('understandItem: a post of a product is read from its picture, searched, and filled from its shop page', async () => {
+  const kv = {};
+  const store = createStore({ get: async (k) => Object.fromEntries((Array.isArray(k) ? k : [k]).filter((x) => x in kv).map((x) => [x, kv[x]])), set: async (o) => Object.assign(kv, o), remove: async () => {}, clear: async () => {}, onChanged: () => () => {} }, memoryRecordBackend());
+  await store.init();
+  await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await store.setSecret('aiApiKey', 'sk');
+  const it = await store.addItem({ ...igPost(), id: undefined, image: 'https://scontent.cdninstagram.com/caddy.jpg' });
+  const bodies = [];
+  globalThis.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    bodies.push(body);
+    if (!body.tools) return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ kind: 'product', confidence: 0.9, title: 'Shower caddy', details: {}, reason: 'A caddy' }) }] }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ content: [
+      { type: 'web_search_tool_result', content: [{ url: 'https://bathhaus.example/caddy' }] },
+      { type: 'text', text: JSON.stringify({ ...found(), listing: { ...found().listing }, confidence: 0.88 }) },
+    ] }) };
+  };
+  const pictures = [];
+  const r = await understandItem(store, it.id, { runId: 'p' }, { fetchShopPage: async (u) => (u === 'https://bathhaus.example/caddy' ? SHOP : null), loadImage: async (u) => { pictures.push(u); return 'data:image/jpeg;base64,QUJD'; } });
+  assert.deepEqual([r.kind, r.changed], ['product', true]);
+  assert.equal(bodies.length, 2, 'what it is, then the product with web search');
+  assert.equal(bodies[0].messages[0].content[0].type, 'image', 'the picture goes to the first read');
+  assert.equal(bodies[1].messages[0].content[0].type, 'image', 'and to the product read');
+  assert.match(bodies[1].messages[0].content.at(-1).text, /may be wrong/);
+  assert.deepEqual(pictures, ['https://scontent.cdninstagram.com/caddy.jpg'], 'the picture is copied once');
+  const saved = await store.getItem(it.id);
+  assert.deepEqual([saved.kind, saved.title, saved.price, saved.details.shopName, saved.url], ['product', 'Pole Shower Caddy, Tangerine', 89, 'Bathhaus', 'https://www.instagram.com/reel/XYZ/']);
+  const log = (await store.getAiLog()).at(-1);
+  assert.deepEqual([log.before.kind, log.before.price, log.before.title], ['link', null, 'Your sign to add more color, every day ✨']);
+});
+
+test('understandProductWithAI: a link the search never returned is dropped', async () => {
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'web_search_tool_result', content: [{ url: 'https://real.example/a' }] }, { type: 'text', text: JSON.stringify(found({ listing: { url: 'https://made-up.example/x', price: 10 } })) }] }) });
+  const r = await understandProductWithAI({ title: 't', image: '' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk');
+  assert.equal(r.listing, null);
+  assert.equal(r.name, 'Bathhaus Pole Shower Caddy');
 });
