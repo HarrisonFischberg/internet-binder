@@ -1924,6 +1924,45 @@ body.modal-open {
   color: var(--ink-2);
 }
 
+.quickview-product {
+  display: grid;
+  gap: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.quickview-meta {
+  color: var(--ink-2);
+}
+
+.quickview-text,
+.quickview-features {
+  margin: 0;
+}
+
+.quickview-features {
+  padding-left: 18px;
+}
+
+.quickview-specs {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 0;
+}
+
+.quickview-specs dt {
+  color: var(--ink-2);
+}
+
+.quickview-specs dd {
+  margin: 0;
+}
+
+.quickview-summary {
+  color: var(--ink-2);
+}
+
 .toggles {
   display: flex;
   flex-wrap: wrap;

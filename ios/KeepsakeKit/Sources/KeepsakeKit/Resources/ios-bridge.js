@@ -23,6 +23,17 @@
   };
   const row = (store, r) => (store === 'items' ? [JSON.stringify(r), factOf(r)] : JSON.stringify(r));
 
+  // What your AI provider may read besides its own answer (understand.js), through the host, which allows
+  // them only while Optional AI is on with a key: the shop page its web search found for a product
+  // (__native.fetchPage, no cookies), and a small copy of the picture a card shows (__native.loadImage,
+  // made on this device). Both answer null when they can't.
+  const viaNative = (name) => (url) => new Promise((resolve) => {
+    const fn = typeof __native !== 'undefined' && __native[name];
+    if (typeof fn !== 'function') { resolve(null); return; }
+    fn(String(url), (v) => resolve(typeof v === 'string' && v ? v : null));
+  });
+  const aiDeps = { fetchPage: viaNative('fetchPage'), loadImage: viaNative('loadImage') };
+
   function nativeRecordBackend() {
     const n = __native.db;
     const listeners = new Set();
@@ -218,7 +229,7 @@
       const items = await store.getItems();
       let tidied = 0;
       // With AI on, tidySave first has your provider work out what each save is (understand.js).
-      for (const it of items.filter((i) => i.captureState === 'pending')) { await K.fill.tidySave(store, it.id); tidied++; }
+      for (const it of items.filter((i) => i.captureState === 'pending')) { await K.fill.tidySave(store, it.id, aiDeps); tidied++; }
       if (!aiOn && !lookupsOn) return { tidied, filled: 0 };
       const raw = await store.backend.get(['keepsake_ios_filled']);
       const filled = new Set(raw.keepsake_ios_filled || []);
@@ -232,7 +243,7 @@
         last = Date.now();
       };
       for (const it of todo) {
-        await K.fill.fillSave(store, it.id, {}, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn });
+        await K.fill.fillSave(store, it.id, {}, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...aiDeps });
         filled.add(it.id);
       }
       await store.backend.set({ keepsake_ios_filled: [...filled].slice(-5000) });
@@ -269,10 +280,12 @@
       const settings = await store.getSettings();
       return !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
     },
-    // Fix with AI for saves in Review (dashboard/aiCleanup.js runAiCleanup, scope 'review', planFixes):
-    // each save's title, description (an Instagram post's caption) and current collection go to your
-    // provider in batches; a confident answer files it, tidies a product's title and price, and logs the
-    // change with Undo. Hand-edited fields stay. No live pages are read on iOS.
+    // Fix with AI for any saves (one, a collection, a Lifestyle view, everything; dashboard/aiCleanup.js
+    // runAiCleanup, planFixes): each is read again by your provider (understand.js, with its picture; a
+    // product's shop page too), then what's still to buy gets the shopping check: its title, description
+    // (an Instagram post's caption) and current collection go to your provider in batches; a confident
+    // answer files a save from Review and confirms a price. Every change is logged with Undo. Hand-edited
+    // fields stay.
     async fixWithAI(ids) {
       const settings = await store.getSettings();
       const key = await store.getSecret('aiApiKey');
@@ -280,7 +293,8 @@
       const prefs = await store.getPrefs();
       const threshold = prefs.confidenceThreshold || 0.6;
       const FIELDS = ['title', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
-      const report = { checked: 0, changed: 0, filed: [], error: '' };
+      const report = { checked: 0, changed: 0, products: 0, filed: [], error: '' };
+      const changed = new Set();
       const runId = `ios-fix-${Date.now()}`;
       const found = (await Promise.all(ids.map((id) => store.getItem(id)))).filter((i) => i && !i.deletedAt);
       // What each save is, first (Chrome's Fix with AI, understand.js): a recipe, workout or place goes to
@@ -289,18 +303,23 @@
       for (const it of found) {
         let r = null;
         try {
-          r = await K.understand.understandItem(store, it.id, { force: true, runId });
+          r = await K.understand.understandItem(store, it.id, { force: true, runId }, aiDeps);
         } catch (e) {
           report.error = String((e && e.message) || e);
-          if (/\((401|403|429)\)|API key|base URL/i.test(report.error)) return report;
+          if (/\((401|403|429)\)|API key|base URL/i.test(report.error)) { report.changed = changed.size; return report; }
         }
         if (r && K.kinds.hasOwnView(r.kind)) {
           report.checked++;
           if (r.changed) {
-            report.changed++;
+            changed.add(it.id);
             report.filed.push({ id: it.id, collection: K.kinds.kindInfo(r.kind).plural });
           }
-        } else items.push((await store.getItem(it.id)) || it);
+        } else {
+          // Something to buy: your provider already named it from its picture and shop page (understandProduct);
+          // the check below only files it and confirms a price.
+          if (r && r.changed) { changed.add(it.id); report.products++; }
+          items.push((await store.getItem(it.id)) || it);
+        }
       }
       report.logIds = (await store.getAiLog()).filter((e) => e.runId === runId).map((e) => e.id);
       for (let at = 0; at < items.length; at += K.provider.CLEANUP_BATCH) {
@@ -327,7 +346,7 @@
           const patch = {};
           const changes = [];
           if (item.type === 'product') {
-            if (ai.title && ai.title !== item.title && !mine.has('title')) { patch.title = ai.title; changes.push({ field: 'title', from: item.title, to: ai.title }); }
+            if (ai.title && ai.title !== item.title && !mine.has('title') && !changed.has(item.id)) { patch.title = ai.title; changes.push({ field: 'title', from: item.title, to: ai.title }); }
             const currency = ai.currency || item.currency || '';
             if (ai.price !== null && ai.price !== undefined && !mine.has('price') && (ai.price !== item.price || (ai.currency && ai.currency !== item.currency))) {
               patch.price = ai.price;
@@ -344,12 +363,13 @@
           const before = {};
           for (const f of FIELDS) if (f in patch) before[f] = item[f] === undefined ? null : item[f];
           await store.updateItem(item.id, patch, { by: 'ai' });
-          report.changed++;
+          changed.add(item.id);
           log.push({ id: K.util.uid(), runId, at: K.util.nowIso(), itemId: item.id, itemTitle: patch.title || item.title, changes, before, after: patch, reason: ai.reason || '', undone: false });
         }
         if (log.length) await store.appendAiLog(log);
         report.logIds = [...(report.logIds || []), ...log.map((e) => e.id)];
       }
+      report.changed = changed.size;
       return report;
     },
     async testAi() {

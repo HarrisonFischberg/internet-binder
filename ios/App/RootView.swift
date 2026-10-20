@@ -26,7 +26,11 @@ struct RootView: View {
         // Near the bottom, under the thumb: above the tab bar, Library's search bar and a save's
         // action buttons, clear of the Dynamic Island and of titles and navigation buttons.
         .overlay(alignment: .bottom) {
-            ToastView().frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 128)
+            VStack(spacing: 10) {
+                AIRunBar()
+                ToastView()
+            }
+            .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 128)
         }
         .overlay { CelebrationView() }
         .task { await model.start() }
@@ -70,6 +74,9 @@ struct Stack<Root: View>: View {
     @ViewBuilder let root: (Namespace.ID) -> Root
     @Namespace private var zoom
     @State private var path = NavigationPath()
+    /// How deep each open save sits in the stack. The tabs step aside on a save; this stack (not the save's
+    /// page) says so, so they come back the moment you go back, not when the zoom back to the card ends.
+    @State private var saveDepths: Set<Int> = []
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
 
@@ -79,6 +86,7 @@ struct Stack<Root: View>: View {
                 .navigationDestination(for: Save.self) { save in
                     SaveDetailScreen(save: save).navigationTransition(.zoom(sourceID: save.id, in: zoom))
                         .modifier(PageBar(t: t))
+                        .onAppear { saveDepths.insert(path.count) }
                 }
                 .navigationDestination(for: Route.self) { route in
                     Group {
@@ -93,6 +101,9 @@ struct Stack<Root: View>: View {
                     .modifier(PageBar(t: t))
                 }
         }
+        .toolbar(saveDepths.contains(path.count) && path.count > 0 ? .hidden : .visible, for: .tabBar)
+        .animation(.easeOut(duration: 0.2), value: saveDepths.contains(path.count))
+        .onChange(of: path.count) { _, depth in saveDepths = saveDepths.filter { $0 <= depth } }
         .onChange(of: model.opening?.id) {
             guard let open = model.opening, open.stack == name, let save = model.saves.first(where: { $0.id == open.id }) else { return }
             path = NavigationPath()
@@ -217,6 +228,10 @@ struct SaveGrid: View {
                 }
                 .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
                 .contextMenu {
+                    if model.aiReady {
+                        Button("Fix with AI", systemImage: "sparkles") { Task { await model.fixWithAI([save]) } }
+                            .disabled(model.aiRun != nil)
+                    }
                     Button("Move to Trash", systemImage: "trash", role: .destructive) { Task { await model.trash(save) } }
                 }
         }

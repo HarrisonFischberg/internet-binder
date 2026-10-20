@@ -2159,16 +2159,35 @@ async function openQuickView(id) {
     pic,
     el('div', { class: 'quickview-title' }, [item.title]),
     price ? el('div', { class: 'quickview-price' }, [price]) : null,
+    kindOf(item) === 'product' ? productFacts(item.details || {}) : null,
   ]);
+  const shop = kindOf(item) === 'product' ? item.details?.shopUrl : '';
   await UI.openModal({
     title: 'Quick view',
     body,
     actions: [
       { label: 'Close', value: false },
       { label: 'Edit details', quiet: true, closes: false, onClick: async (close) => { close(false); await openItem(item.id); } },
-      item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), primary: true, icon: UI.externalIcon() } : null,
+      shop && item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), quiet: true, icon: UI.externalIcon() } : null,
+      shop ? { label: `Visit ${item.details.shopName || 'shop'}`, href: openableUrl(shop), primary: true, icon: UI.externalIcon() } : null,
+      !shop && item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), primary: true, icon: UI.externalIcon() } : null,
     ].filter(Boolean),
   });
+}
+
+// What your AI provider found a product to be (src/shared/understand.js understandProduct): the shop page's
+// own facts first, then the provider's summary, marked as its own words.
+function productFacts(d) {
+  const by = [d.brand, d.category].filter(Boolean).join(' · ');
+  const nodes = [
+    by ? el('div', { class: 'quickview-meta' }, [by]) : null,
+    d.shopDescription ? el('p', { class: 'quickview-text' }, [d.shopDescription]) : null,
+    d.specs?.length ? el('dl', { class: 'quickview-specs' }, d.specs.flatMap((x) => [el('dt', {}, [x.label]), el('dd', {}, [x.value])])) : null,
+    d.features?.length ? el('ul', { class: 'quickview-features' }, d.features.map((f) => el('li', {}, [f]))) : null,
+    d.availability ? el('div', { class: 'quickview-meta' }, [d.availability === 'in_stock' ? 'In stock' : 'Out of stock', d.shopName ? ` at ${d.shopName}` : '']) : null,
+    d.summary ? el('div', { class: 'quickview-summary' }, [el('span', { class: 'pill' }, ['AI summary']), ' ', d.summary]) : null,
+  ].filter(Boolean);
+  return nodes.length ? el('div', { class: 'quickview-product' }, nodes) : null;
 }
 
 async function openItem(id) {

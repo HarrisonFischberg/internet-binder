@@ -13,11 +13,16 @@
 //     ("AI draft" on the card);
 //   - a place's street address, phone and hours are kept only when the save states them.
 // Every change goes to the AI change log with Undo.
+//
+// Something to buy (often an Instagram or Facebook post whose picture is right but whose caption is vague or
+// wrong) gets a second read, understandProduct: the provider looks at the picture, works out what the product
+// really is, and searches the web for its own page. That page, read here, is the card's main source (its
+// name, price, description and specs); the provider's summary sits alongside it.
 
-import { uid, nowIso, decodeEntities } from './util.js';
+import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
 import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema } from './kinds.js';
 import { fillMissing } from './lookups.js';
-import { understandWithAI } from '../ai/provider.js';
+import { understandWithAI, understandProductWithAI } from '../ai/provider.js';
 
 // How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Keepsake picked.
 export const UNDERSTAND_CONFIDENCE = 0.7;
@@ -176,12 +181,208 @@ export function planUnderstanding(item, ai, sourceText = '') {
   return { patch, changes, kind };
 }
 
-const LOGGED = ['kind', 'details', 'title', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
+const LOGGED = ['kind', 'details', 'title', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
+
+// --- Something to buy -----------------------------------------------------------------------------
+
+// How sure the provider must be of what a product is before its name, shop page and price are used.
+export const PRODUCT_CONFIDENCE = 0.6;
+
+// A shop page's own facts, from the structured data shops publish for search engines (schema.org Product,
+// then Open Graph and product meta tags). Plain string parsing: it runs in Chrome's worker and in
+// JavaScriptCore on iOS, neither of which has a DOM.
+export function productFromHtml(html, baseUrl = '') {
+  const src = String(html || '').slice(0, 3_000_000);
+  const nodes = [];
+  const walk = (n, depth = 0) => {
+    if (!n || depth > 6 || nodes.length > 200) return;
+    if (Array.isArray(n)) return n.forEach((x) => walk(x, depth + 1));
+    if (typeof n !== 'object') return;
+    nodes.push(n);
+    if (n['@graph']) walk(n['@graph'], depth + 1);
+  };
+  for (const m of src.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { walk(JSON.parse(m[1].trim())); } catch { /* not JSON */ }
+  }
+  const types = (n) => (Array.isArray(n['@type']) ? n['@type'] : [n['@type']]).map((t) => String(t || ''));
+  const isProduct = (n) => types(n).some((t) => /^(product|productgroup|individualproduct|productmodel)$/i.test(t));
+  const product = nodes.find((n) => isProduct(n) && n.offers) || nodes.find(isProduct) || null;
+  const meta = (name) => decodeEntities((src.match(new RegExp(`<meta[^>]+(?:property|name|itemprop)=["']${name}["'][^>]*content=["']([^"']*)`, 'i'))
+    || src.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name|itemprop)=["']${name}["']`, 'i')) || [])[1] || '').trim();
+  const text = (v) => decodeEntities(String(v ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  const nameOf = (v) => text(v && typeof v === 'object' ? v.name : v);
+  const abs = (v) => {
+    const s = typeof v === 'string' ? v : v && typeof v === 'object' ? v.url || v.contentUrl || '' : '';
+    try { const u = new URL(s.trim(), baseUrl || undefined); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch { return ''; }
+  };
+  let price = null;
+  let currency = '';
+  let availability = '';
+  const offers = product ? [].concat(product.offers || []).flatMap((o) => (o && o.offers ? [o, ...[].concat(o.offers)] : [o])) : [];
+  for (const o of offers.slice(0, 20)) {
+    if (!o || typeof o !== 'object') continue;
+    const cur = String(o.priceCurrency || o.priceSpecification?.priceCurrency || '').toUpperCase();
+    for (const v of [o.price, o.lowPrice, o.priceSpecification?.price]) {
+      const p = parsePrice(v, cur);
+      if (price === null && p && p.amount > 0) { price = p.amount; currency = cur || p.currency || ''; }
+    }
+    if (!availability && o.availability) availability = /outofstock|soldout|discontinued/i.test(String(o.availability)) ? 'out_of_stock' : /instock|limitedavailability|preorder/i.test(String(o.availability)) ? 'in_stock' : '';
+  }
+  if (price === null) {
+    const cur = (meta('product:price:currency') || meta('og:price:currency') || meta('priceCurrency')).toUpperCase();
+    const p = parsePrice(meta('product:price:amount') || meta('og:price:amount') || meta('price'), cur);
+    if (p && p.amount > 0) { price = p.amount; currency = cur || p.currency || ''; }
+  }
+  if (!availability) {
+    const a = meta('product:availability') || meta('og:availability');
+    if (a) availability = /out|sold/i.test(a) ? 'out_of_stock' : 'in_stock';
+  }
+  const specs = [];
+  const spec = (label, v) => { const value = Array.isArray(v) ? v.map(nameOf).filter(Boolean).join(', ') : nameOf(v); if (value && value.length <= 160) specs.push({ label, value }); };
+  if (product) {
+    spec('Colour', product.color);
+    spec('Material', product.material);
+    spec('Size', product.size);
+    if (product.width || product.height || product.depth) spec('Dimensions', [product.width, product.height, product.depth].map((d) => (d && typeof d === 'object' ? [d.value, d.unitText || d.unitCode].filter(Boolean).join(' ') : d)).filter(Boolean).join(' × '));
+    if (product.weight) spec('Weight', typeof product.weight === 'object' ? [product.weight.value, product.weight.unitText || product.weight.unitCode].filter(Boolean).join(' ') : product.weight);
+    for (const pv of [].concat(product.additionalProperty || []).slice(0, 10)) if (pv && pv.name) spec(text(pv.name).slice(0, 40), pv.value);
+  }
+  const name = product ? nameOf(product.name) : '';
+  return {
+    name: name.slice(0, 200),
+    title: (name || meta('og:title') || text((src.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '')).slice(0, 200),
+    brand: product ? nameOf(product.brand || product.manufacturer).slice(0, 60) : '',
+    description: text(product?.description || meta('og:description') || meta('description')).slice(0, 1200),
+    category: product ? nameOf(product.category).slice(0, 60) : '',
+    sku: product ? text(product.sku || product.mpn || product.model?.name || product.model || '').slice(0, 60) : '',
+    price,
+    currency,
+    availability,
+    image: abs(product ? [].concat(product.image || [])[0] : null) || abs(meta('og:image')),
+    siteName: meta('og:site_name').slice(0, 80),
+    specs: specs.slice(0, 16),
+    url: baseUrl,
+    structured: !!product,
+  };
+}
+
+// Shopping saves the provider reads as a product: anything already a product, a post or link saved into
+// a collection (collections are for shopping), or a post the first read says is one thing to buy.
+export function isShopping(item, ai = null) {
+  const kind = kindOf(item);
+  if (kind === 'product') return true;
+  if (hasOwnView(kind)) return false;
+  if (item.collectionId) return true;
+  return !!ai && ai.kind === 'product' && ai.confidence >= UNDERSTAND_CONFIDENCE;
+}
+
+// The change the provider's product answer (and the shop page it found) makes to a save (pure).
+export function planProduct(item, ai, page = null) {
+  const mine = new Set(item.userFields || []);
+  const current = kindOf(item);
+  const patch = {};
+  const changes = [];
+  if (current !== 'product' && !mine.has('kind') && !hasOwnView(current)) {
+    patch.kind = 'product';
+    changes.push({ field: 'kind', from: kindInfo(current).label, to: kindInfo('product').label });
+  }
+  const sure = ai.confidence >= PRODUCT_CONFIDENCE;
+  const listing = sure ? ai.listing : null;
+  const shop = sure && page && (page.structured || page.title) ? page : null;
+  const old = current === 'product' ? item.details || {} : {};
+  const yours = old.source === 'you' && Object.entries(old).some(([k, v]) => k !== 'source' && v !== '' && !(Array.isArray(v) && !v.length));
+  if (!yours) {
+    const specs = [...(shop?.specs || [])];
+    for (const s of ai.specs || []) if (!specs.some((x) => x.label.toLowerCase() === s.label.toLowerCase())) specs.push(s);
+    const shopUrl = shop?.url || listing?.url || '';
+    const details = sanitizeDetails('product', {
+      brand: shop?.brand || (sure ? ai.brand : ''),
+      model: shop?.sku || (sure ? ai.model : ''),
+      category: shop?.category || ai.category,
+      summary: ai.summary,
+      features: sure ? ai.features : [],
+      specs: sure ? specs : [],
+      shopUrl,
+      shopName: shopUrl ? listing?.retailer || shop?.siteName || prettyRetailer(hostnameOf(shopUrl)) : '',
+      shopTitle: shop?.title || listing?.title || '',
+      shopDescription: shop?.description || '',
+      availability: shop?.availability || listing?.availability || '',
+      source: shop ? 'page' : 'ai',
+    });
+    if (JSON.stringify(details) !== JSON.stringify(old)) {
+      patch.details = details;
+      changes.push({ field: 'product details', from: '—', to: shop ? `from ${details.shopName || 'its shop page'}` : 'AI summary' });
+    }
+  }
+  // Its real name: the shop page's, else the provider's. A post's title is its caption's first line, so
+  // it's replaced; a shop page's own title stays unless it's a site's name.
+  const name = shop?.name || (sure ? ai.name : '');
+  const renames = item.type === 'instagram' || item.type === 'inspiration' || genericTitle(item.title) || current !== 'product' || /facebook\.com$/i.test(item.host || '');
+  if (name && name.length >= 3 && name !== item.title && !mine.has('title') && renames) {
+    patch.title = name;
+    changes.push({ field: 'title', from: item.title, to: name });
+  }
+  const price = shop?.price ?? listing?.price ?? null;
+  if (price !== null && (item.price === null || item.price === undefined) && !mine.has('price')) {
+    patch.price = price;
+    patch.currency = (shop?.price != null ? shop.currency : listing?.currency) || item.currency || '';
+    changes.push({ field: 'price', from: 'none', to: formatPrice(price, patch.currency) || String(price) });
+  }
+  return { patch, changes };
+}
+
+// What the provider is told about a product.
+function productInput(item, pages, image) {
+  const ig = item.instagram || {};
+  return {
+    title: item.title || '',
+    caption: ig.caption || '',
+    creator: ig.creator || '',
+    hashtags: ig.hashtags || [],
+    description: item.description && item.description !== ig.caption ? item.description : '',
+    site: item.retailer || item.host || '',
+    url: item.url || '',
+    price: item.price != null ? formatPrice(item.price, item.currency) || String(item.price) : '',
+    products: ig.products || [],
+    pages,
+    image,
+  };
+}
+
+// The save's picture for the provider: a stored thumbnail as it is, else (when the caller can) a small copy
+// of the picture the card already shows, made on this device.
+async function pictureOf(item, loadImage) {
+  if (typeof item.image === 'string' && item.image.startsWith('data:image/')) return item.image;
+  if (!/^https:\/\//.test(item.image || '')) return '';
+  try {
+    const data = await loadImage(item.image);
+    return typeof data === 'string' && data.startsWith('data:image/') ? data : '';
+  } catch {
+    return '';
+  }
+}
+
+// The product read: the picture, what it is, its own page. Returns the plan, or null when nothing changes.
+async function readProduct(item, settings, key, pages, image, { fetchPage }) {
+  const ai = await understandProductWithAI(productInput(item, pages, image), settings, key);
+  let page = null;
+  if (ai.listing?.url && ai.confidence >= PRODUCT_CONFIDENCE) {
+    try {
+      const html = await fetchPage(ai.listing.url);
+      const read = html ? productFromHtml(html, ai.listing.url) : null;
+      if (read && (read.structured || read.price !== null)) page = read;
+    } catch {
+      /* unreadable: the search's own facts still go on the card */
+    }
+  }
+  return { ai, page };
+}
 
 // Reads one save with your provider and applies the answer. Once per save unless force (Fix with AI,
-// Check with AI). fetchPage(url) returns a page's HTML, or null when it can't or mayn't be read.
+// Check with AI). fetchPage(url) returns a page's HTML, or null when it can't or mayn't be read; loadImage(url)
+// returns a small data: copy of a picture, or null.
 // Throws when the provider fails, so a batch can stop on a bad key.
-export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null } = {}) {
+export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null, loadImage = async () => null } = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt || (item.understoodAt && !force)) return null;
   const settings = await store.getSettings();
@@ -197,16 +398,36 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
       /* unreadable: the save's own text still goes */
     }
   }
-  const input = contextFor(item, pages);
-  const ai = await understandWithAI(input, settings, key);
+  // A product saved from its own shop page needs no first read: it is a product.
+  const shopPage = item.type === 'product' && kindOf(item) === 'product' && !/facebook\.com$/i.test(item.host || '');
+  const image = await pictureOf(item, loadImage);
+  let input = null;
+  let ai = null;
+  if (!shopPage) {
+    input = { ...contextFor(item, pages), image };
+    ai = await understandWithAI(input, settings, key);
+  }
   // Anything you changed in the meantime wins.
-  const current = await store.getItem(id);
+  let current = await store.getItem(id);
   if (!current || current.deletedAt) return null;
-  const { patch, changes, kind } = planUnderstanding(current, ai, sourceTextOf(input));
+  let { patch, changes, kind } = ai ? planUnderstanding(current, ai, sourceTextOf(input)) : { patch: {}, changes: [], kind: 'product' };
+  let reason = ai?.reason || '';
+  let confidence = ai?.confidence ?? null;
+  if (!hasOwnView(kind) && isShopping(current, ai)) {
+    const { ai: found, page } = await readProduct(current, settings, key, pages, image, { fetchPage });
+    current = (await store.getItem(id)) || current;
+    const product = planProduct({ ...current, ...patch }, found, page);
+    patch = { ...patch, ...product.patch };
+    changes = [...changes, ...product.changes];
+    if (product.patch.kind) kind = 'product';
+    else kind = kindOf({ ...current, ...patch });
+    reason = found.reason || reason;
+    confidence = found.confidence;
+  }
   const before = Object.fromEntries(LOGGED.filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
   await store.updateItem(id, { ...patch, understoodAt: nowIso() }, { by: 'ai' });
   if (changes.length) {
-    await store.appendAiLog([{ id: uid(), runId: runId || `understand-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: ai.reason || '', undone: false }]);
+    await store.appendAiLog([{ id: uid(), runId: runId || `understand-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason, undone: false }]);
   }
-  return { kind, changed: changes.length > 0, aiKind: ai.kind, confidence: ai.confidence };
+  return { kind, changed: changes.length > 0, aiKind: ai?.kind || 'product', confidence };
 }

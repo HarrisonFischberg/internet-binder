@@ -157,7 +157,7 @@ export function supportsWebLookup(settings) {
 
 const FIND_SYSTEM = 'You help someone find where to buy the product shown in a social media post they saved. First decide what the product most likely is, then use web search (at most 3 searches) to find real listings. Respond ONLY with a JSON object: {"candidates":[{"name":"product name","brand":"brand or empty","retailer":"store name","price":number or null,"currency":"ISO code or empty","url":"exact URL of a listing you found via search, or empty","confidence":0-1,"note":"one short caveat"}]}. Give 1-4 candidates, best first. Only use URLs that appeared in search results. If you cannot identify the product, return an empty candidates list.';
 
-async function findViaAnthropic(cfg, apiKey, userText, imageDataUrl, controller) {
+async function findViaAnthropic(cfg, apiKey, userText, imageDataUrl, controller, { system = FIND_SYSTEM, maxTokens = 1200, searches = 3 } = {}) {
   const content = [];
   if (imageDataUrl) {
     const m = imageDataUrl.match(/^data:(image\/[a-z]+);base64,(.+)$/i);
@@ -167,7 +167,7 @@ async function findViaAnthropic(cfg, apiKey, userText, imageDataUrl, controller)
   const res = await fetch(`${cfg.baseUrl}/v1/messages`, {
     method: 'POST', signal: controller.signal,
     headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({ model: cfg.model, max_tokens: 1200, system: FIND_SYSTEM, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }], messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({ model: cfg.model, max_tokens: maxTokens, system, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: searches }], messages: [{ role: 'user', content }] }),
   });
   const data = await readJson(res);
   const seen = new Set();
@@ -183,13 +183,13 @@ async function findViaAnthropic(cfg, apiKey, userText, imageDataUrl, controller)
   return { text, seen };
 }
 
-async function findViaOpenAI(cfg, apiKey, userText, imageDataUrl, controller) {
+async function findViaOpenAI(cfg, apiKey, userText, imageDataUrl, controller, { system = FIND_SYSTEM, maxTokens = 1200 } = {}) {
   const content = [{ type: 'input_text', text: userText }];
   if (imageDataUrl) content.push({ type: 'input_image', image_url: imageDataUrl, detail: 'low' });
   const res = await fetch(`${cfg.baseUrl}/responses`, {
     method: 'POST', signal: controller.signal,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: cfg.model, instructions: FIND_SYSTEM, tools: [{ type: 'web_search_preview' }], input: [{ role: 'user', content }], max_output_tokens: 1200 }),
+    body: JSON.stringify({ model: cfg.model, instructions: system, tools: [{ type: 'web_search_preview' }], input: [{ role: 'user', content }], max_output_tokens: maxTokens }),
   });
   const data = await readJson(res);
   const seen = new Set();
@@ -448,6 +448,7 @@ Kinds and their details:
 - link (none of these, or several different things): {}
 Rules:
 - Use everything given: title, caption, description, hashtags, location tag, linked pages and the image.
+- The title, caption and description were written by whoever posted it and can be vague or wrong. When the image clearly shows one item someone would buy (furniture, a gadget, clothing, a bathroom fitting…), it is a product, whatever the caption says.
 - title: the thing's own name (the dish, the place, the routine, the film), short, no emoji, hashtags or "on Instagram".
 - Take every detail the input states first, word for word where you can (ingredient quantities, exercise sets and reps, the street address).
 - A recipe or workout whose details are not written out (they are only in the video or image): draft a sensible version from what the post shows and says, and list each drafted field in "drafted" (for example ["ingredients","steps"]). Give quantities.
@@ -488,6 +489,90 @@ export async function understandWithAI(input, settings, apiKey) {
     drafted: (Array.isArray(parsed.drafted) ? parsed.drafted : []).filter((f) => typeof f === 'string').slice(0, 12),
     reason: cut(parsed.reason, 200),
   };
+}
+
+// --- Understand a product (what the thing in the picture really is, from its own shop page) -------------
+// For a save that is something to buy, often an Instagram or Facebook post: the image shows the real thing,
+// while the post's title and caption may be vague, promotional or wrong. Sends the save's title, caption or
+// description, hashtags, site and its locally stored thumbnail; with OpenAI or Anthropic the provider's own
+// web search finds the product's page. Every link is checked against the search results (urlVerified), so
+// a page the model made up is never kept. Applied by src/shared/understand.js understandProduct.
+const PRODUCT_SYSTEM = `You identify the product in something a person saved to buy later (often an Instagram or Facebook post, sometimes a shop page) and build an accurate card for it.
+Look at the image first: it shows the real product. The title, caption and description were written by whoever posted it and may be vague, promotional, about something else or simply wrong. Use them as hints only; when they disagree with the image, trust the image.
+SEARCH
+Then search the web to find this exact product's own page: the brand's site first, else a well-known shop. Read what that page says.
+Return ONLY JSON: {"name":"the product's real name, brand first","brand":"","model":"","category":"what it is, e.g. shower caddy","summary":"2-3 plain sentences in your own words: what it is, what it's for, what stands out","features":["short feature from the page"],"specs":[{"label":"Material","value":"Aluminium"}],"listing":{"url":"","retailer":"shop name","title":"the page's product name","price":number|null,"currency":"ISO code or empty","availability":"in_stock|out_of_stock|"},"confidence":0-1,"reason":"one short sentence on how you know what it is"}
+Rules:
+- features, specs and listing come from pages you found; never invent them. The summary is yours and may use the image.
+- listing.url is the exact address of a page from your search results that sells or shows this same product; leave it empty when you found none or are not sure it is the same item.
+- name: no emoji, hashtags, "link in bio" or promo text.
+- confidence is how sure you are what the product is (0.9+ only when the brand and model are clear).`;
+
+function productAnswer(parsed, seen) {
+  const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  const l = parsed?.listing && typeof parsed.listing === 'object' ? parsed.listing : {};
+  const url = cut(l.url, 2000);
+  const verified = !!seen && urlVerified(url, seen);
+  const price = l.price === null || l.price === undefined || l.price === '' ? null : Number(l.price);
+  return {
+    name: cut(parsed?.name, 200),
+    brand: cut(parsed?.brand, 60),
+    model: cut(parsed?.model, 80),
+    category: cut(parsed?.category, 60),
+    summary: cut(parsed?.summary, 600),
+    features: (Array.isArray(parsed?.features) ? parsed.features : []).map((f) => cut(f, 160)).filter(Boolean).slice(0, 10),
+    specs: (Array.isArray(parsed?.specs) ? parsed.specs : []).map((x) => ({ label: cut(x?.label, 40), value: cut(String(x?.value ?? ''), 160) })).filter((x) => x.label && x.value).slice(0, 16),
+    listing: verified ? {
+      url,
+      retailer: cut(l.retailer, 80),
+      title: cut(l.title, 200),
+      price: Number.isFinite(price) && price > 0 ? price : null,
+      currency: cut(l.currency, 8).toUpperCase(),
+      availability: ['in_stock', 'out_of_stock'].includes(l.availability) ? l.availability : '',
+    } : null,
+    confidence: Math.max(0, Math.min(1, Number(parsed?.confidence) || 0)),
+    reason: cut(parsed?.reason, 200),
+    searched: !!seen,
+  };
+}
+
+export async function understandProductWithAI(input, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  if (!apiKey) throw new Error('Add your API key in Settings → Optional AI first.');
+  const cut = (v, n) => String(v || '').slice(0, n);
+  const text = [
+    `Title: ${cut(input.title, 200)}`,
+    input.caption ? `Caption (from the post, may be wrong): ${cut(input.caption, 2200)}` : '',
+    input.creator ? `Posted by: ${cut(input.creator, 80)}` : '',
+    input.hashtags?.length ? `Hashtags: ${input.hashtags.slice(0, 30).map((h) => `#${cut(h, 60)}`).join(' ')}` : '',
+    input.description ? `Description: ${cut(input.description, 1500)}` : '',
+    input.site ? `From: ${cut(input.site, 120)}` : '',
+    input.url ? `Link: ${cut(input.url, 300)}` : '',
+    input.price ? `Saved price: ${cut(input.price, 40)}` : '',
+    ...(input.products || []).slice(0, 5).map((p) => `Tagged product: ${cut(p.name, 160)}${p.retailer ? ` (${cut(p.retailer, 80)})` : ''}`),
+    ...(input.pages || []).slice(0, 2).map((pg) => `Linked page ${cut(pg.url, 300)}:\n${cut(pg.text, 3000)}`),
+    input.image ? 'The image is the saved thumbnail.' : 'There is no image.',
+  ].filter(Boolean).join('\n');
+  const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
+  if (!supportsWebLookup(settings)) {
+    // A custom endpoint has no search tool: the image and text only, and no shop page.
+    const system = PRODUCT_SYSTEM.replace(/SEARCH\n[^\n]*\n/, 'You cannot search the web: leave listing empty and features and specs empty unless the text states them.\n');
+    return productAnswer(parseJsonBlock(await callProvider(cfg, apiKey, { system, userText: text, imageDataUrl: image, maxTokens: 900 })), null);
+  }
+  const system = PRODUCT_SYSTEM.replace('SEARCH\n', '');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+  try {
+    const opts = { system, maxTokens: 1600, searches: 4 };
+    const { text: out, seen } = cfg.provider === 'anthropic'
+      ? await findViaAnthropic(cfg, apiKey, text, image, controller, opts)
+      : await findViaOpenAI(cfg, apiKey, text, image, controller, opts);
+    const parsed = parseJsonBlock(out);
+    if (!parsed || typeof parsed !== 'object') throw new Error('The provider didn’t return a usable answer.');
+    return productAnswer(parsed, seen);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function testConnection(settings, apiKey) {
