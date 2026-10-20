@@ -548,6 +548,16 @@ export function createStore(kv, db = memoryRecordBackend()) {
           const { enabled, useForCategorization, instantSave, ...ai } = raw[KEYS.settings].ai;
           write[KEYS.settings] = { ...raw[KEYS.settings], ai: { ...ai, on: !!instantSave } };
         }
+        if (!raw[KEYS.meta]?.aiDefaultClaudeAt) {
+          // OpenAI used to be the default provider. A library that never set AI up (no key, model
+          // or address) moves once to the new default, Claude Haiku 5.5 at Medium.
+          write[KEYS.meta].aiDefaultClaudeAt = now;
+          const settings = write[KEYS.settings] || raw[KEYS.settings];
+          const ai = settings?.ai;
+          if (ai && ai.provider === 'openai' && !ai.model && !ai.baseUrl && !raw[KEYS.secrets]?.aiApiKey) {
+            write[KEYS.settings] = { ...settings, ai: { ...ai, provider: 'anthropic', effort: ai.effort || 'medium' } };
+          }
+        }
         await be.set(write);
         return { fresh: !hadMeta, migrated, caughtUp };
       });
