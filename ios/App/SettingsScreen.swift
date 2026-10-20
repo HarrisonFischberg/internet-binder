@@ -138,6 +138,7 @@ struct SettingsScreen: View {
                     Button("Fix every save with AI", systemImage: "sparkles") { fixingAll = true }
                         .disabled(model.aiRun != nil)
                 }
+                RunAIOnImportedButton()
             }
         } header: { Text("Optional AI") } footer: {
             Text("Off by default. Uses your own key, kept in this iPhone's Keychain and never exported. Sends only what each feature says, to the provider you choose.")

@@ -293,6 +293,9 @@ export function makeItem(input = {}) {
     captureError: sanitizeText(input.captureError, 200),
     // When your AI provider last read the save to work out what it is (src/shared/understand.js).
     understoodAt: typeof input.understoodAt === 'string' && !Number.isNaN(Date.parse(input.understoodAt)) ? input.understoodAt : null,
+    // Brought in by a bulk import (open tabs, Instagram, a backup) and not read by your AI provider yet.
+    // Nothing reads it automatically; "Run AI on imported saves" does, when you ask (src/shared/aiQueue.js).
+    needsAi: !!input.needsAi,
     deletedAt: typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt)) ? input.deletedAt : null,
     createdAt: input.createdAt || now,
     updatedAt: now,
@@ -507,6 +510,15 @@ export function createStore(kv, db = memoryRecordBackend()) {
     return removed.length;
   }
 
+  // Before bulk imports waited for Run AI, an import sent every save to your AI provider straight away,
+  // and a big one could stall there. Once: saves still waiting for the AI tidy, and Instagram imports
+  // your provider never read, join the imported-saves queue (needsAi) instead.
+  async function queueUnreadImports() {
+    const ids = (await db.all('items')).filter((i) => live(i) && !i.needsAi && (i.captureState === 'pending' || (i.type === 'instagram' && i.instagram?.importedAt && !i.understoodAt))).map((i) => i.id);
+    if (ids.length) await db.update('items', ids, (i) => (i ? { ...i, captureState: i.captureState === 'pending' ? 'complete' : i.captureState, needsAi: true } : undefined));
+    return ids.length;
+  }
+
   // Goals and every check-in they have, for good.
   async function removeGoals(goalIds) {
     const checkins = (await Promise.all(goalIds.map((id) => db.byIndex('checkins', 'goalId', id)))).flat();
@@ -540,7 +552,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
         if (!(await db.get('kv', 'importHistory'))) await kvSet('importHistory', { instagram: {} });
         const textRepaired = raw[KEYS.meta]?.textRepairedAt ? null : await repairEncodedText();
         const kindCollections = raw[KEYS.meta]?.kindCollectionsRemovedAt ? null : await removeKindCollections();
-        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}), ...(textRepaired !== null ? { textRepairedAt: now, textRepairedCount: textRepaired } : {}), ...(kindCollections !== null ? { kindCollectionsRemovedAt: now, kindCollectionsRemoved: kindCollections } : {}) } };
+        const aiBacklog = raw[KEYS.meta]?.aiBacklogAt ? null : await queueUnreadImports();
+        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}), ...(textRepaired !== null ? { textRepairedAt: now, textRepairedCount: textRepaired } : {}), ...(kindCollections !== null ? { kindCollectionsRemovedAt: now, kindCollectionsRemoved: kindCollections } : {}), ...(aiBacklog !== null ? { aiBacklogAt: now, aiBacklogQueued: aiBacklog } : {}) } };
         if (!raw[KEYS.settings]) write[KEYS.settings] = structuredClone(DEFAULT_SETTINGS);
         else if (raw[KEYS.settings].ai && raw[KEYS.settings].ai.on === undefined) {
           // Before the single switch, each AI feature had its own. Carry over only the
@@ -755,6 +768,25 @@ export function createStore(kv, db = memoryRecordBackend()) {
 
     async getPendingItems() {
       return (await db.all('items')).filter((i) => live(i) && i.captureState === 'pending');
+    },
+
+    // Saves a bulk import brought in that your AI provider hasn't read yet (needsAi), newest first.
+    async getAiBacklog() {
+      return (await db.all('items')).filter((i) => live(i) && i.needsAi).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    },
+
+    // Moves saves still waiting for the AI tidy into the imported-saves queue: they keep what Keepsake
+    // worked out on the device and wait for Run AI. A thousand of them would otherwise go to your provider
+    // all at once the next time the extension wakes.
+    async parkPending(ids) {
+      if (!ids.length) return 0;
+      let moved = 0;
+      await db.update('items', ids, (i) => {
+        if (!i || i.captureState !== 'pending') return undefined;
+        moved++;
+        return { ...i, captureState: 'complete', needsAi: true, updatedAt: nowIso() };
+      });
+      return moved;
     },
 
     // Move items; optionally learn from the correction. `learn`: 'light' | 'strong' | false
@@ -976,6 +1008,9 @@ export function createStore(kv, db = memoryRecordBackend()) {
           const resolvedId = idMap.get(item.collectionId) || (collections[item.collectionId] ? item.collectionId : null);
           item.collectionId = resolvedId;
           if (!resolvedId && needsCollection(item)) item.needsReview = true;
+          // Not read by your AI provider yet: it waits for Run AI instead of going to your provider by itself.
+          if (item.captureState === 'pending') item.captureState = 'complete';
+          if (!item.understoodAt && !item.deletedAt) item.needsAi = true;
           newItems.push(item);
           ids.add(item.id);
           if (item.urlKey && !item.deletedAt) keys.add(item.urlKey);

@@ -125,7 +125,9 @@ async function readJson(res) {
   }
   if (!res.ok) {
     const msg = data?.error?.message || data?.message || textBody.slice(0, 200) || `HTTP ${res.status}`;
-    throw new Error(`Provider error (${res.status}): ${msg}`);
+    // status and retryAfter (seconds) let a long run slow down when the provider asks (aiQueue.js).
+    const retryAfter = Number(res.headers?.get?.('retry-after'));
+    throw Object.assign(new Error(`Provider error (${res.status}): ${msg}`), { status: res.status, retryAfter: Number.isFinite(retryAfter) ? retryAfter : null });
   }
   if (!data) throw new Error('Provider returned a non-JSON response.');
   return data;

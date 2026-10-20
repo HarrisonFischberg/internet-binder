@@ -34,7 +34,9 @@ export async function fillSave(store, id, { review = false, verify = false, forc
   let kind = kindOf(item);
   if (!FILLED_KINDS.includes(kind)) return;
   const settings = await store.getSettings();
-  const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
+  // A save from a bulk import waits for Run AI (needsAi): only a check you asked for sends it now.
+  const aiAllowed = settings.ai?.on && (!item.needsAi || review || verify || force);
+  const key = aiAllowed ? await store.getSecret('aiApiKey') : '';
   // An Instagram place: its caption read again with today's rules first (nothing sent anywhere). Normally
   // that only fills what's missing. From Places review (you asked), what an older reading wrote is replaced:
   // its name, street, city and state, never what you typed yourself; a new street drops the old pin.
@@ -185,4 +187,39 @@ export async function tidySave(store, id, deps = {}) {
     const { captureState, captureError, ...after } = patch;
     await store.appendAiLog([{ id: uid(), runId: `save-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after, reason: (ai && ai.reason) || '', undone: false }]);
   }  return { kind: kindOf(current) };
+}
+
+// Run AI on imported saves, for one save a bulk import flagged (needsAi): your provider reads it
+// (understand.js), then a Lifestyle save gets its fill-in (Lookups) and anything else the AI tidy a new
+// save gets (tidySave: title and collection). The provider's errors are thrown, so the caller can slow
+// down and try again (src/shared/aiQueue.js); the save stays flagged until it has been read.
+export async function readImported(store, id, deps = {}) {
+  const item = await store.getItem(id);
+  if (!item || item.deletedAt || !item.needsAi) return null;
+  const settings = await store.getSettings();
+  const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
+  if (!key) throw new Error('Turn on Optional AI and add your API key first.');
+  const before = JSON.stringify([item.title, item.kind, item.collectionId, item.details]);
+  await understandItem(store, id, { force: true, runId: deps.runId || '' }, deps);
+  let current = await store.getItem(id);
+  if (!current || current.deletedAt) return null;
+  if (current.needsAi) current = await store.updateItem(id, { needsAi: false }, { by: 'machine' });
+  if (FILLED_KINDS.includes(kindOf(current))) {
+    if (deps.fetchFn) await fillSave(store, id, {}, deps).catch(() => {});
+  } else if (!hasOwnView(kindOf(current))) {
+    // The shopping tidy: already read above, so this is the one request that files it.
+    await store.updateItem(id, { captureState: 'pending' }, { by: 'machine' });
+    await tidySave(store, id, deps).catch(() => {});
+  }
+  const after = await store.getItem(id);
+  return { kind: kindOf(after || current), changed: !!after && JSON.stringify([after.title, after.kind, after.collectionId, after.details]) !== before };
+}
+
+// Saves still waiting for the AI tidy when the extension (or the iOS app) wakes: the newest few are
+// tidied as usual; the rest join the imported-saves queue instead of all going to your provider at once.
+export const PENDING_AT_ONCE = 10;
+export async function pendingToTidy(store) {
+  const pending = (await store.getPendingItems()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  if (pending.length > PENDING_AT_ONCE) await store.parkPending(pending.slice(PENDING_AT_ONCE).map((i) => i.id));
+  return pending.slice(0, PENDING_AT_ONCE);
 }

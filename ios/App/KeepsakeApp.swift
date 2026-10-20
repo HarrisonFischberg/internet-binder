@@ -78,7 +78,13 @@ final class LibraryModel {
         var done: Int
         let total: Int
         var stopping = false
+        /// Run AI on imported saves (rather than Fix with AI): the bar says "Reading" and offers Pause.
+        var imported = false
+        /// Your provider asked to slow down: the bar says so until then.
+        var waitingUntil: Date?
     }
+    /// Imported saves your provider hasn't read yet (needsAi), newest first.
+    var aiBacklog: [Save] { saves.filter { $0.needsAi == true } }
     let library: Library?
 
     struct Toast: Identifiable, Equatable {
@@ -209,7 +215,8 @@ final class LibraryModel {
             _ = try await library.importExport(try Data(contentsOf: url), replace: false)
             refresh()
             let added = max(0, saves.count - before)
-            show(added == 0 ? "Nothing new to import: those saves are already here" : "Imported \(added) \(added == 1 ? "save" : "saves")")
+            // Imported saves don't go to your AI provider by themselves: Home offers Run AI on them.
+            show(added == 0 ? "Nothing new to import: those saves are already here" : "Imported \(added) \(added == 1 ? "save" : "saves")\(aiReady ? ". Run AI on them from Home when you like" : "")")
             Haptic.saved()
         } catch {
             show(error.localizedDescription)

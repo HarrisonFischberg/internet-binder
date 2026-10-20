@@ -805,3 +805,38 @@ test('instagram scan: Safari without instagram.com access sends no tab address; 
   assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', posts: [post] }, { tab: { id: 31, url: 'https://evil.example/' }, url: 'https://evil.example/' })).ok, false);
   await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
 });
+
+test('bulk import from open tabs: with AI on, nothing goes to your provider; the save is flagged for Run AI', async () => {
+  await aiOn();
+  let asked = 0;
+  globalThis.fetch = async () => { asked++; return aiReply({ kind: 'product', confidence: 0.9 })(); };
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: { ...tent, url: 'https://shop.example/tent-bulk' }, source: 'tabs-import', deferAi: true }, popup);
+  await finish();
+  await new Promise((r) => setTimeout(r, 100));
+  const it = await S.getItem(res.item.id);
+  assert.deepEqual([it.captureState, it.needsAi, asked], ['complete', true, 0]);
+});
+
+test('Run AI on imported saves: reads the flagged saves you picked, clears their flag, reports progress; a bad key pauses it', async () => {
+  await aiOn();
+  globalThis.fetch = aiReply({ kind: 'recipe', confidence: 0.95, title: 'Weeknight pasta', details: { ingredients: ['pasta', 'salt'], steps: ['Boil.'] } });
+  const mk = (n) => S.addItem({ type: 'instagram', title: `Post ${n}`, url: `https://www.instagram.com/p/RUNAI${n}/`, instagram: { caption: `Post ${n}` }, needsAi: true });
+  const a = await mk(1);
+  const b = await mk(2);
+  const c = await mk(3);
+  const res = await F.send({ type: MSG.AI_BACKLOG_RUN, itemIds: [a.id, b.id] }, popup);
+  assert.equal(res.ok, true);
+  assert.deepEqual([res.job.backlog, res.job.total], [true, 2]);
+  for (let i = 0; i < 100 && F.session.keepsake_fillJob?.running; i++) await new Promise((r) => setTimeout(r, 25));
+  const job = F.session.keepsake_fillJob;
+  assert.deepEqual([job.running, job.done, job.paused], [false, 2, false]);
+  assert.deepEqual([(await S.getItem(a.id)).needsAi, (await S.getItem(a.id)).kind, (await S.getItem(c.id)).needsAi], [false, 'recipe', true], 'only the ones picked');
+  // A bad key: paused with the reason, and the save stays waiting.
+  globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => JSON.stringify({ error: { message: 'invalid x-api-key' } }) });
+  await F.send({ type: MSG.AI_BACKLOG_RUN }, popup);
+  for (let i = 0; i < 100 && F.session.keepsake_fillJob?.running; i++) await new Promise((r) => setTimeout(r, 25));
+  assert.equal(F.session.keepsake_fillJob.paused, true);
+  assert.match(F.session.keepsake_fillJob.error, /401/);
+  assert.equal((await S.getItem(c.id)).needsAi, true);
+  assert.equal((await F.send({ type: MSG.AI_BACKLOG_RUN }, pageTab)).error, 'Not allowed.');
+});

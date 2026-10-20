@@ -270,6 +270,12 @@ extension Library {
     /// files the ones in Review the AI is confident about.
     public func fixWithAI(_ ids: [String]) async throws -> AIFixReport { try await prepare(); return try await core.call("views.fixWithAI", [ids], as: AIFixReport.self) }
     public func testAI() async throws { try await core.call("views.testAi") }
+    /// Run AI on imported saves, one save (fill.js readImported): your provider reads it, then its details
+    /// or collection. Throws the provider's error ("Provider error (429): …") so the caller can wait and retry.
+    @discardableResult public func readImported(_ id: String) async throws -> Bool {
+        try await prepare()
+        return ((try await core.call("views.readImported", [id]) as? [String: Any])?["changed"] as? Bool) ?? false
+    }
     public func suggestions(for id: String) async throws -> ReviewSuggestions { try await core.call("views.suggestions", [id], as: ReviewSuggestions.self) }
     /// Files a save from Review and learns from it strongly (Chrome's Review filing).
     @discardableResult public func file(_ id: String, into target: String) async throws -> String { try await core.call("views.file", [id, target], as: String.self) }

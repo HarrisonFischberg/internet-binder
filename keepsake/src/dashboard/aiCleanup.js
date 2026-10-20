@@ -9,8 +9,9 @@
 // DOMParser, which never runs the page's scripts.
 
 import { el, clear, formatPrice, parsePrice, pluralize, uid, nowIso } from '../shared/util.js';
-import { providerConfig, originFor, cleanupWithAI, CLEANUP_BATCH } from '../ai/provider.js';
+import { providerConfig, originFor, cleanupWithAI, CLEANUP_BATCH, MODELS } from '../ai/provider.js';
 import * as UI from './ui.js';
+import { MSG } from '../shared/messages.js';
 import { needsCollection, hasOwnView, kindOf, kindInfo } from '../shared/kinds.js';
 import { understandItem } from '../shared/understand.js';
 import { fetchPage, loadImage } from '../ai/pages.js';
@@ -586,4 +587,51 @@ export function cleanupSection(ctx) {
       logLink,
     ]),
   ]);
+}
+
+// --- Run AI on imported saves -------------------------------------------------------------------------
+// Bulk imports save without AI and flag each save (needsAi). Before anything goes to your provider, this
+// says how many saves, about how long, and lets you start with the newest few. The run itself is in the
+// background worker (background.js startAiBacklog): two at a time, with Pause and Cancel in the bar.
+export const AI_RUN_FIRST = 100;
+const SECONDS_PER_SAVE = 4; // two at a time, a picture and a page each: roughly what a run takes
+
+export function aiBacklogOf(items) {
+  return items.filter((i) => i.needsAi && !i.deletedAt).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+export async function confirmAiRun(ctx, ids, { label = '' } = {}) {
+  const want = ids ? new Set(ids) : null;
+  const todo = aiBacklogOf(ctx.state.items).filter((i) => !want || want.has(i.id)).map((i) => i.id);
+  if (!todo.length) {
+    UI.toast('Nothing here is waiting for AI.');
+    return;
+  }
+  if (!ctx.state.settings?.ai?.on) {
+    UI.toast('Turn on Optional AI in Settings first.', { kind: 'danger' });
+    return;
+  }
+  const minutes = (n) => {
+    const m = Math.max(1, Math.round((n * SECONDS_PER_SAVE) / 60));
+    return m < 90 ? pluralize(m, 'minute', 'minutes') : `${Math.round(m / 6) / 10} hours`;
+  };
+  const cfg = providerConfig(ctx.state.settings);
+  const modelName = (MODELS[cfg.provider] || []).find((m) => m.id === cfg.model)?.label || cfg.model || cfg.provider;
+  const few = todo.length > AI_RUN_FIRST;
+  const choice = await UI.openModal({
+    title: `Run AI on ${pluralize(todo.length, 'imported save', 'imported saves')}?`,
+    body: [
+      el('p', {}, [`Your AI provider (${modelName}) reads each one: what it is from its picture, caption and page, then its details or collection. That’s one to three requests a save, two at a time, so about ${minutes(todo.length)} for all of them${few ? `, or ${minutes(AI_RUN_FIRST)} for the newest ${AI_RUN_FIRST}` : ''}.`]),
+      el('p', { class: 'help' }, ['It runs in the background with progress under the header. Pause or cancel any time; whatever isn’t done yet stays waiting, so you can resume later. If your provider asks Keepsake to slow down, it waits and tries again. Every change can be undone from the AI change log.']),
+    ],
+    actions: [
+      { label: 'Not now', quiet: true, onClick: (c) => c('') },
+      ...(few ? [{ label: `Newest ${AI_RUN_FIRST}`, onClick: (c) => c('first') }] : []),
+      { label: few ? `All ${todo.length}` : 'Run AI', primary: true, onClick: (c) => c('all') },
+    ],
+  });
+  if (!choice) return;
+  const res = await ctx.send({ type: MSG.AI_BACKLOG_RUN, itemIds: choice === 'first' ? todo.slice(0, AI_RUN_FIRST) : ids ? todo : null, label });
+  if (!res?.ok) UI.toast(res?.error || 'Run AI couldn’t start.', { kind: 'danger', duration: 6000 });
+  else ctx.state.fillJob = res.job;
 }

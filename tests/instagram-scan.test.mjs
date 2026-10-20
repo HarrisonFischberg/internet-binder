@@ -114,3 +114,18 @@ test('import all collections: each Instagram collection becomes a group; recipes
   const tent = (await store.db.all('items')).find((i) => i.url.includes('GRP0005'));
   assert.equal((await store.getCollection(tent.collectionId)).name, 'Camping & Outdoors');
 });
+
+test('import: nothing is sent to your AI provider; every post is flagged for Run AI', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const { importPosts } = await import('../keepsake/src/dashboard/importer.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  await store.init();
+  const sent = [];
+  const settings = { ...(await store.getSettings()), ai: { on: true, provider: 'anthropic' } };
+  const ctx = { store, state: { collections: await store.getCollections(), prefs: await store.getPrefs(), settings }, send: async (m) => { sent.push(m); return { ok: true }; } };
+  const post = (code, caption) => ({ url: `https://www.instagram.com/p/${code}/`, shortcode: code, type: 'post', thumbnail: '', caption });
+  const summary = await importPosts(ctx, { collectionName: 'Saved' }, [post('NOAI001', 'Linen lampshade'), post('NOAI002', 'Weeknight pasta\nIngredients\n200 g pasta\nSalt')]);
+  assert.equal(summary.ids.length, 2);
+  assert.ok(!sent.some((m) => m.type === MSG.FILL_BATCH || m.understand), 'no AI batch');
+  for (const id of summary.ids) assert.equal((await store.getItem(id)).needsAi, true);
+});

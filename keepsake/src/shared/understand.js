@@ -427,7 +427,7 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
     confidence = found.confidence;
   }
   const before = Object.fromEntries(LOGGED.filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
-  await store.updateItem(id, { ...patch, understoodAt: nowIso() }, { by: 'ai' });
+  await store.updateItem(id, { ...patch, understoodAt: nowIso(), needsAi: false }, { by: 'ai' });
   if (changes.length) {
     await store.appendAiLog([{ id: uid(), runId: runId || `understand-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason, undone: false }]);
   }

@@ -21,7 +21,7 @@ import { stepIngredients } from '../shared/stepIngredients.js';
 import { renderSettings, renderAI, renderPrivacy, analyzeItems } from './settings.js';
 import { renderImport } from './importer.js';
 import { renderTabsImport } from './tabsImport.js';
-import { runAiCleanup, renderAiLog, undoEntries } from './aiCleanup.js';
+import { runAiCleanup, renderAiLog, undoEntries, confirmAiRun, aiBacklogOf } from './aiCleanup.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 followColorScheme();
@@ -593,26 +593,71 @@ function renderJobBar() {
   if (!bar) return;
   const job = state.localJob || state.fillJob;
   const recent = job && job.finishedAt && Date.now() - Date.parse(job.finishedAt) < JOB_SHOWN_MS;
-  const show = !!job && (job.running || recent) && !jobDismissed.has(job.id);
+  // A paused Run AI stays until you resume or cancel it.
+  const paused = !!job?.backlog && !job.running && job.paused;
+  const show = !!job && (job.running || recent || paused) && !jobDismissed.has(job.id);
   bar.classList.toggle('hidden', !show);
   clear(bar);
   if (!show) return;
   const done = Math.min(job.done, job.total);
   const pct = job.total ? Math.round((done / job.total) * 100) : 100;
-  const head = job.running ? `${job.label || 'Checking with AI'}… ${done} of ${job.total}` : `${job.stopped ? 'Stopped' : 'Done'}: ${done} of ${job.total} checked`;
-  const extra = [job.changed ? `${pluralize(job.changed, 'save', 'saves')} updated` : (job.running ? '' : 'nothing new found'), job.ready ? `${pluralize(job.ready, 'place', 'places')} moved to your list` : ''].filter(Boolean).join(' · ');
+  const waitSecs = job.running && job.waitingUntil ? Math.max(1, Math.round((Date.parse(job.waitingUntil) - Date.now()) / 1000)) : 0;
+  const head = paused ? `Paused: ${done} of ${job.total} read`
+    : job.running ? `${job.label || 'Checking with AI'}… ${done} of ${job.total}`
+      : `${job.stopped ? (job.backlog ? 'Cancelled' : 'Stopped') : 'Done'}: ${done} of ${job.total} ${job.backlog ? 'read' : 'checked'}`;
+  const extra = [
+    waitSecs ? `your provider asked to slow down, trying again in ${waitSecs}s` : '',
+    job.changed ? `${pluralize(job.changed, 'save', 'saves')} updated` : (job.running || paused ? '' : 'nothing new found'),
+    job.failed ? `${job.failed} couldn’t be read (they stay waiting)` : '',
+    job.ready ? `${pluralize(job.ready, 'place', 'places')} moved to your list` : '',
+    paused && job.error ? job.error : '',
+  ].filter(Boolean).join(' · ');
   bar.append(
     el('div', { class: 'jobbar-text' }, [el('strong', {}, [head]), extra ? el('span', { class: 'muted' }, [` · ${extra}`]) : null]),
     el('div', { class: 'progress jobbar-progress', role: 'progressbar', 'aria-label': job.label || 'Progress', 'aria-valuemin': '0', 'aria-valuemax': String(job.total), 'aria-valuenow': String(done) }, [
       el('div', { class: `progress-fill ${job.running ? 'is-running' : ''}`, style: { width: `${Math.max(job.running ? 3 : 0, pct)}%` } }),
     ]),
-    job.running
+    job.backlog && (job.running || paused)
+      ? el('div', { class: 'jobbar-actions' }, [
+        job.running
+          ? el('button', { type: 'button', class: 'btn btn-sm', onClick: (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Pausing…'; send({ type: MSG.AI_BACKLOG_PAUSE }); } }, ['Pause'])
+          : el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => resumeAiRun(job) }, ['Resume']),
+        el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: (e) => { e.currentTarget.disabled = true; send({ type: MSG.AI_BACKLOG_PAUSE, cancel: true }); if (!job.running) { jobDismissed.add(job.id); renderJobBar(); } } }, ['Cancel']),
+      ])
+      : job.running
       ? el('div', { class: 'jobbar-actions' }, [
         job.onShow ? el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => job.onShow() }, ['Show']) : null,
         el('button', { type: 'button', class: 'btn btn-sm', onClick: (e) => { e.currentTarget.disabled = true; e.currentTarget.textContent = 'Stopping…'; if (job.onStop) job.onStop(); else send({ type: MSG.FILL_STOP }); } }, ['Stop']),
       ])
       : el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => { jobDismissed.add(job.id); renderJobBar(); } }, ['Dismiss']),
   );
+}
+
+// Resume a paused Run AI: the same saves it started with (or every flagged save), less the ones read since.
+async function resumeAiRun(job) {
+  const res = await send({ type: MSG.AI_BACKLOG_RUN, itemIds: job.scope || null, label: job.label });
+  if (!res?.ok) {
+    UI.toast(res?.error || 'Run AI couldn’t start.', { kind: 'danger', duration: 6000 });
+    if (/Nothing here/.test(res?.error || '')) { jobDismissed.add(job.id); renderJobBar(); }
+    return;
+  }
+  state.fillJob = res.job;
+  renderJobBar();
+}
+
+// "N saves haven't been read by AI": imported saves waiting for Run AI, shown only while Optional AI is on
+// and nothing is running. scope: these saves only (a collection or Lifestyle view), else all of them.
+function aiBacklogNote(items, { home = false } = {}) {
+  if (!state.settings?.ai?.on || state.fillJob?.running || (state.fillJob?.backlog && state.fillJob.paused)) return null;
+  const waiting = aiBacklogOf(items);
+  if (!waiting.length) return null;
+  const text = `${pluralize(waiting.length, home ? 'imported save hasn’t' : 'save here hasn’t', home ? 'imported saves haven’t' : 'saves here haven’t')} been read by AI`;
+  const run = () => confirmAiRun(ctx, home ? null : waiting.map((i) => i.id), { label: home ? 'Running AI on imported saves' : 'Running AI on these saves' });
+  return el('button', { type: 'button', class: `home-attention ai-backlog-note${home ? '' : ' is-inline'}`, onClick: run }, [
+    el('span', { class: 'home-attention-dot', 'aria-hidden': 'true' }),
+    el('span', {}, [text]),
+    el('span', { class: 'home-attention-go' }, [home ? 'Run AI →' : 'Run AI on these →']),
+  ]);
 }
 
 async function startFillJob(ids, opts) {
@@ -784,6 +829,10 @@ function renderGrid(view) {
   if (baseItems().length && !listView) view.append(filterBar());
   const chips = topicChips();
   if (chips) view.append(chips);
+  if (r.name === 'c' || r.name === 'kind') {
+    const note = aiBacklogNote(baseItems());
+    if (note) view.append(note);
+  }
   const items = currentGridItems();
   if (state.search && state.searchUsed) {
     view.append(el('p', { class: 'search-corrected', role: 'status' }, [
@@ -3034,6 +3083,9 @@ function renderHome(view) {
       el('span', { class: 'home-attention-go' }, ['Review →']),
     ]));
   }
+
+  const backlogNote = aiBacklogNote(live, { home: true });
+  if (backlogNote) page.append(backlogNote);
 
   const recent = live.slice(0, 8);
   page.append(homeSection('Recently saved', { href: '#all', label: 'Library →' },

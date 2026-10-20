@@ -207,7 +207,9 @@ export function classifyCapture(product, kind, details, ctx) {
 
 // instant: saved with no preview (on-page button, right-click). Then a local pick below
 // AUTO_FILE_CONFIDENCE goes to Review with that pick as the suggestion, like the toolbar.
-export async function saveCapture(store, rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false } = {}, { enrich = () => {}, fill = () => {} } = {}) {
+// deferAi: part of a bulk import (open tabs). Nothing goes to your AI provider now; the save is flagged
+// (needsAi) for Run AI on imported saves, which you start yourself.
+export async function saveCapture(store, rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false, deferAi = false } = {}, { enrich = () => {}, fill = () => {} } = {}) {
   const product = normalizeProduct(rawProduct);
   if (!force) {
     const existing = await store.findByUrl(product.canonicalUrl || product.url);
@@ -223,7 +225,7 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
   // With AI on, the save is stored first with the local result and marked "finishing details"; your
   // provider then works out what it is (a product may turn out to be a recipe) and tidies it (tidySave).
   // Nothing waits on the network. Lifestyle saves get the same reading from their fill-in (fillSave).
-  const aiWanted = !FILLED_KINDS.includes(kind) && !collectionId && !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
+  const aiWanted = !deferAi && !FILLED_KINDS.includes(kind) && !collectionId && !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
 
   if (instant && !collectionId && !classification.isInbox && classification.confidence < AUTO_FILE_CONFIDENCE) {
     const pick = { collectionId: classification.collectionId, collectionName: classification.collectionName, taxonomyKey: classification.taxonomyKey, isNew: classification.isNew };
@@ -254,6 +256,7 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
     details,
     ...topicsFor(kind, product, details),
     captureState: aiWanted ? 'pending' : 'complete',
+    needsAi: !!deferAi,
     confidence: userChose ? 1 : classification.confidence,
     categorizationSource: userChose ? 'manual' : 'local',
     categorizationReason: userChose ? 'Chosen by you' : classification.reason,
