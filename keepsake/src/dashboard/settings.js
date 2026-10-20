@@ -9,7 +9,7 @@ import { emptyPrefs } from '../shared/categorizer.js';
 import { PROVIDERS, providerConfig, originFor, describePayload, analyzePost, testConnection, findProductOnline, supportsWebLookup } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
-import { hasInstagramAccess, revokeInstagramAccess } from '../instagram/enrich.js';
+import { hasInstagramAccess, requestInstagramAccess, revokeInstagramAccess, instagramAccessHelp } from '../instagram/enrich.js';
 import { clearScanStore } from '../instagram/scanStore.js';
 
 const ALL_SITES = '*://*/*';
@@ -314,8 +314,24 @@ function igAccessControl(ctx) {
     const has = await hasInstagramAccess();
     box.append(el('span', { class: `pill ${has ? 'pill-ok' : ''}` }, [has ? 'Granted' : 'Not granted']));
     if (has) box.append(' ', el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: async () => { await revokeInstagramAccess(); UI.toast('instagram.com access revoked.', { duration: 2000 }); draw(); } }, ['Revoke']));
+    else box.append(' ', el('button', { type: 'button', class: 'btn btn-sm', onClick: async () => {
+      const ok = (await requestInstagramAccess()) || (await hasInstagramAccess());
+      if (ok) UI.toast('instagram.com access granted.', { duration: 2000 });
+      else UI.toast(`instagram.com access wasn’t granted. ${instagramAccessHelp()}`, { duration: 10000 });
+      draw();
+    } }, ['Grant access']));
   };
   draw();
+  // Access can also change from the browser's own settings while this page is open.
+  const refresh = () => {
+    if (box.isConnected) return draw();
+    chrome.permissions.onAdded?.removeListener(refresh);
+    chrome.permissions.onRemoved?.removeListener(refresh);
+    document.removeEventListener('visibilitychange', refresh);
+  };
+  chrome.permissions.onAdded?.addListener(refresh);
+  chrome.permissions.onRemoved?.addListener(refresh);
+  document.addEventListener('visibilitychange', refresh);
   return box;
 }
 
