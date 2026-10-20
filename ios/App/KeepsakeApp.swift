@@ -31,14 +31,21 @@ final class NoticeDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
         return true
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    // The completion-handler forms, finished on the main thread: with the async forms Swift calls UIKit's
+    // completion handler from a background thread, and UIKit stops the app (SIGABRT after a tap).
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler done: @escaping () -> Void) {
         let link = SaveNotice.link(from: response.notification.request.content.userInfo)
-        await MainActor.run { tapped = link }
+        Task { @MainActor in
+            tapped = link
+            done()
+        }
     }
 
     /// Shown as a banner even while Keepsake is open (iPad, with Safari beside it).
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .list]
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Task { @MainActor in done([.banner, .list]) }
     }
 }
 
