@@ -28,7 +28,7 @@ final class ScreenshotTests: XCTestCase {
         guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
         try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
         let env = ProcessInfo.processInfo.environment
-        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry", "notebook", "gallery", "atlas", "swiss"]
+        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry", "notebook", "atlas", "swiss"]
         let modes: [XCUIDevice.Appearance] = (env["KEEPSAKE_SHOT_MODES"] ?? "light,dark").split(separator: ",").map { $0 == "dark" ? .dark : .light }
         let regular = UIDevice.current.userInterfaceIdiom == .pad   // iPad: sidebar, not tabs
         for theme in themes {
@@ -197,7 +197,7 @@ final class ScreenshotTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
         let env = ProcessInfo.processInfo.environment
         let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
-        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry", "notebook", "gallery", "atlas", "swiss"]
+        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry", "notebook", "atlas", "swiss"]
         let modes: [XCUIDevice.Appearance] = (env["KEEPSAKE_SHOT_MODES"] ?? "light,dark").split(separator: ",").map { $0 == "dark" ? .dark : .light }
         let regular = UIDevice.current.userInterfaceIdiom == .pad
         let device = regular ? "ipad" : "iphone"

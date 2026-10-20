@@ -6,6 +6,7 @@ import KeepsakeUI
 /// ingredients it uses, with their amounts, right under the instruction (StepIngredients works out
 /// which); tap one to check it off. Things made in an earlier step show as "from step N". Swipe or tap
 /// Next; the progress bar opens every step and the whole list. The last step offers "Cooked".
+/// Quiet music plays along (CookingMusic), unless it is turned off here or in Settings.
 struct CookingView: View {
     let save: Save
     let steps: [String]
@@ -18,6 +19,9 @@ struct CookingView: View {
     @State private var step = 0
     @State private var showOverview = false
     @State private var checked: Set<Int> = []
+    @State private var music = CookingMusic()
+    @AppStorage(CookingMusic.enabledKey) private var musicOn = true
+    @Environment(\.scenePhase) private var scenePhase
 
     init(save: Save, steps: [String], ingredients: [String], cooked: @escaping () -> Void) {
         self.save = save
@@ -40,6 +44,8 @@ struct CookingView: View {
                     Color.clear.frame(width: 44, height: 44)
                 }
                 .padding(.horizontal, 12)
+                CookingMusicBar(music: music, on: $musicOn)
+                    .frame(maxWidth: .infinity).padding(.top, 2)
                 TabView(selection: $step) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, text in
                         ScrollView {
@@ -74,8 +80,18 @@ struct CookingView: View {
                 .padding(.horizontal, 16).padding(.bottom, 8)
             }
         }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true
+            if musicOn { music.start() }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            music.stop()
+        }
+        .onChange(of: musicOn) { _, on in if on { music.start() } else { music.stop() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { music.resume() } else if phase == .background { music.suspend() }
+        }
         .sheet(isPresented: $showOverview) {
             NavigationStack {
                 List {

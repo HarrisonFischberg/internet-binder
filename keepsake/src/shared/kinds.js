@@ -1088,6 +1088,29 @@ export function sanitizeDetails(kind, details) {
     const isbn = String(details.isbn || '').replace(/[^\dXx]/g, '');
     return { author: clean(details.author, 240), ...base, pages: num(details.pages, 20000), isbn: /^(?:\d{9}[\dXx]|\d{13})$/.test(isbn) ? isbn.toUpperCase() : '' };
   }
+  if (kind === 'product') {
+    // What your AI provider worked out the thing is (src/shared/understand.js understandProduct): the shop
+    // page it found is the main source (shop*), its own summary sits alongside. Empty for a plain save.
+    const url = (() => { try { const u = new URL(String(details.shopUrl || '')); return /^https?:$/.test(u.protocol) ? u.href.slice(0, 2000) : ''; } catch { return ''; } })();
+    const specs = (Array.isArray(details.specs) ? details.specs : []).slice(0, 16)
+      .map((s) => (s && typeof s === 'object' ? { label: clean(s.label, 40), value: clean(s.value, 160) } : null)).filter((s) => s && s.label && s.value);
+    const out = {
+      brand: clean(details.brand, 60),
+      model: clean(details.model, 80),
+      category: clean(details.category, 60),
+      summary: clean(details.summary, 600),
+      features: list(details.features, 10, 160),
+      specs,
+      shopUrl: url,
+      shopName: clean(details.shopName, 80),
+      shopTitle: clean(details.shopTitle, 200),
+      shopDescription: clean(details.shopDescription, 1200),
+      availability: ['in_stock', 'out_of_stock'].includes(details.availability) ? details.availability : '',
+      source: ['page', 'ai', 'you'].includes(details.source) ? details.source : 'you',
+    };
+    const blank = (v) => v === '' || (Array.isArray(v) && !v.length);
+    return Object.entries(out).some(([k, v]) => k !== 'source' && !blank(v)) ? out : {};
+  }
   // Other kinds keep a small, flat set of strings and numbers until their own fields land.
   const out = {};
   for (const [k, v] of Object.entries(details).slice(0, 20)) {

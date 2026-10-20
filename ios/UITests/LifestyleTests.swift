@@ -67,6 +67,15 @@ final class LifestyleTests: XCTestCase {
         // Each step shows the ingredients it uses; sage isn't named by any step, so it waits on step 1.
         XCTAssertTrue(app.buttons["350 g rigatoni"].exists)
         XCTAssertTrue(app.buttons["12 sage leaves"].exists)
+        // Music plays along: pause, next song, off and back on.
+        XCTAssertTrue(app.buttons["Next song"].waitForExistence(timeout: 3))
+        app.buttons["Pause music"].tap()
+        XCTAssertTrue(app.buttons["Play music"].waitForExistence(timeout: 2))
+        app.buttons["Next song"].tap()
+        app.buttons["Turn music off"].tap()
+        XCTAssertTrue(app.buttons["Turn music on"].waitForExistence(timeout: 2))
+        app.buttons["Turn music on"].tap()
+        XCTAssertTrue(app.buttons["Pause music"].waitForExistence(timeout: 2))
         app.buttons["Next step"].tap()
         // The recipe page behind the cover lists "90 g butter" too; take the one on the step.
         XCTAssertTrue(app.buttons["90 g butter"].waitForExistence(timeout: 3))

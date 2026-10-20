@@ -13,7 +13,6 @@ struct LibraryScreen: View {
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.appearance) private var appearance
     @State private var filter: Filter = .all
     @State private var query = ""
     @State private var results: SearchResult?
@@ -224,7 +223,7 @@ struct LibraryScreen: View {
             if let results, results.corrected {
                 Text("Showing results for “\(results.query)”").font(KSFont.note).foregroundStyle(t.inkMuted)
             }
-            Masonry(shown, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: appearance.density == "compact" ? 105 : 170) { save in
+            Masonry(shown, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: 170) { save in
                 if selecting {
                     let on = selected.contains(save.id)
                     Button {

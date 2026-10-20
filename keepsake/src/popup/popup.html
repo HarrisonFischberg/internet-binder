@@ -20,6 +20,9 @@
     <div class="topbar-actions">
       <button class="btn btn-quiet btn-sm" id="importTabsBtn" type="button" title="Read every tab in this window and offer to save the products found">Import tabs</button>
       <button class="btn btn-quiet btn-sm" id="openDashboard" type="button">Dashboard</button>
+      <button class="btn btn-primary btn-sm door" id="homeDashboard" type="button">Open dashboard
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
     </div>
   </header>
 
@@ -98,8 +101,99 @@
       </div>
     </section>
 
+    <!-- Home, drawn like the iPhone share sheet. Nothing is saved until you press Save. -->
+    <section class="state hidden" id="state-home">
+      <!-- The page, drawn as its object (before you pick a place) -->
+      <div class="sheet-object" id="homeObject">
+        <div class="object-card">
+          <div class="object-photo" id="homeObjectPhoto" hidden></div>
+          <span class="object-pill" id="homeObjectPill"></span>
+          <p class="object-title" id="homeObjectTitle"></p>
+        </div>
+      </div>
+
+      <!-- The page as a small card, with the title to tidy (once you're picking) -->
+      <div class="sheet-compact hidden" id="homeCompact">
+        <div class="compact-thumb" id="homeThumb" aria-hidden="true"></div>
+        <div class="compact-text">
+          <label class="sr-only" for="homeTitleInput">Title</label>
+          <textarea class="compact-title" id="homeTitleInput" rows="1" maxlength="200" spellcheck="false" placeholder="Give this a title"></textarea>
+          <span class="compact-dest" id="homeDest"></span>
+        </div>
+      </div>
+      <p class="notice notice-warn hidden" id="homeAlready"></p>
+
+      <!-- The two libraries -->
+      <div class="where" id="homeLibraries">
+        <div class="where-head">
+          <h2>Where does it live?</h2>
+          <p id="homeGuess"></p>
+        </div>
+        <div class="libraries">
+          <button class="library" id="libCollections" type="button">
+            <span class="fan" aria-hidden="true"></span>
+            <span class="library-title">Collections</span>
+            <span class="library-caption">Things to buy</span>
+            <span class="library-count"></span>
+          </button>
+          <button class="library" id="libLifestyle" type="button">
+            <span class="fan" aria-hidden="true"></span>
+            <span class="library-title">Lifestyle</span>
+            <span class="library-caption">Recipes, places &amp; more</span>
+            <span class="library-count"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- One library's groups -->
+      <div class="where hidden" id="homeGroups">
+        <div class="groups-head">
+          <button class="groups-back" id="groupsBack" type="button" aria-label="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+          </button>
+          <div>
+            <h2 id="groupsTitle"></h2>
+            <p id="groupsSub"></p>
+          </div>
+        </div>
+        <div class="new-name hidden" id="homeNewRow">
+          <label class="sr-only" for="homeNewName">New collection name</label>
+          <input class="input" id="homeNewName" maxlength="80" placeholder="Name the new collection" />
+        </div>
+        <div class="groups" id="groupGrid"></div>
+      </div>
+
+      <button class="review-row" id="pickReview" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h4l1.5 3h5L16 13h4"/><path d="M5.5 6h13L20 13v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5z"/></svg>
+        <span class="review-text">
+          <span class="review-title" id="reviewTitle">Not sure? Put it in Review</span>
+          <span class="review-sub">Keepsake suggests a home for it later.</span>
+        </span>
+        <svg class="review-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+      </button>
+
+      <label class="sr-only" for="homeNote">Note</label>
+      <textarea class="textarea home-note hidden" id="homeNote" rows="2" maxlength="1000" placeholder="Add a note"></textarea>
+      <p class="notice notice-danger hidden" id="homeError" role="alert"></p>
+      <div class="sheet-actions hidden" id="homeActions">
+        <button class="btn sheet-secondary" id="homeAddNote" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h8M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          Add a note
+        </button>
+        <button class="btn btn-primary sheet-primary" id="homeSave" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+          <span id="homeSaveLabel">Save</span>
+        </button>
+      </div>
+    </section>
+
     <!-- Product editor -->
     <section class="state hidden" id="state-product">
+      <div class="quick-head" id="quickHead">
+        <span class="muted small">Saving to</span>
+        <strong class="quick-dest" id="quickDest"></strong>
+        <button class="btn-link small" id="quickChange" type="button">Change</button>
+      </div>
       <div class="notice notice-warn hidden" id="sparseNotice">This page didn’t expose much product data — check the title and price before saving.</div>
 
       <div class="hero">
@@ -113,7 +207,7 @@
             <span class="dot-sep" aria-hidden="true">·</span>
             <span class="host truncate" id="host" title=""></span>
           </div>
-          <label class="sr-only" for="titleInput">Title</label>
+          <label class="title-label small muted" for="titleInput">Title</label>
           <textarea class="title-input" id="titleInput" rows="2" maxlength="200" spellcheck="false" placeholder="Give this a title"></textarea>
           <div class="price-row">
             <label class="sr-only" for="priceInput">Price</label>
@@ -168,6 +262,7 @@
 
       <div class="actions" id="saveActions">
         <button class="btn btn-primary btn-save" id="saveBtn" type="button">Save</button>
+        <button class="btn-link small more-details" id="moreDetails" type="button">Price, picture and note</button>
       </div>
       <p class="notice notice-danger hidden" id="saveError" role="alert"></p>
     </section>

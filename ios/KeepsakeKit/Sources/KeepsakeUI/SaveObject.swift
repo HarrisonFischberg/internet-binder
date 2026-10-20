@@ -7,14 +7,15 @@ import KeepsakeKit
 /// fact that matters. One accessibility element: "{title}, {kind}, {fact}" plus its state.
 public struct SaveObject: View {
     let save: Save
+    /// Smaller type and picture, for the style previews in Appearance.
+    let compact: Bool
     @Environment(\.ks) private var t
-    @Environment(\.appearance) private var look
-    public init(_ save: Save) { self.save = save }
+    public init(_ save: Save, compact: Bool = false) { self.save = save; self.compact = compact }
 
     private var done: Bool { save.status == "done" || save.purchased == true }
 
     public var body: some View {
-        SaveCard(save: save, compact: look.density == "compact")
+        SaveCard(save: save, compact: compact)
             .fixedSize(horizontal: false, vertical: true)
             .saturation(done ? 0.4 : 1)
             .accessibilityElement(children: .ignore)
