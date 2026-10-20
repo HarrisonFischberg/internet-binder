@@ -1,18 +1,51 @@
 import SwiftUI
+import UIKit
+import UserNotifications
 import WidgetKit
 import KeepsakeKit
 import KeepsakeUI
 
 @main
 struct KeepsakeApp: App {
+    @UIApplicationDelegateAdaptor private var notices: NoticeDelegate
     @State private var model = LibraryModel()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(model)
+                .environment(notices)
                 .keepsakeAppearance(model.appearance)
         }
+    }
+}
+
+/// Taps on "Saved to …" notifications (SaveNotice): the link waits in `tapped` for RootView to open.
+/// Set as the delegate at launch, so a tap that starts the app isn't missed.
+@MainActor @Observable
+final class NoticeDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    var tapped: URL?
+
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    // The completion-handler forms, finished on the main thread: with the async forms Swift calls UIKit's
+    // completion handler from a background thread, and UIKit stops the app (SIGABRT after a tap).
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler done: @escaping () -> Void) {
+        let link = SaveNotice.link(from: response.notification.request.content.userInfo)
+        Task { @MainActor in
+            tapped = link
+            done()
+        }
+    }
+
+    /// Shown as a banner even while Keepsake is open (iPad, with Safari beside it).
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Task { @MainActor in done([.banner, .list]) }
     }
 }
 

@@ -164,10 +164,12 @@ final class ShareState {
         }
     }
 
+    /// Done: the save stays where it is now, and a notification says so (tap it to open the save).
     func done() {
-        guard let save, let library, !note.trimmingCharacters(in: .whitespaces).isEmpty else { finish(); return }
+        guard let save else { finish(); return }
         Task {
-            try? await library.update(save.id, ["note": note])
+            if let library, !note.trimmingCharacters(in: .whitespaces).isEmpty { try? await library.update(save.id, ["note": note]) }
+            if case .saved = phase { await SaveNotice.post(id: save.id, title: save.title, destination: destinationLabel) }
             finish()
         }
     }

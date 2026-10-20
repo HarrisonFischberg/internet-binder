@@ -24,6 +24,9 @@ public final class ThumbnailStore: @unchecked Sendable {
 
     private func file(_ id: String) -> URL? { dir?.appendingPathComponent("\(id).jpg") }
 
+    /// The local copy's file, if there is one (a save notification's picture).
+    public func localFile(_ id: String) -> URL? { file(id).flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil } }
+
     /// Only what's already decoded in memory: cheap enough to ask while drawing.
     public func memory(_ id: String) -> UIImage? { cache.object(forKey: id as NSString) }
 

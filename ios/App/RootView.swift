@@ -15,6 +15,7 @@ enum Route: Hashable {
 /// toast. Library keeps its own search field too.
 struct RootView: View {
     @Environment(LibraryModel.self) private var model
+    @Environment(NoticeDelegate.self) private var notices
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var size
     @State private var tab = "home"
@@ -35,6 +36,24 @@ struct RootView: View {
         .overlay { CelebrationView() }
         .task { await model.start() }
         .task { IconPicker.retireOldIcons() }
+        // Asks once whether "Saved to …" notifications may show (not in UI tests, where the prompt would
+        // cover the screen).
+        .task {
+            #if DEBUG
+            // UI tests: -noticeFirstSave posts the notification for the newest save, as the Share Extension does.
+            if UserDefaults.standard.bool(forKey: "noticeFirstSave") {
+                while model.saves.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
+                await SaveNotice.ask()
+                // Time for the test to send Keepsake to the background first.
+                try? await Task.sleep(for: .seconds(5))
+                let s = model.saves[0]
+                await SaveNotice.post(id: s.id, title: s.title, destination: KindStyle(s.kind).plural)
+                return
+            }
+            #endif
+            guard SaveNotice.enabled, ProcessInfo.processInfo.environment["KEEPSAKE_DB"] == nil else { return }
+            await SaveNotice.ask()
+        }
         // A Keepsake export sent by AirDrop, or opened from Files with "Open in Keepsake": imported
         // the way Settings → Import from Chrome does (merged; saves already here are skipped).
         .onOpenURL { url in
@@ -59,12 +78,19 @@ struct RootView: View {
             Tab(value: "search", role: .search) { Stack(name: "search") { SearchScreen(zoom: $0) } }
         }
         .onChange(of: tab) { Perf.mark("tab \(tab)") }
-        // keepsake://save/<id> (widgets): open that save in the Library.
-        .onOpenURL { url in
-            guard url.scheme == "keepsake", url.host() == "save", let id = url.pathComponents.last else { return }
-            tab = "library"
-            model.opening = (stack: "library", id: id)
+        // keepsake://save/<id> (widgets, and a tapped "Saved to …" notification): open that save in the Library.
+        .onOpenURL { open($0) }
+        .onChange(of: notices.tapped, initial: true) {
+            guard let url = notices.tapped else { return }
+            notices.tapped = nil
+            open(url)
         }
+    }
+
+    private func open(_ url: URL) {
+        guard url.scheme == "keepsake", url.host() == "save", let id = url.pathComponents.last else { return }
+        tab = "library"
+        model.opening = (stack: "library", id: id)
     }
 }
 
@@ -104,12 +130,17 @@ struct Stack<Root: View>: View {
         .toolbar(saveDepths.contains(path.count) && path.count > 0 ? .hidden : .visible, for: .tabBar)
         .animation(.easeOut(duration: 0.2), value: saveDepths.contains(path.count))
         .onChange(of: path.count) { _, depth in saveDepths = saveDepths.filter { $0 <= depth } }
-        .onChange(of: model.opening?.id) {
-            guard let open = model.opening, open.stack == name, let save = model.saves.first(where: { $0.id == open.id }) else { return }
-            path = NavigationPath()
-            path.append(save)
-            model.opening = nil
-        }
+        // initial: a tab first shown by the link itself (a tapped notification while on Home) opens it too.
+        .onChange(of: model.opening?.id, initial: true) { openWaitingSave() }
+        // A save made in the Share Extension appears once the library catches up, then opens.
+        .onChange(of: model.saves.count) { openWaitingSave() }
+    }
+
+    private func openWaitingSave() {
+        guard let open = model.opening, open.stack == name, let save = model.saves.first(where: { $0.id == open.id }) else { return }
+        path = NavigationPath()
+        path.append(save)
+        model.opening = nil
     }
 }
 
