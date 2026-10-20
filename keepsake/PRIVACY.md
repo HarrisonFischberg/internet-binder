@@ -14,7 +14,7 @@ All data lives in the browser profile you installed Keepsake in: your saves, col
 | IndexedDB `goals` and `checkins` | Workout goals you create (which workout, "3× a week for 4 weeks" or a target like 3×12, start day, an optional week-by-week plan) and each check-in (when, optional sets, reps, time and note). Ended goals are kept 30 days so they can be restored. Included in exports. |
 | IndexedDB `collections` | Collection names, descriptions, keywords, aliases, cover image URL, placeholder color, whether it's pinned, and order. |
 | IndexedDB `prefs` | The confidence threshold, the auto-create setting, keyword and retailer weights learned from your moves, and a capped history of the last 200 corrections (title, from → to). |
-| `keepsake_settings` | Style and theme, on-page button options, Instagram import options, AI provider settings (provider, base URL, model, enabled flags), onboarding flag. |
+| `keepsake_settings` | Style and theme, on-page button options, Instagram import options, AI provider settings (provider, base URL, model, effort level, enabled flags), onboarding flag. |
 | IndexedDB `importHistory` | Which Instagram post URLs have already been imported, so re-scans don't duplicate. |
 | `keepsake_secrets` | Your AI API key, if you added one. **Excluded from exports.** |
 | IndexedDB `aiLog` | What *Fix with AI*, and the AI tidy after a save, changed (item id and title, each field's value before and after, the AI's one-line reason), capped at 3,000 entries, so changes can be undone. **Excluded from exports.** |

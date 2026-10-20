@@ -179,6 +179,11 @@ extension Library {
     }
 
     public func undoCheckIn(_ id: String) async throws { try await core.call("store.removeCheckin", [id]) }
+
+    /// Removes a goal. It and its check-ins stay in the trash for a while, so Undo can bring it back.
+    public func removeGoal(_ id: String) async throws { try await core.call("store.deleteGoal", [id]) }
+
+    public func restoreGoal(_ id: String) async throws { try await core.call("store.restoreGoal", [id]) }
 }
 
 /// What the widgets read (written by the app to the App Group; the widget never runs the shared code).

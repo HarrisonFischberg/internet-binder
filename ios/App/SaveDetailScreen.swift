@@ -304,7 +304,7 @@ struct SaveDetailScreen: View {
 
     private var workoutPanel: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if let goal { GoalCard(goal: goal) }
+            if let goal { GoalCard(goal: goal) { removeGoal(goal) } }
             let exercises = detail?.exercises ?? []
             if !exercises.isEmpty {
                 card("Exercises", drafted: isDrafted("exercises")) {
@@ -334,7 +334,21 @@ struct SaveDetailScreen: View {
         }
     }
 
-    private func checkIn() async {
+    /// Takes the goal off the workout (made by accident, say), with Undo to bring it back.
+    private func removeGoal(_ goal: GoalView) {
+        Task {
+            guard let lib = model.library else { return }
+            let id = goal.goal.id
+            try? await lib.removeGoal(id)
+            await reload()
+            model.show("Goal removed") {
+                try? await lib.restoreGoal(id)
+                await reload()
+            }
+        }
+    }
+
+        private func checkIn() async {
         guard let goal, let lib = model.library, let id = try? await lib.checkIn(goalId: goal.goal.id) else { return }
         await reload()
         model.show("Checked in for today") {

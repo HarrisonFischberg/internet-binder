@@ -12,7 +12,9 @@ struct SettingsScreen: View {
     @State private var settings: [String: Any] = [:]
     @State private var aiOn = false
     @State private var readPosts = true
-    @State private var provider = "openai"
+    @State private var provider = "anthropic"
+    @State private var aiModel = SettingsScreen.claudeModels[0].id
+    @State private var effort = "medium"
     @State private var key = ""
     @State private var lookups: [String: Bool] = ["places": false, "media": false, "books": false]
     @State private var consent: Consent?
@@ -21,6 +23,16 @@ struct SettingsScreen: View {
     @State private var erasing = false
     @State private var testResult: String?
     @State private var fixingAll = false
+
+    /// The Claude models on offer, cheapest first (provider.js MODELS). Haiku 5.5 is the default.
+    static let claudeModels: [(id: String, name: String, note: String)] = [
+        ("claude-haiku-5-5", "Claude Haiku 5.5", "Fastest and cheapest. Plenty for tidying saves."),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5", "Sharper at reading pictures and pages."),
+        ("claude-opus-5-5", "Claude Opus 5.5", "Most careful. Costs more per save."),
+        ("claude-fable-5-1", "Claude Fable 5.1", "Most capable, and the most expensive."),
+    ]
+    /// How hard the model thinks before answering (provider.js EFFORTS). Medium is the default.
+    static let efforts: [(id: String, name: String)] = [("low", "Low"), ("medium", "Medium"), ("high", "High")]
 
     enum Consent: Identifiable { case ai, lookup(String); var id: String { switch self { case .ai: "ai"; case .lookup(let k): k } } }
 
@@ -68,11 +80,35 @@ struct SettingsScreen: View {
                 if on { consent = .ai } else { Task { aiOn = false; try? await model.library?.updateSettings(["ai": ["on": false]]); await model.refreshAIReady() } }
             }))
             if aiOn {
-                Picker("Provider", selection: $provider) {
-                    Text("OpenAI").tag("openai")
+                // A new provider starts on its own default model. (Bindings, not onChange, so loading
+                // the saved settings never writes them back.)
+                Picker("Provider", selection: Binding(get: { provider }, set: { p in
+                    guard p != provider else { return }
+                    provider = p
+                    aiModel = Self.claudeModels[0].id
+                    Task { try? await model.library?.updateSettings(["ai": ["provider": p, "model": ""]]) }
+                })) {
                     Text("Anthropic").tag("anthropic")
+                    Text("OpenAI").tag("openai")
                 }
-                .onChange(of: provider) { Task { try? await model.library?.updateSettings(["ai": ["provider": provider]]) } }
+                if provider == "anthropic" {
+                    Picker("Model", selection: Binding(get: { aiModel }, set: { m in
+                        aiModel = m
+                        Task { try? await model.library?.updateSettings(["ai": ["model": m]]) }
+                    })) {
+                        ForEach(Self.claudeModels, id: \.id) { m in Text(m.name).tag(m.id) }
+                        if !Self.claudeModels.contains(where: { $0.id == aiModel }) { Text(aiModel).tag(aiModel) }
+                    }
+                    Picker("Effort", selection: Binding(get: { effort }, set: { e in
+                        effort = e
+                        Task { try? await model.library?.updateSettings(["ai": ["effort": e]]) }
+                    })) {
+                        ForEach(Self.efforts, id: \.id) { e in Text(e.name).tag(e.id) }
+                    }
+                    if let note = Self.claudeModels.first(where: { $0.id == aiModel })?.note {
+                        Text("\(note) Effort is how long it thinks first; Medium suits most saves.").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 SecureField("Your API key", text: $key)
                     .textContentType(.password).autocorrectionDisabled().textInputAutocapitalization(.never)
                     .onSubmit { Task { try? await model.library?.setAIKey(key); await model.refreshAIReady() } }
@@ -133,7 +169,10 @@ struct SettingsScreen: View {
         settings = s
         let ai = s["ai"] as? [String: Any] ?? [:]
         aiOn = ai["on"] as? Bool ?? false
-        provider = ai["provider"] as? String ?? "openai"
+        provider = ai["provider"] as? String ?? "anthropic"
+        let m = ai["model"] as? String ?? ""
+        aiModel = m.isEmpty ? Self.claudeModels[0].id : m
+        effort = ai["effort"] as? String ?? "medium"
         key = (try? await lib.aiKey()) ?? ""
         readPosts = (s["instagram"] as? [String: Any])?["readPostDetails"] as? Bool ?? true
         let l = s["lookups"] as? [String: Any] ?? [:]

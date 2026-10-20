@@ -101,7 +101,8 @@ export const DEFAULT_SETTINGS = {
     // collection at save time), "Fix with AI", and "Find products" for Instagram saves.
     on: false,
     webLookup: false, // "Find products": also run the provider's web search for listings
-    provider: 'openai', // openai | anthropic | custom
+    provider: 'anthropic', // anthropic | openai | custom
+    effort: 'medium', // low | medium | high (Claude models)
     baseUrl: '',
     model: '',
   },
