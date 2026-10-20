@@ -12,7 +12,9 @@ struct SettingsScreen: View {
     @State private var settings: [String: Any] = [:]
     @State private var aiOn = false
     @State private var readPosts = true
-    @State private var provider = "openai"
+    @State private var provider = "anthropic"
+    @State private var aiModel = SettingsScreen.claudeModels[0].id
+    @State private var effort = "medium"
     @State private var key = ""
     @State private var lookups: [String: Bool] = ["places": false, "media": false, "books": false]
     @State private var consent: Consent?
@@ -21,6 +23,17 @@ struct SettingsScreen: View {
     @State private var erasing = false
     @State private var testResult: String?
     @AppStorage(CookingMusic.enabledKey) private var cookingMusic = true
+    @State private var fixingAll = false
+
+    /// The Claude models on offer, cheapest first (provider.js MODELS). Haiku 5.5 is the default.
+    static let claudeModels: [(id: String, name: String, note: String)] = [
+        ("claude-haiku-5-5", "Claude Haiku 5.5", "Fastest and cheapest. Plenty for tidying saves."),
+        ("claude-sonnet-5-5", "Claude Sonnet 5.5", "Sharper at reading pictures and pages."),
+        ("claude-opus-5-5", "Claude Opus 5.5", "Most careful. Costs more per save."),
+        ("claude-fable-5-1", "Claude Fable 5.1", "Most capable, and the most expensive."),
+    ]
+    /// How hard the model thinks before answering (provider.js EFFORTS). Medium is the default.
+    static let efforts: [(id: String, name: String)] = [("low", "Low"), ("medium", "Medium"), ("high", "High")]
 
     enum Consent: Identifiable { case ai, lookup(String); var id: String { switch self { case .ai: "ai"; case .lookup(let k): k } } }
 
@@ -55,6 +68,11 @@ struct SettingsScreen: View {
                           defaultFilename: "keepsake-export-\(Date.now.formatted(.iso8601.year().month().day()))") { _ in exportDoc = nil }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { r in if case .success(let url) = r { Task { await model.importFile(url) } } }
             .sheet(isPresented: $erasing) { EraseSheet() }
+            .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
+                Button("Fix everything") { dismiss(); Task { await model.fixWithAI(model.saves) } }
+            } message: {
+                Text("Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone.")
+            }
         }
     }
 
@@ -63,24 +81,53 @@ struct SettingsScreen: View {
     private var aiSection: some View {
         Section {
             Toggle("Optional AI", isOn: Binding(get: { aiOn }, set: { on in
-                if on { consent = .ai } else { Task { aiOn = false; try? await model.library?.updateSettings(["ai": ["on": false]]) } }
+                if on { consent = .ai } else { Task { aiOn = false; try? await model.library?.updateSettings(["ai": ["on": false]]); await model.refreshAIReady() } }
             }))
             if aiOn {
-                Picker("Provider", selection: $provider) {
-                    Text("OpenAI").tag("openai")
+                // A new provider starts on its own default model. (Bindings, not onChange, so loading
+                // the saved settings never writes them back.)
+                Picker("Provider", selection: Binding(get: { provider }, set: { p in
+                    guard p != provider else { return }
+                    provider = p
+                    aiModel = Self.claudeModels[0].id
+                    Task { try? await model.library?.updateSettings(["ai": ["provider": p, "model": ""]]) }
+                })) {
                     Text("Anthropic").tag("anthropic")
+                    Text("OpenAI").tag("openai")
                 }
-                .onChange(of: provider) { Task { try? await model.library?.updateSettings(["ai": ["provider": provider]]) } }
+                if provider == "anthropic" {
+                    Picker("Model", selection: Binding(get: { aiModel }, set: { m in
+                        aiModel = m
+                        Task { try? await model.library?.updateSettings(["ai": ["model": m]]) }
+                    })) {
+                        ForEach(Self.claudeModels, id: \.id) { m in Text(m.name).tag(m.id) }
+                        if !Self.claudeModels.contains(where: { $0.id == aiModel }) { Text(aiModel).tag(aiModel) }
+                    }
+                    Picker("Effort", selection: Binding(get: { effort }, set: { e in
+                        effort = e
+                        Task { try? await model.library?.updateSettings(["ai": ["effort": e]]) }
+                    })) {
+                        ForEach(Self.efforts, id: \.id) { e in Text(e.name).tag(e.id) }
+                    }
+                    if let note = Self.claudeModels.first(where: { $0.id == aiModel })?.note {
+                        Text("\(note) Effort is how long it thinks first; Medium suits most saves.").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
                 SecureField("Your API key", text: $key)
                     .textContentType(.password).autocorrectionDisabled().textInputAutocapitalization(.never)
-                    .onSubmit { Task { try? await model.library?.setAIKey(key) } }
+                    .onSubmit { Task { try? await model.library?.setAIKey(key); await model.refreshAIReady() } }
                 Button("Save key and test") {
                     Task {
                         try? await model.library?.setAIKey(key)
+                        await model.refreshAIReady()
                         do { try await model.library?.testAI(); testResult = "Connected." } catch { testResult = error.localizedDescription }
                     }
                 }
                 if let testResult { Text(testResult).font(.footnote).foregroundStyle(.secondary) }
+                if model.aiReady && !model.saves.isEmpty {
+                    Button("Fix every save with AI", systemImage: "sparkles") { fixingAll = true }
+                        .disabled(model.aiRun != nil)
+                }
             }
         } header: { Text("Optional AI") } footer: {
             Text("Off by default. Uses your own key, kept in this iPhone's Keychain and never exported. Sends only what each feature says, to the provider you choose.")
@@ -126,7 +173,10 @@ struct SettingsScreen: View {
         settings = s
         let ai = s["ai"] as? [String: Any] ?? [:]
         aiOn = ai["on"] as? Bool ?? false
-        provider = ai["provider"] as? String ?? "openai"
+        provider = ai["provider"] as? String ?? "anthropic"
+        let m = ai["model"] as? String ?? ""
+        aiModel = m.isEmpty ? Self.claudeModels[0].id : m
+        effort = ai["effort"] as? String ?? "medium"
         key = (try? await lib.aiKey()) ?? ""
         readPosts = (s["instagram"] as? [String: Any])?["readPostDetails"] as? Bool ?? true
         let l = s["lookups"] as? [String: Any] ?? [:]
@@ -139,6 +189,7 @@ struct SettingsScreen: View {
         case .ai:
             try? await lib.updateSettings(["ai": ["on": true, "provider": provider]])
             aiOn = true
+            await model.refreshAIReady()
         case .lookup(let k):
             try? await lib.updateSettings(["lookups": [k: true]])
             lookups[k] = true
@@ -158,6 +209,7 @@ struct ConsentSheet: View {
     let consent: SettingsScreen.Consent
     let decide: (Bool) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.ks) private var t
 
     private var title: String {
         switch consent {
@@ -172,8 +224,9 @@ struct ConsentSheet: View {
         case .ai: [
             "Uses your own key with the provider you choose. Keepsake has no AI server.",
             "After a save: its title, caption or description, hashtags, location tag, site and the thumbnail stored on this iPhone, to work out what it is (a recipe, workout, place…) and fill in its card. What the post doesn't say is drafted and marked AI draft. You can undo every change.",
-            "Something to buy also gets its price, shop and your collection names, to tidy the title and pick a collection.",
-            "Nothing is fetched from the pages a post links to on this iPhone.",
+            "Something to buy (an Instagram or Facebook post of a product, say) is worked out from its picture, since a post's caption can be wrong. Your provider searches the web for the product, and Keepsake reads the one shop page it found, without cookies, for its name, price and details. The card shows the shop's facts first and the AI's summary beside them.",
+            "Its price, shop and your collection names also go, to tidy the title and pick a collection.",
+            "Nothing else is fetched from the pages a post links to on this iPhone.",
             "Nothing is sent until you add a key. Turning this off stops it at once.",
         ]
         case .lookup("places"): ["Each place's name and city (and street, if known) goes to nominatim.openstreetmap.org, at most one a second.", "Only a result with the same name in the same area is used.", "No cookies, no account."]
@@ -191,18 +244,27 @@ struct ConsentSheet: View {
                         Label(p, systemImage: "arrow.up.right.circle").font(.body)
                     }
                 }
+                .foregroundStyle(t.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
             }
-            .safeAreaInset(edge: .bottom) {
+            // The buttons sit on their own solid bar under the text, so the text scrolls above them and
+            // never runs underneath (the sheet's glass showed it through before).
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack(spacing: 12) {
                     Button("Not now") { decide(false); dismiss() }.buttonStyle(.bordered).frame(minHeight: 44)
                     PrimarySlab("Turn on", symbol: "checkmark") { decide(true); dismiss() }
                 }
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(t.table.ignoresSafeArea(edges: .bottom))
+                .overlay(alignment: .top) { Rectangle().fill(t.style == .pantry ? t.line : t.rule).frame(height: t.style == .pantry ? 2 : 1) }
             }
+            .background(t.table.ignoresSafeArea())
             .onAppear { Haptic.warning() }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
     }
 }
 

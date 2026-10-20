@@ -273,10 +273,14 @@ struct CaptureTests {
         #expect(r.save?.title.contains("Brown butter pasta") == true)
     }
 
-    /// Your AI provider, faked: it files every save it's asked about in Home Decor.
+    /// Your AI provider, faked: it files every save it's asked about in Home Decor. The save's own page
+    /// (read first, without cookies) isn't there.
     struct FakeProvider: NetworkTransport {
         func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
-            #expect(request.url?.host() == "api.openai.com")
+            if request.url?.host() != "api.openai.com" {
+                #expect(request.httpMethod == "GET" && request.value(forHTTPHeaderField: "Cookie") == nil)
+                return (404, Data())
+            }
             let answer = #"{"items":[{"ref":"i0","collection":"Home Decor","confidence":0.92,"reason":"cushions for a sofa"}]}"#
             let body: [String: Any] = ["choices": [["message": ["content": answer]]], "output_text": answer]
             return (200, try JSONSerialization.data(withJSONObject: body))
