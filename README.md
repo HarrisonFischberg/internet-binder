@@ -1,54 +1,161 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="keepsake/icons/styles/pantry/dark/icon128.png">
+    <img src="keepsake/icons/styles/pantry/icon128.png" width="96" height="96" alt="Keepsake app icon">
+  </picture>
+</p>
+
 # Keepsake
 
-**A privacy-first saver for Chrome: products, places, recipes, workouts, videos, articles, films and books.**
+**Save products, places, recipes, workouts, videos, articles, films and books from anywhere. Sorted for you, kept on your device, no account.**
 
-Save from any site with one click. Shopping sorts itself into collections; everything else goes to its own Lifestyle view. Everything stays on your own machine.
+Keepsake runs in Chrome (and other Chromium browsers), in Safari on the Mac, and as an app for iPhone and iPad. Save from any site with one click. Shopping sorts itself into collections; everything else goes to its own Lifestyle view. Everything stays on your own device.
+
+Made by [Rare Creatures LLC](https://rarecreatures.app). Questions or feedback: [hello@rarecreatures.app](mailto:hello@rarecreatures.app).
+
+## Screenshots
+
+Every screenshot uses the built-in sample data. They follow your GitHub theme: switch GitHub to dark mode to see the dark versions.
+
+**Chrome: Home and Library**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/chrome-home-dark.png">
+  <img src="docs/screenshots/chrome-home-light.png" alt="Keepsake dashboard in Chrome: Home with recent saves and Come back to">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/chrome-library-dark.jpg">
+  <img src="docs/screenshots/chrome-library-light.jpg" alt="Keepsake dashboard in Chrome: the Library with kind filters and a grid of saves">
+</picture>
+
+**iPhone: Home, Library, cooking mode and Appearance**
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-home-dark.png">
+    <img src="docs/screenshots/iphone-home-light.png" width="200" alt="Keepsake on iPhone: Home">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-library-dark.png">
+    <img src="docs/screenshots/iphone-library-light.png" width="200" alt="Keepsake on iPhone: Library">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-cooking-dark.png">
+    <img src="docs/screenshots/iphone-cooking-light.png" width="200" alt="Keepsake on iPhone: cooking a recipe step by step with music">
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/iphone-appearance-dark.png">
+    <img src="docs/screenshots/iphone-appearance-light.png" width="200" alt="Keepsake on iPhone: Appearance with mode and style">
+  </picture>
+</p>
+
+**Safari on the Mac**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/mac-dark.png">
+  <img src="docs/screenshots/mac-light.png" width="460" alt="Keepsake for Safari on the Mac: ready, with the app icon picker">
+</picture>
+
+<details>
+<summary>All screenshots, light and dark side by side</summary>
+
+| Light | Dark |
+| --- | --- |
+| ![Chrome Home, light](docs/screenshots/chrome-home-light.png) | ![Chrome Home, dark](docs/screenshots/chrome-home-dark.png) |
+| ![Chrome Library, light](docs/screenshots/chrome-library-light.jpg) | ![Chrome Library, dark](docs/screenshots/chrome-library-dark.jpg) |
+| <img src="docs/screenshots/iphone-home-light.png" width="240" alt="iPhone Home, light"> | <img src="docs/screenshots/iphone-home-dark.png" width="240" alt="iPhone Home, dark"> |
+| <img src="docs/screenshots/iphone-library-light.png" width="240" alt="iPhone Library, light"> | <img src="docs/screenshots/iphone-library-dark.png" width="240" alt="iPhone Library, dark"> |
+| <img src="docs/screenshots/iphone-cooking-light.png" width="240" alt="iPhone cooking, light"> | <img src="docs/screenshots/iphone-cooking-dark.png" width="240" alt="iPhone cooking, dark"> |
+| <img src="docs/screenshots/iphone-appearance-light.png" width="240" alt="iPhone Appearance, light"> | <img src="docs/screenshots/iphone-appearance-dark.png" width="240" alt="iPhone Appearance, dark"> |
+| ![Safari on the Mac, light](docs/screenshots/mac-light.png) | ![Safari on the Mac, dark](docs/screenshots/mac-dark.png) |
+
+</details>
+
+## What it does
 
 - Works on any shop, without per-site integrations: reads JSON-LD / Open Graph / visible page data.
 - Files each save into a collection automatically (Home Decor, Clothing, Technology, Kitchen, Camping & Outdoors, Weddings, Pets, …) and learns from your corrections. Unsure saves are left uncategorized and wait in **Review** instead of being guessed.
 - Save anything anywhere: every "where does this go?" menu (popup, page card, Move to…, Review) lists the **Lifestyle** views and your **Collections**. Putting a save into a Lifestyle view makes it that kind and works out its details from what it holds (a place's name from the post's location tag or a "📍" line, a recipe's ingredients, a workout's exercises). With **Lookups** on (Settings, each off by default) Keepsake fills in the rest from free public sources: a place's address and pin from OpenStreetMap, a film's details from Wikidata, a book's from Open Library. With Optional AI on, your provider fills in what a post doesn't say. **Places** has a **Map** (OpenStreetMap, drawn on your device).
 - Keeps shopping and life apart. **Collections** are for shopping: products sorted into collections, with Purchased. **Lifestyle** holds the rest, each kind in its own view: recipes, workouts, places, videos, articles, films and books; they never go into a collection. Products, plus **recipes** (ingredients, steps, servings and time read from the recipe page's structured data or from "Ingredients / Method" in a caption, all on your device), **workouts** (exercises with sets, reps or time and rest, read from a caption or a workout page's lists), **places** (restaurants, cafés and places to visit: address, pin, cuisine, price range and opening hours from the page's structured data, the name and pin from a Google Maps or Apple Maps link, the address on a business's own site or a venue listing, or a business's Instagram profile or Facebook page; a lookup is never used when the name matches places in different spots), **videos** (length, channel and date from YouTube, Vimeo and other video pages) and **articles** (author, site, date and reading time, counted from the article's own text on your device). **Films and shows** (year, director or creator, runtime or seasons, genre) and **books** (author, year, pages) are read from pages like Letterboxd, IMDb and Goodreads (a title's page on a known film or book site is always one, like YouTube for videos), and kept as simple lists to scroll: what's still to watch or read first, with a tick to move it to Watched or Read. A book with a price on a shop page stays a product. Anything from YouTube is saved as a video. Videos and articles open into a short view with Watch or Read. Videos, articles and links get **tags** guessed on your device from the title, channel and description (like "AI", "Video games" or "Shoes"); filter a view by tag, and change the tags in Edit details. The Lifestyle views sit together under **Lifestyle** in the menu; Collections fold too, keeping pinned ones in view. The **Library** (everything you've saved) has a filter bar (kind, status, source, site, sort), a grid or list layout, and a search that ranks titles first and fixes a typo (press / to search). Home shows what's waiting in Review, recent saves, and *Come back to*: saves you haven't opened in six weeks; nothing is embedded or played inside Keepsake. Places are listed by state (or country), then city, each with **Open in Maps**; a place with no name of its own or no state waits in **Places review** (next to List and Map), where *Fix with AI* (or *Read again*, on your device) names it and says where it is (Apple Maps or Google Maps; the link is built from what you saved, nothing is looked up). Recipes open straight into a recipe view with a checklist, steps and "Cooked"; you can edit them, and only if you ask with Optional AI on, get a labelled AI draft for a dish with no written recipe. Workouts open into a workout view where you can make a goal ("3× a week for 4 weeks" or "reach 3×12 push-ups"), check in with one tap and see your weeks fill in; with Optional AI on you can ask for a week-by-week progression, which you preview before accepting. Goals and check-ins stay on your device and are included in exports.
-- Optional on-page save buttons for product grids — off until you turn them on, and only on sites you grant.
-- Import your own **Instagram Saved collections**, then **read each post's page** for the real caption, creator, links and creator-tagged products (name, price, shop URL) — no login, no credentials, just your existing session.
-- Calm dashboard: a Home page with search, your latest saves and your top collections; a masonry grid with search, sort, filters, favorites, purchased, bulk actions; collection tiles that scale to hundreds of collections; light/dark.
-- **No account. No server. No telemetry.** Everything lives in this browser profile (IndexedDB for your saves, `chrome.storage.local` for settings). Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
-- Optional, opt-in, bring-your-own-key AI to help identify products in Instagram saves — with a preview of exactly what leaves the browser.
+- Optional on-page save buttons for product grids, off until you turn them on, and only on sites you grant.
+- Import your own **Instagram Saved collections**, then **read each post's page** for the real caption, creator, links and creator-tagged products (name, price, shop URL). No login, no credentials, just your existing session.
+- Calm dashboard: a Home page with search, your latest saves and your top collections; a masonry grid with search, sort, filters, favorites, purchased, bulk actions; collection tiles that scale to hundreds of collections; five styles, each in light and dark.
+- **No account. No server. No telemetry.** Everything lives on your device: in the browser profile (IndexedDB for your saves, `chrome.storage.local` for settings), or in the app on iPhone and iPad. Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
+- Optional, opt-in, bring-your-own-key AI to help identify products in Instagram saves, with a preview of exactly what leaves the browser.
+- On iPhone and iPad: save from any app's Share sheet, cook a recipe step by step with optional music, add Home Screen widgets, and pick from four styles with matching app icons.
 
-Manifest V3, plain HTML/CSS/JS, no build step, no dependencies at runtime.
-
----
+The browser extension is Manifest V3, plain HTML/CSS/JS, no build step, no dependencies at runtime.
 
 ## Contents
 
-1. [Install (unpacked, developer mode)](#install-unpacked-developer-mode)
-2. [Pin the icon and learn the shortcut](#pin-the-icon-and-learn-the-shortcut)
-3. [Saving from the toolbar](#saving-from-the-toolbar)
-4. [On-page save buttons (optional)](#on-page-save-buttons-optional)
-5. [Right-click save](#right-click-save)
-6. [How categorization works and how to train it](#how-categorization-works-and-how-to-train-it)
-7. [The dashboard](#the-dashboard)
-8. [Instagram Saved-collection import](#instagram-saved-collection-import)
-9. [Optional AI: "Find products in Instagram saves"](#optional-ai-find-products-in-instagram-saves)
-10. [Privacy, export, import, erase](#privacy-export-import-erase)
-11. [Permissions explained](#permissions-explained)
-12. [Limitations](#limitations)
-13. [Development and tests](#development-and-tests)
-14. [Packaging for the Chrome Web Store](#packaging-for-the-chrome-web-store)
-15. [Project layout](#project-layout)
+1. [Install](#install)
+2. [Dark mode](#dark-mode)
+3. [Pin the icon and learn the shortcut](#pin-the-icon-and-learn-the-shortcut)
+4. [Saving from the toolbar](#saving-from-the-toolbar)
+5. [On-page save buttons (optional)](#on-page-save-buttons-optional)
+6. [Right-click save](#right-click-save)
+7. [How categorization works and how to train it](#how-categorization-works-and-how-to-train-it)
+8. [The dashboard](#the-dashboard)
+9. [Instagram Saved-collection import](#instagram-saved-collection-import)
+10. [Optional AI](#optional-ai)
+11. [Privacy, export, import, erase](#privacy-export-import-erase)
+12. [Permissions explained](#permissions-explained)
+13. [Limitations](#limitations)
+14. [Development and tests](#development-and-tests)
+15. [Releasing to the Chrome Web Store](#releasing-to-the-chrome-web-store)
+16. [Project layout](#project-layout)
 
----
+## Install
 
-## Install (unpacked, developer mode)
+This README describes Keepsake 2.1.0. Pick the platform you use.
 
-1. Download and unzip `keepsake.zip` (or clone this folder). You need the folder that contains `manifest.json`.
+### Chrome, Edge, Brave and other Chromium browsers
+
+Keepsake is published to the Chrome Web Store by the release workflow (see [Releasing to the Chrome Web Store](#releasing-to-the-chrome-web-store)). To run it straight from this repository instead:
+
+1. Clone this repository (or download it as a zip and unzip it). You need the `keepsake/` folder, the one that contains `manifest.json`.
 2. Open Chrome and go to `chrome://extensions`.
 3. Turn on **Developer mode** (top-right toggle).
 4. Click **Load unpacked** and pick the `keepsake` folder.
 5. Keepsake installs, opens a short welcome page and creates the default collections. Nothing runs on any website yet.
 
-Requires Chrome 121 or newer (also works in Edge, Brave and other Chromium browsers with the same steps).
+Requires Chrome 121 or newer. Edge, Brave and other Chromium browsers use the same steps on their own extensions page. To update after editing files, click the reload icon on the Keepsake card at `chrome://extensions`.
 
-To update after editing files, click the reload icon on the Keepsake card at `chrome://extensions`.
+### Safari on the Mac
+
+The Safari version is the same extension inside a small Mac app (`safari/Keepsake/`). You need macOS 14 or newer, Xcode and Node 20+.
+
+1. Open `safari/Keepsake/Keepsake.xcodeproj` in Xcode.
+2. Pick the **Keepsake** scheme and your Mac, set your own team under *Signing & Capabilities* if Xcode asks, then **Run**. Each build runs `node safari/build.mjs` first, which copies `keepsake/` into `safari/dist/` as a Safari-ready build.
+3. The Keepsake app opens. Click **Open Safari Settings** and tick **Keepsake** under *Extensions*. If Safari doesn't list it, turn on *Allow unsigned extensions* in Safari's developer settings and try again.
+4. Click Keepsake's toolbar button, or press ⌥⇧K, to save the page you're on.
+
+### iPhone and iPad
+
+The app, its Share Extension and its widgets live in `ios/` (iOS 27 or newer). It isn't on the App Store yet, so you build it with Xcode:
+
+1. Open `ios/Keepsake.xcodeproj` in Xcode.
+2. Pick the **Keepsake** scheme and a simulator or your own device. On a device, set your own team under *Signing & Capabilities* (the App Group needs one).
+3. **Run**. To save from Safari, Instagram or any app, tap Share and pick **Keepsake**.
+
+From the command line:
+
+```bash
+xcodebuild -project ios/Keepsake.xcodeproj -scheme Keepsake -destination 'platform=iOS Simulator,name=iPhone 17' build
+```
+
+See [ios/README.md](ios/README.md) for the Swift package, tests and the shared core bundle.
+
+## Dark mode
+
+Keepsake follows your system's light or dark setting everywhere, and you can pin it to one.
+
+- **Chrome and Safari extension:** Dashboard → **Settings → Appearance** has *System*, *Light* and *Dark*; the sun button at the top of the dashboard cycles through them. The choice applies to the dashboard, the popup and the save card shown on pages. The toolbar icon swaps to its dark version when the browser is dark.
+- **iPhone and iPad:** Settings → **Appearance → Mode** has *System*, *Light* and *Dark*. The app icon has light, dark and tinted versions that follow the Home Screen.
+- **Mac app:** follows the Mac's appearance.
+
+Every style has a light and a dark version: Pantry Pop (the default), Field Notebook, Night Atlas and Swiss Index, plus Gallery in the browser extension. Pick one under Appearance, along with a matching toolbar or app icon.
 
 ## Pin the icon and learn the shortcut
 
@@ -60,17 +167,14 @@ Click the puzzle-piece icon in Chrome's toolbar and press the pin next to **Keep
 
 ## Saving from the toolbar
 
-Open any product page and click the Keepsake icon (or press Alt+Shift+K). If the local categorizer is at least **75% sure** of the collection (or Optional AI is on), the item is **saved straight away**: the popup shows *Saved to …* with **Undo**, a **Move to** menu, and **Open in dashboard**, which opens that collection (or Review). Undo brings up the full preview below so you can adjust and save by hand.
+Open any page and click the Keepsake icon (or press Alt+Shift+K). The toolbar icon never saves on its own: the popup opens with **Open dashboard** at the top and the page's picture and title, then asks **Where does it live?**
 
-Otherwise — or when the page is already saved — the popup shows a preview:
+1. Keepsake reads the page (a skeleton shows while it does) and says what it thinks ("Keepsake thinks **Home Decor**", or "Keepsake isn't sure yet").
+2. Pick **Collections** (things to buy) or **Lifestyle** (recipes, places and more), then the collection or view. You can name a new collection right there. Or pick **Not sure? Put it in Review** and Keepsake suggests a home later.
+3. Rename the title if you like, add a note, then **Save**.
+4. The popup confirms with *Saved to …*, **Undo** and a button that opens where it landed (its collection, its Lifestyle view, or Review). When you picked something other than Keepsake's guess, "Use this choice for similar items" teaches the categorizer strongly.
 
-1. Shows a skeleton while it reads the page, then the detected **image, title, price, retailer and URL**. Up to six image candidates are offered; click one to use it as the cover.
-2. Picks a **collection** and shows a confidence pill (High / Good / Low / Needs sorting) and a one-line reason ("*tent* in title", "you usually file items from this shop here"). Change the collection from the dropdown, pick "＋ New collection…" to create one inline, or leave it uncategorized for Review.
-3. Lets you edit the title and price and add a note.
-4. Detects if the page is already saved (tracking parameters ignored) and offers **Update existing item** or **Save another copy**.
-5. Confirms with **Undo**, **Open in dashboard** (opens the collection the item went into) and — when you overrode the suggestion — a checkbox "Use this choice for similar items" that teaches the categorizer strongly.
-
-On pages Keepsake cannot read (browser pages, the Web Store, local files) it says so and offers the dashboard instead. On pages with no product data it still lets you save the page; the item is left uncategorized and flagged for Review.
+If the page is already saved (tracking parameters ignored), Keepsake says so and offers **Update the saved one** or **Save another copy**. On pages Keepsake cannot read (browser pages, the Web Store, local files) it says so and offers the dashboard instead. On pages with no product data it still lets you save the page.
 
 ## On-page save buttons (optional)
 
@@ -78,7 +182,7 @@ Dashboard → **Settings → On-page save buttons**. Three modes:
 
 | Mode | What Chrome asks | What runs |
 | --- | --- | --- |
-| **Off (default)** | nothing | nothing — the toolbar, shortcut and right-click menu still work everywhere |
+| **Off (default)** | nothing | nothing; the toolbar, shortcut and right-click menu still work everywhere |
 | **Only on sites I choose** | permission for each site you add | the button script on those sites only |
 | **On all sites** | "read and change data on all sites" | the button script on every site; Keepsake still only reads a card when you hover it |
 
@@ -96,16 +200,16 @@ Right-click a page, product image, link or selected text → **Save to Keepsake*
 
 Categorization runs **entirely locally** (`src/shared/categorizer.js`, deterministic, no network). For each save it scores every collection from:
 
-- the product's title, description, structured category, breadcrumbs, image alt text, card text and — for Instagram — the Saved-collection name and caption;
+- the product's title, description, structured category, breadcrumbs, image alt text, card text and, for Instagram, the Saved-collection name and caption;
 - the **store's own product type and tags** when the page publishes them (Shopify's embedded product data, WooCommerce `product_cat-`/`product_tag-` classes). The type counts as much as the title; tags only back up a collection the product already matches elsewhere, because stores use them for merchandising ("Holiday Gift Guide");
 - each collection's built-in vocabulary (strong keywords such as *tent*, *dutch oven*, *headphones* and softer ones such as *ceramic*, *wireless*), the collection's name and aliases, and **your own keywords** (a collection's page → *Keywords*: "for mum, birthday" on Gifts). Your keywords outweigh the built-in vocabulary, and a match makes Keepsake at least 85% sure. The more specific keyword wins: "coffee cup" on Kitchen beats "coffee" on Food for a coffee cup. If the same keyword is on two collections, matching items go to Review, and adding a keyword another collection already has asks whether to move it;
 - **what it learned** from your corrections: every time you move an item, the salient words of its title get a small weight toward the new collection; "Use this choice for similar items" gives a strong weight. Retailers you file consistently also count.
 
-Keywords match their plurals ("hoodie" → "hoodies", "battery" → "batteries"). Longer phrases beat shorter ones ("camp chair" beats "chair"). Usage phrases in descriptions ("at home", "on the job site", "on the go") are ignored, since they say how something is used rather than what it is. Collection names and aliases ("Home", "Body", "Gear") only count when they appear in the title, product type, category, tags or breadcrumbs — not in descriptions — and site-navigation crumbs like "Home" or "Shop all" are ignored. A confidence score compares the winner with the runner-up; a runner-up that only matched description words counts for much less than one that also matched the title, product type, category or breadcrumbs. Below the **threshold** (default 0.6, adjustable) the item is left uncategorized with a suggestion instead of a guess. The **Review** queue shows those, with one-click "Move to …" buttons that teach the categorizer.
+Keywords match their plurals ("hoodie" → "hoodies", "battery" → "batteries"). Longer phrases beat shorter ones ("camp chair" beats "chair"). Usage phrases in descriptions ("at home", "on the job site", "on the go") are ignored, since they say how something is used rather than what it is. Collection names and aliases ("Home", "Body", "Gear") only count when they appear in the title, product type, category, tags or breadcrumbs (not in descriptions), and site-navigation crumbs like "Home" or "Shop all" are ignored. A confidence score compares the winner with the runner-up; a runner-up that only matched description words counts for much less than one that also matched the title, product type, category or breadcrumbs. Below the **threshold** (default 0.6, adjustable) the item is left uncategorized with a suggestion instead of a guess. The **Review** queue shows those, with one-click "Move to …" buttons that teach the categorizer.
 
 Other knobs (Settings → Categorization): auto-create missing default collections (e.g. re-create *Tools* when a drill shows up), and a view of the strongest learned terms and retailer habits with a one-click clear. Similar collection names are never duplicated ("Lamps" and "lamp" are the same collection; "Home Décor" matches "Home Decor"); merging collections carries names over as aliases.
 
-Keepsake starts with three collections — Home Decor, Clothing and Technology — and creates the rest of its default taxonomy (Camping & Outdoors, Kitchen, Van Build, Personal Care, Books & Media, Gifts, Travel, Tools, Weddings, Baby & Kids, Pets, Fitness & Wellness, Garden & Outdoor Living, Art & Crafts, Office & Stationery, Automotive, Jewelry & Watches, Music & Instruments, Party & Events) on demand, the first time something actually matches one. There is no separate Inbox collection: anything Keepsake can't confidently place is simply left uncategorized and shows up in **Review**. Rename, merge or delete any collection. Creating a collection whose name is close to an existing one (for example "Food" when Kitchen already covers food) asks which you meant instead of quietly using the existing one.
+Keepsake starts with three collections (Home Decor, Clothing and Technology) and creates the rest of its default taxonomy (Camping & Outdoors, Kitchen, Van Build, Personal Care, Books & Media, Gifts, Travel, Tools, Weddings, Baby & Kids, Pets, Fitness & Wellness, Garden & Outdoor Living, Art & Crafts, Office & Stationery, Automotive, Jewelry & Watches, Music & Instruments, Party & Events) on demand, the first time something actually matches one. There is no separate Inbox collection: anything Keepsake can't confidently place is simply left uncategorized and shows up in **Review**. Rename, merge or delete any collection. Creating a collection whose name is close to an existing one (for example "Food" when Kitchen already covers food) asks which you meant instead of quietly using the existing one.
 
 ## The dashboard
 
@@ -113,22 +217,22 @@ Open it from the popup or from the extension's Options; it opens on **Home**, an
 
 `#home` · `#all` · `#favorites` · `#purchased` · `#review` · `#collections` · `#c/<collection-id>` · `#item/<item-id>` (opens the item) · `#import` · `#settings` · `#ai` · `#ailog` · `#privacy` · `#welcome`
 
-- **Home**: a search box (typing jumps to the Library with the search filled in), a "N saves waiting to be filed" line that appears only when Review has something, one row of your most recent saves, and five collection tiles — pinned collections first (up to five), then the ones you saved into most recently.
+- **Home**: a search box (typing jumps to the Library with the search filled in), a "N saves waiting to be filed" line that appears only when Review has something, one row of your most recent saves, and five collection tiles: pinned collections first (up to five), then the ones you saved into most recently.
 - **Menu**: Home, Library (every save), Favorites, Review (only while something is waiting to be filed) and Lifestyle; Purchased (everything marked purchased, which leaves the Library, Favorites and its collection until un-marked), then Collections (your collections; the chevron folds it, keeping pinned ones). The Library has two tabs: Saves and Collections (every collection). Trash is the last item, under Settings; Privacy is a section in Settings.
 - **Masonry grid** of cards with image (or a text placeholder when there is none), title, price, retailer or Instagram creator, note, favorite star, source badge and "Needs sorting" label. Clicking a card opens a lightweight **Quick view** (image, title, price, a link to the original page); "Edit details" from there or from a card's **⋯** menu opens the full editor.
 - **Search** across titles, retailers, notes, descriptions, prices, captions and creators; **sort** newest/oldest/price and **filter** by retailer or source from the compact bar above the grid; empty states for every view.
-- **Item details**: the **exact link** the item was saved from, shown in full as a selectable field with **Copy** and **Visit page** (**Open post** for Instagram) — and editable, so you can point an item at the right product page if the extractor grabbed a listing or a redirect. Changing the link updates the host, refreshes an auto-derived retailer name, re-keys duplicate detection, and refuses a link another item already has. Alongside it: edit title/price/note, choose a cover from the candidates, move collection (optionally "use for similar"), favorite / purchased / archived, delete (moves to the **Trash**, with Undo).
+- **Item details**: the **exact link** the item was saved from, shown in full as a selectable field with **Copy** and **Visit page** (**Open post** for Instagram), and editable, so you can point an item at the right product page if the extractor grabbed a listing or a redirect. Changing the link updates the host, refreshes an auto-derived retailer name, re-keys duplicate detection, and refuses a link another item already has. Alongside it: edit title/price/note, choose a cover from the candidates, move collection (optionally "use for similar"), favorite / purchased / archived, delete (moves to the **Trash**, with Undo).
 - **Select** mode for bulk move, favorite, delete (to Trash) and (when AI is on) *Find products*.
 - **Trash** (`#trash`): deleted saves stay 30 days, with Restore (back to their collection, or Review if it's gone), Delete forever and Empty Trash.
 - **Collections**: the sidebar lists every pinned collection, then the ones you saved into most recently, up to eight; the collection you have open is always listed. **All collections** opens every collection as a cover tile (a collage of its latest images), pinned first, with a name/keyword search and sorting by recently saved to, A–Z or most saves. Pin a collection from its tile, its page, or the sidebar (drag or Alt+↑/↓ to reorder pinned ones). Rename by editing the name on the collection's page; keywords, description and cover (newest image or your own URL) under *Keywords*; merge by selecting items and ticking *Merge* in **Move to…**; delete (items become uncategorized, waiting in Review, unless you choose otherwise).
-- **Style and theme**: three styles (Modern, the default; Moss, the original warm look; Minimalist, black and white), each with system / light / dark (Settings → Appearance; the toolbar sun icon toggles the theme). The style applies to the popup, the dashboard and the save card shown on pages.
+- **Style and theme**: five styles (Pantry Pop, the default; Field Notebook; Gallery; Night Atlas; Swiss Index), each with system / light / dark (Settings → Appearance; the sun button in the header cycles the theme), and a matching toolbar icon. The style applies to the popup, the dashboard and the save card shown on pages. See [Dark mode](#dark-mode).
 - **Load sample data** from the welcome page or the empty state to see the layout; delete it any time.
 
 ## Instagram Saved-collection import
 
 Keepsake never asks for Instagram credentials and never calls Instagram's API. It reads the page you already have open.
 
-1. In Chrome, log in to Instagram normally and open **one of your Saved collections** (`instagram.com/<you>/saved/<collection>/…`). The generic *Saved* overview page is not importable — open a specific collection.
+1. In Chrome, log in to Instagram normally and open **one of your Saved collections** (`instagram.com/<you>/saved/<collection>/…`). To bring in everything at once, open your *Saved* page (`instagram.com/<you>/saved/`) instead: the popup offers **Import all collections**, opens each collection in turn, then "All posts" for anything in no collection, and by default makes each Instagram collection a group with the same name.
 2. Click the Keepsake icon. The popup recognises the collection and shows **Import this collection**.
 3. Click it. Keepsake injects a small reader into **that tab only**, scrolls the collection to load more posts, and shows live progress (*24 posts found…*) with a **Stop** button. It stops automatically at the end of the collection, after a quiet period (default 6 s with nothing new), at the **safety limit** (default 300 posts), or when you press Stop.
 4. Click **Review** to open the dashboard. It shows how many posts were found and how many are already in Keepsake (those are skipped), and one button: **Import N posts**.
@@ -144,22 +248,22 @@ Limits and honesty: this depends on Instagram's page markup. All selectors live 
 
 ## Optional AI
 
-Off by default, and it needs **your own API key**. It's one switch (**Use AI**): when it's on, saves are instant, and *Fix with AI* and *Find products* are available. There are no per-feature toggles.
+Off by default, and it needs **your own API key**. It's one switch (**Use AI**): when it's on, the AI tidies each new save, and *Fix with AI* and *Find products* are available. There are no per-feature toggles.
 
-- Dashboard → **Optional AI**. Choose OpenAI, Anthropic or a custom OpenAI-compatible endpoint, paste your key, optionally set the model. Enabling asks Chrome for permission to contact **only the provider's address**; disabling revokes it.
+- Dashboard → **Optional AI**. Choose Anthropic (the default for new installs), OpenAI or a custom OpenAI-compatible endpoint and paste your key. With Anthropic you pick a Claude model from a list and an effort level (Medium by default); other providers take a model name. Enabling asks Chrome for permission to contact **only the provider's address**; disabling revokes it.
 - Your key is stored in `chrome.storage.local` under a separate `keepsake_secrets` key that is **never included in exports**. *Remove key* wipes it.
-- On an Instagram card (or in bulk via Select → *Find products (AI)*) click **Find this product online**. Before anything is sent you see the exact payload: the stored thumbnail (image) and the caption / creator / collection name (text). Nothing else — no cookies, no account data, no browsing history.
-- With **web search** ticked (OpenAI and Anthropic only — custom endpoints have no search tool), the provider runs up to three web searches per post and returns real listings: product name, brand, retailer, price and a link. Each link is checked against the URLs its search actually returned; anything the model made up is **dropped**, and the candidate is shown without a link rather than with a fake one. Every result gets an **Open** and a **Save as product** button, so a found listing becomes a normal Keepsake item with price and URL, linked back to the post.
+- On an Instagram card (or in bulk via Select → *Find products (AI)*) click **Find this product online**. Before anything is sent you see the exact payload: the stored thumbnail (image) and the caption / creator / collection name (text). Nothing else: no cookies, no account data, no browsing history.
+- With **web search** ticked (OpenAI and Anthropic only; custom endpoints have no search tool), the provider runs up to three web searches per post and returns real listings: product name, brand, retailer, price and a link. Each link is checked against the URLs its search actually returned; anything the model made up is **dropped**, and the candidate is shown without a link rather than with a fake one. Every result gets an **Open** and a **Save as product** button, so a found listing becomes a normal Keepsake item with price and URL, linked back to the post.
 - *Identify only* skips the search and just names the likely item, with category, brand and 2–4 **Search the web** phrases you can click yourself.
 - Everything here is labelled as a guess: the model can identify the wrong item, and prices go stale. Check the listing before buying.
-- **Instant save**: clicking the toolbar icon or an on-page button saves immediately with no preview, using the local categorizer (at 75% or more it's filed, otherwise it waits in Review). The save is stored **before** anything is sent; then the AI tidies the title and may re-file it if it's confident (at or above your threshold), unless you already edited the title or moved the item. Those changes go to the AI change log with Undo, and the original title is kept. If the provider is slow or offline the save is unaffected. The popup says *Finishing details…* while the AI works. The popup shows *Saved to …* with Undo and a *Move to* menu; the on-page toast offers Move and Undo. Undo in the popup opens the normal editable preview.
+- **After a save**: the on-page button and the right-click menu save straight away using the local categorizer (at 75% or more it's filed, otherwise it waits in Review); the toolbar popup saves where you picked. The save is stored **before** anything is sent; then the AI tidies the title and may re-file it if it's confident (at or above your threshold), unless you already edited the title or moved the item. For something to buy, it reads the picture as well as the words, searches the web for the product's page, and Keepsake reads that page's product data; the card shows the shop's facts first and the AI's summary labelled *AI summary*. Those changes go to the AI change log with Undo, and the original title is kept. If the provider is slow or offline the save is unaffected. The popup says *Finishing details…* while the AI works.
 - **Check with AI** (Review → *Fix all with AI*, or *Check with AI* at the top of the Library or a collection; Lifestyle views have their own, which fills in what each save is missing, with a progress bar and Stop): reads each item's live product page (optional, without cookies), then tidies titles, updates prices (the model may only choose a number that appears on the page or in the saved data), replaces missing/broken images, and files items into collections. From Review, an item is filed when the AI's confidence meets your threshold; elsewhere an item is only moved at ≥ 85% and never if you filed it yourself. Fixes apply immediately, and every change goes to the **AI change log** (`#ailog`) with per-item and per-run Undo. Dead links, out-of-stock items and unfixable broken images are listed at the end of a run.
 
-Local vs cloud in one sentence: everything in Keepsake — saving, extraction, categorization, dashboard, Instagram import — runs on your machine with no network; the only network calls Keepsake makes are to the AI provider **you** configured (when Optional AI is on: each save, and runs you start) and, for a *Fix with AI* run with live-page reading ticked, to your saved items' own product pages (without cookies).
+Local vs cloud in one sentence: everything in Keepsake (saving, extraction, categorization, dashboard, Instagram import) runs on your machine with no network; the only network calls Keepsake makes are to the AI provider **you** configured (when Optional AI is on: each save, and runs you start) and, for a *Fix with AI* run with live-page reading ticked, to your saved items' own product pages (without cookies).
 
 ## Privacy, export, import, erase
 
-See [PRIVACY.md](PRIVACY.md) and the in-extension **Privacy** page. In short:
+See [keepsake/PRIVACY.md](keepsake/PRIVACY.md) (browser extension), [ios/PRIVACY-iOS.md](ios/PRIVACY-iOS.md) (iPhone and iPad), the in-extension **Privacy** page, and the privacy policy at [rarecreatures.app/apps/keepsake/privacy](https://rarecreatures.app/apps/keepsake/privacy/). In short:
 
 - **Export** (Settings → Data): downloads `keepsake-export-<date>.json` with collections, items, learned preferences, settings and import history. Never the API key.
 - **Import**: pick a JSON export. Keepsake validates it (format, schema version, every field sanitized, URLs must be http(s)) and either **merges** (collections dedupe by name, items by URL; duplicates are reported) or **replaces** everything after a typed confirmation.
@@ -222,17 +326,31 @@ Releases are automated with GitHub Actions (`.github/workflows/release.yml`):
    git tag v1.2.3
    git push origin v1.2.3
    ```
-3. The workflow checks out the tag, verifies the tag matches `manifest.json`'s `version`, zips the extension (`manifest.json`, `background.js`, `icons/`, `src/` — docs excluded), uploads it to the existing Chrome Web Store listing via the Chrome Web Store Publish API, and publishes it. It also attaches the zip to a GitHub release for that tag.
+3. The workflow checks out the tag, verifies the tag matches `manifest.json`'s `version`, zips the extension (`manifest.json`, `background.js`, `icons/`, `src/`, docs excluded), uploads it to the existing Chrome Web Store listing via the Chrome Web Store Publish API, and publishes it. It also attaches the zip to a GitHub release for that tag.
 4. Chrome reviews the update (usually within a few hours to a few days) before it rolls out to users; the workflow's "Publish item" step succeeds once the item is submitted for publishing, not once review finishes.
 
 This requires a Google Cloud service account with Chrome Web Store access, stored as GitHub Secrets: `CHROME_SERVICE_ACCOUNT_KEY` (the JSON key) and `CHROME_PUBLISHER_ID`. The target listing (`icons/`, `icon128.png` as the store icon, single purpose, permission justifications from the table above, remote code: none, data usage: none collected, `PRIVACY.md` as the privacy policy text) is configured once in the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole) and does not need to change per release.
 
 ## Project layout
 
+At the repository root:
+
+```
+keepsake/                    the browser extension (this is what ships to the Chrome Web Store)
+safari/                      Safari for Mac: build.mjs makes safari/dist from keepsake/, Keepsake/ is the Xcode project
+ios/                         the iPhone and iPad app, Share Extension, widgets and KeepsakeKit (see ios/README.md)
+tests/                       Node test suites for the extension (npm test)
+tools/                       icon rendering scripts
+docs/screenshots/            the screenshots in this README
+replica/                     design notes, release notes and audits
+```
+
+Inside `keepsake/`:
+
 ```
 manifest.json                MV3 manifest
 background.js                service worker: context menu, message hub, saving, content-script registration
-icons/                       felt pocket icon, light (16/32/48/128 PNG) and icons/dark/ for dark toolbars; rendered by tools/icons/make-icons.py
+icons/styles/                one toolbar icon per style (Pantry Pop is the default), each with a dark/ version for dark toolbars
 src/shared/                  util, url, taxonomy, categorizer, storage (schema 3 + migrations), db (IndexedDB records), messages, base.css
 src/extract/extract.js       page extractor (JSON-LD → OG/Twitter → microdata → visible heuristics)
 src/content/                 toast.js (Shadow DOM toast), detector.js (card detection), floating.js (hover button)
@@ -240,8 +358,9 @@ src/instagram/               adapter.js (all Instagram selectors), scan.js (scro
                              post.js (post-page parsing), post-page.js (in-tab reader), enrich.js (read details for a scan)
 src/ai/provider.js           optional BYOK provider boundary
 src/popup/                   toolbar popup
-src/toolbar/                 swaps the toolbar icon to icons/dark/ when the browser is dark
+src/toolbar/                 sets the toolbar icon you picked, swapping to its dark version when the browser is dark
+fonts/, vendor/               bundled fonts (OFL) and the map library for Places
 src/dashboard/               dashboard page, ui primitives, settings/AI/privacy pages, Instagram importer
 ```
 
-License: MIT.
+License: MIT. Keepsake is made by [Rare Creatures LLC](https://rarecreatures.app) · [hello@rarecreatures.app](mailto:hello@rarecreatures.app).
