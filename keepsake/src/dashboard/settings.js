@@ -6,7 +6,7 @@ import { MSG } from '../shared/messages.js';
 import { el, clear, pluralize } from '../shared/util.js';
 import { originPattern, hostFromPattern } from '../shared/url.js';
 import { emptyPrefs } from '../shared/categorizer.js';
-import { PROVIDERS, providerConfig, originFor, describePayload, analyzePost, testConnection, findProductOnline, supportsWebLookup } from '../ai/provider.js';
+import { PROVIDERS, MODELS, EFFORTS, providerConfig, originFor, describePayload, analyzePost, testConnection, findProductOnline, supportsWebLookup } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { hasInstagramAccess, requestInstagramAccess, revokeInstagramAccess, instagramAccessHelp } from '../instagram/enrich.js';
@@ -512,19 +512,29 @@ export function renderAI(ctx, view) {
         el('ul', {}, [
           el('li', {}, [el('strong', {}, ['Saves are instant: ']), 'every time you save, Keepsake sends the item’s title, price, description, retailer and your collection names. The AI tidies the title and picks the collection, and the item is saved right away with no preview (“Saved to …”, with Undo and Move). If the AI isn’t confident, the item waits in Review.']),
           el('li', {}, [el('strong', {}, ['Fix with AI: ']), 'when you start it (from Review or below), Keepsake sends the same fields for each item being checked, plus the title, price and availability read from its live product page. Pages are fetched from this browser without your cookies.']),
+          el('li', {}, [el('strong', {}, ['Products from posts: ']), 'for something to buy (often an Instagram or Facebook post), Keepsake sends its title, caption, site and picture and asks your provider what the product really is, from the picture first. With OpenAI or Anthropic it searches the web for the product’s own page; Keepsake reads that page’s product data (only on sites you let it read, without cookies) and puts its name, price and details on the card, with the AI’s summary alongside. Every change can be undone.']),
           el('li', {}, [el('strong', {}, ['Find products in Instagram saves: ']), 'for a post you select, Keepsake sends the locally stored thumbnail (a small JPEG) plus the caption, creator name and the Saved-collection name, and shows back product guesses. It never invents purchase links, and results can be wrong.']),
         ]),
         el('p', {}, ['Nothing else is ever sent: no browsing history, no cookies, no Instagram account data, no other items. Your key is stored only in this browser and is excluded from exports.']),
       ]),
     ]));
 
-    const providerSel = UI.selectInput({ value: ai.provider || 'openai', options: Object.entries(PROVIDERS).map(([k, v]) => ({ value: k, label: v.label })), onChange: async (v) => { await ctx.store.updateSettings({ ai: { provider: v, baseUrl: '', model: '' } }); }, label: 'Provider' });
+    const providerSel = UI.selectInput({ value: cfg.provider, options: Object.entries(PROVIDERS).map(([k, v]) => ({ value: k, label: v.label })), onChange: async (v) => { await ctx.store.updateSettings({ ai: { provider: v, baseUrl: '', model: '' } }); }, label: 'Provider' });
     const baseInput = el('input', { class: 'input', type: 'url', placeholder: PROVIDERS[ai.provider]?.baseUrl || 'https://…', 'aria-label': 'Base URL', spellcheck: 'false' });
     baseInput.value = ai.baseUrl || '';
     baseInput.addEventListener('change', () => ctx.store.updateSettings({ ai: { baseUrl: baseInput.value.trim() } }));
     const modelInput = el('input', { class: 'input', placeholder: PROVIDERS[ai.provider]?.model || 'model name', 'aria-label': 'Model', spellcheck: 'false' });
     modelInput.value = ai.model || '';
     modelInput.addEventListener('change', () => ctx.store.updateSettings({ ai: { model: modelInput.value.trim() } }));
+    // Claude gets a picker of the current models and an effort level; other providers type a model name.
+    const models = MODELS[cfg.provider] || [];
+    const modelSel = models.length ? UI.selectInput({
+      value: cfg.model,
+      options: [...models.map((m) => ({ value: m.id, label: m.label })), ...(models.some((m) => m.id === cfg.model) ? [] : [{ value: cfg.model, label: cfg.model }])],
+      onChange: async (v) => { await ctx.store.updateSettings({ ai: { model: v } }); },
+      label: 'Model',
+    }) : null;
+    const effortSel = cfg.effort ? UI.selectInput({ value: cfg.effort, options: EFFORTS.map((e) => ({ value: e.id, label: e.label })), onChange: async (v) => { await ctx.store.updateSettings({ ai: { effort: v } }); }, label: 'Effort' }) : null;
     const keyInput = el('input', { class: 'input', type: 'password', placeholder: key ? '•••••••• (saved)' : 'Paste your API key', 'aria-label': 'API key', autocomplete: 'off', spellcheck: 'false' });
     const saveKey = el('button', { type: 'button', class: 'btn', onClick: async () => {
       const v = keyInput.value.trim();
@@ -560,7 +570,10 @@ export function renderAI(ctx, view) {
     box.append(UI.section('Provider', '', [
       UI.settingRow('Provider', providerSel),
       ai.provider === 'custom' || ai.baseUrl ? UI.settingRow('Base URL', baseInput, ai.provider === 'custom' ? 'Any OpenAI-compatible chat completions endpoint (without /chat/completions).' : 'Leave empty to use the provider default.') : UI.settingRow('Base URL', el('span', { class: 'mono' }, [cfg.baseUrl]), 'Requests go only to this address.'),
-      UI.settingRow('Model', modelInput, `Default: ${PROVIDERS[ai.provider]?.model || '—'}`),
+      modelSel
+        ? UI.settingRow('Model', modelSel, models.find((m) => m.id === cfg.model)?.note || 'A model Keepsake doesn’t list. Pick one above to use the current Claude models.')
+        : UI.settingRow('Model', modelInput, `Default: ${PROVIDERS[cfg.provider]?.model || '—'}`),
+      effortSel ? UI.settingRow('Effort', effortSel, `${EFFORTS.find((e) => e.id === cfg.effort)?.note || ''} Default: Medium.`) : null,
       UI.settingRow('API key', el('div', { class: 'inline-form' }, [keyInput, saveKey, removeKey]), 'Stored under keepsake_secrets in chrome.storage.local. Never exported.'),
       UI.settingRow('Permission to contact the provider', el('span', { class: `pill ${originGranted ? 'pill-ok' : 'pill-warn'}` }, [originGranted ? `Granted for ${origin}` : origin ? 'Not granted yet' : 'Set a valid https base URL']), 'Chrome asks for this when you enable a feature or test the connection. Revoke it any time below or at chrome://extensions.'),
       el('div', { class: 'actions-row' }, [testBtn, originGranted && origin ? el('button', { type: 'button', class: 'btn btn-quiet', onClick: async () => { await removeOrigin(origin); await ctx.store.updateSettings({ ai: { on: false } }); draw(); } }, ['Revoke permission & turn off']) : null]),

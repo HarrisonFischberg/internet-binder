@@ -19,8 +19,11 @@ Keepsake has no server, no account, no analytics and no advertising. It contacts
 - **Apple Maps** to draw maps of your places; **Directions** opens Apple Maps with the place's name and
   address (built from what's saved; nothing is looked up).
 - **Optional AI** (off until you turn it on and add your own key): your chosen provider only, with the
-  same payloads as Chrome (`PRIVACY.md`, "Optional AI"), except that the app reads no linked pages:
-  *Understanding a save* sends the save's own text and its thumbnail stored on the device.
+  same payloads as Chrome (`PRIVACY.md`, "Optional AI"), except that the app reads no pages a post links
+  to: *Understanding a save* sends the save's own text and its picture (the copy stored on the device, or
+  a small copy of the picture its card shows, made on the device). *Understanding a product* also lets
+  the provider search the web for the product, then reads the one shop page it found (a page its search
+  returned), without cookies, for that page's structured product data.
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and
   covers load from Wikimedia Commons and `covers.openlibrary.org`.

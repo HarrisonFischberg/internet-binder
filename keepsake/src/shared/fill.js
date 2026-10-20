@@ -28,7 +28,7 @@ function incompleteDetails(kind, d = {}) {
 // when it has a title.
 // verify: Check with AI on the Places list: a place missing its street, city or state goes to your provider
 // too; only the missing fields are filled, and a name it already has stays.
-export async function fillSave(store, id, { review = false, verify = false, force = false } = {}, { fetchFn, allowed, waitTurn = async () => {}, fetchPage = async () => null }) {
+export async function fillSave(store, id, { review = false, verify = false, force = false } = {}, { fetchFn, allowed, waitTurn = async () => {}, fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null }) {
   let item = await store.getItem(id);
   if (!item || item.deletedAt) return;
   let kind = kindOf(item);
@@ -65,7 +65,7 @@ export async function fillSave(store, id, { review = false, verify = false, forc
     // Your provider reads the save: what it is and everything that kind's card shows.
     if (!item.understoodAt || (force && incompleteDetails(kind, d))) {
       try {
-        await understandItem(store, id, { force: true }, { fetchPage });
+        await understandItem(store, id, { force: true }, { fetchPage, fetchShopPage, loadImage });
         item = await store.getItem(id);
         d = item.details || {};
         kind = kindOf(item);
@@ -152,7 +152,7 @@ export async function tidySave(store, id, deps = {}) {
   }
   let ai = null;
   try {
-    ai = (await cleanupWithAI([{ ref: 'new', item, live: null }], collections, settings, key)).get('new') || null;
+    ai = (await cleanupWithAI([{ ref: 'new', item: read, live: null }], collections, settings, key)).get('new') || null;
   } catch (e) {
     await store.updateItem(id, { captureState: 'complete', captureError: sanitizeText(`AI tidy skipped: ${(e && e.message) || e}`, 200) }, { by: 'machine' }).catch(() => {});
     return { kind: kindOf(read) };
@@ -164,7 +164,8 @@ export async function tidySave(store, id, deps = {}) {
   const patch = { captureState: 'complete', captureError: '' };
   const before = {};
   const changes = [];
-  if (ai && ai.title && current.type !== 'instagram' && !userFields.has('title') && ai.title !== current.title) {
+  // A title your provider took from the product's own page (understandProduct) stays.
+  if (ai && ai.title && current.type !== 'instagram' && !userFields.has('title') && ai.title !== current.title && current.title === item.title) {
     before.title = current.title;
     patch.title = ai.title;
     changes.push({ field: 'title', from: current.title, to: ai.title });

@@ -6,6 +6,7 @@ import KeepsakeUI
 struct LifestyleScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
+    private var lifestyle: [Save] { model.saves.filter(\.hasOwnView) }
 
     var body: some View {
         ZStack {
@@ -23,6 +24,11 @@ struct LifestyleScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if model.aiReady && !lifestyle.isEmpty {
+                ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: lifestyle, what: "all \(lifestyle.count) Lifestyle saves") }
+            }
+        }
     }
 }
 

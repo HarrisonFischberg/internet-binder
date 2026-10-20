@@ -94,9 +94,10 @@ public struct KSTheme: Sendable {
                                    stamp: tok(.swiss, "accent"), shadow: .clear,
                                    radius: 0, controlRadius: 0, outline: 1, depth: .flat)
 
-    /// The styles someone can pick (Settings → Appearance), Pantry Pop first.
-    public static let all: [(id: String, name: String, theme: KSTheme)] = [pantry, notebook, gallery, atlas, swiss].map { ($0.style.rawValue, $0.name, $0) }
-    /// A saved id, including the retired Postcard, Linen and Ink (all now Pantry Pop).
+    /// The styles someone can pick (Settings → Appearance), Pantry Pop first. Gallery is retired on
+    /// iOS: it is no longer offered, and a saved "gallery" falls back to Pantry Pop like other old ids.
+    public static let all: [(id: String, name: String, theme: KSTheme)] = [pantry, notebook, atlas, swiss].map { ($0.style.rawValue, $0.name, $0) }
+    /// A saved id, including the retired Gallery, Postcard, Linen and Ink (all now Pantry Pop).
     public static func named(_ id: String) -> KSTheme { all.first { $0.id == id }?.theme ?? .pantry }
     public static func canonical(_ id: String) -> String { all.contains { $0.id == id } ? id : "pantry" }
 
@@ -341,8 +342,6 @@ public struct Appearance: Sendable, Equatable {
     public var theme = "pantry"
     /// "system", "light" or "dark": the app's appearance, whatever the device is set to.
     public var mode = "system"
-    /// "comfortable" (cards in masonry) or "compact" (an even grid, more on screen).
-    public var density = "comfortable"
     /// Kept for older settings; every style draws its own cards.
     public var cardStyle = "objects"
     public var haptics = true
@@ -355,7 +354,6 @@ public struct Appearance: Sendable, Equatable {
         var a = Appearance()
         a.theme = KSTheme.canonical(d.string(forKey: "ks.theme") ?? a.theme)
         a.mode = d.string(forKey: "ks.mode") ?? a.mode
-        a.density = d.string(forKey: "ks.density") ?? a.density
         a.cardStyle = d.string(forKey: "ks.cardStyle") ?? a.cardStyle
         a.haptics = d.object(forKey: "ks.haptics") as? Bool ?? true
         a.sound = d.object(forKey: "ks.sound") as? Bool ?? false
@@ -366,7 +364,7 @@ public struct Appearance: Sendable, Equatable {
 
     public func save() {
         let d = Self.defaults
-        d.set(theme, forKey: "ks.theme"); d.set(mode, forKey: "ks.mode"); d.set(density, forKey: "ks.density"); d.set(cardStyle, forKey: "ks.cardStyle")
+        d.set(theme, forKey: "ks.theme"); d.set(mode, forKey: "ks.mode"); d.set(cardStyle, forKey: "ks.cardStyle")
         d.set(haptics, forKey: "ks.haptics"); d.set(sound, forKey: "ks.sound")
     }
 }

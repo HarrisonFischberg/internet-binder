@@ -10,6 +10,7 @@ struct CollectionsScreen: View {
     @State private var collections: [SaveCollection] = []
     @State private var naming = false
     @State private var newName = ""
+    private var collected: [Save] { model.saves.filter { !($0.collectionId ?? "").isEmpty } }
 
     var body: some View {
         ZStack {
@@ -23,7 +24,12 @@ struct CollectionsScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .primaryAction) { Button("New collection", systemImage: "plus") { naming = true } } }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { Button("New collection", systemImage: "plus") { naming = true } }
+            if model.aiReady && !collected.isEmpty {
+                ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: collected, what: "all \(collected.count) saves in Collections") }
+            }
+        }
         .alert("New collection", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) { newName = "" }
@@ -64,7 +70,12 @@ struct CollectionScreen: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } } }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } }
+            if model.aiReady && !saves.isEmpty {
+                ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) in \(name)") }
+            }
+        }
         .sheet(isPresented: $editing) {
             if let c = try? model.library?.collections().first(where: { $0.id == id }) {
                 CollectionEditor(collection: c) { deleted in if deleted { dismiss() } }
