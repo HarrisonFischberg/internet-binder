@@ -12,7 +12,7 @@ final class TabBarAndConsentTests: XCTestCase {
     func testTabBarAndConsent() throws {
         guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
         try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
-        XCUIDevice.shared.appearance = .light
+        XCUIDevice.shared.appearance = ProcessInfo.processInfo.environment["KEEPSAKE_SHOT_MODES"] == "dark" ? .dark : .light
         let app = XCUIApplication()
         app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
         app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "pantry"]
