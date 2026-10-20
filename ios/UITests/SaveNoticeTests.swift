@@ -36,9 +36,9 @@ final class SaveNoticeTests: XCTestCase {
         app.launchEnvironment["KEEPSAKE_DB"] = "uitest-\(UUID().uuidString)"
         app.launchArguments += ["-importOnLaunch", demo, "-noticeFirstSave", "YES"]
         app.launch()
-        // iOS asks once; allow it.
+        // iOS asks once (the app posts 5 s later); allow it.
         let allow = springboard.buttons["Allow"]
-        if allow.waitForExistence(timeout: 10) { allow.tap() }
+        if allow.waitForExistence(timeout: 2) { allow.tap() }
         XCUIDevice.shared.press(.home)
         let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Saved to'")).firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 15), "no notification")

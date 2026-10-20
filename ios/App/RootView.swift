@@ -44,6 +44,8 @@ struct RootView: View {
             if UserDefaults.standard.bool(forKey: "noticeFirstSave") {
                 while model.saves.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
                 await SaveNotice.ask()
+                // Time for the test to send Keepsake to the background first.
+                try? await Task.sleep(for: .seconds(5))
                 let s = model.saves[0]
                 await SaveNotice.post(id: s.id, title: s.title, destination: KindStyle(s.kind).plural)
                 return
@@ -128,7 +130,8 @@ struct Stack<Root: View>: View {
         .toolbar(saveDepths.contains(path.count) && path.count > 0 ? .hidden : .visible, for: .tabBar)
         .animation(.easeOut(duration: 0.2), value: saveDepths.contains(path.count))
         .onChange(of: path.count) { _, depth in saveDepths = saveDepths.filter { $0 <= depth } }
-        .onChange(of: model.opening?.id) { openWaitingSave() }
+        // initial: a tab first shown by the link itself (a tapped notification while on Home) opens it too.
+        .onChange(of: model.opening?.id, initial: true) { openWaitingSave() }
         // A save made in the Share Extension appears once the library catches up, then opens.
         .onChange(of: model.saves.count) { openWaitingSave() }
     }
