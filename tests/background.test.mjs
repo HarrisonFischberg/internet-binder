@@ -793,3 +793,15 @@ test('instagram: stopping "Import all collections" keeps what was found and skip
     await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
   }
 });
+
+test('instagram scan: Safari without instagram.com access sends no tab address; reports from the scan\'s own tab still count', async () => {
+  await F.send({ type: MSG.IG_START_SCAN, tabId: 31 }, popup);
+  const post = { url: 'https://www.instagram.com/p/SAFARI1/', shortcode: 'SAFARI1', type: 'post' };
+  // No url on the tab or the sender, as Safari reports a content script on activeTab alone.
+  assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', reason: 'end', collectionName: 'Food', posts: [post] }, { tab: { id: 31 } })).ok, true);
+  assert.equal((await F.send({ type: MSG.IG_SCAN_STATE }, popup)).scan.posts.length, 1);
+  // Another tab without an address is still refused, and so is a tab on another site.
+  assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', posts: [post] }, { tab: { id: 32 } })).ok, false);
+  assert.equal((await F.send({ type: MSG.IG_SCAN_UPDATE, status: 'done', posts: [post] }, { tab: { id: 31, url: 'https://evil.example/' }, url: 'https://evil.example/' })).ok, false);
+  await F.send({ type: MSG.IG_SCAN_CLEAR }, popup);
+});
