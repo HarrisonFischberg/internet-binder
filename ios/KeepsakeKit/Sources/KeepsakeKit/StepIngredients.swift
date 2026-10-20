@@ -21,6 +21,10 @@ public struct StepIngredients: Sendable, Equatable {
         public var items: [Int] = []
         public var carried: [Carried] = []
         public var isEmpty: Bool { items.isEmpty && carried.isEmpty }
+        public init(items: [Int] = [], carried: [Carried] = []) {
+            self.items = items
+            self.carried = carried
+        }
     }
 
     public let items: [Item]

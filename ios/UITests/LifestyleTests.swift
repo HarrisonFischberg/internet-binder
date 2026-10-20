@@ -68,8 +68,9 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.buttons["350 g rigatoni"].exists)
         XCTAssertTrue(app.buttons["12 sage leaves"].exists)
         app.buttons["Next step"].tap()
-        let butter = app.buttons["90 g butter"]
-        XCTAssertTrue(butter.waitForExistence(timeout: 3))
+        // The recipe page behind the cover lists "90 g butter" too; take the one on the step.
+        XCTAssertTrue(app.buttons["90 g butter"].waitForExistence(timeout: 3))
+        let butter = app.buttons.matching(identifier: "90 g butter").allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons["90 g butter"]
         butter.tap()
         XCTAssertTrue(butter.isSelected, "checked off")
         app.buttons["Next step"].tap()
