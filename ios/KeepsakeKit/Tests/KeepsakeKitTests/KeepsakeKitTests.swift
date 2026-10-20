@@ -634,6 +634,8 @@ struct StepIngredientsTests {
         #expect(StepIngredients.split("2 portions fresh ramen noodles") == ("2 portions", "fresh ramen noodles"))
         #expect(StepIngredients.split("½ tsp salt") == ("½ tsp", "salt"))
         #expect(StepIngredients.split("250g flour") == ("250g", "flour"))
+        #expect(StepIngredients.split("1 cup (150 g) fine cornmeal (fubá)") == ("1 cup (150 g)", "fine cornmeal (fubá)"))
+        #expect(StepIngredients.split("(395 g) sweetened condensed milk") == ("(395 g)", "sweetened condensed milk"))
     }
 
     @Test func eachStepGetsWhatItNames() {

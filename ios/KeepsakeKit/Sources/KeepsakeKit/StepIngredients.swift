@@ -71,7 +71,8 @@ public struct StepIngredients: Sendable, Equatable {
         }
     }
 
-    /// "200 g spaghetti" → ("200 g", "spaghetti"); "Pinch of salt" → ("Pinch", "salt"); "Black pepper" → ("", "Black pepper").
+    /// "200 g spaghetti" → ("200 g", "spaghetti"); "Pinch of salt" → ("Pinch", "salt"); "Black pepper" → ("", "Black pepper");
+    /// "1 cup (150 g) fine cornmeal" → ("1 cup (150 g)", "fine cornmeal").
     public static func split(_ line: String) -> (amount: String, name: String) {
         let parts = line.split(whereSeparator: \.isWhitespace).map(String.init)
         if parts.count > 2, pinches.contains(parts[0].lowercased()), parts[1].lowercased() == "of" {
@@ -79,8 +80,12 @@ public struct StepIngredients: Sendable, Equatable {
         }
         var taken = 0
         var number = false
-        for p in parts {
-            let t = p.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".,"))
+        while taken < parts.count {
+            let t = parts[taken].lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".,"))
+            // A second measure in brackets: "1 cup (150 g) cornmeal", "(395 g) condensed milk".
+            if t.hasPrefix("("), t.contains(where: \.isNumber), let end = parts[taken...].firstIndex(where: { $0.contains(")") }) {
+                number = true; taken = end + 1; continue
+            }
             if isNumber(t) { number = true; taken += 1; continue }
             if number, ["-", "–", "to"].contains(t) { taken += 1; continue }
             // "250g"

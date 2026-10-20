@@ -17,6 +17,7 @@ import { goalTitle, goalProgress, resultText, formatSeconds, localDay } from '..
 import { draftRecipe, suggestProgression } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { kindIcon } from '../shared/kindIcon.js';
+import { stepIngredients } from '../shared/stepIngredients.js';
 import { renderSettings, renderAI, renderPrivacy, analyzeItems } from './settings.js';
 import { renderImport } from './importer.js';
 import { renderTabsImport } from './tabsImport.js';
@@ -2021,16 +2022,44 @@ async function openRecipe(id) {
     ingredients.length ? ['Ingredients', String(ingredients.length)] : null,
   ].filter(Boolean);
 
+  // Each step lists the ingredients it uses (stepIngredients); a box checked there is checked in the
+  // Ingredients list too, and the other way round.
+  const plan = stepIngredients(steps, ingredients);
   const counter = el('span', { class: 'recipe-count' }, [ingredients.length ? `0 of ${ingredients.length}` : '']);
-  const updateCount = (list) => { counter.textContent = `${list.querySelectorAll('input:checked').length} of ${ingredients.length}`; };
+  const boxes = () => [...body.querySelectorAll('input[data-ing]')];
+  const setChecked = (i, on) => {
+    boxes().filter((b) => b.dataset.ing === String(i)).forEach((b) => { b.checked = on; });
+    counter.textContent = `${new Set(boxes().filter((b) => b.checked).map((b) => b.dataset.ing)).size} of ${ingredients.length}`;
+  };
+  const box = (i, id) => el('input', { type: 'checkbox', id, 'data-ing': String(i), onChange: (e) => setChecked(i, e.target.checked) });
   const ingList = el('ul', { class: 'recipe-ingredients' });
-  ingredients.forEach((x, i) => ingList.append(el('li', {}, [el('label', { class: 'check' }, [
-    el('input', { type: 'checkbox', id: `rv-ing-${i}`, onChange: () => updateCount(ingList) }), el('span', {}, [x]),
-  ])])));
+  ingredients.forEach((x, i) => ingList.append(el('li', {}, [el('label', { class: 'check' }, [box(i, `rv-ing-${i}`), el('span', {}, [x])])])));
+  const names = (c) => { const n = c.items.map((i) => plan.items[i].name).join(', '); return n.charAt(0).toUpperCase() + n.slice(1); };
+  const marked = (text, i) => {
+    const out = [];
+    let at = 0;
+    for (const r of plan.highlights(text, i)) { out.push(text.slice(at, r.start), el('mark', { class: 'step-mark' }, [text.slice(r.start, r.end)])); at = r.end; }
+    out.push(text.slice(at));
+    return out;
+  };
   const stepList = el('ol', { class: 'recipe-steps recipe-steps-big' }, steps.map((x, i) => {
+    const uses = [...(plan.steps[i]?.items || []), ...(i === 0 ? plan.unmatched : [])];
+    const carried = plan.steps[i]?.carried || [];
+    const need = uses.length || carried.length
+      ? el('div', { class: 'step-ings', onClick: (e) => e.stopPropagation(), onKeydown: (e) => e.stopPropagation() }, [
+        ...uses.map((k) => el('label', { class: 'step-ing' }, [
+          box(k, `rv-step-${i}-ing-${k}`),
+          plan.items[k].amount ? el('b', {}, [plan.items[k].amount]) : null,
+          el('span', {}, [plan.items[k].name]),
+        ])),
+        ...carried.map((c) => el('span', { class: 'step-carry' }, [
+          el('span', {}, [names(c)]), el('small', {}, [`From step ${c.fromStep + 1}`]),
+        ])),
+      ])
+      : null;
     const li = el('li', { tabindex: '0', 'aria-label': `Step ${i + 1}: ${x}`, onClick: () => li.classList.toggle('is-done'), onKeydown: (e) => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.classList.toggle('is-done'); }
-    } }, [el('span', { class: 'step-n', 'aria-hidden': 'true' }, [String(i + 1)]), el('span', {}, [x])]);
+    } }, [el('span', { class: 'step-n', 'aria-hidden': 'true' }, [String(i + 1)]), el('div', { class: 'step-body' }, [el('span', { class: 'step-text' }, marked(x, i)), need])]);
     return li;
   }));
   const empty = !ingredients.length && !steps.length;
@@ -2053,7 +2082,7 @@ async function openRecipe(id) {
       ])
       : el('div', { class: 'recipe-columns' }, [
         el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Ingredients', isDrafted(d, 'ingredients') ? draftTag() : null]), counter]), ingList]),
-        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Method', isDrafted(d, 'steps') ? draftTag() : null]), el('span', { class: 'recipe-count' }, [steps.length ? `${steps.length} steps · tap a step when it’s done` : ''])]), stepList]),
+        el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Method', isDrafted(d, 'steps') ? draftTag() : null]), el('span', { class: 'recipe-count' }, [steps.length ? `${steps.length} steps · check off what you add, tap a step when it’s done` : ''])]), stepList]),
       ]),
   ]);
   const cooked = item.status === 'done';

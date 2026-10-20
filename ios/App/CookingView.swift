@@ -50,7 +50,7 @@ struct CookingView: View {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, text in
                         ScrollView {
                             CookingStep(index: i, count: steps.count, text: text, plan: plan, extras: i == 0 ? plan.unmatched : [],
-                                        checked: $checked) { go(to: $0) }
+                                        checked: $checked)
                                 .padding(t.style == .swiss ? 20 : 24)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -193,7 +193,6 @@ private struct CookingStep: View {
     /// Ingredients no step names, shown on the first step so nothing is missed.
     let extras: [Int]
     @Binding var checked: Set<Int>
-    let jump: (Int) -> Void
     @Environment(\.ks) private var t
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .largeTitle) private var numeral: CGFloat = 64
@@ -374,22 +373,20 @@ private struct CookingStep: View {
     }
 
     private func carriedRow(_ c: StepIngredients.Carried) -> some View {
-        Button { jump(c.fromStep) } label: {
+        Group {
             HStack(alignment: t.style == .swiss ? .firstTextBaseline : .center, spacing: 12) {
                 if t.style == .swiss { Text("–").font(.body.weight(.bold)).foregroundStyle(t.inkMuted).frame(width: amountWidth, alignment: .trailing) }
-                else { Image(systemName: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted).frame(width: 24) }
+                else { Image(systemName: "plus.circle").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted).frame(width: 24) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(names(c)).font(t.style == .notebook ? .system(.title3, design: .serif) : .body).foregroundStyle(t.ink)
                     Text("From step \(c.fromStep + 1)").font(t.monoLabels ? .system(.caption, design: .monospaced) : .caption).foregroundStyle(t.inkMuted)
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 6).frame(minHeight: 50).contentShape(Rectangle())
+            .padding(.vertical, 6).frame(minHeight: 50)
         }
-        .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(names(c)), from step \(c.fromStep + 1)")
-        .accessibilityHint("Shows step \(c.fromStep + 1)")
     }
 
     private func box(_ done: Bool) -> some View {
@@ -433,7 +430,7 @@ private struct CookingStep: View {
     }
 
     private func carriedJar(_ c: StepIngredients.Carried) -> some View {
-        Button { jump(c.fromStep) } label: {
+        Group {
             HStack(spacing: 8) {
                 Text("Step \(c.fromStep + 1)").font(.system(.caption, design: .rounded).weight(.heavy)).foregroundStyle(t.table)
                     .padding(.horizontal, 8).padding(.vertical, 4).background(t.ink, in: Capsule())
@@ -444,10 +441,8 @@ private struct CookingStep: View {
             .background(t.well, in: Capsule())
             .overlay { Capsule().strokeBorder(t.line, style: StrokeStyle(lineWidth: 2, dash: [6, 4])) }
         }
-        .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(names(c)), from step \(c.fromStep + 1)")
-        .accessibilityHint("Shows step \(c.fromStep + 1)")
     }
 
     private func names(_ c: StepIngredients.Carried) -> String {
