@@ -40,6 +40,7 @@ final class SaveNoticeTests: XCTestCase {
         let allow = springboard.buttons["Allow"]
         if allow.waitForExistence(timeout: 2) { allow.tap() }
         XCUIDevice.shared.press(.home)
+        if allow.exists { allow.tap() }
         let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Saved to'")).firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 15), "no notification")
         shoot("notice-banner")
