@@ -720,7 +720,21 @@ async function startScan() {
   if (!res.ok) {
     $('igErrorNotice').textContent = res.error || 'Could not start the scan. Reload the Instagram tab and try again.';
     igView('error');
+    return;
   }
+  watchStart();
+}
+
+// The page's first report arrives within a second or two. If none has after a while, the scan never
+// reached Keepsake: say so instead of spinning on "Looking for posts…" for ever.
+function watchStart(ms = 15000) {
+  setTimeout(async () => {
+    const res = await send({ type: MSG.IG_SCAN_STATE });
+    if (!res.ok || res.scan?.status !== 'starting' || res.scan.tabId !== state.tab.id) return;
+    const safari = location.protocol === 'safari-web-extension:';
+    $('igErrorNotice').textContent = `The scan didn’t start in this tab. Reload the Instagram page and try again. If it still doesn’t start, let Keepsake use instagram.com: ${safari ? 'Safari → Settings → Extensions → Keepsake → Edit Websites…, set instagram.com to Allow' : 'right-click the Keepsake icon → Manage extension → Site access, and add https://www.instagram.com'}.`;
+    igView('error');
+  }, ms);
 }
 
 // "Import all collections": needs instagram.com access, since the tab moves from collection to collection.
