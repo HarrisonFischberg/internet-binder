@@ -63,10 +63,17 @@ final class LifestyleTests: XCTestCase {
         let app = launch()
         open(app, kind: "Recipes", save: "Brown butter pasta")
         app.buttons["Start cooking"].tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Step 1 of 3"].waitForExistence(timeout: 3))
+        // Each step shows the ingredients it uses; sage isn't named by any step, so it waits on step 1.
+        XCTAssertTrue(app.buttons["350 g rigatoni"].exists)
+        XCTAssertTrue(app.buttons["12 sage leaves"].exists)
         app.buttons["Next step"].tap()
+        let butter = app.buttons["90 g butter"]
+        XCTAssertTrue(butter.waitForExistence(timeout: 3))
+        butter.tap()
+        XCTAssertTrue(butter.isSelected, "checked off")
         app.buttons["Next step"].tap()
-        XCTAssertTrue(app.staticTexts["Step 3 of 3"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Step 3 of 3"].waitForExistence(timeout: 3))
         app.buttons["Mark as cooked"].tap()
         XCTAssertTrue(app.buttons["Cooked, done"].waitForExistence(timeout: 5))
     }

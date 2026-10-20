@@ -612,3 +612,47 @@ struct CollectionTests {
         #expect(try lib.collections().contains { $0.id == col.id } == false)
     }
 }
+
+@Suite("Ingredients for each cooking step")
+struct StepIngredientsTests {
+    let carbonara = StepIngredients(
+        steps: ["Cook the guanciale slowly until crisp; keep the fat.", "Whisk the yolks, egg and pecorino with lots of pepper.",
+                "Boil the spaghetti in salted water until just al dente.",
+                "Toss the pasta in the pan off the heat, then stir in the egg mix with a splash of pasta water until glossy."],
+        ingredients: ["200 g spaghetti", "100 g guanciale", "3 egg yolks", "1 whole egg", "50 g pecorino romano, grated", "Black pepper"])
+
+    @Test func amounts() {
+        #expect(StepIngredients.split("200 g spaghetti") == ("200 g", "spaghetti"))
+        #expect(StepIngredients.split("3 cloves garlic") == ("3 cloves", "garlic"))
+        #expect(StepIngredients.split("Pinch of salt") == ("Pinch", "salt"))
+        #expect(StepIngredients.split("Black pepper") == ("", "Black pepper"))
+        #expect(StepIngredients.split("1 onion, sliced") == ("1", "onion, sliced"))
+        #expect(StepIngredients.split("2 portions fresh ramen noodles") == ("2 portions", "fresh ramen noodles"))
+        #expect(StepIngredients.split("½ tsp salt") == ("½ tsp", "salt"))
+        #expect(StepIngredients.split("250g flour") == ("250g", "flour"))
+    }
+
+    @Test func eachStepGetsWhatItNames() {
+        #expect(carbonara.steps.map(\.items) == [[1], [2, 3, 4, 5], [0], []])
+        #expect(carbonara.unmatched.isEmpty)
+    }
+
+    @Test func laterStepsCarryEarlierOnes() {
+        // "the pasta" is the spaghetti boiled in step 3; "the egg mix" is step 2's yolks and egg.
+        #expect(carbonara.steps[3].carried == [.init(fromStep: 2, items: [0]), .init(fromStep: 1, items: [2, 3])])
+    }
+
+    @Test func groupWordsAndLeftovers() {
+        let s = StepIngredients(steps: ["Boil the pasta.", "Add garlic and spices.", "Toss."],
+                                ingredients: ["350 g rigatoni", "3 cloves garlic", "1 tsp cumin", "12 sage leaves"])
+        #expect(s.steps.map(\.items) == [[0], [1, 2], []])
+        #expect(s.unmatched == [3])
+    }
+
+    @Test func highlightsNameTheIngredients() {
+        let text = "Whisk the yolks, egg and pecorino with lots of pepper."
+        #expect(carbonara.highlights(in: text, step: 1).map { String(text[$0]) } == ["yolks", "egg", "pecorino", "pepper"])
+        let last = "Toss the pasta in the pan off the heat, then stir in the egg mix with a splash of pasta water until glossy."
+        #expect(carbonara.highlights(in: last, step: 3).map { String(last[$0]) } == ["pasta", "egg", "pasta"])
+    }
+}
