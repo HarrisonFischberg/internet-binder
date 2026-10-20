@@ -1,10 +1,10 @@
 {
  "format": "keepsake-export",
  "schemaVersion": 3,
- "exportedAt": "2026-10-16T09:36:12.893Z",
+ "exportedAt": "2026-10-20T19:54:45.922Z",
  "collections": {
-  "ea36d7f4-42cf-4b98-83f5-28381c1d091c": {
-   "id": "ea36d7f4-42cf-4b98-83f5-28381c1d091c",
+  "79f8e6cd-a5fa-4e30-b1d1-4aabd1e72f4d": {
+   "id": "79f8e6cd-a5fa-4e30-b1d1-4aabd1e72f4d",
    "name": "Home Decor",
    "description": "Lighting, furniture, rugs, mirrors, art, plants and the things that make a room.",
    "coverImage": "",
@@ -27,11 +27,11 @@
    "taxonomyKey": "home",
    "sortOrder": 1,
    "pinned": false,
-   "createdAt": "2026-10-16T09:36:12.885Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.912Z",
+   "updatedAt": "2026-10-20T19:54:45.920Z"
   },
-  "8d16bb2d-aed9-478d-a481-6e68c53c8dc9": {
-   "id": "8d16bb2d-aed9-478d-a481-6e68c53c8dc9",
+  "713a3251-c89b-4c4c-8543-739f07e0c116": {
+   "id": "713a3251-c89b-4c4c-8543-739f07e0c116",
    "name": "Clothing",
    "description": "Shoes, jackets, tops, pants, dresses, accessories and everything you wear.",
    "coverImage": "",
@@ -55,11 +55,11 @@
    "taxonomyKey": "clothing",
    "sortOrder": 2,
    "pinned": false,
-   "createdAt": "2026-10-16T09:36:12.887Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.915Z",
+   "updatedAt": "2026-10-20T19:54:45.920Z"
   },
-  "41a8e1f1-f62e-4464-b92c-4a907cb37142": {
-   "id": "41a8e1f1-f62e-4464-b92c-4a907cb37142",
+  "6945d7fa-9ee8-48da-b981-293fd9fbf510": {
+   "id": "6945d7fa-9ee8-48da-b981-293fd9fbf510",
    "name": "Technology",
    "description": "Headphones, computers, phones, cameras, audio, smart home and gadgets.",
    "coverImage": "",
@@ -82,13 +82,13 @@
    "taxonomyKey": "tech",
    "sortOrder": 3,
    "pinned": false,
-   "createdAt": "2026-10-16T09:36:12.887Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.915Z",
+   "updatedAt": "2026-10-20T19:54:45.920Z"
   }
  },
  "items": {
-  "635ca476-4827-44e4-814f-e9052a6bd420": {
-   "id": "635ca476-4827-44e4-814f-e9052a6bd420",
+  "5d3e5cec-ce6e-4351-b4b2-2e960d18285b": {
+   "id": "5d3e5cec-ce6e-4351-b4b2-2e960d18285b",
    "collectionId": null,
    "type": "product",
    "kind": "product",
@@ -132,12 +132,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.887Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.915Z",
+   "updatedAt": "2026-10-20T19:54:45.920Z"
   },
-  "3d812c69-885e-4810-8bbb-dcff9f3f41a7": {
-   "id": "3d812c69-885e-4810-8bbb-dcff9f3f41a7",
+  "1b007ae1-be44-4618-9918-1a827743777a": {
+   "id": "1b007ae1-be44-4618-9918-1a827743777a",
    "collectionId": null,
    "type": "instagram",
    "kind": "place",
@@ -189,7 +190,7 @@
     "creator": "lisboa.eats",
     "caption": "Best pastéis in Alfama 📍 Café Azulejo",
     "postType": "",
-    "importedAt": "2026-10-16T09:36:12.888Z",
+    "importedAt": "2026-10-20T19:54:45.916Z",
     "postedAt": "",
     "location": "",
     "place": null,
@@ -207,12 +208,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.888Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.916Z",
+   "updatedAt": "2026-10-20T19:54:45.920Z"
   },
-  "e40b2f24-8d08-4a1c-a437-8dbc1bc98189": {
-   "id": "e40b2f24-8d08-4a1c-a437-8dbc1bc98189",
+  "35bfff29-9ba3-4169-842b-7984daa3df94": {
+   "id": "35bfff29-9ba3-4169-842b-7984daa3df94",
    "collectionId": null,
    "type": "product",
    "kind": "recipe",
@@ -272,12 +274,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.888Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.916Z",
+   "updatedAt": "2026-10-20T19:54:45.920Z"
   },
-  "d9115d50-199e-4bbc-bf2e-dd517dc53aab": {
-   "id": "d9115d50-199e-4bbc-bf2e-dd517dc53aab",
+  "ab75d48f-0e05-4ac5-95e4-eda16b5baefc": {
+   "id": "ab75d48f-0e05-4ac5-95e4-eda16b5baefc",
    "collectionId": null,
    "type": "instagram",
    "kind": "recipe",
@@ -330,7 +333,7 @@
     "creator": "move.daily",
     "caption": "Morning mobility\n1. Hip circles 2x10\n2. World's greatest stretch 3x5 each side\n3. Deep squat hold 3x30s\nRest 30s between sets. Training every morning.",
     "postType": "",
-    "importedAt": "2026-10-16T09:36:12.888Z",
+    "importedAt": "2026-10-20T19:54:45.916Z",
     "postedAt": "",
     "location": "",
     "place": null,
@@ -348,12 +351,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.888Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.916Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "6d48d74f-3103-47a2-923b-72a6b111c98d": {
-   "id": "6d48d74f-3103-47a2-923b-72a6b111c98d",
+  "5ad5fa60-bf28-4f6a-bb22-e1a9448ef1d4": {
+   "id": "5ad5fa60-bf28-4f6a-bb22-e1a9448ef1d4",
    "collectionId": null,
    "type": "product",
    "kind": "video",
@@ -400,12 +404,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.889Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.917Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "a6b810e1-e781-4b28-b680-164cc67047c2": {
-   "id": "a6b810e1-e781-4b28-b680-164cc67047c2",
+  "9b3b19e6-849a-4225-9e21-b3602ae7e383": {
+   "id": "9b3b19e6-849a-4225-9e21-b3602ae7e383",
    "collectionId": null,
    "type": "product",
    "kind": "article",
@@ -453,12 +458,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.889Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.918Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "6a3e0eea-005a-49e8-86c7-f2eb054a76e6": {
-   "id": "6a3e0eea-005a-49e8-86c7-f2eb054a76e6",
+  "aac5a6aa-2919-474e-99cd-0db310dde8b9": {
+   "id": "aac5a6aa-2919-474e-99cd-0db310dde8b9",
    "collectionId": null,
    "type": "product",
    "kind": "media",
@@ -507,12 +513,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.889Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.918Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "6160462b-bbb3-461c-bf6c-9f1cfde64de9": {
-   "id": "6160462b-bbb3-461c-bf6c-9f1cfde64de9",
+  "70da3a53-cb1f-40aa-9140-007b71875a32": {
+   "id": "70da3a53-cb1f-40aa-9140-007b71875a32",
    "collectionId": null,
    "type": "product",
    "kind": "book",
@@ -560,12 +567,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.890Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.918Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "273d03a5-a56a-4fc0-b20e-9610c68788bc": {
-   "id": "273d03a5-a56a-4fc0-b20e-9610c68788bc",
+  "b66d8b79-e534-4006-83bc-b125a144d0e4": {
+   "id": "b66d8b79-e534-4006-83bc-b125a144d0e4",
    "collectionId": null,
    "type": "product",
    "kind": "place",
@@ -620,12 +628,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.890Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.918Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "fe2e5974-3513-4d64-bac1-241bf7c93ed4": {
-   "id": "fe2e5974-3513-4d64-bac1-241bf7c93ed4",
+  "2f1f5131-a44b-422b-a78f-0fd23c5e92be": {
+   "id": "2f1f5131-a44b-422b-a78f-0fd23c5e92be",
    "collectionId": null,
    "type": "product",
    "kind": "product",
@@ -666,12 +675,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.890Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.918Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "ed9cec9c-1f3a-4371-831d-fa714b6a0a55": {
-   "id": "ed9cec9c-1f3a-4371-831d-fa714b6a0a55",
+  "7f81eb2a-dbbc-4c81-9949-7bb5dd148a3c": {
+   "id": "7f81eb2a-dbbc-4c81-9949-7bb5dd148a3c",
    "collectionId": null,
    "type": "product",
    "kind": "workout",
@@ -732,12 +742,13 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
+   "needsAi": true,
    "deletedAt": null,
-   "createdAt": "2026-10-16T09:36:12.890Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "createdAt": "2026-10-20T19:54:45.918Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   },
-  "126c7add-b6db-4309-adec-1ddccdfd8072": {
-   "id": "126c7add-b6db-4309-adec-1ddccdfd8072",
+  "e79978a8-6575-4c04-b8c1-e7894ba880a5": {
+   "id": "e79978a8-6575-4c04-b8c1-e7894ba880a5",
    "collectionId": null,
    "type": "product",
    "kind": "product",
@@ -778,34 +789,35 @@
    "captureState": "complete",
    "captureError": "",
    "understoodAt": null,
-   "deletedAt": "2026-10-16T09:36:12.891Z",
-   "createdAt": "2026-10-16T09:36:12.891Z",
-   "updatedAt": "2026-10-16T09:36:12.892Z"
+   "needsAi": false,
+   "deletedAt": "2026-10-20T19:54:45.919Z",
+   "createdAt": "2026-10-20T19:54:45.919Z",
+   "updatedAt": "2026-10-20T19:54:45.921Z"
   }
  },
  "goals": [
   {
-   "id": "02663e45-c31e-454d-96e0-968739bf8560",
-   "itemId": "d9115d50-199e-4bbc-bf2e-dd517dc53aab",
+   "id": "65c9e62a-3d63-4640-b6a7-2d6b5186a111",
+   "itemId": "ab75d48f-0e05-4ac5-95e4-eda16b5baefc",
    "kind": "frequency",
    "spec": {
     "perWeek": 3,
     "weeks": 4
    },
-   "startsOn": "2026-10-16",
-   "endsOn": "2026-11-12",
+   "startsOn": "2026-10-20",
+   "endsOn": "2026-11-16",
    "plan": [],
    "planSource": "",
    "source": "user",
-   "createdAt": "2026-10-16T09:36:12.891Z",
-   "updatedAt": "2026-10-16T09:36:12.891Z",
+   "createdAt": "2026-10-20T19:54:45.919Z",
+   "updatedAt": "2026-10-20T19:54:45.919Z",
    "deletedAt": null
   }
  ],
  "checkins": [
   {
-   "id": "5a1bd21e-9dc8-4cc3-9d2c-caf8446807e1",
-   "goalId": "02663e45-c31e-454d-96e0-968739bf8560",
+   "id": "17613e78-23d7-4212-9f99-7be7ef33a735",
+   "goalId": "65c9e62a-3d63-4640-b6a7-2d6b5186a111",
    "at": "2026-10-01T08:00:00.000Z",
    "result": {
     "sets": 3,
@@ -815,8 +827,8 @@
    }
   },
   {
-   "id": "b7a51ec8-068d-4b64-88a9-1ccbfd3c8294",
-   "goalId": "02663e45-c31e-454d-96e0-968739bf8560",
+   "id": "aa902406-428d-4955-a139-04c2297f4946",
+   "goalId": "65c9e62a-3d63-4640-b6a7-2d6b5186a111",
    "at": "2026-10-03T08:00:00.000Z",
    "result": {
     "sets": null,
@@ -835,7 +847,8 @@
  },
  "settings": {
   "theme": "system",
-  "style": "modern",
+  "style": "pantry",
+  "icon": "pantry",
   "home": {
    "comeBack": true
   },
@@ -861,7 +874,8 @@
   "ai": {
    "on": false,
    "webLookup": false,
-   "provider": "openai",
+   "provider": "anthropic",
+   "effort": "medium",
    "baseUrl": "",
    "model": ""
   },
