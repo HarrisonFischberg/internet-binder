@@ -245,6 +245,51 @@ final class ScreenshotTests: XCTestCase {
         XCUIDevice.shared.appearance = .light
     }
 
+    /// Cooking with each step's ingredients (carbonara): step 2 with two checked, and the last step,
+    /// in every style, light and dark, plus Field Notebook at an accessibility text size.
+    func testCookingSteps() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let env = ProcessInfo.processInfo.environment
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        let themes = env["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry", "notebook", "atlas", "swiss"]
+        var runs: [(String, XCUIDevice.Appearance, String?)] = themes.flatMap { [($0, .light, nil), ($0, .dark, nil)] }
+        if themes.contains("notebook") { runs.append(("notebook", .light, "UICTContentSizeCategoryAccessibilityL")) }
+        for (theme, mode, size) in runs {
+            XCUIDevice.shared.appearance = mode
+            let tag = "\(theme)-\(mode == .dark ? "dark" : "light")\(size == nil ? "" : "-large-text")"
+            let app = XCUIApplication()
+            app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+            // The simulator doesn't always take XCUIDevice's appearance, so the app is told too.
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-ksMode", mode == .dark ? "dark" : "light"]
+            if let size { app.launchArguments += ["-UIPreferredContentSizeCategoryName", size] }
+            app.launch()
+            XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+            app.tabBars.buttons["Library"].tap()
+            openRecipes(app)
+            card(app, "Spaghetti alla carbonara").tap()
+            XCTAssertTrue(app.buttons["Start cooking"].waitForExistence(timeout: 5))
+            app.buttons["Start cooking"].tap()
+            XCTAssertTrue(app.buttons["Next step"].waitForExistence(timeout: 5))
+            app.buttons["Next step"].tap()
+            sleep(1)
+            // The recipe page behind the cover lists the same lines; tap the ones on the step.
+            for line in ["3 egg yolks", "50 g pecorino romano, grated"] {
+                (app.buttons.matching(identifier: line).allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons[line]).tap()
+            }
+            sleep(1)
+            try shoot(app, folder, "\(tag)-cooking-step2")
+            if size == nil {
+                app.buttons["Next step"].tap()
+                app.buttons["Next step"].tap()
+                sleep(1)
+                try shoot(app, folder, "\(tag)-cooking-last")
+            }
+            app.terminate()
+        }
+        XCUIDevice.shared.appearance = .light
+    }
+
     /// The Appearance sheet (Pantry Pop and Field Notebook) and the Search tab, light and dark.
     func testAppearanceAndSearch() throws {
         guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }

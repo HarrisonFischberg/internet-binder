@@ -63,7 +63,10 @@ final class LifestyleTests: XCTestCase {
         let app = launch()
         open(app, kind: "Recipes", save: "Brown butter pasta")
         app.buttons["Start cooking"].tap()
-        XCTAssertTrue(app.staticTexts["Step 1 of 3"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Step 1 of 3"].waitForExistence(timeout: 3))
+        // Each step shows the ingredients it uses; sage isn't named by any step, so it waits on step 1.
+        XCTAssertTrue(app.buttons["350 g rigatoni"].exists)
+        XCTAssertTrue(app.buttons["12 sage leaves"].exists)
         // Music plays along: pause, next song, off and back on.
         XCTAssertTrue(app.buttons["Next song"].waitForExistence(timeout: 3))
         app.buttons["Pause music"].tap()
@@ -74,8 +77,13 @@ final class LifestyleTests: XCTestCase {
         app.buttons["Turn music on"].tap()
         XCTAssertTrue(app.buttons["Pause music"].waitForExistence(timeout: 2))
         app.buttons["Next step"].tap()
+        // The recipe page behind the cover lists "90 g butter" too; take the one on the step.
+        XCTAssertTrue(app.buttons["90 g butter"].waitForExistence(timeout: 3))
+        let butter = app.buttons.matching(identifier: "90 g butter").allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons["90 g butter"]
+        butter.tap()
+        XCTAssertTrue(butter.isSelected, "checked off")
         app.buttons["Next step"].tap()
-        XCTAssertTrue(app.staticTexts["Step 3 of 3"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Step 3 of 3"].waitForExistence(timeout: 3))
         app.buttons["Mark as cooked"].tap()
         XCTAssertTrue(app.buttons["Cooked, done"].waitForExistence(timeout: 5))
     }
