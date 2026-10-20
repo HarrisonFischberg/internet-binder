@@ -10,7 +10,7 @@ import { isRestrictedUrl } from '../shared/url.js';
 import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
 import { followColorScheme, setActionIcon } from '../toolbar/icon.js';
-import { hasInstagramAccess, requestInstagramAccess } from '../instagram/enrich.js';
+import { hasInstagramAccess, requestInstagramAccess, instagramAccessHelp } from '../instagram/enrich.js';
 
 const store = createStore(chromeBackend(), idbBackend());
 followColorScheme();
@@ -671,6 +671,7 @@ async function instagramPanel(ig) {
     $('igExplain').textContent = 'Keepsake will open each of your collections in this tab, one after another, scroll each to the end, then “All posts” for anything in no collection. You review everything before it is saved, and each collection becomes a group with the same name. Nothing is sent anywhere.';
     $('igStart').textContent = 'Import all collections';
     $('igHelp').textContent = 'Keep this tab open while it runs; it moves at a browsing pace and you can stop at any time. Needs access to instagram.com. Your login, cookies and messages are never read.';
+    if (!(await hasInstagramAccess())) igAccessHint();
   }
 
   $('igStart').addEventListener('click', start);
@@ -703,6 +704,16 @@ async function instagramPanel(ig) {
     const next = changes[SESSION_KEYS.igScan].newValue;
     if (next && next.tabId === state.tab.id) renderScan(next);
   });
+}
+
+// Shown on the Saved overview until instagram.com access is granted.
+function igAccessHint() {
+  const text = el('span', {}, ['Keepsake doesn’t have access to instagram.com yet. ']);
+  const hint = el('div', { class: 'notice notice-warn', id: 'igAccess' }, [text, el('button', { type: 'button', class: 'btn-link small', onClick: async () => {
+    if ((await requestInstagramAccess()) || (await hasInstagramAccess())) return hint.remove();
+    text.textContent = `Access wasn’t granted. ${instagramAccessHelp()} `;
+  } }, ['Grant access'])]);
+  $('igIdle').prepend(hint);
 }
 
 function igView(which) {
