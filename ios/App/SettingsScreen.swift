@@ -23,6 +23,10 @@ struct SettingsScreen: View {
     @State private var erasing = false
     @State private var testResult: String?
     @AppStorage(CookingMusic.enabledKey) private var cookingMusic = true
+    @State private var saveNotices = SaveNotice.enabled
+    @State private var noticesBlocked = false
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var phase
     @State private var fixingAll = false
 
     /// The Claude models on offer, cheapest first (provider.js MODELS). Haiku 5.5 is the default.
@@ -46,6 +50,7 @@ struct SettingsScreen: View {
                 Section {
                     Toggle("Music while cooking", isOn: $cookingMusic)
                 } footer: { Text("Ten quiet, original tunes play while you follow a recipe step by step. They stay silent when your iPhone is on silent and never stop a podcast or song you're already playing.") }
+                noticesSection
                 Section {
                     NavigationLink("Change log") { ChangeLogScreen() }
                 } footer: { Text("Every change AI made, with Undo.") }
@@ -58,6 +63,11 @@ struct SettingsScreen: View {
                     NavigationLink("Privacy") { PrivacyScreen() }
                     Button("Erase everything", role: .destructive) { erasing = true }
                 } footer: { Text("Keepsake has no account and no server. Your library stays on this iPhone.") }
+                Section {} footer: {
+                    Text("Keepsake \(Self.version)")
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("appVersion")
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -132,6 +142,35 @@ struct SettingsScreen: View {
         } header: { Text("Optional AI") } footer: {
             Text("Off by default. Uses your own key, kept in this iPhone's Keychain and never exported. Sends only what each feature says, to the provider you choose.")
         }
+    }
+
+    /// "Saved to …" notifications after a Share Sheet save (SaveNotice).
+    private var noticesSection: some View {
+        Section {
+            Toggle("Notify after saving", isOn: Binding(get: { saveNotices }, set: { on in
+                saveNotices = on
+                SaveNotice.enabled = on
+                if on { Task { await SaveNotice.ask(); noticesBlocked = await SaveNotice.blocked() } }
+            }))
+            if saveNotices && noticesBlocked {
+                Button("Allow notifications in iOS Settings", systemImage: "bell.badge") {
+                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
+                }
+            }
+        } header: { Text("Notifications") } footer: {
+            Text(saveNotices && noticesBlocked
+                 ? "Notifications are off for Keepsake in iOS Settings, so nothing shows after a save."
+                 : "After you save from the Share Sheet, a notification drops in from the top saying where it went. Tap it to open that save in Keepsake.")
+        }
+        .task(id: phase) { noticesBlocked = await SaveNotice.blocked() }
+    }
+
+    /// "2.1.1 (1)": the version and build, from the app's bundle.
+    static var version: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let v = info["CFBundleShortVersionString"] as? String ?? "?"
+        let b = info["CFBundleVersion"] as? String ?? "?"
+        return "\(v) (\(b))"
     }
 
     // MARK: Lookups

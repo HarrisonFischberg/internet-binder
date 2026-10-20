@@ -4,11 +4,16 @@
 The project is generated (no XcodeGen/Tuist installed; see replica/m3/decisions.md D2). Targets use
 folder-synchronized groups, so adding a Swift file needs no change here. Edit this script to change
 targets or build settings, then run: python3 ios/tools/make-xcodeproj.py
+(also after bumping keepsake/manifest.json's version: the app's MARKETING_VERSION follows it)
 """
+import json
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'Keepsake.xcodeproj', 'project.pbxproj')
+# The app's version is the extension's (Settings shows it); re-run this script after a version bump.
+with open(os.path.join(HERE, '..', '..', 'keepsake', 'manifest.json')) as f:
+    VERSION = json.load(f)['version']
 
 T = {  # target key: (name, product, productType, folder, bundle id, extra settings)
  'app':   ('Keepsake', 'Keepsake.app', 'com.apple.product-type.application', 'App', 'com.harrisonfischberg.keepsake',
@@ -71,7 +76,7 @@ for k, (name, prod, ptype, folder, bid, extra) in T.items():
     deps = [ids[x]['dep'] for x in ('share', 'widgets')] if k == 'app' else [i['appdep']] if k == 'uitests' else []
     add(f'\t\t{i["target"]} /* {name} */ = {{isa = PBXNativeTarget; buildConfigurationList = {i["cfgs"]}; buildPhases = ({", ".join(phases)}); buildRules = (); dependencies = ({", ".join(deps)}); fileSystemSynchronizedGroups = ({i["group"]}); name = {name}; packageProductDependencies = ({", ".join(dep for _, dep, _ in i["pkgs"])}); productName = {name}; productReference = {i["product"]}; productType = "{ptype}"; }};\n')
     base = {'CODE_SIGN_STYLE': 'Automatic', 'DEVELOPMENT_TEAM': 'KTV2G3Z883', '"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]"': '"-"',
-            'CURRENT_PROJECT_VERSION': '1', 'MARKETING_VERSION': '0.1', 'GENERATE_INFOPLIST_FILE': 'YES',
+            'CURRENT_PROJECT_VERSION': '1', 'MARKETING_VERSION': VERSION, 'GENERATE_INFOPLIST_FILE': 'YES',
             'PRODUCT_BUNDLE_IDENTIFIER': bid, 'PRODUCT_NAME': '"$(TARGET_NAME)"', 'SWIFT_VERSION': '5.0', 'TARGETED_DEVICE_FAMILY': '"1,2"',
             'SWIFT_EMIT_LOC_STRINGS': 'YES', 'ENABLE_PREVIEWS': 'YES'}
     base.update(extra)
