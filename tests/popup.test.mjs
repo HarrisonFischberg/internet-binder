@@ -59,12 +59,49 @@ before(async () => {
 const video = { title: 'Top 5 cold opens', url: 'https://www.youtube.com/watch?v=popup1', images: ['https://i.ytimg.com/vi/popup1/hqdefault.jpg'], image: 'https://i.ytimg.com/vi/popup1/hqdefault.jpg',
   price: null, priceText: '10000', schemaTypes: [], media: { ogType: 'video.other', channel: 'Example Comedy' } };
 
-test('popup: a new YouTube video saves straight to Videos', async () => {
+const shown = (id) => !page.getElementById(id).classList.contains('hidden');
+async function until(id) {
+  for (let i = 0; i < 80 && !shown(id); i++) await settle(25);
+  assert.ok(shown(id), `${id} is showing`);
+}
+const tiles = () => [...page.querySelectorAll('#groupGrid .group')];
+const tileNamed = (name) => tiles().find((t) => t.querySelector('.group-title').textContent === name);
+async function savedUrl(url) {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  return createStore(chromeBackend(), idbBackend()).findByUrl(url);
+}
+
+test('popup: opening it never saves; it offers the dashboard and asks where the page lives', async () => {
   await openPopup(video);
-  assert.equal(page.getElementById('savedTitle').textContent, 'Saved to');
+  assert.ok(shown('state-home'));
+  assert.equal(await savedUrl(video.url), null, 'nothing saved just by opening it');
+  assert.match(page.getElementById('homeGuess').textContent, /Keepsake thinks Videos\./);
+  assert.ok(page.getElementById('libLifestyle').classList.contains('is-guess'), 'its guess is ticked');
+  assert.ok(!page.getElementById('libCollections').classList.contains('is-guess'));
+  F.calls.tabsCreated.length = 0;
+  page.getElementById('homeDashboard').click();
+  for (let i = 0; i < 40 && !F.calls.tabsCreated.length; i++) await settle(25);
+  assert.match(F.calls.tabsCreated.at(-1)?.url || '', /dashboard\.html#home$/);
+  assert.equal(await savedUrl(video.url), null, 'Open dashboard skips saving');
+});
+
+test('popup: Lifestyle, then Videos, then a tidier title, then Save', async () => {
+  await openPopup(video);
+  page.getElementById('libLifestyle').click();
+  assert.ok(shown('homeGroups'));
+  assert.ok(tileNamed('Videos').classList.contains('is-guess'));
+  tileNamed('Videos').click();
+  await until('state-product');
+  assert.ok(page.getElementById('state-product').classList.contains('quick'), 'the quick step');
+  assert.equal(page.getElementById('quickDest').textContent, 'Videos');
+  assert.ok(page.querySelector('.price-row').classList.contains('hidden'), 'no price for a video');
+  page.getElementById('titleInput').value = 'Cold opens';
+  page.getElementById('saveBtn').click();
+  await until('state-saved');
   assert.equal(page.getElementById('savedMove').value, 'kind:video');
-  assert.deepEqual([...page.querySelectorAll('#savedMove optgroup')].map((g) => g.label), ['Lifestyle', 'Collections'], 'any Lifestyle view or collection');
   assert.ok(visible('savedUndo'));
+  const saved = await savedUrl(video.url);
+  assert.deepEqual([saved.kind, saved.title], ['video', 'Cold opens']);
 });
 
 test('popup: opening it again on a saved video shows that save, not the duplicate preview', async () => {
@@ -80,27 +117,44 @@ test('popup: opening it again on a saved video shows that save, not the duplicat
   assert.match(F.calls.tabsCreated.at(-1)?.url || '', /dashboard\.html#kind\/video$/, 'Open in dashboard goes to Videos, not Review');
 });
 
-test('popup: the preview for a video picks its Lifestyle view, and shows no price', async () => {
-  // A preview is shown after Undo on a save made straight away.
-  const fresh = { ...video, title: 'Another sketch', url: 'https://www.youtube.com/watch?v=popup2' };
-  await openPopup(fresh);
+test('popup: Not sure goes to Review, and Undo comes back to the start', async () => {
+  const page2 = { title: 'Some notes', url: 'https://notes.example/popup-review', images: [], image: '', price: null, schemaTypes: [] };
+  await openPopup(page2);
+  page.getElementById('pickReview').click();
+  await until('state-product');
+  assert.equal(page.getElementById('quickDest').textContent, 'Review');
+  page.getElementById('saveBtn').click();
+  await until('state-saved');
+  const saved = await savedUrl(page2.url);
+  assert.deepEqual([saved.collectionId, saved.needsReview], [null, true]);
   page.getElementById('savedUndo').click();
-  await settle(150);
-  await ready();
-  const sel = page.getElementById('collectionSelect');
-  assert.equal(sel.value, 'kind:video', 'Videos is picked');
-  assert.ok([...sel.querySelectorAll('optgroup')].some((g) => g.label === 'Lifestyle'));
-  assert.ok(page.querySelector('.price-row').classList.contains('hidden'), 'no price for a video');
+  await until('state-home');
+  assert.equal(await savedUrl(page2.url), null, 'undone');
 });
 
-test('popup: a product page still shows its price in the preview', async () => {
+test('popup: a new collection is named in the quick step', async () => {
+  const mug = { title: 'Speckled mug', url: 'https://shop.example/mug-popup', price: 18, priceText: '$18.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] };
+  await openPopup(mug);
+  page.getElementById('libCollections').click();
+  tileNamed('New collection').click();
+  await until('state-product');
+  assert.ok(shown('newCollectionRow'));
+  page.getElementById('newCollectionInput').value = 'Pottery shelf';
+  page.getElementById('saveBtn').click();
+  await until('state-saved');
+  const saved = await savedUrl(mug.url);
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const col = await createStore(chromeBackend(), idbBackend()).getCollection(saved.collectionId);
+  assert.equal(col.name, 'Pottery shelf');
+});
+
+test('popup: a product page still shows its price under Price, picture and note', async () => {
   const lamp = { title: 'Lamp', url: 'https://shop.example/lamp-popup', price: 12, priceText: '$12.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] };
   await openPopup(lamp);
-  if (page.getElementById('savedUndo') && visible('savedUndo')) {
-    page.getElementById('savedUndo').click();
-    await settle(150);
-    await ready();
-  }
+  page.getElementById('pickReview').click();
+  await until('state-product');
+  page.getElementById('moreDetails').click();
+  assert.ok(!page.getElementById('state-product').classList.contains('quick'));
   assert.ok(!page.querySelector('.price-row').classList.contains('hidden'));
   assert.equal(page.getElementById('priceInput').value, '12');
 });
@@ -109,28 +163,28 @@ test('popup: a saved post moved into Places becomes a place named from its capti
   const post = { title: 'nyceats on Instagram: "Best donuts in the city"', url: 'https://www.instagram.com/reel/donut1/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
     description: '1,234 likes - nyceats: "Best donuts in the city 🍩 Try the glazed. #nyc"' };
   await openPopup(post);
-  // Keepsake wasn't sure, so it shows the preview: pick Places from the Lifestyle group and save.
-  const sel = page.getElementById('collectionSelect');
-  assert.ok(!page.getElementById('state-product').classList.contains('hidden'), 'the preview');
-  sel.value = 'kind:place';
-  sel.dispatchEvent(new window.Event('change'));
-  assert.ok(page.querySelector('.price-row').classList.contains('hidden'), 'no price for a place');
+  page.getElementById('libLifestyle').click();
+  tileNamed('Places').click();
+  await until('state-product');
   page.getElementById('saveBtn').click();
-  for (let i = 0; i < 60 && page.getElementById('state-saved')?.classList.contains('hidden') !== false; i++) await settle(25);
+  await until('state-saved');
   assert.equal(page.getElementById('savedMove').value, 'kind:place');
-  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
-  const store = createStore(chromeBackend(), idbBackend());
-  const saved = await store.findByUrl(post.url);
+  const saved = await savedUrl(post.url);
   assert.deepEqual([saved.kind, saved.collectionId, saved.needsReview], ['place', null, false]);
 });
 
-test('popup: an Instagram post with 📍 in its caption is saved as a place, named from it', async () => {
+test('popup: an Instagram post with 📍 in its caption is guessed as a place, named from it', async () => {
   const post = { title: 'nyceats on Instagram: "Glazed heaven"', url: 'https://www.instagram.com/reel/donut2/', isInstagram: true, images: [], image: '', price: null, schemaTypes: [],
     description: '987 likes - nyceats: "Glazed heaven 🍩\n📍 Peter Pan Donut & Pastry Shop, Greenpoint\n#nycfood"' };
   await openPopup(post);
+  assert.match(page.getElementById('homeGuess').textContent, /Places/);
+  page.getElementById('libLifestyle').click();
+  page.querySelector('#groupGrid .group.is-guess').click();
+  await until('state-product');
+  page.getElementById('saveBtn').click();
+  await until('state-saved');
   assert.equal(page.getElementById('savedMove').value, 'kind:place');
-  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
-  const saved = await createStore(chromeBackend(), idbBackend()).findByUrl(post.url);
+  const saved = await savedUrl(post.url);
   assert.deepEqual([saved.kind, saved.title, saved.details.locality], ['place', 'Peter Pan Donut & Pastry Shop', 'Greenpoint']);
 });
 

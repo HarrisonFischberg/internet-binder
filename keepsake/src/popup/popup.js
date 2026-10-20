@@ -1,15 +1,17 @@
 // Keepsake toolbar popup.
-// Reads the active tab on demand (activeTab + scripting), previews the local
-// classification, lets the user adjust anything, and saves through the
-// background worker. Nothing here touches the network.
+// Reads the active tab on demand (activeTab + scripting). Opening it never saves: it offers the
+// dashboard, then asks where the page lives (Collections, Lifestyle or Review, as the iPhone share
+// sheet does), then lets you tidy the title before Save. Saves go through the background worker.
+// Nothing here touches the network.
 
 import { createStore, chromeBackend, idbBackend, applyLook } from '../shared/storage.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
 import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
-import { learnFromCorrection, nearMatchCollection, AUTO_FILE_CONFIDENCE } from '../shared/categorizer.js';
+import { learnFromCorrection, nearMatchCollection } from '../shared/categorizer.js';
 import { followColorScheme, setActionIcon } from '../toolbar/icon.js';
+import { kindIcon } from '../shared/kindIcon.js';
 import { hasInstagramAccess, requestInstagramAccess, instagramAccessHelp } from '../instagram/enrich.js';
 
 const store = createStore(chromeBackend(), idbBackend());
@@ -37,15 +39,17 @@ const state = {
   userOverride: false,
   savedItem: null,
   savedMode: 'saved', // saved | updated | existing (a video, recipe… already saved: shown, not saved again)
-  instant: false, // saved straight away (AI, or a confident local pick), without the preview
+  initialChoice: '', // the picker value for Keepsake's own guess
+  items: [],
   ig: null,
   igScanListener: null,
 };
 
-const STATES = ['state-loading', 'state-restricted', 'state-instagram', 'state-product', 'state-saved'];
+const STATES = ['state-loading', 'state-restricted', 'state-instagram', 'state-home', 'state-product', 'state-saved'];
 function show(id) {
   for (const s of STATES) $(s).classList.toggle('hidden', s !== id);
   $('state-loading').setAttribute('aria-busy', id === 'state-loading' ? 'true' : 'false');
+  document.body.dataset.state = id;
   // The title box can only be measured once its section is visible; sized while
   // hidden it collapsed to 2px.
   if (id === 'state-product') autosize($('titleInput'));
@@ -133,53 +137,148 @@ async function loadProduct() {
     showSaved(existing, existing.collectionId ? state.collections.find((c) => c.id === existing.collectionId) || null : null);
     return;
   }
-  if (!existing) {
-    if (await instantSaveOn()) {
-      if (await instantSave({ label: 'Saving…', instant: true })) return;
-    } else {
-      const cls = await send({ type: MSG.CLASSIFY, product: state.product });
-      const c = cls.ok ? cls.classification : null;
-      if (c && !c.isInbox && c.confidence >= AUTO_FILE_CONFIDENCE && await instantSave({ label: 'Saving…', classification: c })) return;
-    }
-  }
-  await showPreview();
-}
-
-// With AI on (and a key saved), the popup always saves straight away with the local result;
-// the background worker then tidies the title and may re-file it ("Finishing details…").
-async function instantSaveOn() {
-  try {
-    const settings = await store.getSettings();
-    return !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
-  } catch {
-    return false;
-  }
-}
-
-async function instantSave({ label, classification = null, instant = false }) {
-  $('loadingText').textContent = label;
-  const res = await send({ type: MSG.SAVE_ITEM, product: state.product, source: 'toolbar', classification, instant });
-  if (!res.ok || res.duplicate) return false;
-  state.instant = true;
-  state.collections = await store.getCollections().catch(() => state.collections); // may include one the save just created
-  state.savedItem = res.item;
-  state.savedMode = 'saved';
-  showSaved(res.item, res.collection, res.classification);
-  return true;
-}
-
-// The editable preview: shown normally, for pages already saved, and after undoing an instant save.
-async function showPreview() {
-  $('loadingText').textContent = 'Looking at this page…';
-  show('state-loading');
-  const [cls, dup] = await Promise.all([
+  const [cls, items] = await Promise.all([
     send({ type: MSG.CLASSIFY, product: state.product }),
-    store.findByUrl(state.product.canonicalUrl || state.product.url).catch(() => null),
+    store.getItems().catch(() => []),
   ]);
   state.classification = cls.ok ? cls.classification : { collectionId: null, collectionName: 'Review', confidence: 0, reason: '', isInbox: true, isNew: false };
-  state.duplicate = dup;
+  state.duplicate = existing;
+  state.items = items;
   renderProduct();
+  showHome();
+}
+
+// --- home: the dashboard, or where this page lives ----------------------------------------------------
+// Opening Keepsake never saves. Open dashboard is one tap; saving is: pick a library (Collections or
+// Lifestyle), pick a group in it (or start a collection), tidy the title, Save. Or "Not sure? Put it in
+// Review". Keepsake's own guess is ticked at each step, as on the iPhone share sheet.
+
+const tintOf = (kind) => `var(--c-kind-${kind === 'media' ? 'film' : kind}-fill, var(--c-surface-2))`;
+
+// The library a picker value belongs to: a Lifestyle view, a collection, or neither (Review).
+function shelfOf(value) {
+  if (!value) return null;
+  return value.startsWith('kind:') ? 'lifestyle' : 'collections';
+}
+
+function choiceLabel(value) {
+  if (!value) return 'Review';
+  if (value.startsWith('kind:')) return kindInfo(value.slice(5)).plural;
+  if (value.startsWith('new:')) return state.classification.collectionName;
+  if (value === '__new') return 'A new collection';
+  return state.collections.find((c) => c.id === value)?.name || 'Review';
+}
+
+function pageKind() {
+  const cls = state.classification;
+  if (cls.shelf) return cls.shelf;
+  return state.product.price !== null && state.product.price !== undefined && state.product.price !== '' ? 'product' : 'link';
+}
+
+function showHome(shelf = null) {
+  const p = state.product;
+  const all = state.items;
+  const toSort = all.filter((it) => it.needsReview).length;
+  $('homeCounts').textContent = all.length ? [pluralize(all.length, 'save', 'saves'), toSort ? `${toSort} to sort` : ''].filter(Boolean).join(' · ') : '';
+
+  const kind = pageKind();
+  const thumb = $('homeThumb');
+  clear(thumb);
+  thumb.style.setProperty('--tint', tintOf(kind));
+  if (state.chosenImage) {
+    thumb.append(el('img', { src: state.chosenImage, alt: '', onError: () => { clear(thumb); thumb.append(kindIcon(kind)); } }));
+  } else thumb.append(kindIcon(kind));
+  $('homeTitle').textContent = p.title || p.host || '';
+  $('homeHost').textContent = p.retailer || p.host || '';
+
+  const dup = state.duplicate;
+  const dupCol = dup && dup.collectionId ? state.collections.find((c) => c.id === dup.collectionId) : null;
+  $('homeAlready').textContent = dup ? `Already saved${dupCol ? ` in ${dupCol.name}` : ''}. Pick a place to update it or save a copy.` : '';
+  $('homeAlready').classList.toggle('hidden', !dup);
+
+  // Keepsake's guess, said once and ticked on its library.
+  const initial = state.initialChoice;
+  const cls = state.classification;
+  const guess = $('homeGuess');
+  clear(guess);
+  if (initial) guess.append('Keepsake thinks ', el('strong', {}, [choiceLabel(initial)]), '.');
+  else if (cls.suggested?.collectionName) guess.append('Keepsake isn’t sure. Maybe ', el('strong', {}, [cls.suggested.collectionName]), '?');
+  else guess.append('Keepsake isn’t sure yet.');
+  for (const [id, which] of [['libCollections', 'collections'], ['libLifestyle', 'lifestyle']]) {
+    const card = $(id);
+    const mine = shelfOf(initial) === which;
+    card.classList.toggle('is-guess', mine);
+    card.querySelector('.library-caption').textContent = mine ? choiceLabel(initial) : which === 'collections' ? 'Things to buy' : 'Recipes, places & more';
+    card.querySelector('.library-count').textContent = which === 'collections'
+      ? pluralize(state.collections.length, 'collection', 'collections')
+      : pluralize(LIFESTYLE().length, 'kind', 'kinds');
+    card.setAttribute('aria-label', `${which === 'collections' ? 'Collections' : 'Lifestyle'}${mine ? `, Keepsake thinks ${choiceLabel(initial)}` : ''}`);
+    card.onclick = () => openShelf(which);
+  }
+  $('pickReview').onclick = () => pick('');
+  $('groupsBack').onclick = () => showHome();
+  $('homeDashboard').onclick = () => openDashboard('#home');
+
+  $('homeLibraries').classList.remove('hidden');
+  $('homeGroups').classList.add('hidden');
+  show('state-home');
+  if (shelf) openShelf(shelf);
+  else setTimeout(() => $('homeDashboard').focus(), 30);
+}
+
+// One library's groups: Lifestyle's views, or your collections (plus a new one).
+function openShelf(shelf) {
+  const lifestyle = shelf === 'lifestyle';
+  const cls = state.classification;
+  $('groupsTitle').textContent = lifestyle ? 'Lifestyle' : 'Collections';
+  $('groupsSub').textContent = lifestyle ? 'Pick the view it belongs in.' : 'Pick a collection, or start one.';
+  const grid = $('groupGrid');
+  clear(grid);
+  const tile = (value, title, sub, icon, tint, extra = '') => {
+    const guess = value === state.initialChoice && value !== '__new';
+    const node = el('button', {
+      type: 'button', class: `group ${extra} ${guess ? 'is-guess' : ''}`.trim(),
+      'aria-label': `${title}${guess ? ', Keepsake’s guess' : ''}`, onClick: () => pick(value),
+    }, [el('span', { class: 'group-icon', 'aria-hidden': 'true' }, [icon]), el('span', { class: 'group-title' }, [title]), sub ? el('span', { class: 'group-sub' }, [sub]) : null]);
+    node.style.setProperty('--tint', tint);
+    return node;
+  };
+  const saves = (n) => (n ? pluralize(n, 'save', 'saves') : 'Empty');
+  if (lifestyle) {
+    for (const k of LIFESTYLE()) grid.append(tile(`kind:${k.value}`, k.plural, saves(state.items.filter((it) => kindOf(it) === k.value && !it.collectionId).length), kindIcon(k.value), tintOf(k.value)));
+  } else {
+    grid.append(tile('__new', 'New collection', 'Name it next', plusIcon(), 'transparent', 'group-new'));
+    if (cls.isNew && cls.taxonomyKey) grid.append(tile(`new:${cls.taxonomyKey}`, cls.collectionName, 'New', kindIcon('product'), tintOf('product')));
+    for (const c of state.collections) grid.append(tile(c.id, c.name, saves(state.items.filter((it) => it.collectionId === c.id).length), kindIcon('product'), tintOf('product')));
+  }
+  $('homeLibraries').classList.add('hidden');
+  $('homeGroups').classList.remove('hidden');
+  setTimeout(() => (grid.querySelector('.is-guess') || $('groupsBack')).focus(), 30);
+}
+
+function plusIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.4', 'stroke-linecap': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v);
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', 'M12 5v14M5 12h14');
+  svg.append(path);
+  return svg;
+}
+
+// A place picked: the quick step says where it's going and offers the title to tidy before Save.
+function pick(value) {
+  const sel = $('collectionSelect');
+  if (!value && !sel.querySelector('option[value=""]')) sel.prepend(el('option', { value: '', text: 'Not sure yet (leave it in Review)' }));
+  sel.value = value;
+  sel.onchange();
+  $('quickDest').textContent = choiceLabel(value);
+  $('state-product').classList.add('quick');
   show('state-product');
+  setTimeout(() => {
+    const field = value === '__new' ? $('newCollectionInput') : $('titleInput');
+    field.focus();
+    if (field === $('titleInput')) field.setSelectionRange(field.value.length, field.value.length);
+  }, 30);
 }
 
 function renderProduct() {
@@ -196,6 +295,13 @@ function renderProduct() {
   title.value = p.title || '';
   autosize(title);
   title.addEventListener('input', () => autosize(title));
+  title.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && $('state-product').classList.contains('quick')) {
+      e.preventDefault();
+      if (state.duplicate) return;
+      save({ force: false });
+    }
+  });
   $('heroInitial').textContent = (p.title || p.host || 'K').trim().charAt(0).toUpperCase() || 'K';
 
   // Price: only for products (a number on a video or recipe page is never its price).
@@ -253,6 +359,11 @@ function renderProduct() {
     state.userOverride = false;
     updateConfidencePill();
   });
+  $('quickChange').addEventListener('click', () => showHome(shelfOf($('collectionSelect').value)));
+  $('moreDetails').addEventListener('click', () => {
+    $('state-product').classList.remove('quick');
+    autosize($('titleInput'));
+  });
   $('newCollectionInput').addEventListener('input', () => $('nearMatchRow').classList.add('hidden'));
   $('newCollectionInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -260,7 +371,6 @@ function renderProduct() {
       save({ force: !!state.duplicate });
     }
   });
-  setTimeout(() => $('saveBtn').focus(), 30);
 }
 
 function setHeroImage(src) {
@@ -300,6 +410,7 @@ function renderCollectionPicker() {
   cols.append(el('option', { value: '__new', text: '＋ New collection…' }));
   sel.append(cols);
   const initial = cls.shelf ? `kind:${cls.shelf}` : cls.isNew ? `new:${cls.taxonomyKey}` : cls.collectionId || '';
+  state.initialChoice = initial;
   sel.value = initial;
   if (sel.value !== initial) sel.value = sel.options[0]?.value || '';
   sel.onchange = () => {
@@ -460,10 +571,12 @@ async function save({ force }) {
       chosen = null;
     }
     const note = sanitizeText($('noteInput').value, 1000);
+    // Not sure: it waits in Review, where Keepsake suggests a home later.
+    const review = chosen === '';
     const res = await send({
       type: MSG.SAVE_ITEM, product, force, note, source: 'toolbar',
-      collectionId: state.userOverride ? chosen : null,
-      classification: state.userOverride ? null : state.classification,
+      collectionId: state.userOverride && !review ? chosen : null,
+      classification: review ? { ...state.classification, collectionId: null, collectionName: 'Review', taxonomyKey: null, isNew: false, isInbox: true, shelf: null } : state.userOverride ? null : state.classification,
       learn: 'light',
     });
     if (!res.ok) throw new Error(res.error || 'Could not save.');
@@ -552,14 +665,9 @@ function showSaved(item, collection, classification = null) {
     $('savedUndo').disabled = true;
     await send({ type: MSG.UNDO_SAVE, itemId: item.id });
     state.duplicate = null;
-    if (state.instant) {
-      // Nothing was previewed yet: undoing an instant save opens the editable preview instead.
-      state.instant = false;
-      await showPreview();
-    } else {
-      renderDuplicate();
-      show('state-product');
-    }
+    renderDuplicate();
+    state.items = state.items.filter((it) => it.id !== item.id);
+    showHome();
     $('savedUndo').disabled = false;
   };
   // Show the item where it landed: its collection, or Review if it wasn't filed.
