@@ -1,5 +1,7 @@
 import Foundation
 import JavaScriptCore
+import ImageIO
+import UniformTypeIdentifiers
 
 public enum CoreError: Error, LocalizedError, Equatable {
     /// The shared code threw; the message is written for people (storage.js copy).
@@ -57,6 +59,8 @@ public final class KeepsakeCore: @unchecked Sendable {
         let clearTimeout: @convention(block) (Int) -> Void = { [unowned self] id in self.timers.removeValue(forKey: id)?.cancel() }
         native.setObject(clearTimeout, forKeyedSubscript: "clearTimeout" as NSString)
         native.setObject(networkBridge(), forKeyedSubscript: "fetch" as NSString)
+        native.setObject(pageBridge(), forKeyedSubscript: "fetchPage" as NSString)
+        native.setObject(imageBridge(), forKeyedSubscript: "loadImage" as NSString)
         native.setObject(recordBridge(in: ctx), forKeyedSubscript: "db" as NSString)
         native.setObject(settingsBridge(in: ctx), forKeyedSubscript: "kv" as NSString)
         ctx.setObject(native, forKeyedSubscript: "__native" as NSString)
@@ -101,6 +105,66 @@ public final class KeepsakeCore: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    /// Optional AI is on and a key is set: the only time the two readers below may go out.
+    private func aiOn() -> Bool {
+        let settings = ((try? database.settings(["keepsake_settings"]))?["keepsake_settings"] as? [String: Any]) ?? [:]
+        let secrets = ((try? database.settings([RecordDatabase.secretsKey]))?[RecordDatabase.secretsKey] as? [String: Any]) ?? [:]
+        return (settings["ai"] as? [String: Any])?["on"] as? Bool == true && !((secrets["aiApiKey"] as? String) ?? "").isEmpty
+    }
+
+    /// One GET of a public https page or picture, without cookies, for Optional AI (understand.js): the shop
+    /// page your provider's web search found for a product, or the picture a card already shows.
+    private func readOnce(_ urlString: String, accept: String, limit: Int, done: @escaping @Sendable (Data?) -> Void) {
+        guard aiOn(), let url = URL(string: urlString), url.scheme == "https", url.host() != nil else { done(nil); return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.httpShouldHandleCookies = false
+        request.timeoutInterval = 15
+        request.setValue(accept, forHTTPHeaderField: "Accept")
+        let transport = transport
+        Task {
+            let result = try? await transport.send(request)
+            done(result.flatMap { (200..<300).contains($0.status) && $0.body.count <= limit ? $0.body : nil })
+        }
+    }
+
+    /// __native.fetchPage(url, done(html | null)).
+    private func pageBridge() -> @convention(block) (String, JSValue) -> Void {
+        return { [unowned self] url, done in
+            let callback = JSBox(done)
+            self.readOnce(url, accept: "text/html,application/xhtml+xml", limit: 3_000_000) { data in
+                let html = data.map { String(decoding: $0, as: UTF8.self) }
+                self.queue.async { callback.value.call(withArguments: [html ?? NSNull()]) }
+            }
+        }
+    }
+
+    /// __native.loadImage(url, done(dataURL | null)): a JPEG of at most 640 px, made on this device.
+    private func imageBridge() -> @convention(block) (String, JSValue) -> Void {
+        return { [unowned self] url, done in
+            let callback = JSBox(done)
+            self.readOnce(url, accept: "image/*", limit: 15_000_000) { data in
+                let small = data.flatMap(KeepsakeCore.thumbnailDataURL)
+                self.queue.async { callback.value.call(withArguments: [small ?? NSNull()]) }
+            }
+        }
+    }
+
+    static func thumbnailDataURL(_ data: Data) -> String? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 640,
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return "data:image/jpeg;base64," + (out as Data).base64EncodedString()
     }
 
     private func recordBridge(in ctx: JSContext) -> JSValue {

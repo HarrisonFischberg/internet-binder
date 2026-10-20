@@ -6,6 +6,8 @@ import KeepsakeUI
 /// ("2 of 3 this week · week 1 of 4"). No streaks, no guilt: a short week reads neutrally.
 struct GoalCard: View {
     let goal: GoalView
+    /// "Remove goal", for a goal made by mistake (the screen offers Undo).
+    var onRemove: (() -> Void)? = nil
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
 
@@ -26,6 +28,18 @@ struct GoalCard: View {
                     Text("Goal").font(KSFont.label).foregroundStyle(workout)
                     Text(goal.progress.summary).font(KSFont.name(.headline)).foregroundStyle(t.ink)
                     if let note = goal.progress.lastWeekNote, !note.isEmpty { Text(note).font(.footnote).foregroundStyle(t.inkMuted) }
+                }
+                Spacer(minLength: 0)
+                if let onRemove {
+                    Menu {
+                        Button("Remove goal", systemImage: "trash", role: .destructive, action: onRemove)
+                    } label: {
+                        Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(t.inkMuted)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Goal options")
+                    .accessibilityIdentifier("goal-options")
                 }
             }
             if let strip = goal.progress.strip {

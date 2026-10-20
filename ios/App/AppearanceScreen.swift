@@ -3,7 +3,7 @@ import KeepsakeKit
 import KeepsakeUI
 
 /// Appearance, opened from the palette button on Home (and the iPad sidebar): light or dark, the
-/// style, the app icon, then cards and feel. The sheet itself wears the chosen style, so a change
+/// style, the app icon, then feel. The sheet itself wears the chosen style, so a change
 /// shows at once.
 struct AppearanceSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -46,13 +46,6 @@ struct AppearanceScreen: View {
                         }
                     }
                     section("App icon") { IconPicker() }
-                    section("Cards") {
-                        Picker("Density", selection: $model.appearance.density) {
-                            Text("Comfortable").tag("comfortable")
-                            Text("Compact").tag("compact")
-                        }
-                        .pickerStyle(.segmented)
-                    }
                     section("Feel") {
                         VStack(spacing: 0) {
                             Toggle("Haptics", isOn: $model.appearance.haptics).frame(minHeight: 44)
@@ -102,7 +95,6 @@ struct StyleCard: View {
     let chosen: Bool
     let action: () -> Void
     @Environment(\.ks) private var t
-    @Environment(\.appearance) private var look
 
     var body: some View {
         Button(action: action) {
@@ -144,7 +136,7 @@ struct StyleCard: View {
                 Text("Your saves will show here.").font(.footnote).foregroundStyle(theme.inkMuted)
             }
             ForEach(saves) { save in
-                SaveObject(save).frame(width: 132).allowsHitTesting(false)
+                SaveObject(save, compact: true).frame(width: 132).allowsHitTesting(false)
             }
             Spacer(minLength: 0)
         }
@@ -153,7 +145,6 @@ struct StyleCard: View {
         .clipped()
         .background { TableBackground() }
         .environment(\.ks, theme)
-        .environment(\.appearance, { var a = look; a.density = "compact"; return a }())
         .accessibilityHidden(true)
     }
 
@@ -174,7 +165,7 @@ struct IconPicker: View {
     @State private var current = UIApplication.shared.alternateIconName
     @Environment(\.ks) private var t
     static let icons: [(name: String?, label: String)] = [
-        (nil, "Pantry Pop"), ("AppIconNotebook", "Field Notebook"), ("AppIconGallery", "Gallery"),
+        (nil, "Pantry Pop"), ("AppIconNotebook", "Field Notebook"),
         ("AppIconAtlas", "Night Atlas"), ("AppIconSwiss", "Swiss Index"),
     ]
     var body: some View {
@@ -210,7 +201,7 @@ struct IconPicker: View {
         }
     }
 
-    /// The felt pocket icons are gone: anyone still on one goes back to the app's own icon.
+    /// The felt pocket and Gallery icons are gone: anyone still on one goes back to the app's own icon.
     @MainActor static func retireOldIcons() {
         guard let name = UIApplication.shared.alternateIconName, !icons.contains(where: { $0.name == name }) else { return }
         UIApplication.shared.setAlternateIconName(nil)

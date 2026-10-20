@@ -26,7 +26,7 @@ final class LibraryModel {
     var toast: Toast?
     /// "🎉 Cooked!": a moment in the middle of the screen when a stamp lands.
     var celebration: Toast?
-    /// Theme, density, cards, haptics and sound (Settings → Appearance), shared with the extensions.
+    /// Theme, mode, haptics and sound (Settings → Appearance), shared with the extensions.
     var appearance = LibraryModel.startingAppearance() {
         didSet {
             appearance.save()
@@ -37,6 +37,15 @@ final class LibraryModel {
     var opening: (stack: String, id: String)?
     /// ⌘F on iPad: focus the Library's search.
     var focusSearch = false
+    /// Optional AI is on with a key: the Fix with AI buttons show.
+    private(set) var aiReady = false
+    /// A Fix with AI run in progress (one save, a collection, a Lifestyle view or everything).
+    var aiRun: AIRun?
+    struct AIRun: Equatable {
+        var done: Int
+        let total: Int
+        var stopping = false
+    }
     let library: Library?
 
     struct Toast: Identifiable, Equatable {
@@ -85,6 +94,7 @@ final class LibraryModel {
                 }
                 #endif
                 finishSaves()
+                await refreshAIReady()
             } catch {
                 problem = error.localizedDescription
             }
@@ -131,6 +141,11 @@ final class LibraryModel {
             try? await library.finishSaves()
             refresh()
         }
+    }
+
+    /// Whether the Fix with AI buttons show (after Settings turns Optional AI on or off, or a key changes).
+    func refreshAIReady() async {
+        aiReady = await library?.aiReady() ?? false
     }
 
     /// Rewrites the widgets' snapshot and asks WidgetKit to redraw them.

@@ -18,7 +18,7 @@ import { guessTopics } from './src/shared/topics.js';
 import { normalizeProduct, captureFacts, classifyCapture, saveCapture, FILLED_KINDS } from './src/shared/capture.js';
 import { fillSave, tidySave } from './src/shared/fill.js';
 import { understandItem } from './src/shared/understand.js';
-import { fetchPage } from './src/ai/pages.js';
+import { fetchPage, loadImage } from './src/ai/pages.js';
 import { placeNamed, placeReviewReasons, stateCode } from './src/shared/places.js';
 import { restoreActionIcon } from './src/toolbar/icon.js';
 
@@ -213,12 +213,12 @@ async function fillKind(id, opts = {}) {
   };
   if (opts.understand) {
     try {
-      await understandItem(store, id, { force: !!opts.force }, { fetchPage });
+      await understandItem(store, id, { force: !!opts.force }, { fetchPage, loadImage });
     } catch {
       /* the provider didn't answer: the save stays as it was */
     }
   }
-  return fillSave(store, id, opts, { fetchFn: fetch, allowed: lookupAllowed, waitTurn, fetchPage });
+  return fillSave(store, id, opts, { fetchFn: fetch, allowed: lookupAllowed, waitTurn, fetchPage, loadImage });
 }
 
 // --- after the save: optional AI tidy ---------------------------------------------------------------
@@ -244,7 +244,7 @@ async function enrichPending() {
 // Your provider works out what the save is first (src/shared/understand.js); a save that turns out to be
 // a place, recipe, workout, film or book then gets its Lifestyle fill-in (Lookups for a place's pin).
 async function enrichItem(id) {
-  const res = await tidySave(store, id, { fetchPage });
+  const res = await tidySave(store, id, { fetchPage, loadImage });
   if (res && FILLED_KINDS.includes(res.kind)) queueFill(id);
   return res;
 }

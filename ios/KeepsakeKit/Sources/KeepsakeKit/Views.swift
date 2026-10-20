@@ -179,6 +179,11 @@ extension Library {
     }
 
     public func undoCheckIn(_ id: String) async throws { try await core.call("store.removeCheckin", [id]) }
+
+    /// Removes a goal. It and its check-ins stay in the trash for a while, so Undo can bring it back.
+    public func removeGoal(_ id: String) async throws { try await core.call("store.deleteGoal", [id]) }
+
+    public func restoreGoal(_ id: String) async throws { try await core.call("store.restoreGoal", [id]) }
 }
 
 /// What the widgets read (written by the app to the App Group; the widget never runs the shared code).
@@ -240,11 +245,13 @@ public struct AIChange: Decodable, Sendable, Identifiable {
     public let undone: Bool
 }
 
-/// What Fix with AI did to saves in Review.
+/// What Fix with AI did to the saves it read.
 public struct AIFixReport: Decodable, Sendable {
     public struct Filed: Decodable, Sendable { public let id: String; public let collection: String }
     public let checked: Int
     public let changed: Int
+    /// Things to buy your provider named and filled in from their picture and shop page.
+    public let products: Int?
     public let filed: [Filed]
     public let error: String
     /// The AI change log entries it wrote, for Undo.
@@ -259,7 +266,8 @@ extension Library {
     @discardableResult public func undoAI(_ ids: [String]) async throws -> Int { try await core.call("views.undoAi", [ids], as: Int.self) }
     /// Optional AI is on and a key is set.
     public func aiReady() async -> Bool { (try? await core.call("views.aiReady") as? Bool) ?? false }
-    /// Chrome's Fix with AI for saves in Review: files the ones the AI is confident about.
+    /// Chrome's Fix with AI for any saves: reads each again (a product from its picture and shop page) and
+    /// files the ones in Review the AI is confident about.
     public func fixWithAI(_ ids: [String]) async throws -> AIFixReport { try await prepare(); return try await core.call("views.fixWithAI", [ids], as: AIFixReport.self) }
     public func testAI() async throws { try await core.call("views.testAi") }
     public func suggestions(for id: String) async throws -> ReviewSuggestions { try await core.call("views.suggestions", [id], as: ReviewSuggestions.self) }

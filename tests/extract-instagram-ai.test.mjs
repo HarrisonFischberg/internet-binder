@@ -92,7 +92,7 @@ test('instagram: titles from captions', () => {
 });
 
 // --- Optional AI boundary --------------------------------------------------------------------
-const { cleanupWithAI, findProductOnline, describePayload, originFor } = await import('../keepsake/src/ai/provider.js');
+const { cleanupWithAI, findProductOnline, describePayload, originFor, providerConfig, MODELS } = await import('../keepsake/src/ai/provider.js');
 
 function fakeFetch(reply) {
   const calls = [];
@@ -292,4 +292,21 @@ test('instagram: a post’s location tag keeps its street, city and pin', () => 
     location: { id: '2', name: 'Example Diner', address_json: '{"street_address":"1 Main St","zip_code":"10001","city_name":"New York","region_name":"NY"}' } } });
   const e = parsePostHtml(`<html><body><script type="application/json">${old}</script></body></html>`, 'https://www.instagram.com/p/LOCTAG456/');
   assert.deepEqual([e.place.address, e.place.city, e.place.region, e.place.postalCode, e.place.lat], ['1 Main St', 'New York', 'NY', '10001', null]);
+});
+
+test('AI models: Claude Haiku 5.5 at medium effort is the default, and effort only goes to listed Claude models', async () => {
+  assert.deepEqual(providerConfig({ ai: {} }), { provider: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-haiku-5-5', effort: 'medium' });
+  assert.equal(providerConfig({ ai: { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high' } }).effort, 'high');
+  assert.equal(providerConfig({ ai: { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'bogus' } }).effort, 'medium');
+  assert.equal(providerConfig({ ai: { provider: 'anthropic', model: 'claude-haiku-4-5' } }).effort, '', 'a typed-in older model gets no effort');
+  assert.equal(providerConfig({ ai: { provider: 'openai' } }).effort, '');
+  assert.deepEqual(MODELS.anthropic.map((m) => m.id), ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-1']);
+  const { fn, calls } = fakeFetch({ content: [{ type: 'text', text: '{"items":[]}' }] });
+  globalThis.fetch = fn;
+  await cleanupWithAI([{ ref: 'a', item: { title: 't' } }], cols, { ai: { on: true, provider: 'anthropic' } }, 'k');
+  assert.equal(calls[0].body.model, 'claude-haiku-5-5');
+  assert.deepEqual(calls[0].body.output_config, { effort: 'medium' });
+  assert.ok(calls[0].body.max_tokens > 8000, 'room for thinking on top of the answer');
+  await cleanupWithAI([{ ref: 'a', item: { title: 't' } }], cols, anthropic, 'k');
+  assert.equal(calls[1].body.output_config, undefined);
 });
