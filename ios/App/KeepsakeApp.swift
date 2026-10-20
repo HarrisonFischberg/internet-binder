@@ -26,7 +26,7 @@ final class LibraryModel {
     var toast: Toast?
     /// "🎉 Cooked!": a moment in the middle of the screen when a stamp lands.
     var celebration: Toast?
-    /// Theme, density, cards, haptics and sound (Settings → Appearance), shared with the extensions.
+    /// Theme, mode, haptics and sound (Settings → Appearance), shared with the extensions.
     var appearance = LibraryModel.startingAppearance() {
         didSet {
             appearance.save()
