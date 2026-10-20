@@ -208,7 +208,7 @@ test('understandItem: a post of a product is read from its picture, searched, an
     ] }) };
   };
   const pictures = [];
-  const r = await understandItem(store, it.id, { runId: 'p' }, { fetchPage: async (u) => (u === 'https://bathhaus.example/caddy' ? SHOP : null), loadImage: async (u) => { pictures.push(u); return 'data:image/jpeg;base64,QUJD'; } });
+  const r = await understandItem(store, it.id, { runId: 'p' }, { fetchShopPage: async (u) => (u === 'https://bathhaus.example/caddy' ? SHOP : null), loadImage: async (u) => { pictures.push(u); return 'data:image/jpeg;base64,QUJD'; } });
   assert.deepEqual([r.kind, r.changed], ['product', true]);
   assert.equal(bodies.length, 2, 'what it is, then the product with web search');
   assert.equal(bodies[0].messages[0].content[0].type, 'image', 'the picture goes to the first read');

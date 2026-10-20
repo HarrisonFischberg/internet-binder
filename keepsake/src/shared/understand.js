@@ -363,12 +363,12 @@ async function pictureOf(item, loadImage) {
 }
 
 // The product read: the picture, what it is, its own page. Returns the plan, or null when nothing changes.
-async function readProduct(item, settings, key, pages, image, { fetchPage }) {
+async function readProduct(item, settings, key, pages, image, { fetchShopPage }) {
   const ai = await understandProductWithAI(productInput(item, pages, image), settings, key);
   let page = null;
   if (ai.listing?.url && ai.confidence >= PRODUCT_CONFIDENCE) {
     try {
-      const html = await fetchPage(ai.listing.url);
+      const html = await fetchShopPage(ai.listing.url);
       const read = html ? productFromHtml(html, ai.listing.url) : null;
       if (read && (read.structured || read.price !== null)) page = read;
     } catch {
@@ -379,10 +379,12 @@ async function readProduct(item, settings, key, pages, image, { fetchPage }) {
 }
 
 // Reads one save with your provider and applies the answer. Once per save unless force (Fix with AI,
-// Check with AI). fetchPage(url) returns a page's HTML, or null when it can't or mayn't be read; loadImage(url)
-// returns a small data: copy of a picture, or null.
+// Check with AI). fetchPage(url) returns a page's HTML, or null when it can't or mayn't be read (the save's own
+// page and pages its caption links to); fetchShopPage(url) the same for the shop page your provider's search
+// found for a product (fetchPage unless the caller says otherwise); loadImage(url) returns a small data: copy
+// of a picture, or null.
 // Throws when the provider fails, so a batch can stop on a bad key.
-export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null, loadImage = async () => null } = {}) {
+export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null } = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt || (item.understoodAt && !force)) return null;
   const settings = await store.getSettings();
@@ -414,7 +416,7 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
   let reason = ai?.reason || '';
   let confidence = ai?.confidence ?? null;
   if (!hasOwnView(kind) && isShopping(current, ai)) {
-    const { ai: found, page } = await readProduct(current, settings, key, pages, image, { fetchPage });
+    const { ai: found, page } = await readProduct(current, settings, key, pages, image, { fetchShopPage });
     current = (await store.getItem(id)) || current;
     const product = planProduct({ ...current, ...patch }, found, page);
     patch = { ...patch, ...product.patch };

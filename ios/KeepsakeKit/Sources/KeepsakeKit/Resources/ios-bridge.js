@@ -32,7 +32,8 @@
     if (typeof fn !== 'function') { resolve(null); return; }
     fn(String(url), (v) => resolve(typeof v === 'string' && v ? v : null));
   });
-  const aiDeps = { fetchPage: viaNative('fetchPage'), loadImage: viaNative('loadImage') };
+  // Only the shop page: the app reads no page a save links to (PRIVACY-iOS.md), so fetchPage stays unset.
+  const aiDeps = { fetchShopPage: viaNative('fetchPage'), loadImage: viaNative('loadImage') };
 
   function nativeRecordBackend() {
     const n = __native.db;

@@ -28,7 +28,7 @@ function incompleteDetails(kind, d = {}) {
 // when it has a title.
 // verify: Check with AI on the Places list: a place missing its street, city or state goes to your provider
 // too; only the missing fields are filled, and a name it already has stays.
-export async function fillSave(store, id, { review = false, verify = false, force = false } = {}, { fetchFn, allowed, waitTurn = async () => {}, fetchPage = async () => null, loadImage = async () => null }) {
+export async function fillSave(store, id, { review = false, verify = false, force = false } = {}, { fetchFn, allowed, waitTurn = async () => {}, fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null }) {
   let item = await store.getItem(id);
   if (!item || item.deletedAt) return;
   let kind = kindOf(item);
@@ -65,7 +65,7 @@ export async function fillSave(store, id, { review = false, verify = false, forc
     // Your provider reads the save: what it is and everything that kind's card shows.
     if (!item.understoodAt || (force && incompleteDetails(kind, d))) {
       try {
-        await understandItem(store, id, { force: true }, { fetchPage, loadImage });
+        await understandItem(store, id, { force: true }, { fetchPage, fetchShopPage, loadImage });
         item = await store.getItem(id);
         d = item.details || {};
         kind = kindOf(item);
