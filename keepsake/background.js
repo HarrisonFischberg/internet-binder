@@ -633,6 +633,24 @@ function sanitizePost(p) {
   };
 }
 
+// A scan's reports come only from an Instagram tab. Safari leaves the tab's address out of the
+// sender when Keepsake has no instagram.com access (the scan then runs on activeTab alone), so a
+// report from the very tab the scan was started in counts too.
+async function fromScanTab(sender) {
+  if (!sender.tab) return false;
+  const url = sender.tab.url || sender.url || '';
+  if (url) {
+    try {
+      return /(^|\.)instagram\.com$/.test(new URL(url).hostname);
+    } catch {
+      return false;
+    }
+  }
+  if (bulk && !bulk.finished && bulk.tabId === sender.tab.id) return true;
+  const raw = await chrome.storage.session.get(SESSION_KEYS.igScan);
+  return raw[SESSION_KEYS.igScan]?.tabId === sender.tab.id;
+}
+
 // --- reading one post in a background tab (fallback when a fetch hits a login wall) ---------------------
 let readQueue = Promise.resolve();
 function readPostInTab(url) {
@@ -799,7 +817,7 @@ async function handleMessage(msg, sender) {
       return { ok: true };
     }
     case MSG.IG_SCAN_UPDATE: {
-      if (!sender.tab || !/(^|\.)instagram\.com$/.test(new URL(sender.tab.url || sender.url || 'https://invalid/').hostname)) return { ok: false };
+      if (!(await fromScanTab(sender))) return { ok: false };
       const posts = (Array.isArray(msg.posts) ? msg.posts : []).slice(0, 2000).map(sanitizePost);
       const scan = {
         tabId: sender.tab.id, status: msg.status === 'done' ? 'done' : msg.status === 'error' ? 'error' : 'scanning',
@@ -829,7 +847,7 @@ async function handleMessage(msg, sender) {
       return { ok: true };
     }
     case MSG.IG_SCAN_THUMB: {
-      if (!sender.tab || !/(^|\.)instagram\.com$/.test(new URL(sender.tab.url || sender.url || 'https://invalid/').hostname)) return { ok: false };
+      if (!(await fromScanTab(sender))) return { ok: false };
       const key = typeof msg.shortcode === 'string' && /^[\w-]{5,40}$/.test(msg.shortcode) ? msg.shortcode : '';
       const data = typeof msg.data === 'string' && msg.data.startsWith('data:image/') && msg.data.length <= 600000 ? msg.data : '';
       if (!key || !data) return { ok: false };
