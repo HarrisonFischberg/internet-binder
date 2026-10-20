@@ -5,70 +5,710 @@
 	};
 	objectVersion = 77;
 	objects = {
+
+/* Begin PBXBuildFile section */
+		BB0000000000000000000026 /* KeepsakeKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000025 /* KeepsakeKit */; };
+		BB0000000000000000000028 /* KeepsakeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000027 /* KeepsakeUI */; };
+		BB000000000000000000002A /* KeepsakeKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000029 /* KeepsakeKit */; };
+		BB000000000000000000002C /* KeepsakeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB000000000000000000002B /* KeepsakeUI */; };
+		BB000000000000000000002E /* KeepsakeKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB000000000000000000002D /* KeepsakeKit */; };
+		BB0000000000000000000030 /* KeepsakeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB000000000000000000002F /* KeepsakeUI */; };
+		BB0000000000000000000031 /* KeepsakeShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB000000000000000000000A /* KeepsakeShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		BB0000000000000000000034 /* KeepsakeWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB000000000000000000001C /* KeepsakeWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		BB0000000000000000000032 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BB0000000000000000000039 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB000000000000000000000C;
+			remoteInfo = KeepsakeShare;
+		};
+		BB0000000000000000000035 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BB0000000000000000000039 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB000000000000000000001E;
+			remoteInfo = KeepsakeWidgets;
+		};
+		BB0000000000000000000037 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BB0000000000000000000039 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BB0000000000000000000003;
+			remoteInfo = Keepsake;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BB0000000000000000000040 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				BB0000000000000000000031 /* KeepsakeShare.appex in Embed Foundation Extensions */,
+				BB0000000000000000000034 /* KeepsakeWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
 		BB0000000000000000000001 /* Keepsake.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsake.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		BB0000000000000000000002 /* App */ = {isa = PBXFileSystemSynchronizedRootGroup; path = App; sourceTree = "<group>"; };
-		BB0000000000000000000025 /* KeepsakeKit */ = {isa = XCSwiftPackageProductDependency; package = BB000000000000000000003C; productName = KeepsakeKit; };
-		BB0000000000000000000026 /* KeepsakeKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000025; };
-		BB0000000000000000000027 /* KeepsakeUI */ = {isa = XCSwiftPackageProductDependency; package = BB000000000000000000003C; productName = KeepsakeUI; };
-		BB0000000000000000000028 /* KeepsakeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000027; };
-		BB0000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (BB0000000000000000000026, BB0000000000000000000028); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000003 /* Keepsake */ = {isa = PBXNativeTarget; buildConfigurationList = BB0000000000000000000007; buildPhases = (BB0000000000000000000004, BB0000000000000000000005, BB0000000000000000000006, BB0000000000000000000040); buildRules = (); dependencies = (BB0000000000000000000033, BB0000000000000000000036); fileSystemSynchronizedGroups = (BB0000000000000000000002); name = Keepsake; packageProductDependencies = (BB0000000000000000000025, BB0000000000000000000027); productName = Keepsake; productReference = BB0000000000000000000001; productType = "com.apple.product-type.application"; };
-		BB0000000000000000000008 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Config/App-Info.plist; INFOPLIST_KEY_CFBundleDisplayName = Keepsake; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; CODE_SIGN_ENTITLEMENTS = Config/Keepsake.entitlements; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconNotebook AppIconGallery AppIconAtlas AppIconSwiss"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); }; name = Debug; };
-		BB0000000000000000000009 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Config/App-Info.plist; INFOPLIST_KEY_CFBundleDisplayName = Keepsake; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; CODE_SIGN_ENTITLEMENTS = Config/Keepsake.entitlements; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconNotebook AppIconGallery AppIconAtlas AppIconSwiss"; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks"); }; name = Release; };
-		BB0000000000000000000007 = {isa = XCConfigurationList; buildConfigurations = (BB0000000000000000000008, BB0000000000000000000009); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		BB000000000000000000000A /* KeepsakeShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KeepsakeShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		BB000000000000000000000B /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; path = ShareExtension; sourceTree = "<group>"; };
-		BB0000000000000000000029 /* KeepsakeKit */ = {isa = XCSwiftPackageProductDependency; package = BB000000000000000000003C; productName = KeepsakeKit; };
-		BB000000000000000000002A /* KeepsakeKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000029; };
-		BB000000000000000000002B /* KeepsakeUI */ = {isa = XCSwiftPackageProductDependency; package = BB000000000000000000003C; productName = KeepsakeUI; };
-		BB000000000000000000002C /* KeepsakeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB000000000000000000002B; };
-		BB000000000000000000000D = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB000000000000000000000E = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (BB000000000000000000002A, BB000000000000000000002C); runOnlyForDeploymentPostprocessing = 0; };
-		BB000000000000000000000F = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000031 /* KeepsakeShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB000000000000000000000A; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		BB0000000000000000000032 = {isa = PBXContainerItemProxy; containerPortal = BB0000000000000000000039; proxyType = 1; remoteGlobalIDString = BB000000000000000000000C; remoteInfo = KeepsakeShare; };
-		BB0000000000000000000033 = {isa = PBXTargetDependency; target = BB000000000000000000000C; targetProxy = BB0000000000000000000032; };
-		BB000000000000000000000C /* KeepsakeShare */ = {isa = PBXNativeTarget; buildConfigurationList = BB0000000000000000000010; buildPhases = (BB000000000000000000000D, BB000000000000000000000E, BB000000000000000000000F); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (BB000000000000000000000B); name = KeepsakeShare; packageProductDependencies = (BB0000000000000000000029, BB000000000000000000002B); productName = KeepsakeShare; productReference = BB000000000000000000000A; productType = "com.apple.product-type.app-extension"; };
-		BB0000000000000000000011 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.share; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Config/Share-Info.plist; INFOPLIST_KEY_CFBundleDisplayName = Keepsake; CODE_SIGN_ENTITLEMENTS = Config/Share.entitlements; APPLICATION_EXTENSION_API_ONLY = YES; SKIP_INSTALL = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"); }; name = Debug; };
-		BB0000000000000000000012 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.share; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Config/Share-Info.plist; INFOPLIST_KEY_CFBundleDisplayName = Keepsake; CODE_SIGN_ENTITLEMENTS = Config/Share.entitlements; APPLICATION_EXTENSION_API_ONLY = YES; SKIP_INSTALL = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"); }; name = Release; };
-		BB0000000000000000000010 = {isa = XCConfigurationList; buildConfigurations = (BB0000000000000000000011, BB0000000000000000000012); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		BB0000000000000000000013 /* KeepsakeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KeepsakeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		BB0000000000000000000014 /* UITests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = UITests; sourceTree = "<group>"; };
-		BB0000000000000000000016 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000017 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000018 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000037 = {isa = PBXContainerItemProxy; containerPortal = BB0000000000000000000039; proxyType = 1; remoteGlobalIDString = BB0000000000000000000003; remoteInfo = Keepsake; };
-		BB0000000000000000000038 = {isa = PBXTargetDependency; target = BB0000000000000000000003; targetProxy = BB0000000000000000000037; };
-		BB0000000000000000000015 /* KeepsakeUITests */ = {isa = PBXNativeTarget; buildConfigurationList = BB0000000000000000000019; buildPhases = (BB0000000000000000000016, BB0000000000000000000017, BB0000000000000000000018); buildRules = (); dependencies = (BB0000000000000000000038); fileSystemSynchronizedGroups = (BB0000000000000000000014); name = KeepsakeUITests; packageProductDependencies = (); productName = KeepsakeUITests; productReference = BB0000000000000000000013; productType = "com.apple.product-type.bundle.ui-testing"; };
-		BB000000000000000000001A /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; TEST_TARGET_NAME = Keepsake; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks"); }; name = Debug; };
-		BB000000000000000000001B /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; TEST_TARGET_NAME = Keepsake; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks"); }; name = Release; };
-		BB0000000000000000000019 = {isa = XCConfigurationList; buildConfigurations = (BB000000000000000000001A, BB000000000000000000001B); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		BB000000000000000000001C /* KeepsakeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KeepsakeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		BB000000000000000000001D /* Widgets */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Widgets; sourceTree = "<group>"; };
-		BB000000000000000000002D /* KeepsakeKit */ = {isa = XCSwiftPackageProductDependency; package = BB000000000000000000003C; productName = KeepsakeKit; };
-		BB000000000000000000002E /* KeepsakeKit in Frameworks */ = {isa = PBXBuildFile; productRef = BB000000000000000000002D; };
-		BB000000000000000000002F /* KeepsakeUI */ = {isa = XCSwiftPackageProductDependency; package = BB000000000000000000003C; productName = KeepsakeUI; };
-		BB0000000000000000000030 /* KeepsakeUI in Frameworks */ = {isa = PBXBuildFile; productRef = BB000000000000000000002F; };
-		BB000000000000000000001F = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000020 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (BB000000000000000000002E, BB0000000000000000000030); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000021 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		BB0000000000000000000034 /* KeepsakeWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB000000000000000000001C; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		BB0000000000000000000035 = {isa = PBXContainerItemProxy; containerPortal = BB0000000000000000000039; proxyType = 1; remoteGlobalIDString = BB000000000000000000001E; remoteInfo = KeepsakeWidgets; };
-		BB0000000000000000000036 = {isa = PBXTargetDependency; target = BB000000000000000000001E; targetProxy = BB0000000000000000000035; };
-		BB000000000000000000001E /* KeepsakeWidgets */ = {isa = PBXNativeTarget; buildConfigurationList = BB0000000000000000000022; buildPhases = (BB000000000000000000001F, BB0000000000000000000020, BB0000000000000000000021); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (BB000000000000000000001D); name = KeepsakeWidgets; packageProductDependencies = (BB000000000000000000002D, BB000000000000000000002F); productName = KeepsakeWidgets; productReference = BB000000000000000000001C; productType = "com.apple.product-type.app-extension"; };
-		BB0000000000000000000023 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.widgets; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Config/Widgets-Info.plist; INFOPLIST_KEY_CFBundleDisplayName = Keepsake; CODE_SIGN_ENTITLEMENTS = Config/Widgets.entitlements; APPLICATION_EXTENSION_API_ONLY = YES; SKIP_INSTALL = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"); }; name = Debug; };
-		BB0000000000000000000024 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = KTV2G3Z883; "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-"; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.widgets; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; SWIFT_EMIT_LOC_STRINGS = YES; ENABLE_PREVIEWS = YES; INFOPLIST_FILE = Config/Widgets-Info.plist; INFOPLIST_KEY_CFBundleDisplayName = Keepsake; CODE_SIGN_ENTITLEMENTS = Config/Widgets.entitlements; APPLICATION_EXTENSION_API_ONLY = YES; SKIP_INSTALL = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks"); }; name = Release; };
-		BB0000000000000000000022 = {isa = XCConfigurationList; buildConfigurations = (BB0000000000000000000023, BB0000000000000000000024); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		BB0000000000000000000040 /* Embed Foundation Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (BB0000000000000000000031, BB0000000000000000000034); name = "Embed Foundation Extensions"; runOnlyForDeploymentPostprocessing = 0; };
-		BB000000000000000000003C /* KeepsakeKit */ = {isa = XCLocalSwiftPackageReference; relativePath = KeepsakeKit; };
-		BB000000000000000000003B /* Products */ = {isa = PBXGroup; children = (BB0000000000000000000001, BB000000000000000000000A, BB0000000000000000000013, BB000000000000000000001C); name = Products; sourceTree = "<group>"; };
-		BB000000000000000000003A = {isa = PBXGroup; children = (BB0000000000000000000002, BB000000000000000000000B, BB0000000000000000000014, BB000000000000000000001D, BB000000000000000000003B); sourceTree = "<group>"; };
-		BB000000000000000000003E /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; ENABLE_USER_SCRIPT_SANDBOXING = YES; IPHONEOS_DEPLOYMENT_TARGET = 27.0; SDKROOT = iphoneos; SWIFT_STRICT_CONCURRENCY = minimal; LOCALIZATION_PREFERS_STRING_CATALOGS = YES; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_OPTIMIZATION_LEVEL = 0; ONLY_ACTIVE_ARCH = YES; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
-		BB000000000000000000003F /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; ENABLE_USER_SCRIPT_SANDBOXING = YES; IPHONEOS_DEPLOYMENT_TARGET = 27.0; SDKROOT = iphoneos; SWIFT_STRICT_CONCURRENCY = minimal; LOCALIZATION_PREFERS_STRING_CATALOGS = YES; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_COMPILATION_MODE = wholemodule; VALIDATE_PRODUCT = YES; }; name = Release; };
-		BB000000000000000000003D = {isa = XCConfigurationList; buildConfigurations = (BB000000000000000000003E, BB000000000000000000003F); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		BB0000000000000000000039 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2700; LastUpgradeCheck = 2700; }; buildConfigurationList = BB000000000000000000003D; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = BB000000000000000000003A; minimizedProjectReferenceProxies = 1; packageReferences = (BB000000000000000000003C); preferredProjectObjectVersion = 77; productRefGroup = BB000000000000000000003B; projectDirPath = ""; projectRoot = ""; targets = (BB0000000000000000000003, BB000000000000000000000C, BB0000000000000000000015, BB000000000000000000001E); };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		BB0000000000000000000002 /* App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = App;
+			sourceTree = "<group>";
+		};
+		BB000000000000000000000B /* ShareExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
+		BB0000000000000000000014 /* UITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = UITests;
+			sourceTree = "<group>";
+		};
+		BB000000000000000000001D /* Widgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Widgets;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BB0000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB0000000000000000000026 /* KeepsakeKit in Frameworks */,
+				BB0000000000000000000028 /* KeepsakeUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000000000000000000000E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB000000000000000000002A /* KeepsakeKit in Frameworks */,
+				BB000000000000000000002C /* KeepsakeUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB0000000000000000000017 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB0000000000000000000020 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB000000000000000000002E /* KeepsakeKit in Frameworks */,
+				BB0000000000000000000030 /* KeepsakeUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		BB000000000000000000003A = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000002 /* App */,
+				BB000000000000000000000B /* ShareExtension */,
+				BB0000000000000000000014 /* UITests */,
+				BB000000000000000000001D /* Widgets */,
+				BB000000000000000000003B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BB000000000000000000003B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BB0000000000000000000001 /* Keepsake.app */,
+				BB000000000000000000000A /* KeepsakeShare.appex */,
+				BB0000000000000000000013 /* KeepsakeUITests.xctest */,
+				BB000000000000000000001C /* KeepsakeWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BB0000000000000000000003 /* Keepsake */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000007 /* Build configuration list for PBXNativeTarget "Keepsake" */;
+			buildPhases = (
+				BB0000000000000000000004 /* Sources */,
+				BB0000000000000000000005 /* Frameworks */,
+				BB0000000000000000000006 /* Resources */,
+				BB0000000000000000000040 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB0000000000000000000033 /* PBXTargetDependency */,
+				BB0000000000000000000036 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BB0000000000000000000002 /* App */,
+			);
+			name = Keepsake;
+			packageProductDependencies = (
+				BB0000000000000000000025 /* KeepsakeKit */,
+				BB0000000000000000000027 /* KeepsakeUI */,
+			);
+			productName = Keepsake;
+			productReference = BB0000000000000000000001 /* Keepsake.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BB000000000000000000000C /* KeepsakeShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000010 /* Build configuration list for PBXNativeTarget "KeepsakeShare" */;
+			buildPhases = (
+				BB000000000000000000000D /* Sources */,
+				BB000000000000000000000E /* Frameworks */,
+				BB000000000000000000000F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BB000000000000000000000B /* ShareExtension */,
+			);
+			name = KeepsakeShare;
+			packageProductDependencies = (
+				BB0000000000000000000029 /* KeepsakeKit */,
+				BB000000000000000000002B /* KeepsakeUI */,
+			);
+			productName = KeepsakeShare;
+			productReference = BB000000000000000000000A /* KeepsakeShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		BB0000000000000000000015 /* KeepsakeUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000019 /* Build configuration list for PBXNativeTarget "KeepsakeUITests" */;
+			buildPhases = (
+				BB0000000000000000000016 /* Sources */,
+				BB0000000000000000000017 /* Frameworks */,
+				BB0000000000000000000018 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB0000000000000000000038 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				BB0000000000000000000014 /* UITests */,
+			);
+			name = KeepsakeUITests;
+			packageProductDependencies = (
+			);
+			productName = KeepsakeUITests;
+			productReference = BB0000000000000000000013 /* KeepsakeUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		BB000000000000000000001E /* KeepsakeWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000022 /* Build configuration list for PBXNativeTarget "KeepsakeWidgets" */;
+			buildPhases = (
+				BB000000000000000000001F /* Sources */,
+				BB0000000000000000000020 /* Frameworks */,
+				BB0000000000000000000021 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BB000000000000000000001D /* Widgets */,
+			);
+			name = KeepsakeWidgets;
+			packageProductDependencies = (
+				BB000000000000000000002D /* KeepsakeKit */,
+				BB000000000000000000002F /* KeepsakeUI */,
+			);
+			productName = KeepsakeWidgets;
+			productReference = BB000000000000000000001C /* KeepsakeWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BB0000000000000000000039 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+			};
+			buildConfigurationList = BB000000000000000000003D /* Build configuration list for PBXProject "Keepsake" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = BB000000000000000000003A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = BB000000000000000000003B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BB0000000000000000000003 /* Keepsake */,
+				BB000000000000000000000C /* KeepsakeShare */,
+				BB0000000000000000000015 /* KeepsakeUITests */,
+				BB000000000000000000001E /* KeepsakeWidgets */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		BB0000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000000000000000000000F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB0000000000000000000018 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB0000000000000000000021 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BB0000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB0000000000000000000016 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB000000000000000000001F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		BB0000000000000000000033 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB000000000000000000000C /* KeepsakeShare */;
+			targetProxy = BB0000000000000000000032 /* PBXContainerItemProxy */;
+		};
+		BB0000000000000000000036 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB000000000000000000001E /* KeepsakeWidgets */;
+			targetProxy = BB0000000000000000000035 /* PBXContainerItemProxy */;
+		};
+		BB0000000000000000000038 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BB0000000000000000000003 /* Keepsake */;
+			targetProxy = BB0000000000000000000037 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		BB0000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconNotebook AppIconGallery AppIconAtlas AppIconSwiss";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/Keepsake.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/App-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BB0000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconNotebook AppIconGallery AppIconAtlas AppIconSwiss";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/Keepsake.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/App-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BB0000000000000000000011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/Share.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Share-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BB0000000000000000000012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/Share.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Share-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BB000000000000000000001A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Keepsake;
+			};
+			name = Debug;
+		};
+		BB000000000000000000001B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Keepsake;
+			};
+			name = Release;
+		};
+		BB0000000000000000000023 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/Widgets.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Widgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		BB0000000000000000000024 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Config/Widgets.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = KTV2G3Z883;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Config/Widgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BB000000000000000000003E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = minimal;
+			};
+			name = Debug;
+		};
+		BB000000000000000000003F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		BB0000000000000000000007 /* Build configuration list for PBXNativeTarget "Keepsake" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB0000000000000000000008 /* Debug */,
+				BB0000000000000000000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB0000000000000000000010 /* Build configuration list for PBXNativeTarget "KeepsakeShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB0000000000000000000011 /* Debug */,
+				BB0000000000000000000012 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB0000000000000000000019 /* Build configuration list for PBXNativeTarget "KeepsakeUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB000000000000000000001A /* Debug */,
+				BB000000000000000000001B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB0000000000000000000022 /* Build configuration list for PBXNativeTarget "KeepsakeWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB0000000000000000000023 /* Debug */,
+				BB0000000000000000000024 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB000000000000000000003D /* Build configuration list for PBXProject "Keepsake" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB000000000000000000003E /* Debug */,
+				BB000000000000000000003F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = KeepsakeKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BB0000000000000000000025 /* KeepsakeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */;
+			productName = KeepsakeKit;
+		};
+		BB0000000000000000000027 /* KeepsakeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */;
+			productName = KeepsakeUI;
+		};
+		BB0000000000000000000029 /* KeepsakeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */;
+			productName = KeepsakeKit;
+		};
+		BB000000000000000000002B /* KeepsakeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */;
+			productName = KeepsakeUI;
+		};
+		BB000000000000000000002D /* KeepsakeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */;
+			productName = KeepsakeKit;
+		};
+		BB000000000000000000002F /* KeepsakeUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB000000000000000000003C /* XCLocalSwiftPackageReference "KeepsakeKit" */;
+			productName = KeepsakeUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
-	rootObject = BB0000000000000000000039;
+	rootObject = BB0000000000000000000039 /* Project object */;
 }
