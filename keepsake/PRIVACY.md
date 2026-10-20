@@ -1,6 +1,6 @@
 # Keepsake privacy policy
 
-_Last updated: October 2026 · applies to Keepsake 2.0.0_
+_Last updated: October 2026 · applies to Keepsake 2.0.1_
 
 Keepsake is a browser extension that saves products and inspiration into collections **stored only in your browser**. It has no server, no account, no analytics and no advertising. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
 
