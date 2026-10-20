@@ -19,8 +19,11 @@ final class SaveNoticeTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 10))
         app.buttons["Settings"].tap()
-        XCTAssertTrue(app.switches["Notify after saving"].waitForExistence(timeout: 5))
-        let version = app.staticTexts["appVersion"]
+        XCTAssertTrue(app.switches["Optional AI"].waitForExistence(timeout: 5))
+        // Settings is a lazy list: scroll down to the toggle and the version.
+        let toggle = app.switches["Notify after saving"], version = app.staticTexts["appVersion"]
+        for _ in 0..<8 where !toggle.exists { app.swipeUp() }
+        XCTAssertTrue(toggle.exists)
         for _ in 0..<8 where !version.exists { app.swipeUp() }
         XCTAssertTrue(version.waitForExistence(timeout: 3))
         XCTAssertTrue(version.label.hasPrefix("Keepsake "), version.label)
@@ -37,7 +40,7 @@ final class SaveNoticeTests: XCTestCase {
         let allow = springboard.buttons["Allow"]
         if allow.waitForExistence(timeout: 10) { allow.tap() }
         XCUIDevice.shared.press(.home)
-        let banner = springboard.otherElements.matching(NSPredicate(format: "label CONTAINS 'Saved to'")).firstMatch
+        let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Saved to'")).firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 15), "no notification")
         shoot("notice-banner")
         banner.tap()
