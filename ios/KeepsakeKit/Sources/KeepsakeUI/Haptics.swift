@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 import SwiftUI
 import UIKit
-import AudioToolbox
+import AVFoundation
 
 /// Every haptic in Keepsake, named by what happened (replica/m3/haptics.md). Nothing else buzzes.
 @MainActor
@@ -22,7 +22,22 @@ public enum Haptic {
     public static func trashed() { impact(.rigid, 1) }
     public static func warning() { notify(.warning) }
     public static func stamped() { impact(.heavy, 1); tick() }
-    public static func tick() { if sound { AudioServicesPlaySystemSound(1104) } }
+    /// Plays at media volume and mixes under whatever else is playing (it never stops a podcast). Silent
+    /// mode mutes it, like every other interface sound; Cooking mode's music session is left alone.
+    public static func tick() {
+        guard sound else { return }
+        let session = AVAudioSession.sharedInstance()
+        if session.category != .playback { try? session.setCategory(.ambient) }
+        try? session.setActive(true)
+        if tickPlayer == nil {
+            tickPlayer = try? AVAudioPlayer(data: TickSound.wav)
+            tickPlayer?.volume = 0.6
+            tickPlayer?.prepareToPlay()
+        }
+        tickPlayer?.currentTime = 0
+        tickPlayer?.play()
+    }
+    private static var tickPlayer: AVAudioPlayer?
 
     private static func selection() { guard enabled else { return }; UISelectionFeedbackGenerator().selectionChanged() }
     private static func notify(_ t: UINotificationFeedbackGenerator.FeedbackType) { guard enabled else { return }; UINotificationFeedbackGenerator().notificationOccurred(t) }

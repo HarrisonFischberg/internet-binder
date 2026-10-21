@@ -4,8 +4,9 @@ import SwiftUI
 
 /// Music while cooking: ten original instrumentals bundled in App/Music (ios/tools/make-cooking-music.py
 /// composes and renders them), shuffled and played one after another while Cooking mode is open.
-/// The audio session is ambient, so the silent switch silences it and it mixes under anything else that is
-/// playing instead of stopping it; when another app is already playing, it waits for a tap instead.
+/// The audio session is playback that mixes with others: turning music on is asking for it, so Silent mode
+/// does not mute it (it used to be ambient, and with the phone on silent nothing played). It mixes under
+/// anything else that is playing instead of stopping it; when another app is already playing, it waits for a tap.
 @MainActor @Observable
 final class CookingMusic {
     static let enabledKey = "cookingMusic"
@@ -42,7 +43,7 @@ final class CookingMusic {
     func start() {
         guard !Self.tracks.isEmpty, player == nil else { return }
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.ambient)
+        try? session.setCategory(.playback, options: .mixWithOthers)
         try? session.setActive(true)
         order = Self.tracks.shuffled()
         index = 0
@@ -61,9 +62,13 @@ final class CookingMusic {
         guard let p = player else { return }
         player = nil; current = nil; playing = false
         p.setVolume(0, fadeDuration: 0.6)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
             p.stop()
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            guard self?.player == nil else { return }  // turned straight back on
+            let session = AVAudioSession.sharedInstance()
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            // Back to ambient, so the Sound setting's tick goes quiet in Silent mode again.
+            try? session.setCategory(.ambient)
         }
     }
 
