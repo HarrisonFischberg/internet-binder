@@ -285,6 +285,9 @@ export function instagramIcon() {
 export function pencilIcon() {
   return svg(['M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z', 'm13.5 6.5 3 3']);
 }
+export function mapIcon() {
+  return svg(['M9 4 3 6.5V20l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4Z', 'M9 4v13.5M15 6.5V20']);
+}
 export function trashIcon() {
   return svg(['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13', 'M10 11v6M14 11v6']);
 }

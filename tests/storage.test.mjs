@@ -326,6 +326,29 @@ test('import merge: dedupes collections by name and items by URL, reports counts
   assert.ok((await dst.store.getCollections()).some((c) => c.name === 'Ramen spots'));
 });
 
+test('export writes the cover picture once and import puts it back in the gallery', async () => {
+  const pic = (n) => `data:image/jpeg;base64,${String(n).repeat(4000)}`;
+  const src = await fresh();
+  const a = await src.store.addItem({ title: 'Cover first', url: 'https://a.example/1', image: pic(1), images: [pic(1), pic(2)] });
+  const b = await src.store.addItem({ title: 'Cover second', url: 'https://a.example/2', image: pic(3), images: [pic(4), pic(3)] });
+  const c = await src.store.addItem({ title: 'Cover only', url: 'https://a.example/3', image: pic(5) });
+  const exp = await src.store.exportJSON();
+  const text = JSON.stringify(exp);
+  assert.equal(text.split(pic(1)).length - 1, 1, 'the cover is written once');
+  assert.deepEqual(exp.items[a.id].images, [pic(2)]);
+  assert.equal(exp.items[a.id].coverAt, 0);
+  assert.equal(exp.items[c.id].coverAt, undefined);
+  const dst = await fresh();
+  await dst.store.importJSON(JSON.parse(text));
+  const got = Object.fromEntries((await dst.store.getItems()).map((i) => [i.title, i]));
+  assert.deepEqual(got['Cover first'].images, [pic(1), pic(2)]);
+  assert.deepEqual(got['Cover second'].images, [pic(4), pic(3)]);
+  assert.equal(got['Cover second'].image, pic(3));
+  assert.deepEqual(got['Cover only'].images, []);
+  assert.ok(!('coverAt' in got['Cover first']));
+  assert.ok(b);
+});
+
 test('import replace wipes existing items and keeps the API key', async () => {
   const src = await fresh();
   await src.store.addItem({ title: 'From backup', url: 'https://a.example/b' });

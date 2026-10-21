@@ -155,40 +155,7 @@ struct PlacesScreen: View {
 
     // MARK: map
 
-    private var pinned: [(Save, CLLocationCoordinate2D)] {
-        (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }.compactMap { s in
-            guard let lat = s.details?["lat"]?.number, let lng = s.details?["lng"]?.number else { return nil }
-            return (s, CLLocationCoordinate2D(latitude: lat, longitude: lng))
-        }
-    }
-
-    private var map: some View {
-        Map {
-            ForEach(pinned, id: \.0.id) { place, pin in
-                Annotation(place.title, coordinate: pin) {
-                    NavigationLink(value: model.saves.first { $0.id == place.id } ?? place) {
-                        // A 32 pt pin with a 44 pt target; the glyph is drawn in the colour that reads on the pin.
-                        Image(systemName: place.status == "done" ? "checkmark" : "mappin")
-                            .font(.subheadline.weight(.bold)).foregroundStyle(t.onKind)
-                            .frame(width: 32, height: 32)
-                            .background(t.kindFill("place"), in: Circle())
-                            .overlay(Circle().strokeBorder(t.style == .pantry ? t.onKind : .white, lineWidth: 2))
-                            .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Circle())
-                    }
-                    .accessibilityLabel(place.title)
-                }
-            }
-        }
-        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
-        .overlay {
-            if pinned.isEmpty {
-                Text("Places with a pin show up here.").font(KSFont.note).foregroundStyle(t.ink)
-                    .padding(14).ksSurface(radius: 24)
-            }
-        }
-    }
+    private var map: some View { PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }) }
 
     // MARK: review
 
@@ -333,5 +300,63 @@ struct PlaceFixSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// The places that have a pin, on Apple Maps; each pin opens its save. The Places tab's Map, and the
+/// map behind the Map button on Lifestyle's Places.
+struct PlacesMap: View {
+    let places: [Save]
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+
+    private var pinned: [(Save, CLLocationCoordinate2D)] {
+        places.compactMap { s in
+            guard let lat = s.details?["lat"]?.number, let lng = s.details?["lng"]?.number else { return nil }
+            return (s, CLLocationCoordinate2D(latitude: lat, longitude: lng))
+        }
+    }
+
+    /// Fits every pin; a lone pin opens on its neighbourhood rather than the street.
+    private var start: MapCameraPosition {
+        guard pinned.count == 1, let pin = pinned.first?.1 else { return .automatic }
+        return .region(MKCoordinateRegion(center: pin, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)))
+    }
+
+    var body: some View {
+        Map(initialPosition: start) {
+            ForEach(pinned, id: \.0.id) { place, pin in
+                Annotation(place.title, coordinate: pin) {
+                    NavigationLink(value: model.saves.first { $0.id == place.id } ?? place) {
+                        // A 32 pt pin with a 44 pt target; the glyph is drawn in the colour that reads on the pin.
+                        Image(systemName: place.status == "done" ? "checkmark" : "mappin")
+                            .font(.subheadline.weight(.bold)).foregroundStyle(t.onKind)
+                            .frame(width: 32, height: 32)
+                            .background(t.kindFill("place"), in: Circle())
+                            .overlay(Circle().strokeBorder(t.style == .pantry ? t.onKind : .white, lineWidth: 2))
+                            .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Circle())
+                    }
+                    .accessibilityLabel(place.title)
+                }
+            }
+        }
+        .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
+        .overlay {
+            if pinned.isEmpty {
+                Text("Places with a pin show up here.").font(KSFont.note).foregroundStyle(t.ink)
+                    .padding(14).ksSurface(radius: 24)
+            }
+        }
+        // Say when some places aren't on the map (no pin yet), so a short map doesn't look like a lost save.
+        // At the top, so it never covers the Apple Maps logo and Legal link at the bottom.
+        .overlay(alignment: .top) {
+            if !pinned.isEmpty && pinned.count < places.count {
+                Text("\(pinned.count) of \(places.count) on the map").font(KSFont.note).foregroundStyle(t.ink)
+                    .padding(.horizontal, 14).padding(.vertical, 8).ksSurface(radius: 24)
+                    .padding(.top, 12)
+            }
+        }
     }
 }
