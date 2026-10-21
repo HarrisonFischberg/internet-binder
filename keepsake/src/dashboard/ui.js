@@ -288,9 +288,6 @@ export function pencilIcon() {
 export function mapIcon() {
   return svg(['M9 4 3 6.5V20l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4Z', 'M9 4v13.5M15 6.5V20']);
 }
-export function listIcon() {
-  return svg(['M9 6h11M9 12h11M9 18h11', 'M4.5 6h.01M4.5 12h.01M4.5 18h.01']);
-}
 export function trashIcon() {
   return svg(['M4 7h16', 'M9 7V4h6v3', 'M6 7l1 13h10l1-13', 'M10 11v6M14 11v6']);
 }

@@ -607,12 +607,11 @@ function renderToolbar() {
   const toggle = $('placesMapToggle');
   toggle.classList.toggle('hidden', !placesHere);
   if (placesHere) {
-    const onMap = placesView() === 'map';
-    const label = onMap ? 'Show list' : 'Show map';
-    toggle.setAttribute('aria-pressed', onMap ? 'true' : 'false');
-    toggle.setAttribute('aria-label', label);
-    toggle.title = label;
-    toggle.replaceChildren(onMap ? UI.listIcon() : UI.mapIcon());
+    // One name ("Map") with pressed state; the List/Map tabs below say which view is showing.
+    toggle.setAttribute('aria-pressed', placesView() === 'map' ? 'true' : 'false');
+    toggle.setAttribute('aria-label', 'Map');
+    toggle.title = 'Map';
+    if (!toggle.firstChild) toggle.append(UI.mapIcon());
   }
 }
 

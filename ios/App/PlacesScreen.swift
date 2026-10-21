@@ -258,8 +258,14 @@ struct PlacesMap: View {
         }
     }
 
+    /// Fits every pin; a lone pin opens on its neighbourhood rather than the street.
+    private var start: MapCameraPosition {
+        guard pinned.count == 1, let pin = pinned.first?.1 else { return .automatic }
+        return .region(MKCoordinateRegion(center: pin, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)))
+    }
+
     var body: some View {
-        Map {
+        Map(initialPosition: start) {
             ForEach(pinned, id: \.0.id) { place, pin in
                 Annotation(place.title, coordinate: pin) {
                     NavigationLink(value: model.saves.first { $0.id == place.id } ?? place) {
@@ -282,6 +288,14 @@ struct PlacesMap: View {
             if pinned.isEmpty {
                 Text("Places with a pin show up here.").font(KSFont.note).foregroundStyle(t.ink)
                     .padding(14).ksSurface(radius: 24)
+            }
+        }
+        // Say when some places aren't on the map (no pin yet), so a short map doesn't look like a lost save.
+        .overlay(alignment: .bottom) {
+            if !pinned.isEmpty && pinned.count < places.count {
+                Text("\(pinned.count) of \(places.count) on the map").font(KSFont.note).foregroundStyle(t.ink)
+                    .padding(.horizontal, 14).padding(.vertical, 8).ksSurface(radius: 24)
+                    .padding(.bottom, 16)
             }
         }
     }

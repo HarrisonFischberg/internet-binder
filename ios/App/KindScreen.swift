@@ -11,6 +11,8 @@ struct KindScreen: View {
     @Environment(\.ks) private var t
     /// Places only: the Map button next to the title swaps the cards for a map (kept on this iPhone).
     @AppStorage("placesShowMap") private var showMap = false
+    /// The Map button grows with the text size, so its glyph stays inside the circle.
+    @ScaledMetric(relativeTo: .title3) private var mapButton: CGFloat = 44
 
     private var saves: [Save] { model.saves.filter { $0.kind == kind } }
     private var onMap: Bool { kind == "place" && showMap && !saves.isEmpty }
@@ -25,6 +27,7 @@ struct KindScreen: View {
                 VStack(spacing: 0) {
                     header(k).padding(.horizontal, 18).padding(.bottom, 12)
                     PlacesMap(places: saves)
+                        .overlay(alignment: .top) { Rectangle().fill(t.line).frame(height: 1) }
                 }
             } else {
                 ScrollView {
@@ -63,12 +66,13 @@ struct KindScreen: View {
                 } label: {
                     Image(systemName: showMap ? "square.grid.2x2" : "map")
                         .font(.title3.weight(.semibold)).foregroundStyle(t.ink)
-                        .frame(width: 44, height: 44)
-                        .ksSurface(radius: 22, scale: 0.5)
+                        .frame(width: mapButton, height: mapButton)
+                        .ksSurface(radius: mapButton / 2, scale: 0.5)
                 }
                 .buttonStyle(PressStyle())
                 .padding(.top, 8)
-                .accessibilityLabel(showMap ? "Show cards" : "Show map")
+                .accessibilityLabel("Map")
+                .accessibilityAddTraits(showMap ? .isSelected : [])
                 .accessibilityIdentifier("placesMapToggle")
             }
         }

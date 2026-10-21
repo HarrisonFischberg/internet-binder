@@ -132,10 +132,13 @@ final class LifestyleTests: XCTestCase {
         // Next to the Places title: one tap swaps the cards for the map, another brings them back.
         let toggle = app.buttons["placesMapToggle"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 3))
-        XCTAssertEqual(toggle.label, "Show map")
+        XCTAssertEqual(toggle.label, "Map")
+        XCTAssertFalse(toggle.isSelected)
         toggle.tap()
         XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: 3))
-        XCTAssertEqual(toggle.label, "Show cards")
+        XCTAssertTrue(toggle.isSelected)
+        // One of the fixture's two places has no pin yet: the map says so.
+        XCTAssertTrue(app.staticTexts["1 of 2 on the map"].exists)
         toggle.tap()
         XCTAssertFalse(app.maps.firstMatch.waitForExistence(timeout: 1))
     }
