@@ -100,7 +100,7 @@ struct PlacesScreen: View {
                             Spacer()
                         }
                         .padding(.vertical, 6)
-                        .background(t.table)
+                        .background(TablePatch())
                         .accessibilityAddTraits(.isHeader)
                     }
                 }

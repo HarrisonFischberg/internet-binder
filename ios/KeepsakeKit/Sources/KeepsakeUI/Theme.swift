@@ -246,30 +246,227 @@ public struct KindStyle: Sendable {
     }
 }
 
-/// The page everything rests on. Field Notebook rules it as graph paper; the others are plain.
+/// The page everything rests on, drawn in each style's own material. It stays put while the tiles
+/// scroll over it. The top of every page is the plain table colour, so the status-bar scrim and the
+/// solid navigation bars meet it without a seam; the style shows lower down, behind the tiles.
+/// With Increase Contrast on, the page is plain.
 public struct TableBackground: View {
+    public init() {}
+    public var body: some View {
+        TablePatch().ignoresSafeArea()
+    }
+}
+
+/// A piece of the page for a bar or pinned header to stand on: the same material as the page behind
+/// it, lined up with it, so a docked bar hides the tiles under it without leaving a flat plate.
+/// Every page and patch is a window onto one surface the size of the app's window (`ksTableFrame`).
+public struct TablePatch: View {
     @Environment(\.ks) private var t
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.ksTableFrame) private var table
     public init() {}
     public var body: some View {
         ZStack {
             t.table
-            if t.style == .notebook { GraphPaper(color: t.accent.opacity(0.08)) }
-        }
-        .ignoresSafeArea()
-    }
-}
-
-struct GraphPaper: View {
-    let color: Color
-    var body: some View {
-        Canvas { ctx, size in
-            var p = Path()
-            stride(from: 0, through: size.width, by: 24).forEach { x in p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height)) }
-            stride(from: 0, through: size.height, by: 24).forEach { y in p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y)) }
-            ctx.stroke(p, with: .color(color), lineWidth: 1)
+            if contrast != .increased && t.style != .gallery {
+                GeometryReader { g in
+                    let f = g.frame(in: .global), page = table ?? f
+                    TableSurface(style: t.style, dark: scheme == .dark, t: t)
+                        .frame(width: page.width, height: page.height)
+                        .offset(x: page.minX - f.minX, y: page.minY - f.minY)
+                }
+                .clipped()
+            }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// The whole page's material. Plain for the first 100 points, under the status bar and its scrim
+/// (TopScrim, about 86 points), then fading in over the next 180.
+private struct TableSurface: View {
+    let style: KSTheme.Style, dark: Bool, t: KSTheme
+    var body: some View {
+        Group {
+            switch style {
+            case .pantry: PantryShelf(dark: dark)
+            case .notebook: GraphPaper(dark: dark, color: t.accent)
+            case .atlas: AtlasChart(dark: dark, line: t.rule)
+            case .swiss: SwissGrid(dark: dark, ink: t.ink, red: t.accent)
+            case .gallery: EmptyView()
+            }
+        }
+        .mask {
+            GeometryReader { g in
+                let h = max(g.size.height, 1)
+                LinearGradient(stops: [.init(color: .clear, location: min(1, 100 / h)), .init(color: .black, location: min(1, 280 / h))],
+                               startPoint: .top, endPoint: .bottom)
+            }
+        }
+    }
+}
+
+private struct TableFrameKey: EnvironmentKey { static let defaultValue: CGRect? = nil }
+extension EnvironmentValues {
+    /// Where the app's whole window sits (global coordinates), so every page and bar draws its part
+    /// of one table. Set by `keepsakeAppearance`; without it a patch draws a page of its own size.
+    public var ksTableFrame: CGRect? {
+        get { self[TableFrameKey.self] }
+        set { self[TableFrameKey.self] = newValue }
+    }
+}
+
+/// Measures the root view, safe areas included, for `ksTableFrame`.
+private struct TableFrameReader: ViewModifier {
+    @State private var frame: CGRect?
+    func body(content: Content) -> some View {
+        content
+            .environment(\.ksTableFrame, frame)
+            .background {
+                Color.clear.ignoresSafeArea()
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            }
+    }
+}
+
+/// A soft glow, `radius` a fraction of the page's longer side, placed by unit point on the page.
+private struct Glow: View {
+    let color: Color, at: UnitPoint, radius: CGFloat
+    var body: some View {
+        GeometryReader { g in
+            let r = radius * max(g.size.width, g.size.height)
+            RadialGradient(colors: [color, color.opacity(0)], center: at, startRadius: 0, endRadius: r)
+        }
+    }
+}
+
+/// Pantry Pop: a sunny shelf. Warm light pooling up from the bottom in the jar colours (mustard,
+/// tomato, teal) and a halftone that grows as it nears the shelf, like a printed label.
+struct PantryShelf: View {
+    let dark: Bool
+    var body: some View {
+        let mustard = Color(uiColor: UIColor(hex: 0xFFC23D)), tomato = Color(uiColor: UIColor(hex: 0xFF5A36)), teal = Color(uiColor: UIColor(hex: 0x12A08F))
+        ZStack {
+            Glow(color: mustard.opacity(dark ? 0.09 : 0.34), at: UnitPoint(x: 1.05, y: 0.62), radius: 0.62)
+            Glow(color: tomato.opacity(dark ? 0.10 : 0.16), at: UnitPoint(x: -0.1, y: 1.0), radius: 0.6)
+            Glow(color: teal.opacity(dark ? 0.08 : 0.08), at: UnitPoint(x: 0.85, y: 1.12), radius: 0.4)
+            Canvas { ctx, size in
+                let step: CGFloat = 14
+                let ink = dark ? Color(uiColor: UIColor(hex: 0xFFF7E8)).opacity(0.07) : Color(uiColor: UIColor(hex: 0x16130F)).opacity(0.075)
+                var dots = Path()
+                var row = 0
+                for y in stride(from: size.height * 0.3, through: size.height + step, by: step) {
+                    // 0 at a third of the way down, full by the bottom.
+                    let k = min(1, max(0, (y - size.height * 0.3) / (size.height * 0.7)))
+                    let r = 0.3 + 1.7 * k
+                    let shift = row.isMultiple(of: 2) ? 0 : step / 2
+                    for x in stride(from: shift, through: size.width + step, by: step) {
+                        dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+                    }
+                    row += 1
+                }
+                ctx.fill(dots, with: .color(ink))
+            }
+        }
+    }
+}
+
+/// Field Notebook: graph paper with a heavier line every fifth square, the paper slightly warmer
+/// and darker towards its edges, like a page that has been carried around.
+struct GraphPaper: View {
+    let dark: Bool
+    let color: Color
+    var body: some View {
+        ZStack {
+            Canvas { ctx, size in
+                let cell: CGFloat = 24
+                var minor = Path(), major = Path()
+                for (i, x) in stride(from: CGFloat(0), through: size.width, by: cell).enumerated() {
+                    var p = i % 5 == 0 ? major : minor
+                    p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
+                    if i % 5 == 0 { major = p } else { minor = p }
+                }
+                for (i, y) in stride(from: CGFloat(0), through: size.height, by: cell).enumerated() {
+                    var p = i % 5 == 0 ? major : minor
+                    p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y))
+                    if i % 5 == 0 { major = p } else { minor = p }
+                }
+                ctx.stroke(minor, with: .color(color.opacity(0.06)), lineWidth: 1)
+                ctx.stroke(major, with: .color(color.opacity(dark ? 0.10 : 0.11)), lineWidth: 1)
+            }
+            // A warm vignette: the middle of the page stays clean.
+            EllipticalGradient(colors: [.clear, Color(uiColor: UIColor(hex: dark ? 0x000000 : 0x8A6A3A)).opacity(dark ? 0.32 : 0.07)],
+                               center: UnitPoint(x: 0.5, y: 0.42), startRadiusFraction: 0.35, endRadiusFraction: 0.8)
+            // Late afternoon light on the lower page.
+            LinearGradient(colors: [.clear, Color(uiColor: UIColor(hex: dark ? 0xE9CF52 : 0xF2D57A)).opacity(dark ? 0.05 : 0.16)],
+                           startPoint: UnitPoint(x: 0.5, y: 0.35), endPoint: .bottom)
+        }
+    }
+}
+
+/// Night Atlas: a chart of the night sky. An amber lamp low on the page, deep water below, the
+/// graticule of a globe rising from the corner and, after dark, a scatter of stars. Its light
+/// mode, Dawn, warms the lower page instead and keeps only the globe.
+struct AtlasChart: View {
+    let dark: Bool
+    let line: Color
+    var body: some View {
+        let amber = Color(uiColor: UIColor(hex: dark ? 0xFFB547 : 0xFF9A3D)), sea = Color(uiColor: UIColor(hex: dark ? 0x2E6B7A : 0x7FA7B5))
+        ZStack {
+            LinearGradient(colors: [.clear, Color(uiColor: UIColor(hex: dark ? 0x05070C : 0xE6ECEF)).opacity(dark ? 0.7 : 0.9)],
+                           startPoint: UnitPoint(x: 0.5, y: 0.25), endPoint: .bottom)
+            Glow(color: amber.opacity(dark ? 0.15 : 0.22), at: UnitPoint(x: 0.0, y: 0.55), radius: 0.55)
+            Glow(color: sea.opacity(dark ? 0.22 : 0.2), at: UnitPoint(x: 1.0, y: 1.05), radius: 0.6)
+            Canvas { ctx, size in
+                // Stars: a fixed scatter, so they don't move between screens.
+                if dark {
+                    var seed: UInt64 = 0x5EED
+                    func next() -> CGFloat { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return CGFloat(seed >> 33) / CGFloat(1 << 31) }
+                    for _ in 0..<Int(size.width * size.height / 5200) {
+                        let x = next() * size.width, y = next() * size.height, r = 0.4 + next() * 0.8, a = 0.12 + next() * 0.3
+                        ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(a)))
+                    }
+                }
+                // A globe in the lower corner: parallels and meridians.
+                let c = CGPoint(x: size.width * 0.92, y: size.height * 1.02), R = max(size.width, size.height * 0.5) * 0.95
+                var g = Path()
+                g.addEllipse(in: CGRect(x: c.x - R, y: c.y - R, width: R * 2, height: R * 2))
+                for f in stride(from: 0.2, through: 0.8, by: 0.2) {
+                    g.addEllipse(in: CGRect(x: c.x - R * f, y: c.y - R, width: R * 2 * f, height: R * 2))
+                }
+                for f in stride(from: -0.75, through: 0.75, by: 0.25) where f != 0 {
+                    let y = c.y + R * f, half = R * (1 - f * f).squareRoot()
+                    g.move(to: CGPoint(x: c.x - half, y: y)); g.addLine(to: CGPoint(x: c.x + half, y: y))
+                }
+                g.move(to: CGPoint(x: c.x - R, y: c.y)); g.addLine(to: CGPoint(x: c.x + R, y: c.y))
+                ctx.stroke(g, with: .color(line.opacity(dark ? 0.9 : 0.75)), lineWidth: 1)
+            }
+        }
+    }
+}
+
+/// Swiss Index: the grid the tiles are set on, shown as column hairlines, and one red disc, the
+/// poster's single colour, low in the corner.
+struct SwissGrid: View {
+    let dark: Bool
+    let ink: Color, red: Color
+    var body: some View {
+        Canvas { ctx, size in
+            let margin: CGFloat = 18, cols = size.width > 700 ? 8 : 4
+            var p = Path()
+            for i in 0...cols {
+                let x = (margin + CGFloat(i) * (size.width - margin * 2) / CGFloat(cols)).rounded() + 0.5
+                p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
+            }
+            ctx.stroke(p, with: .color(ink.opacity(dark ? 0.08 : 0.07)), lineWidth: 1)
+            // Small and pale, tucked into the corner: red is the colour for actions, so the disc
+            // stays a mark rather than a second red block behind them.
+            let r = min(size.width, size.height) * 0.34
+            let c = CGPoint(x: size.width - r * 0.45, y: size.height - r * 0.75)
+            ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(red.opacity(dark ? 0.1 : 0.07)))
+        }
     }
 }
 
@@ -387,6 +584,7 @@ extension View {
         Haptic.sound = a.sound
         return self.environment(\.ks, theme).environment(\.appearance, a).tint(theme.accent).fontDesign(theme.bodyDesign)
             .preferredColorScheme(a.colorScheme)
+            .modifier(TableFrameReader())
     }
 }
 #endif
