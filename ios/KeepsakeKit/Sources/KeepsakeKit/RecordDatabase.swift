@@ -135,6 +135,20 @@ public final class RecordDatabase: @unchecked Sendable {
         return try pool.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM \"\(s.table)\"") ?? 0 }
     }
 
+    /// How many saves (not in the Trash) each value of an item column has ("collectionId", "kind"),
+    /// counted from the column so no body is read. `excluding` leaves one save out.
+    public func liveItemCounts(by column: String, excluding: String? = nil) throws -> [String: Int] {
+        guard Self.specs["items"]?.columns[column] != nil else { throw DatabaseError(message: "Unknown column \(column)") }
+        return try pool.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT "\(column)" AS value, COUNT(*) AS n FROM item
+                WHERE deletedAt IS NULL AND "\(column)" IS NOT NULL AND "\(column)" != '' AND key IS NOT ?
+                GROUP BY "\(column)"
+                """, arguments: [excluding])
+            return Dictionary(uniqueKeysWithValues: rows.map { ($0["value"] as String, $0["n"] as Int) })
+        }
+    }
+
     /// Inserts or replaces records given as their JSON text (with each save's key fact, for items).
     public func put(_ store: String, bodies: [String], facts: [String?]? = nil) throws {
         let s = try spec(store)

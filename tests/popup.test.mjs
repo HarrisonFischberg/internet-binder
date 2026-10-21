@@ -120,8 +120,15 @@ test('popup: opening it again on a saved video shows that save, not the duplicat
 test('popup: Not sure goes to Review with a note, and Undo comes back to the start', async () => {
   const page2 = { title: 'Some notes', url: 'https://notes.example/popup-review', images: [], image: '', price: null, schemaTypes: [] };
   await openPopup(page2);
-  page.getElementById('pickReview').click();
-  assert.ok(page.getElementById('pickReview').classList.contains('is-here'));
+  const review = page.getElementById('pickReview');
+  assert.ok(review.classList.contains('as-card'), 'beside the libraries, Review is a card');
+  assert.equal(page.getElementById('reviewTitle').textContent, 'Review');
+  assert.match(page.getElementById('reviewSub').textContent, /Keepsake suggests a home later$/);
+  assert.ok(review.querySelector('.fan').children.length > 0, 'a fan of what is waiting');
+  review.click();
+  assert.ok(review.classList.contains('is-here'));
+  assert.match(page.getElementById('reviewSub').textContent, /^Waiting here/);
+  assert.equal(page.getElementById('homeGuess').textContent, 'For now it’s waiting in Review.');
   assert.equal(page.getElementById('homeDest').textContent, 'In Review');
   page.getElementById('homeAddNote').click();
   page.getElementById('homeNote').value = 'for later';

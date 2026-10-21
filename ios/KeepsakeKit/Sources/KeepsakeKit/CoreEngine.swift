@@ -189,6 +189,9 @@ public final class KeepsakeCore: @unchecked Sendable {
                 return ""
             } catch { return err(error) }
         }
+        let liveCounts: @convention(block) (String) -> String = { column in
+            String(decoding: (try? JSONSerialization.data(withJSONObject: (try? db.liveItemCounts(by: column)) ?? [:])) ?? Data("{}".utf8), as: UTF8.self)
+        }
         let missingFacts: @convention(block) () -> String = { (try? db.itemsMissingFacts()) ?? "[]" }
         let setFacts: @convention(block) (String) -> String = { json in
             do { try db.setFacts((try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String]) ?? [:]); return "" } catch { return err(error) }
@@ -207,7 +210,8 @@ public final class KeepsakeCore: @unchecked Sendable {
             do { try db.clear(strings(json)); return "" } catch { return err(error) }
         }
         for (k, v) in [("all", all as Any), ("get", get), ("byIndex", byIndex), ("count", count), ("put", put),
-                       ("remove", remove), ("swap", swap), ("clear", clear), ("missingFacts", missingFacts), ("setFacts", setFacts)] {
+                       ("remove", remove), ("swap", swap), ("clear", clear), ("liveCounts", liveCounts), ("missingFacts", missingFacts),
+                       ("setFacts", setFacts)] {
             o.setObject(v, forKeyedSubscript: k as NSString)
         }
         return o

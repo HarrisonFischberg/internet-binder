@@ -458,6 +458,39 @@ struct DestinationTests {
         #expect(after.collectionId == col.id)
     }
 
+    /// The Share Sheet's covers and counts: a few saves per group, counted without reading every save.
+    @Test func shelfHoldsAFewPerGroupAndCountsThemAll() async throws {
+        let lib = try library()
+        let col = try await lib.createCollection(named: "Gifts")
+        var ids: [String] = []
+        for i in 0..<5 {
+            let s = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/gift-\(i)", title: "Gift \(i)", text: nil)).save)
+            try await lib.put([s.id], in: col.id)
+            ids.append(s.id)
+        }
+        let newest = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/new", title: "New", text: nil)).save)
+        let shelf = try lib.shelf(perGroup: 3, excluding: newest.id)
+        #expect(shelf.counts[col.id] == 5)
+        #expect(shelf.saves.filter { $0.collectionId == col.id }.count == 3)
+        #expect(!shelf.saves.contains { $0.id == newest.id })
+        try await lib.trash([ids[0]])
+        #expect(try lib.shelf(excluding: newest.id).counts[col.id] == 4)
+        let d = try await lib.destinations()
+        #expect(d.contains { $0.value == col.id })
+    }
+
+    /// The Share Sheet's Review card: how many wait in Review, and a few of them for its fan.
+    @Test func waitingCountsWhatsInReview() async throws {
+        let lib = try library()
+        let a = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/a", title: "A thing", text: nil)).save)
+        let b = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/b", title: "Another", text: nil)).save)
+        try await lib.toReview([a.id, b.id])
+        #expect(try lib.waiting(excluding: b.id).count == 1)
+        #expect(try lib.waiting().saves.map(\.id).sorted() == [a.id, b.id].sorted())
+        try await lib.put([a.id], in: "kind:place")
+        #expect(try lib.waiting().count == 1)
+    }
+
     @Test func undoRemovesOutright() async throws {
         let lib = try library()
         let saved = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/oops", title: "Oops", text: nil)).save)

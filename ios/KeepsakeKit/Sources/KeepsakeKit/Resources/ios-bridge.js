@@ -7,6 +7,7 @@
 //   put(store, "[recordJSON, …]") → ""|error       remove(store, "[keys]") → ""|error
 //   swap(store, "[[key, expectedBodyOrNull, nextBodyOrNull], …]") → ""|"conflict"|error
 //   clear("[stores]") → ""|error
+//   liveCounts(column) → "{value: count}" (items not in the Trash, counted without reading bodies)
 // __native.kv: get("[keys]") → "{...}", set("{...}") → ""|error, remove("[keys]"), clear()
 
 (function () {
@@ -155,9 +156,10 @@
     // Where a save can go: the Lifestyle views, then collections (pinned first, then most used), as in
     // Chrome's pickers ("kind:place" means the Places view).
     async destinations() {
-      const [cols, items] = await Promise.all([store.getCollections(), store.getItems()]);
-      const counts = new Map();
-      for (const i of items) if (i.collectionId) counts.set(i.collectionId, (counts.get(i.collectionId) || 0) + 1);
+      // Counted in SQLite: reading every save here would hold the whole library (pictures and all) in
+      // memory, more than the Share Extension is allowed, and iOS would close the share sheet.
+      const cols = await store.getCollections();
+      const counts = new Map(Object.entries(JSON.parse(__native.db.liveCounts('collectionId'))));
       const ordered = [...cols].sort((a, b) => (b.pinned === true) - (a.pinned === true) || (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.name.localeCompare(b.name));
       return [
         ...K.kinds.LIFESTYLE().map((k) => ({ value: `kind:${k.value}`, label: k.plural, group: 'lifestyle', kind: k.value })),
