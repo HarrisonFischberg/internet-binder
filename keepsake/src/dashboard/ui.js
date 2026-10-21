@@ -296,6 +296,15 @@ export function pinIcon(filled = false) {
   if (filled) s.querySelector('path').setAttribute('fill', 'currentColor');
   return s;
 }
+export function linkIcon() {
+  return svg(['M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1', 'M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1']);
+}
+export function shareIcon() {
+  return svg(['M12 3v12', 'm7.5 7.5 4.5-4.5 4.5 4.5', 'M6 11H5v9h14v-9h-1']);
+}
+export function selectIcon() {
+  return svg(['M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z', 'm8.5 12.2 2.4 2.4 4.6-4.8']);
+}
 export function folderIcon() {
   return svg(['M3.5 7A1.5 1.5 0 0 1 5 5.5h4l2 2h8A1.5 1.5 0 0 1 20.5 9v9A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18V7Z']);
 }

@@ -236,6 +236,23 @@ struct CaptureTests {
         #expect(r.save?.price == 129)
     }
 
+    /// Deleting collections returns an undo that round-trips through JSON and restores them exactly.
+    @Test func deleteCollectionsUndoes() async throws {
+        let lib = try library()
+        let a = try await lib.createCollection(named: "Garden")
+        let b = try await lib.createCollection(named: "Bikes")
+        let save = try await lib.capture(url: "https://example.com/trowel", title: "Trowel")
+        try await lib.move([save.id], to: a.id)
+        let undo = try await lib.deleteCollections([a.id, b.id])
+        #expect(undo != nil)
+        #expect(try lib.collections().contains { $0.id == a.id } == false)
+        #expect(try lib.save(save.id)?.collectionId == nil)
+        try await lib.restoreCollections(undo!)
+        #expect(try lib.collections().filter { [a.id, b.id].contains($0.id) }.count == 2)
+        #expect(try lib.save(save.id)?.collectionId == a.id)
+        #expect(try await lib.deleteCollections(["missing"]) == nil)
+    }
+
     @Test func sameLinkTwiceIsADuplicate() async throws {
         let lib = try library()
         let p = Library.sharedProduct(url: "https://example.com/a?utm_source=x", title: "A", text: nil)

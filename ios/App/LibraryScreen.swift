@@ -21,7 +21,6 @@ struct LibraryScreen: View {
     @State private var source: String?          // a site (host)
     @State private var selecting = false
     @State private var selected: Set<String> = []
-    @State private var destinations: [Destination] = []
     @State private var collections: [SaveCollection] = []
     @State private var naming = false
     @State private var newName = ""
@@ -84,11 +83,14 @@ struct LibraryScreen: View {
                     content
                 }
                 .padding(.horizontal, 18)
-                .padding(.bottom, selecting ? 100 : 32)
+                .padding(.bottom, selecting ? 140 : 32)
             }
             .scrollDismissesKeyboard(.immediately)
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
-            if selecting { selectionBar }
+            if selecting {
+                SaveSelectionBar(all: shown.map(\.id), selected: $selected, selecting: $selecting)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear { DispatchQueue.main.async { Perf.done("Library on screen") } }
@@ -100,7 +102,8 @@ struct LibraryScreen: View {
             Button("Cancel", role: .cancel) { newName = "" }
             Button("Create") { Task { _ = try? await model.library?.createCollection(named: newName); newName = ""; loadCollections() } }
         }
-        .task(id: model.saves.count) { loadCollections() }
+        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
+        .task(id: "\(model.saves.count)|\(model.collectionsChanged)") { loadCollections() }
         .onChange(of: model.focusSearch, initial: true) { _, want in
             if want { searching = true; model.focusSearch = false }
         }
@@ -123,11 +126,8 @@ struct LibraryScreen: View {
                     .font(KSFont.note).foregroundStyle(t.inkMuted)
             }
             Spacer()
+            if !model.saves.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
             Menu {
-                Button(selecting ? "Done selecting" : "Select", systemImage: "checkmark.circle") {
-                    selecting.toggle()
-                    selected = []
-                }
                 Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
             } label: {
                 Image(systemName: "ellipsis").font(.body.weight(.bold)).foregroundStyle(t.ink)
@@ -230,16 +230,10 @@ struct LibraryScreen: View {
                         Haptic.checked()
                         if on { selected.remove(save.id) } else { selected.insert(save.id) }
                     } label: {
-                        SaveObject(save)
-                            .overlay(alignment: .topTrailing) {
-                                Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                                    .font(.title2).foregroundStyle(on ? t.accent : t.inkMuted)
-                                    .background(Circle().fill(t.paper)).padding(8)
-                            }
-                            .opacity(on ? 1 : 0.85)
+                        SaveObject(save).selectionCheck(on)
                     }
                     .buttonStyle(PressStyle())
-                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .accessibilityLabel(save.title)
                 } else {
                 NavigationLink(value: save) {
                     SaveObject(save).matchedTransitionSource(id: save.id, in: zoom)
@@ -252,7 +246,11 @@ struct LibraryScreen: View {
                 }
                 .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
                 .contextMenu {
-                    Button("Move to Trash", systemImage: "trash", role: .destructive) { Task { await model.trash(save) } }
+                    SaveMenu(save: save) {
+                        Haptic.detent()
+                        selected = [save.id]
+                        selecting = true
+                    }
                 }
                 }
             }
@@ -304,54 +302,6 @@ struct LibraryScreen: View {
     }
 
     private func count(_ n: Int, _ noun: String) -> String { n == 1 ? "1 \(noun)" : "\(n) \(noun)s" }
-
-    /// Select mode: move or trash several saves at once.
-    private var selectionBar: some View {
-        HStack(spacing: 10) {
-            Menu {
-                ForEach(destinations) { d in
-                    Button(d.label) {
-                        let ids = Array(selected)
-                        Task {
-                            let name = (try? await model.library?.put(ids, in: d.value)) ?? d.label
-                            Haptic.dropped()
-                            model.refresh()
-                            model.show(ids.count == 1 ? "Moved to \(name)" : "Moved \(ids.count) saves to \(name)")
-                            selected = []
-                            selecting = false
-                        }
-                    }
-                }
-            } label: {
-                Label("Move to…", systemImage: "folder").font(.headline).foregroundStyle(t.onPrimary)
-                    .frame(maxWidth: .infinity, minHeight: 54).background(t.primary, in: ControlShapeView.shape(t))
-            }
-            .disabled(selected.isEmpty)
-            Button {
-                let ids = Array(selected)
-                Task {
-                    try? await model.library?.trash(ids)
-                    Haptic.trashed()
-                    model.refresh()
-                    model.show(ids.count == 1 ? "Moved to Trash" : "Moved \(ids.count) saves to Trash") {
-                        try? await model.library?.restore(ids)
-                        model.refresh()
-                    }
-                    selected = []
-                    selecting = false
-                }
-            } label: {
-                Image(systemName: "trash").font(.headline).foregroundStyle(t.stamp)
-                    .frame(width: 54, height: 54).ksSurface(radius: 27, scale: 0.75)
-            }
-            .disabled(selected.isEmpty)
-            .accessibilityLabel("Move \(selected.count) to Trash")
-        }
-        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
-        .background(t.table.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) { Rectangle().fill(t.rule).frame(height: 1) }
-        .task { destinations = (try? await model.library?.destinations()) ?? [] }
-    }
 
     /// Search, at the top, with paste-a-link beside it.
     @ViewBuilder private var searchField: some View {

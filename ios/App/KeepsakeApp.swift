@@ -83,6 +83,10 @@ final class LibraryModel {
         /// Your provider asked to slow down: the bar says so until then.
         var waitingUntil: Date?
     }
+    /// Where Move to… can send saves (every Lifestyle view and collection), for the long-press menus.
+    var destinations: [Destination] = []
+    /// Counts collection changes no save count shows (deleting an empty one, Undo), so lists reload.
+    var collectionsChanged = 0
     /// Imported saves your provider hasn't read yet (needsAi), newest first.
     var aiBacklog: [Save] { saves.filter { $0.needsAi == true } }
     let library: Library?
@@ -135,6 +139,7 @@ final class LibraryModel {
                 #endif
                 finishSaves()
                 await refreshAIReady()
+                await loadDestinations()
             } catch {
                 problem = error.localizedDescription
             }
@@ -171,6 +176,7 @@ final class LibraryModel {
         guard let library, let list = try? library.saves() else { return }
         saves = list
         reviewCount = list.filter { $0.needsCollection && $0.purchased != true }.count
+        Task { await loadDestinations() }
     }
 
     /// The after-save work that's turned on (AI tidy, Lifestyle fill-in), for saves made in the Share

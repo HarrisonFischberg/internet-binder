@@ -172,9 +172,7 @@ struct HomeScreen: View {
                         // Hold and slide to put Recent in your own order.
                         .reorderable(save.id, in: $recentOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set("recentOrder", $0) }
                         // Long press: the same menu as the Library's cards.
-                        .contextMenu {
-                            Button("Move to Trash", systemImage: "trash", role: .destructive) { Task { await model.trash(save) } }
-                        }
+                        .contextMenu { SaveMenu(save: save) }
                         .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
                     }
                 }

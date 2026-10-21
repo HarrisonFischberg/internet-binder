@@ -241,6 +241,44 @@ test('deleting a collection sends its items to Review (or to moveTo), and forget
   for (const e of Object.values(prefs.learnedKeywords)) assert.equal(e[home.id], undefined);
 });
 
+test('deleting several collections at once can be undone exactly', async () => {
+  const { store } = await fresh();
+  const [home, clothing, tech] = await store.getCollections();
+  const lamp = await store.addItem({ title: 'Lamp', url: 'https://a.example/1', collectionId: home.id });
+  const coat = await store.addItem({ title: 'Coat', url: 'https://a.example/2', collectionId: clothing.id });
+  const old = await store.addItem({ title: 'Old', url: 'https://a.example/3', collectionId: clothing.id });
+  await store.deleteItems([old.id]);
+  await store.moveItems([lamp.id], clothing.id);
+  await store.moveItems([lamp.id], home.id);
+  const prefsBefore = await store.getPrefs();
+  const undo = await store.deleteCollections([home.id, clothing.id, 'missing']);
+  assert.deepEqual((await store.getCollections()).map((c) => c.id), [tech.id]);
+  assert.equal((await store.getItem(lamp.id)).collectionId, null);
+  assert.equal((await store.getItem(coat.id)).needsReview, true);
+  // The undo travels through JSON on iOS.
+  await store.restoreCollections(JSON.parse(JSON.stringify(undo)));
+  assert.deepEqual((await store.getCollections()).map((c) => c.id).sort(), [home.id, clothing.id, tech.id].sort());
+  const back = await store.getItem(lamp.id);
+  assert.equal(back.collectionId, home.id);
+  assert.equal(back.needsReview, false);
+  assert.equal((await store.getItem(coat.id)).collectionId, clothing.id);
+  assert.ok((await store.getItem(old.id)).deletedAt, 'a save already in the Trash stays there');
+  assert.deepEqual(await store.getPrefs(), prefsBefore);
+  assert.equal(await store.deleteCollections(['missing']), null);
+});
+
+test('deleting collections with their saves sends the saves to the Trash, and Undo brings them back', async () => {
+  const { store } = await fresh();
+  const [home] = await store.getCollections();
+  const lamp = await store.addItem({ title: 'Lamp', url: 'https://a.example/1', collectionId: home.id });
+  const undo = await store.deleteCollections([home.id], { deleteItems: true });
+  assert.ok((await store.getItem(lamp.id)).deletedAt);
+  await store.restoreCollections(undo);
+  const back = await store.getItem(lamp.id);
+  assert.equal(back.deletedAt, undefined);
+  assert.equal(back.collectionId, home.id);
+});
+
 test('merging collections moves items and carries the name over as an alias', async () => {
   const { store } = await fresh();
   const [home, clothing] = await store.getCollections();

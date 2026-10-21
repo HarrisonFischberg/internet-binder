@@ -383,9 +383,16 @@ a.sidebar-brand:hover .brand-name {
   min-width: 0;
 }
 
-.ai-check {
+.ai-check,
+.select-toggle {
   align-self: center;
   flex: none;
+}
+
+.select-toggle[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
 }
 
 .places-map-toggle {
@@ -2090,15 +2097,18 @@ body.modal-open {
   min-width: 0;
 }
 
+/* Undo and the like: the toast's own text colour, bold, in an outline. The highlight colour it used read at
+   about 3:1 on the light toast and 1.5:1 on the dark one. */
 .toast-action {
   background: transparent;
-  color: var(--brass);
-  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--paper);
+  font-weight: 700;
+  border-color: color-mix(in srgb, var(--paper) 45%, transparent);
 }
 
 .toast-action:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--brass);
+  background: color-mix(in srgb, var(--paper) 14%, transparent);
+  color: var(--paper);
 }
 
 .toast-close {
@@ -4669,4 +4679,35 @@ button.library-tab.on {
 @keyframes refresh-turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   #refreshBtn.is-spinning svg { animation: none; }
+}
+
+/* Select mode on rows and collection tiles ---------------------------------- */
+.place-row .card-check,
+.shelf-row .card-check {
+  position: static;
+  flex: none;
+  margin-left: 4px;
+}
+
+.place-row.selected,
+.shelf-row.selected {
+  background: color-mix(in srgb, var(--moss) 10%, transparent);
+}
+
+/* A card without a photo has its kind's icon in that corner: the tick takes its place while selecting. */
+.card.selecting .pic-kind-icon {
+  visibility: hidden;
+}
+
+.tile.selected {
+  outline: 3px solid var(--moss);
+  outline-offset: 2px;
+}
+
+.tile.selecting .tile-art {
+  opacity: 0.85;
+}
+
+.tile.selected .tile-art {
+  opacity: 1;
 }
