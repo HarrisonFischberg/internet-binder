@@ -48,7 +48,7 @@ export const TRASH_DAYS = 30;
 // Lifestyle view (or took it out), so your AI provider fills in that kind's details and never changes it.
 const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'url', 'description', 'topics', 'kind'];
 const CAPTURE_STATES = ['pending', 'complete', 'failed'];
-export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 25 * 1024 * 1024, maxImageBytes: 400 * 1024, maxGoals: 2000, maxCheckins: 50000, maxCheckinsPerGoal: 2000 };
+export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 150 * 1024 * 1024, maxImageBytes: 400 * 1024, maxGoals: 2000, maxCheckins: 50000, maxCheckinsPerGoal: 2000 };
 
 // Styles a person can pick in Settings → Appearance. The first is the default.
 // `about` and `swatch` (page, card, accent, a kind colour) are for the picker in Settings.
@@ -946,7 +946,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
         schemaVersion: SCHEMA_VERSION,
         exportedAt: nowIso(),
         collections: mapOf(collections),
-        items: mapOf(items),
+        items: mapOf(items.map(packImages)),
         goals,
         checkins,
         prefs,
@@ -1127,6 +1127,23 @@ function mergePrefs(base, incoming, idMap) {
   return out;
 }
 
+// The cover picture is usually also the first gallery picture, and pictures are inline data: URLs,
+// so writing it twice doubled the size of an export. The gallery copy is left out and coverAt says
+// where it goes back. Older versions ignore coverAt: their gallery just misses the cover.
+export function packImages(item) {
+  const at = item.image && Array.isArray(item.images) ? item.images.indexOf(item.image) : -1;
+  if (at < 0) return item;
+  return { ...item, images: item.images.filter((u) => u !== item.image), coverAt: at };
+}
+
+export function unpackImages(raw) {
+  if (!Number.isInteger(raw.coverAt) || typeof raw.image !== 'string' || !raw.image) return raw;
+  const images = Array.isArray(raw.images) ? [...raw.images] : [];
+  images.splice(Math.max(0, Math.min(raw.coverAt, images.length)), 0, raw.image);
+  const { coverAt, ...rest } = raw;
+  return { ...rest, images };
+}
+
 // Validates and sanitizes an export payload. Throws with a readable message.
 export function validateExport(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('This file is not a Keepsake export.');
@@ -1146,8 +1163,9 @@ export function validateExport(payload) {
     collections[c.id] = c;
   }
   const items = {};
-  for (const raw of itemEntries) {
-    if (!raw || typeof raw !== 'object') continue;
+  for (const entry of itemEntries) {
+    if (!entry || typeof entry !== 'object') continue;
+    const raw = unpackImages(entry);
     if (typeof raw.image === 'string' && raw.image.startsWith('data:') && raw.image.length > LIMITS.maxImageBytes * 1.4) raw.image = '';
     const it = makeItem({ ...raw, id: safeId(raw.id) });
     if (!it.url && !it.sourceUrl && !it.image && it.title === 'Untitled item') continue;

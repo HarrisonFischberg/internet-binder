@@ -444,7 +444,7 @@ function dataSection(ctx) {
       el('button', { type: 'button', class: 'btn btn-primary', onClick: async () => {
         const data = await ctx.store.exportJSON();
         const stamp = new Date().toISOString().slice(0, 10);
-        UI.download(`keepsake-export-${stamp}.json`, JSON.stringify(data, null, 2));
+        UI.download(`keepsake-export-${stamp}.json`, JSON.stringify(data));
       } }, ['Export JSON']),
       el('button', { type: 'button', class: 'btn', onClick: () => { importMode = 'merge'; fileInput.click(); } }, ['Import (merge)']),
       el('button', { type: 'button', class: 'btn', onClick: () => { importMode = 'replace'; fileInput.click(); } }, ['Import (replace all)']),
@@ -454,7 +454,7 @@ function dataSection(ctx) {
       } }, ['Load sample data']),
       fileInput,
     ]),
-    el('p', { class: 'help' }, ['Merge keeps what you have and skips duplicates (same page URL). Replace clears everything first. Imports are validated and capped at 25 MB.']),
+    el('p', { class: 'help' }, [`Merge keeps what you have and skips duplicates (same page URL). Replace clears everything first. Imports are validated and capped at ${Math.round(LIMITS.maxImportBytes / 1048576)} MB.`]),
     el('div', { class: 'divider' }),
     el('div', { class: 'actions-row' }, [
       el('button', { type: 'button', class: 'btn btn-danger', onClick: async () => {
