@@ -48,6 +48,9 @@ struct SaveCard: View {
     var pictureHeight: CGFloat?
     var fixedHeight: CGFloat?
     @Environment(\.ks) private var t
+    /// Room kept under the name for the state badge, so the badge never sits on the words.
+    @ScaledMetric(relativeTo: .caption2) private var badgeHeight: CGFloat = 20
+    private var badgeRoom: CGFloat { Self.state(save).isEmpty ? 0 : badgeHeight }
 
     private var kind: KindStyle { KindStyle(save.kind) }
     private var fact: String { save.fact ?? "" }
@@ -111,6 +114,7 @@ struct SaveCard: View {
                 Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2)
             }
         }
+        .padding(.bottom, badgeRoom)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -137,7 +141,7 @@ struct SaveCard: View {
             if !fact.isEmpty { Text(fact).font(.footnote.weight(.bold)).lineLimit(2) }
         }
         .foregroundStyle(t.onKind)
-        .padding(.horizontal, 14).padding(.top, 22).padding(.bottom, 14)
+        .padding(.horizontal, 14).padding(.top, 22).padding(.bottom, 14 + badgeRoom)
         .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
         .background(alignment: .top) { Lid().fill(t.onKind.opacity(0.18)).frame(height: 12) }
         .ksSurface(t.kindFill(save.kind))
@@ -151,7 +155,7 @@ struct SaveCard: View {
             Spacer(minLength: 0)
             if !fact.isEmpty { Text(fact.uppercased()).font(KSFont.label(t)).foregroundStyle(t.inkMuted).lineLimit(2) }
         }
-        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 12)
+        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 12 + badgeRoom)
         .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
         .background {
             Canvas { ctx, size in
@@ -216,7 +220,7 @@ struct SaveCard: View {
             Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(t.ink).lineLimit(3)
             if !fact.isEmpty && !compact { Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2) }
         }
-        .padding(12)
+        .padding(12).padding(.bottom, badgeRoom)
         .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
         .ksSurface()
     }
