@@ -88,7 +88,7 @@ struct CookingView: View {
             UIApplication.shared.isIdleTimerDisabled = false
             music.stop()
         }
-        .onChange(of: musicOn) { _, on in if on { music.start() } else { music.stop() } }
+        .onChange(of: musicOn) { _, on in if on { music.start(audible: true) } else { music.stop() } }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { music.resume() } else if phase == .background { music.suspend() }
         }

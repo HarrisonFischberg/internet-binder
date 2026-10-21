@@ -1,7 +1,9 @@
 import Testing
 import Foundation
 import CryptoKit
+import AVFoundation
 @testable import KeepsakeKit
+import KeepsakeUI
 
 func fixture(_ name: String) throws -> Data {
     let url = Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures")!
@@ -710,5 +712,23 @@ struct StepIngredientsTests {
         #expect(carbonara.highlights(in: text, step: 1).map { String(text[$0]) } == ["yolks", "egg", "pecorino", "pepper"])
         let last = "Toss the pasta in the pan off the heat, then stir in the egg mix with a splash of pasta water until glossy."
         #expect(carbonara.highlights(in: last, step: 3).map { String(last[$0]) } == ["pasta", "egg", "pasta"])
+    }
+}
+
+@Suite("Sound setting's tick")
+struct TickSoundTests {
+    @Test func isAShortSoftWav() throws {
+        let wav = TickSound.wav
+        #expect(String(decoding: wav.prefix(4), as: UTF8.self) == "RIFF")
+        #expect(String(decoding: wav[8..<12], as: UTF8.self) == "WAVE")
+        let samples = (wav.count - 44) / 2
+        #expect(samples == Int(Double(TickSound.sampleRate) * TickSound.duration))
+        let peak = stride(from: 44, to: wav.count, by: 2).map { abs(Int(Int16(bitPattern: UInt16(wav[$0]) | UInt16(wav[$0 + 1]) << 8))) }.max()!
+        #expect(peak > 8_000 && peak < Int(Int16.max))  // audible, never clipping
+    }
+
+    @Test func avFoundationPlaysIt() throws {
+        let player = try AVAudioPlayer(data: TickSound.wav)
+        #expect(abs(player.duration - TickSound.duration) < 0.01)
     }
 }

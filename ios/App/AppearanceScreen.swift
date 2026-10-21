@@ -50,7 +50,11 @@ struct AppearanceScreen: View {
                         VStack(spacing: 0) {
                             Toggle("Haptics", isOn: $model.appearance.haptics).frame(minHeight: 44)
                             Toggle("Sound", isOn: $model.appearance.sound).frame(minHeight: 44)
-                            Text("Sound is a soft tick when a save lands or you mark one done.")
+                                .onChange(of: model.appearance.sound) { _, on in
+                                    // A sample, so turning it on is heard at once.
+                                    if on { Haptic.sound = true; Haptic.tick() }
+                                }
+                            Text("Sound is a soft tick when a save lands or you mark one done. Silent mode mutes it.")
                                 .font(.footnote).foregroundStyle(t.inkMuted).frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .foregroundStyle(t.ink)
