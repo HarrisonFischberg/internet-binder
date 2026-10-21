@@ -194,6 +194,14 @@ final class ScreenshotTests: XCTestCase {
             sleep(2)
             try shoot(safari, folder, "\(tag)-share-lifestyle")
             guard mode == .dark else {
+                // Not sure: the Review card files it in one tap and wears the check.
+                safari.buttons.matching(NSPredicate(format: "label == 'Back' AND identifier != 'BackButton'")).firstMatch.tap()
+                let review = safari.buttons["Review"].firstMatch
+                XCTAssertTrue(review.waitForExistence(timeout: 5))
+                review.tap()
+                sleep(1)
+                XCTAssertTrue(review.isSelected, "Review card didn't take the save")
+                try shoot(safari, folder, "\(tag)-share-review")
                 safari.buttons["Undo"].firstMatch.tap()
                 safari.terminate()
                 continue

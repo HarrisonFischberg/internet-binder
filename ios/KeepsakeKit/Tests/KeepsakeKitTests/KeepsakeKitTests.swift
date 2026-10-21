@@ -479,6 +479,18 @@ struct DestinationTests {
         #expect(d.contains { $0.value == col.id })
     }
 
+    /// The Share Sheet's Review card: how many wait in Review, and a few of them for its fan.
+    @Test func waitingCountsWhatsInReview() async throws {
+        let lib = try library()
+        let a = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/a", title: "A thing", text: nil)).save)
+        let b = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/b", title: "Another", text: nil)).save)
+        try await lib.toReview([a.id, b.id])
+        #expect(try lib.waiting(excluding: b.id).count == 1)
+        #expect(try lib.waiting().saves.map(\.id).sorted() == [a.id, b.id].sorted())
+        try await lib.put([a.id], in: "kind:place")
+        #expect(try lib.waiting().count == 1)
+    }
+
     @Test func undoRemovesOutright() async throws {
         let lib = try library()
         let saved = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/oops", title: "Oops", text: nil)).save)

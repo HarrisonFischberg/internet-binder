@@ -38,6 +38,8 @@ final class ShareState {
     /// The two libraries a save can live in.
     enum Shelf: Hashable { case collections, lifestyle }
     static let review = "review"
+    /// What's already waiting in Review (not counting this save).
+    var waiting = Library.Waiting()
     var phase: Phase = .saving
     var save: Save?
     var destinations: [Destination] = []
@@ -76,6 +78,7 @@ final class ShareState {
             phase = .saved
             destinations = (try? await library.destinations()) ?? []
             shelfPreview = (try? library.shelf(excluding: s.id)) ?? Library.Shelf()
+            waiting = (try? library.waiting(excluding: s.id)) ?? Library.Waiting()
             let here = s.hasOwnView ? "kind:\(s.kind)" : s.collectionId
             if let d = destinations.first(where: { $0.value == here }) {
                 destination = d.value
@@ -231,6 +234,7 @@ struct ShareCard: View {
     let state: ShareState
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var appeared = false
     @State private var writing = false
     @State private var naming = false
@@ -248,7 +252,8 @@ struct ShareCard: View {
             VStack(alignment: .leading, spacing: 16) {
                 status
                 if let save = state.save {
-                    if state.shelf == nil {
+                    // Accessibility text sizes: the save as its small card, so the three choices and Done fit.
+                    if state.shelf == nil && !typeSize.isAccessibilitySize {
                         Spacer(minLength: 4)
                         SaveObject(save)
                             .frame(maxWidth: 210)
@@ -363,7 +368,17 @@ struct ShareCard: View {
 
     // MARK: the two libraries
 
-    private var libraries: some View {
+    @ViewBuilder private var libraries: some View {
+        if typeSize.isAccessibilitySize {
+            // One card per row, scrolling above Done, so nothing is pushed off the sheet.
+            ScrollView { librariesStack.padding(.horizontal, 2).padding(.bottom, 8) }
+                .scrollBounceBehavior(.basedOnSize)
+        } else {
+            librariesStack
+        }
+    }
+
+    private var librariesStack: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Where does it live?").font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
@@ -372,36 +387,50 @@ struct ShareCard: View {
                     .font(.subheadline)
                     .contentTransition(.opacity)
             }
-            HStack(spacing: 12) {
-                libraryCard(.collections, "Collections", "Things to buy", symbol: "bag", tint: KindStyle("product").color)
-                libraryCard(.lifestyle, "Lifestyle", "Recipes, places & more", symbol: "sparkles", tint: KindStyle("recipe").color)
+            let rows = typeSize.isAccessibilitySize
+            let stack = rows ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+            stack {
+                libraryCard(.collections, "Collections", "Things to buy", symbol: "bag", tint: KindStyle("product").color, row: rows)
+                libraryCard(.lifestyle, "Lifestyle", "Recipes, places & more", symbol: "sparkles", tint: KindStyle("recipe").color, row: rows)
             }
-            reviewRow
+            reviewCard
         }
     }
 
-    private func libraryCard(_ shelf: ShareState.Shelf, _ title: String, _ caption: String, symbol: String, tint: Color) -> some View {
+    private func libraryCard(_ shelf: ShareState.Shelf, _ title: String, _ caption: String, symbol: String, tint: Color, row: Bool = false) -> some View {
         let here = state.shelfNow == shelf
         let count = state.groups(shelf).count
+        let words = VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink)
+            Text(here ? state.destinationLabel : caption).font(.footnote).foregroundStyle(here ? tint : t.inkMuted).lineLimit(row ? 3 : 1)
+        }
+        let tally = HStack(spacing: 4) {
+            Text(shelf == .lifestyle ? (count == 1 ? "1 kind" : "\(count) kinds") : (count == 1 ? "1 collection" : "\(count) collections"))
+            Image(systemName: "chevron.right").imageScale(.small)
+        }
+        .font(.caption.weight(.medium)).foregroundStyle(t.inkMuted)
+        let check = Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(tint)
+            .transition(.scale.combined(with: .opacity))
         return Button { state.open(shelf) } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top) {
-                    CoverFan(state.members(shelf), symbol: symbol, tint: tint, size: 58)
-                    Spacer(minLength: 0)
-                    if here {
-                        Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(tint)
-                            .transition(.scale.combined(with: .opacity))
+            Group {
+                if row {
+                    // Large text: a row like the Review card, the words taking the width.
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 8) { words; tally }
+                        Spacer(minLength: 0)
+                        if here { check }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .top) {
+                            CoverFan(state.members(shelf), symbol: symbol, tint: tint, size: 58)
+                            Spacer(minLength: 0)
+                            if here { check }
+                        }
+                        words
+                        tally
                     }
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink)
-                    Text(here ? state.destinationLabel : caption).font(.footnote).foregroundStyle(here ? tint : t.inkMuted).lineLimit(1)
-                }
-                HStack(spacing: 4) {
-                    Text(shelf == .lifestyle ? (count == 1 ? "1 kind" : "\(count) kinds") : (count == 1 ? "1 collection" : "\(count) collections"))
-                    Image(systemName: "chevron.right").imageScale(.small)
-                }
-                .font(.caption.weight(.medium)).foregroundStyle(t.inkMuted)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -446,19 +475,7 @@ struct ShareCard: View {
     private func groups(_ shelf: ShareState.Shelf) -> some View {
         let lifestyle = shelf == .lifestyle
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Button { state.open(nil) } label: {
-                    Image(systemName: "chevron.left").font(.headline).foregroundStyle(t.ink)
-                        .frame(width: 44, height: 44).ksSurface(radius: 22, scale: 0.5)
-                }
-                .accessibilityLabel("Back")
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(lifestyle ? "Lifestyle" : "Collections").font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                    Text(lifestyle ? "Pick the view it belongs in" : "Pick a collection, or start one").font(.footnote).foregroundStyle(t.inkMuted)
-                }
-                .padding(.leading, 4)
-                Spacer()
-            }
+            pageHeader(lifestyle ? "Lifestyle" : "Collections", lifestyle ? "Pick the view it belongs in" : "Pick a collection, or start one")
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 14)], spacing: 16) {
                     if !lifestyle {
@@ -497,6 +514,58 @@ struct ShareCard: View {
             .frame(maxHeight: .infinity)
             reviewRow
         }
+    }
+
+    private func pageHeader(_ title: String, _ subtitle: String) -> some View {
+        HStack(spacing: 6) {
+            Button { state.open(nil) } label: {
+                Image(systemName: "chevron.left").font(.headline).foregroundStyle(t.ink)
+                    .frame(width: 44, height: 44).ksSurface(radius: 22, scale: 0.5)
+            }
+            .accessibilityLabel("Back")
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                Text(subtitle).font(.footnote).foregroundStyle(t.inkMuted)
+            }
+            .padding(.leading, 4)
+            Spacer()
+        }
+    }
+
+    // MARK: Review
+
+    /// Not sure yet: Review as a third card, drawn like the two libraries, with a fan of what's already
+    /// waiting there. One tap files it; Keepsake suggests a home for it later.
+    private var reviewCard: some View {
+        let here = state.destination == ShareState.review
+        let n = state.waiting.count
+        let others = n == 0 ? "Waiting here" : (n == 1 ? "Waiting here with 1 other" : "Waiting here with \(n) others")
+        let caption = here ? others : (n == 0 ? "Keepsake suggests a home later" : "\(n) waiting · Keepsake suggests a home later")
+        return Button { state.toReview() } label: {
+            HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: 14) {
+                if !typeSize.isAccessibilitySize { CoverFan(state.waiting.saves, symbol: "tray", tint: t.accent, size: 46) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Review").font(KSFont.name(.title3)).foregroundStyle(t.ink)
+                    Text(caption).font(.footnote).foregroundStyle(here ? t.ink : t.inkMuted).lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
+                }
+                Spacer(minLength: 0)
+                if here {
+                    Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(t.accent)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .ksSurface(stroke: here ? t.ink : nil)
+            .overlay { if here && t.outline == 0 { RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(t.ink, lineWidth: 2) } }
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Review")
+        .accessibilityValue(here ? "It's in Review. \(others)" : caption)
+        .accessibilityHint("Puts it here until you pick a home.")
+        .accessibilityAddTraits(here ? [.isButton, .isSelected] : .isButton)
     }
 
     private func secondary(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {

@@ -8,7 +8,7 @@ import { createStore, chromeBackend, idbBackend, applyLook } from '../shared/sto
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice, mostFirst } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
-import { kindOf, kindInfo, hasOwnView, LIFESTYLE } from '../shared/kinds.js';
+import { kindOf, kindInfo, hasOwnView, needsCollection, LIFESTYLE } from '../shared/kinds.js';
 import { learnFromCorrection, nearMatchCollection } from '../shared/categorizer.js';
 import { followColorScheme, setActionIcon } from '../toolbar/icon.js';
 import { kindIcon } from '../shared/kindIcon.js';
@@ -255,6 +255,18 @@ function showHome({ reset = true, shelf } = {}) {
       : pluralize(LIFESTYLE().length, 'kind', 'kinds');
     card.onclick = () => openShelf(which);
   }
+  // Review, the third card: a fan of what's already waiting there (nothing to buy yet, no home).
+  const waiting = state.items.filter((it) => needsCollection(it) && !it.purchased);
+  const reviewFan = $('pickReview').querySelector('.fan');
+  clear(reviewFan);
+  const waitingShown = [...waiting.filter(hasPhoto), ...waiting.filter((it) => !hasPhoto(it))].slice(0, 3).reverse();
+  for (const it of waitingShown) {
+    const tile = el('span', {}, [picture(hasPhoto(it) ? it.image : '', kindOf(it))]);
+    tile.style.setProperty('--tint', tintOf(kindOf(it)));
+    reviewFan.append(tile);
+  }
+  if (!waitingShown.length) reviewFan.append(el('span', { class: 'fan-empty' }, [reviewIcon()]));
+  state.waitingCount = waiting.length;
   $('pickReview').onclick = () => choose('');
   $('groupsBack').onclick = () => { state.shelfOpen = null; renderHome(); };
   $('homeAddNote').onclick = () => {
@@ -277,7 +289,7 @@ function showHome({ reset = true, shelf } = {}) {
   show('state-home');
   if (state.shelfOpen) openShelf(state.shelfOpen);
   else renderHome();
-  if (reset) setTimeout(() => $('homeDashboard').focus(), 30);
+  if (reset) setTimeout(() => $('homeDashboard')?.focus(), 30);
 }
 
 // Draws what changes as you pick: the object or the small card, libraries or groups, ticks, Save.
@@ -297,7 +309,18 @@ function renderHome() {
   const review = $('pickReview');
   review.classList.toggle('is-here', choice === '');
   review.setAttribute('aria-pressed', choice === '' ? 'true' : 'false');
-  $('reviewTitle').textContent = choice === '' ? 'Going to Review' : 'Not sure? Put it in Review';
+  // Beside the two libraries it's a card like them; inside a library's groups, the dashed row.
+  const n = state.waitingCount || 0;
+  review.classList.toggle('as-card', !shelf);
+  if (shelf) {
+    $('reviewTitle').textContent = choice === '' ? 'Going to Review' : 'Not sure? Put it in Review';
+    $('reviewSub').textContent = 'Keepsake suggests a home for it later.';
+  } else {
+    $('reviewTitle').textContent = 'Review';
+    $('reviewSub').textContent = choice === ''
+      ? (n ? `Waiting here with ${pluralize(n, 'other', 'others')}` : 'Waiting here')
+      : (n ? `${n} waiting · Keepsake suggests a home later` : 'Keepsake suggests a home later');
+  }
 
   const guess = state.initialChoice;
   for (const [id, which, plain] of [['libCollections', 'collections', 'Things to buy'], ['libLifestyle', 'lifestyle', 'Recipes, places & more']]) {

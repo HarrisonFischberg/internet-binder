@@ -1275,7 +1275,7 @@ body[data-state="state-home"] #openDashboard {
   background: var(--c-surface);
 }
 
-.review-row > svg:first-child {
+.review-row > .review-icon {
   width: 22px;
   height: 22px;
   flex: none;
@@ -1303,6 +1303,88 @@ body[data-state="state-home"] #openDashboard {
 .review-text {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+.review-row > .fan {
+  display: none;
+}
+
+/* Beside the two libraries, Review is a third card drawn like them, with a fan of what's waiting. */
+.review-row.as-card {
+  gap: 14px;
+  min-height: 0;
+  padding: 12px 40px 12px 12px;
+  background: var(--c-surface);
+  border: var(--bw) solid var(--c-line);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.review-row.as-card:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: var(--shadow-raised);
+}
+
+.review-row.as-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.review-row.as-card.is-here {
+  background: var(--c-surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.review-row.as-card > .review-icon {
+  display: none;
+}
+
+.review-row.as-card > .fan {
+  display: block;
+  flex: none;
+  margin: 0;
+  width: 92px;
+  height: 52px;
+}
+
+.review-row.as-card > .fan > span {
+  width: 42px;
+  height: 42px;
+}
+
+.review-row.as-card > .fan > span:nth-child(2) { left: 22px; }
+
+.review-row.as-card > .fan > span:nth-child(3) {
+  left: 44px;
+  width: 46px;
+  height: 46px;
+}
+
+.review-row.as-card > .fan > .fan-empty {
+  left: 0;
+  transform: none;
+  background: var(--c-surface-2);
+  color: var(--c-highlight);
+}
+
+.review-row.as-card .review-title {
+  font-family: var(--font-display);
+  font-stretch: var(--stretch-display);
+  font-weight: var(--w-display);
+  letter-spacing: var(--track-display);
+  font-size: 19px;
+  line-height: 1.15;
+}
+
+.review-row.as-card .review-sub {
+  font: var(--t-footnote);
+  color: var(--c-text-muted);
+}
+
+.review-row.as-card.is-here .review-sub {
+  color: var(--c-text);
+  font-weight: 800;
 }
 
 .review-title {

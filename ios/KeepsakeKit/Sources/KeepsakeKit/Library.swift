@@ -137,6 +137,36 @@ public final class Library: @unchecked Sendable {
         return shelf
     }
 
+    /// What's waiting in Review (no collection, no Lifestyle view, not bought): how many, and a few of
+    /// them (pictures first, then newest) for the Share Sheet's Review card.
+    public struct Waiting: Sendable {
+        public var count = 0
+        public var saves: [Save] = []
+        public init() {}
+    }
+
+    public func waiting(limit: Int = 3, excluding id: String? = nil) throws -> Waiting {
+        try database.pool.read { db in
+            let filter = """
+                FROM item WHERE deletedAt IS NULL AND key IS NOT ? AND COALESCE(collectionId, '') = ''
+                AND kind IN ('product', 'link') AND COALESCE(purchased, 0) = 0
+                """
+            var out = Waiting()
+            out.count = try Int.fetchOne(db, sql: "SELECT COUNT(*) \(filter)", arguments: [id]) ?? 0
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT body, fact \(filter)
+                ORDER BY COALESCE(json_extract(body, '$.image'), '') != '' DESC, createdAt DESC LIMIT ?
+                """, arguments: [id, limit])
+            let decoder = JSONDecoder()
+            out.saves = rows.compactMap { row in
+                guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
+                save.fact = row["fact"]
+                return save
+            }
+            return out
+        }
+    }
+
     /// Recent saves for widgets: opens the shared library read-only-ish, without the JavaScript core.
     public static func recentSaves(limit: Int = 20, path: String? = nil) throws -> [Save] {
         let db = try RecordDatabase(path: path ?? RecordDatabase.defaultPath(), secrets: MemorySecrets())
