@@ -2097,15 +2097,18 @@ body.modal-open {
   min-width: 0;
 }
 
+/* Undo and the like: the toast's own text colour, bold, in an outline. The highlight colour it used read at
+   about 3:1 on the light toast and 1.5:1 on the dark one. */
 .toast-action {
   background: transparent;
-  color: var(--brass);
-  border-color: rgba(255, 255, 255, 0.25);
+  color: var(--paper);
+  font-weight: 700;
+  border-color: color-mix(in srgb, var(--paper) 45%, transparent);
 }
 
 .toast-action:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--brass);
+  background: color-mix(in srgb, var(--paper) 14%, transparent);
+  color: var(--paper);
 }
 
 .toast-close {
@@ -4689,6 +4692,11 @@ button.library-tab.on {
 .place-row.selected,
 .shelf-row.selected {
   background: color-mix(in srgb, var(--moss) 10%, transparent);
+}
+
+/* A card without a photo has its kind's icon in that corner: the tick takes its place while selecting. */
+.card.selecting .pic-kind-icon {
+  visibility: hidden;
 }
 
 .tile.selected {
