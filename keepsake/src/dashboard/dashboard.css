@@ -383,9 +383,16 @@ a.sidebar-brand:hover .brand-name {
   min-width: 0;
 }
 
-.ai-check {
+.ai-check,
+.select-toggle {
   align-self: center;
   flex: none;
+}
+
+.select-toggle[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
 }
 
 .view-count {
@@ -4660,4 +4667,30 @@ button.library-tab.on {
 @keyframes refresh-turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   #refreshBtn.is-spinning svg { animation: none; }
+}
+
+/* Select mode on rows and collection tiles ---------------------------------- */
+.place-row .card-check,
+.shelf-row .card-check {
+  position: static;
+  flex: none;
+  margin-left: 4px;
+}
+
+.place-row.selected,
+.shelf-row.selected {
+  background: color-mix(in srgb, var(--moss) 10%, transparent);
+}
+
+.tile.selected {
+  outline: 3px solid var(--moss);
+  outline-offset: 2px;
+}
+
+.tile.selecting .tile-art {
+  opacity: 0.85;
+}
+
+.tile.selected .tile-art {
+  opacity: 1;
 }

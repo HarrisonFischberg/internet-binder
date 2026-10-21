@@ -843,3 +843,103 @@ test('Places review: Fix sends exactly the places waiting there, so the progress
     await chrome.storage.session.set({ keepsake_fillJob: null });
   }
 });
+
+test('Select sits beside Check with AI; Select all, ⌘A and Delete work inside a collection, with one Undo', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const [col] = await store.getCollections();
+  const a = await store.addItem({ title: 'Bulk lamp A', url: 'https://bulk.example/a', collectionId: col.id });
+  const b = await store.addItem({ title: 'Bulk lamp B', url: 'https://bulk.example/b', collectionId: col.id });
+  await afterChange();
+  await go(`#c/${col.id}`);
+  const $ = (id) => window.document.getElementById(id);
+  assert.equal($('selectToggle').parentElement, $('aiCheck').parentElement, 'Select is in the title row with Check with AI');
+  assert.ok(!$('selectToggle').classList.contains('hidden'));
+  $('selectToggle').click();
+  await settle();
+  assert.ok(!$('bulkbar').classList.contains('hidden'));
+  assert.equal($('selectToggle').textContent, 'Done');
+  window.document.body.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'a', code: 'KeyA', metaKey: true, bubbles: true }));
+  await settle();
+  const inCol = (await store.getItems()).filter((i) => i.collectionId === col.id && !i.deletedAt).length;
+  assert.match($('bulkCount').textContent, new RegExp(`^${inCol} selected`));
+  assert.equal($('bulkAll').textContent, 'Select none');
+  $('bulkDelete').click();
+  await afterChange();
+  assert.ok((await store.getItem(a.id)).deletedAt && (await store.getItem(b.id)).deletedAt);
+  assert.ok($('bulkbar').classList.contains('hidden'), 'Select mode ends after deleting');
+  const toast = [...window.document.querySelectorAll('.toast')].pop();
+  assert.match(toast.textContent, /Moved \d+ items to Trash/);
+  [...toast.querySelectorAll('button')].find((x) => x.textContent === 'Undo').click();
+  await afterChange();
+  assert.ok(!(await store.getItem(a.id)).deletedAt && !(await store.getItem(b.id)).deletedAt);
+});
+
+test('right-click on a card opens its menu at the pointer, with Select and Copy link', async () => {
+  await go('#all');
+  const card = view().querySelector('.card');
+  card.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 50 }));
+  const menu = window.document.querySelector('.menu');
+  assert.ok(menu, 'a menu opened');
+  const labels = [...menu.querySelectorAll('.menu-item')].map((m) => m.textContent);
+  for (const l of ['Edit details', 'Move to…', 'Copy link', 'Select', 'Delete']) assert.ok(labels.includes(l), `${l} in ${labels}`);
+  [...menu.querySelectorAll('.menu-item')].find((m) => m.textContent === 'Select').click();
+  await settle();
+  assert.match(window.document.getElementById('bulkCount').textContent, /^1 selected/);
+  assert.ok(view().querySelector('.card.selected'));
+  window.document.getElementById('bulkCancel').click();
+  await settle();
+});
+
+test('Collections page: select collections and delete them; Undo puts them back with their saves', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const { collection: x } = await store.createCollection({ name: 'Bulk Garden' });
+  const { collection: y } = await store.createCollection({ name: 'Bulk Bikes' });
+  const save = await store.addItem({ title: 'Trowel', url: 'https://bulk.example/trowel', collectionId: x.id });
+  await afterChange();
+  await go('#collections');
+  const $ = (id) => window.document.getElementById(id);
+  $('selectToggle').click();
+  await settle();
+  const tile = (name) => [...view().querySelectorAll('.tile')].find((t) => t.textContent.includes(name));
+  tile('Bulk Garden').querySelector('.tile-hit').click();
+  tile('Bulk Bikes').querySelector('.card-check').click();
+  await settle();
+  assert.match($('bulkCount').textContent, /^2 collections selected/);
+  assert.ok($('bulkMove').classList.contains('hidden'));
+  $('bulkDelete').click();
+  const choice = [...window.document.querySelectorAll('.menu-item')].find((m) => /keep the saves/.test(m.textContent));
+  assert.ok(choice, 'asks whether the saves go too');
+  choice.click();
+  await afterChange();
+  const names = (await store.getCollections()).map((c) => c.name);
+  assert.ok(!names.includes('Bulk Garden') && !names.includes('Bulk Bikes'));
+  assert.equal((await store.getItem(save.id)).collectionId, null);
+  const toast = [...window.document.querySelectorAll('.toast')].pop();
+  assert.match(toast.textContent, /Deleted 2 collections\. 1 save waits in Review/);
+  [...toast.querySelectorAll('button')].find((b) => b.textContent === 'Undo').click();
+  await afterChange();
+  assert.ok((await store.getCollections()).some((c) => c.id === y.id));
+  assert.equal((await store.getItem(save.id)).collectionId, x.id);
+});
+
+test('a collection’s Delete offers keep-the-saves or delete-them-too, no confirm dialog, with Undo', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const { collection } = await store.createCollection({ name: 'Bulk Hero' });
+  const save = await store.addItem({ title: 'Hero thing', url: 'https://bulk.example/hero', collectionId: collection.id });
+  await afterChange();
+  await go(`#c/${collection.id}`);
+  [...view().querySelectorAll('.collection-hero-actions button')].find((b) => b.textContent === 'Delete').click();
+  assert.ok(!window.document.querySelector('.modal-overlay'));
+  [...window.document.querySelectorAll('.menu-item')].find((m) => /and its 1 save/.test(m.textContent)).click();
+  await afterChange();
+  assert.ok((await store.getItem(save.id)).deletedAt);
+  assert.equal(window.location.hash, '#collections');
+  const toast = [...window.document.querySelectorAll('.toast')].pop();
+  [...toast.querySelectorAll('button')].find((b) => b.textContent === 'Undo').click();
+  await afterChange();
+  assert.ok(!(await store.getItem(save.id)).deletedAt);
+  assert.ok((await store.getCollections()).some((c) => c.id === collection.id));
+});

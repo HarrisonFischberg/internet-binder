@@ -658,6 +658,37 @@ export function createStore(kv, db = memoryRecordBackend()) {
       await kvUpdate('prefs', emptyPrefs(), (prefs) => forgetCollection(prefs, id, target));
     },
 
+    // Deletes several collections (deleteCollection's rules for each) and resolves what Undo needs to put
+    // them back as they were: the collections, where each of their saves was filed, and what was learned.
+    // Resolves null when none of them exist.
+    async deleteCollections(ids, { deleteItems = false } = {}) {
+      const cols = (await Promise.all([...new Set(ids)].map((id) => db.get('collections', id)))).filter(Boolean);
+      if (!cols.length) return null;
+      const gone = new Set(cols.map((c) => c.id));
+      const items = (await db.all('items')).filter((i) => gone.has(i.collectionId))
+        .map((i) => ({ id: i.id, collectionId: i.collectionId, needsReview: !!i.needsReview, deletedAt: i.deletedAt || null, previousCollections: i.previousCollections || [] }));
+      const prefs = await kvGet('prefs', null);
+      for (const c of cols) await api.deleteCollection(c.id, { deleteItems });
+      return { collections: cols, items, prefs };
+    },
+
+    // Undo for deleteCollections: the collections come back and their saves are filed in them again.
+    async restoreCollections(undo) {
+      if (!undo?.collections?.length) return;
+      await db.put('collections', undo.collections);
+      const was = new Map((undo.items || []).map((i) => [i.id, i]));
+      const now = nowIso();
+      await db.update('items', [...was.keys()], (item) => {
+        if (!item) return undefined;
+        const w = was.get(item.id);
+        const next = { ...item, collectionId: w.collectionId, needsReview: w.needsReview, previousCollections: w.previousCollections, updatedAt: now };
+        if (w.deletedAt) next.deletedAt = w.deletedAt;
+        else delete next.deletedAt;
+        return next;
+      });
+      if (undo.prefs) await kvSet('prefs', undo.prefs);
+    },
+
     async mergeCollections(sourceId, targetId) {
       const source = await db.get('collections', sourceId);
       const target = await db.get('collections', targetId);

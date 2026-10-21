@@ -49,7 +49,7 @@ const state = {
   layout: (() => { try { return localStorage.getItem('keepsake.layout') === 'list' ? 'list' : 'grid'; } catch { return 'grid'; } })(),
   focusSearch: false,
   selecting: false,
-  selected: new Set(),
+  selected: new Set(), // saves, or collections on the Collections page
   shown: 120,
   scan: null,
   fillJob: null, // the background check running now or last (session storage: keepsake_fillJob)
@@ -96,7 +96,7 @@ async function boot() {
   window.addEventListener('hashchange', () => {
     state.route = parseHash();
     state.shown = 120;
-    if (!GRID_ROUTES.has(state.route.name)) exitSelection(false);
+    if (state.selecting) exitSelection(false);
     render();
   });
   state.route = parseHash();
@@ -239,10 +239,10 @@ function bindChrome() {
     UI.toast(`Theme: ${next}`, { duration: 1800 });
   });
   $('bulkAll').addEventListener('click', () => {
-    const visible = currentGridItems();
-    const all = visible.every((i) => state.selected.has(i.id));
-    for (const i of visible) all ? state.selected.delete(i.id) : state.selected.add(i.id);
-    renderView();
+    const visible = selectableIds();
+    const all = visible.every((id) => state.selected.has(id));
+    for (const id of visible) all ? state.selected.delete(id) : state.selected.add(id);
+    renderView({ keepScroll: true });
     updateBulkbar();
   });
   $('bulkMove').addEventListener('click', () => bulkMove());
@@ -256,6 +256,16 @@ function bindChrome() {
       ($('homeSearch') || $('collectionSearch') || $('searchInput')).focus();
     }
     if (e.key === 'Escape' && state.selecting && !document.body.classList.contains('modal-open')) exitSelection(true);
+    // While selecting: ⌘A / Ctrl+A selects everything shown, Delete or Backspace deletes the selection.
+    const typing = /input|textarea|select/i.test(document.activeElement?.tagName || '') || document.body.classList.contains('modal-open');
+    if (!state.selecting || typing) return;
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && e.code === 'KeyA') {
+      e.preventDefault();
+      $('bulkAll').click();
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && state.selected.size) {
+      e.preventDefault();
+      bulkDelete();
+    }
   });
 }
 
@@ -270,6 +280,8 @@ function toggleNav(force) {
 // --- rendering -------------------------------------------------------------------------
 
 const GRID_ROUTES = new Set(['all', 'favorites', 'purchased', 'c', 'item', 'kind']);
+// Pages with Select: every list of saves, and the Collections page (where it selects collections).
+const selectableRoute = () => GRID_ROUTES.has(state.route.name) || state.route.name === 'collections';
 
 // Purchased items leave the Library, Favorites, Review and their collection; they
 // keep their collectionId, so un-marking puts them straight back where they were.
@@ -565,7 +577,6 @@ function renderToolbar() {
   const controls = $('toolbarControls');
   const isGrid = GRID_ROUTES.has(r.name);
   controls.classList.toggle('hidden-controls', !isGrid);
-  $('bulkbar').classList.toggle('hidden', !(isGrid && state.selecting));
   let title = 'Library';
   if (r.name === 'home') title = 'Home';
   else if (r.name === 'collections') title = 'Library';
@@ -593,10 +604,14 @@ function renderToolbar() {
       input.focus();
       input.setSelectionRange(input.value.length, input.value.length);
     }
-    $('selectToggle').setAttribute('aria-pressed', state.selecting ? 'true' : 'false');
-    $('selectToggle').textContent = state.selecting ? 'Done' : 'Select';
     $('bulkAi').classList.toggle('hidden', !state.settings?.ai?.on);
   }
+  // Select, beside Check with AI on every page that lists saves, and on Collections.
+  const canSelect = selectableRoute() && r.name !== 'item' && (r.name === 'collections' ? state.collections.length > 0 : baseItems().length > 0);
+  $('selectToggle').classList.toggle('hidden', !canSelect && !state.selecting);
+  $('selectToggle').setAttribute('aria-pressed', state.selecting ? 'true' : 'false');
+  $('selectToggle').textContent = state.selecting ? 'Done' : 'Select';
+  $('selectToggle').title = r.name === 'collections' ? 'Select collections to delete' : 'Select several to move or delete';
   // Check with AI, next to the title of every page that lists saves, whenever AI is on.
   const aiHere = !!state.settings?.ai?.on && ['all', 'c', 'kind', 'favorites', 'review'].includes(r.name);
   $('aiCheck').classList.toggle('hidden', !aiHere);
@@ -1064,16 +1079,7 @@ function cardNode(item, { list = false } = {}) {
   const done = item.status === 'done';
   const muted = done || item.purchased;
   const card = el('article', { class: `card ${list ? 'card-row' : ''} ${selected ? 'selected' : ''} ${muted ? 'is-done' : ''} ${state.selecting ? 'selecting' : ''}`, role: 'listitem', 'aria-label': item.title });
-  if (state.selecting) {
-    const cb = el('input', { type: 'checkbox', class: 'card-check', 'aria-label': `Select ${item.title}` });
-    cb.checked = selected;
-    cb.addEventListener('change', () => {
-      cb.checked ? state.selected.add(item.id) : state.selected.delete(item.id);
-      card.classList.toggle('selected', cb.checked);
-      updateBulkbar();
-    });
-    card.append(cb);
-  }
+  if (state.selecting) card.append(selectBox(item.id, item.title, card));
   const states = [
     needsCollection(item) && isActive(item) ? el('span', { class: 'state-pill' }, ['Needs a collection']) : null,
     item.captureState === 'pending' ? el('span', { class: 'state-pill state-quiet' }, ['Finishing details…']) : null,
@@ -1082,14 +1088,7 @@ function cardNode(item, { list = false } = {}) {
     item.purchased && kind === 'product' ? el('span', { class: 'state-pill state-done' }, [UI.checkIcon(), 'Purchased']) : null,
   ].filter(Boolean);
   const hit = el('button', { type: 'button', class: 'card-hit', 'aria-label': [item.title, info.label, fact, source].filter(Boolean).join(', '), onClick: () => {
-    if (state.selecting) {
-      const cb = card.querySelector('.card-check');
-      if (cb) {
-        cb.checked = !cb.checked;
-        cb.dispatchEvent(new Event('change'));
-      }
-      return;
-    }
+    if (state.selecting) return toggleBox(card);
     openSave(item.id);
   } }, [
     UI.pictureNode({ src: item.image, aspect: list ? 1 : item.imageAspect, title: item.title, tint: kind, icon: kindIcon(kind) }),
@@ -1118,7 +1117,40 @@ function cardNode(item, { list = false } = {}) {
   } }, [UI.moreIcon()]);
   const actions = el('div', { class: 'card-actions' }, state.selecting ? [] : [favBtn, moreBtn]);
   card.append(hit, actions);
+  bindContextMenu(card, () => itemMenu(item));
   return el('div', { class: 'grid-item' }, [card]);
+}
+
+// The same menu as a card's ⋯ button: right-click, or press and hold on a touch screen. Not while selecting
+// (a tap ticks then) or on a text field.
+const LONG_PRESS_MS = 500;
+function bindContextMenu(node, entries) {
+  const open = (x, y) => {
+    if (state.selecting) return false;
+    openMenu({ x, y }, entries());
+    return true;
+  };
+  node.addEventListener('contextmenu', (e) => {
+    if (e.target.closest?.('input, textarea, select')) return;
+    if (open(e.clientX, e.clientY)) e.preventDefault();
+  });
+  let timer = null;
+  let start = null;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  node.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || state.selecting) return;
+    start = { x: e.clientX, y: e.clientY };
+    cancel();
+    timer = setTimeout(() => {
+      timer = null;
+      if (!open(start.x, start.y)) return;
+      navigator.vibrate?.(10);
+      // The tap that follows a long press doesn't also open the save.
+      node.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); }, { capture: true, once: true });
+    }, LONG_PRESS_MS);
+  });
+  node.addEventListener('pointermove', (e) => { if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) cancel(); });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) node.addEventListener(type, cancel);
 }
 
 function itemMenu(item) {
@@ -1129,10 +1161,22 @@ function itemMenu(item) {
     { label: item.purchased ? 'Mark as not purchased' : 'Mark as purchased', icon: UI.checkIcon(), onClick: () => store.updateItem(item.id, { purchased: !item.purchased }) },
   ];
   if (item.url) entries.push({ label: item.type === 'instagram' ? 'Open on Instagram' : 'Visit page', icon: UI.externalIcon(), onClick: () => window.open(openableUrl(item.url), '_blank', 'noopener') });
+  if (item.url) entries.push({ label: 'Copy link', icon: UI.linkIcon(), onClick: () => copyLink(item) });
+  if (item.url && navigator.share) entries.push({ label: 'Share…', icon: UI.shareIcon(), onClick: () => navigator.share({ title: item.title, url: openableUrl(item.url) }).catch(() => {}) });
+  if (selectableRoute() && state.route.name !== 'collections' && state.route.name !== 'item') entries.push({ label: 'Select', icon: UI.selectIcon(), onClick: () => enterSelection(item.id) });
   for (let n = entries.length - 1; n >= 0; n--) if (!entries[n]) entries.splice(n, 1);
   entries.push({ sep: true });
   entries.push({ label: 'Delete', icon: UI.trashIcon(), danger: true, onClick: () => deleteItems([item]) });
   return entries;
+}
+
+async function copyLink(item) {
+  try {
+    await navigator.clipboard.writeText(openableUrl(item.url));
+    UI.toast('Link copied.', { duration: 1800 });
+  } catch {
+    UI.toast('Couldn’t copy the link.', { duration: 2500 });
+  }
 }
 
 // A small floating menu anchored to a button.
@@ -1151,10 +1195,12 @@ function openMenu(anchor, entries) {
     } }, [e.icon || null, e.label]));
   }
   document.body.append(menu);
-  const r = anchor.getBoundingClientRect();
+  // Anchored to a button (opens under it, right edges lined up) or to a point (a right-click: opens there).
+  const atPoint = !anchor.getBoundingClientRect;
+  const r = atPoint ? { left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y } : anchor.getBoundingClientRect();
   const mw = menu.offsetWidth || 200;
   const mh = menu.offsetHeight || 200;
-  let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+  let left = Math.min(atPoint ? r.left : r.right - mw, window.innerWidth - mw - 8);
   let top = r.bottom + 6;
   if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
   menu.style.left = `${Math.max(8, left)}px`;
@@ -1165,7 +1211,7 @@ function openMenu(anchor, entries) {
   const onKey = (ev) => {
     if (ev.key === 'Escape') {
       closeMenu();
-      anchor.focus();
+      anchor.focus?.();
     } else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
       ev.preventDefault();
       const items = [...menu.querySelectorAll('.menu-item')];
@@ -1195,11 +1241,16 @@ function closeMenu() {
 
 // --- selection & bulk actions ----------------------------------------------------------------
 
-function enterSelection() {
+// Select mode: on a list of saves it selects saves; on the Collections page, collections. `first` (from a
+// card's menu) starts with that one ticked.
+function enterSelection(first) {
   state.selecting = true;
   state.selected.clear();
+  if (first) state.selected.add(first);
+  // The places map has nothing to tick: selecting shows the list.
+  if (state.route.name === 'kind' && state.route.id === 'place' && placesView() === 'map') placesViewChoice = 'list';
   renderToolbar();
-  renderView();
+  renderView({ keepScroll: true });
   updateBulkbar();
 }
 
@@ -1208,22 +1259,55 @@ function exitSelection(rerender) {
   state.selected.clear();
   if (rerender) {
     renderToolbar();
-    renderView();
+    renderView({ keepScroll: true });
   }
   updateBulkbar();
 }
 
+const selectingCollections = () => state.route.name === 'collections';
+
+// What Select all ticks: what this page shows (Places: the list or Places review, whichever is open).
+function selectableIds() {
+  if (selectingCollections()) return visibleCollections().map((c) => c.id);
+  let items = currentGridItems();
+  if (state.route.name === 'kind' && state.route.id === 'place') {
+    const review = placesView() === 'review';
+    items = items.filter((i) => !!placeReviewReasons(i).length === review);
+  }
+  return items.map((i) => i.id);
+}
+
 function updateBulkbar() {
   const n = state.selected.size;
-  $('bulkCount').textContent = `${n} selected`;
+  const cols = selectingCollections();
+  $('bulkCount').textContent = cols ? `${pluralize(n, 'collection', 'collections')} selected` : `${n} selected`;
   for (const id of ['bulkMove', 'bulkFav', 'bulkDelete', 'bulkAi']) $(id).disabled = n === 0;
-  const visible = currentGridItems();
-  $('bulkAll').textContent = visible.length && visible.every((i) => state.selected.has(i.id)) ? 'Select none' : 'Select all';
-  $('bulkbar').classList.toggle('hidden', !(isGridRoute() && state.selecting));
+  for (const id of ['bulkMove', 'bulkFav']) $(id).classList.toggle('hidden', cols);
+  $('bulkAi').classList.toggle('hidden', cols || !state.settings?.ai?.on);
+  $('bulkDelete').textContent = n ? `Delete ${n}` : 'Delete';
+  const visible = selectableIds();
+  $('bulkAll').textContent = visible.length && visible.every((id) => state.selected.has(id)) ? 'Select none' : 'Select all';
+  $('bulkbar').classList.toggle('hidden', !(selectableRoute() && state.selecting));
 }
 
 function selectedItems() {
   return state.items.filter((i) => state.selected.has(i.id));
+}
+
+// A tick box for a row or tile in Select mode; ticking it keeps the bar's count up to date.
+function selectBox(id, label, node) {
+  const cb = el('input', { type: 'checkbox', class: 'card-check', 'aria-label': `Select ${label}` });
+  cb.checked = state.selected.has(id);
+  cb.addEventListener('change', () => {
+    cb.checked ? state.selected.add(id) : state.selected.delete(id);
+    node.classList.toggle('selected', cb.checked);
+    updateBulkbar();
+  });
+  return cb;
+}
+
+function toggleBox(node) {
+  node.querySelector('.card-check')?.click();
 }
 
 async function bulkPatch(patchFor) {
@@ -1243,6 +1327,21 @@ async function bulkMove() {
 }
 
 async function bulkDelete() {
+  if (selectingCollections()) {
+    const cols = state.collections.filter((c) => state.selected.has(c.id));
+    if (!cols.length) return;
+    const inside = state.items.filter((i) => isActive(i) && cols.some((c) => c.id === i.collectionId)).length;
+    if (!inside) {
+      await deleteCollections(cols);
+      return exitSelection(true);
+    }
+    // Their saves either wait in Review or go to the Trash with them; either way Undo puts it all back.
+    openMenu($('bulkDelete'), [
+      { label: `Delete ${pluralize(cols.length, 'collection', 'collections')}, keep the saves`, icon: UI.folderIcon(), onClick: async () => { await deleteCollections(cols); exitSelection(true); } },
+      { label: `Delete them and their ${pluralize(inside, 'save', 'saves')}`, icon: UI.trashIcon(), danger: true, onClick: async () => { await deleteCollections(cols, { deleteItems: true }); exitSelection(true); } },
+    ]);
+    return;
+  }
   const items = selectedItems();
   if (!items.length) return;
   const ok = await deleteItems(items);
@@ -1530,8 +1629,11 @@ function renderShelfList(view, items, kind) {
     const done = item.status === 'done';
     const box = el('input', { type: 'checkbox', 'aria-label': `${verb}: ${item.title}`, onChange: async () => { await store.updateItem(item.id, { status: box.checked ? 'done' : 'saved' }); } });
     box.checked = done;
-    return el('li', { class: `shelf-row ${done ? 'is-done' : ''}` }, [
-      el('button', { type: 'button', class: 'shelf-row-hit', onClick: () => openSave(item.id) }, [
+    const li = el('li', { class: `shelf-row ${done ? 'is-done' : ''} ${state.selected.has(item.id) ? 'selected' : ''}` });
+    if (state.selecting) li.append(selectBox(item.id, item.title, li));
+    bindContextMenu(li, () => itemMenu(item));
+    li.append(...[
+      el('button', { type: 'button', class: 'shelf-row-hit', onClick: () => (state.selecting ? toggleBox(li) : openSave(item.id)) }, [
         UI.pictureNode({ src: item.image, aspect: 2 / 3, title: item.title, className: 'shelf-thumb' }),
         el('span', { class: 'place-row-text' }, [
           el('span', { class: 'place-row-title' }, [item.title]),
@@ -1539,8 +1641,9 @@ function renderShelfList(view, items, kind) {
           d.genres?.length ? el('span', { class: 'place-row-meta' }, [d.genres.join(', ')]) : null,
         ]),
       ]),
-      el('label', { class: 'check shelf-check' }, [box, el('span', {}, [verb])]),
-    ]);
+      state.selecting ? null : el('label', { class: 'check shelf-check' }, [box, el('span', {}, [verb])]),
+    ].filter(Boolean));
+    return li;
   };
   const todo = items.filter((i) => i.status !== 'done');
   const finished = items.filter((i) => i.status === 'done');
@@ -1659,8 +1762,11 @@ function renderPlaces(view, items) {
 // One row of a place list: its picture, name, what it is and where, and Open in Maps.
 function placeRow(item, meta) {
   const d = item.details || {};
-  return el('li', { class: `place-row ${item.status === 'done' ? 'is-done' : ''}` }, [
-    el('button', { type: 'button', class: 'place-row-hit', onClick: () => openSave(item.id) }, [
+  const li = el('li', { class: `place-row ${item.status === 'done' ? 'is-done' : ''} ${state.selected.has(item.id) ? 'selected' : ''}` });
+  if (state.selecting) li.append(selectBox(item.id, item.title, li));
+  bindContextMenu(li, () => itemMenu(item));
+  li.append(...[
+    el('button', { type: 'button', class: 'place-row-hit', onClick: () => (state.selecting ? toggleBox(li) : openSave(item.id)) }, [
       UI.pictureNode({ src: item.image, aspect: 1, title: item.title, className: 'place-thumb' }),
       el('span', { class: 'place-row-text' }, [
         el('span', { class: 'place-row-title' }, [item.title]),
@@ -1668,8 +1774,9 @@ function placeRow(item, meta) {
       ]),
     ]),
     item.status === 'done' ? el('span', { class: 'badge' }, ['Been']) : null,
-    mapsMenuButton(item, { small: true }),
-  ]);
+    state.selecting ? null : mapsMenuButton(item, { small: true }),
+  ].filter(Boolean));
+  return li;
 }
 
 function renderPlacesReview(view, items, all = items) {
@@ -2910,7 +3017,7 @@ function collectionHero(col) {
   const actions = [
     el('button', { type: 'button', class: 'btn btn-sm', 'aria-pressed': col.pinned ? 'true' : 'false', onClick: () => togglePin(col) }, [UI.pinIcon(col.pinned), col.pinned ? 'Pinned' : 'Pin']),
     el('button', { type: 'button', class: 'btn btn-sm', onClick: () => editCollection(col) }, ['Keywords']),
-    el('button', { type: 'button', class: 'btn btn-sm btn-danger', onClick: () => deleteCollection(col) }, ['Delete']),
+    el('button', { type: 'button', class: 'btn btn-sm btn-danger', 'aria-haspopup': 'menu', onClick: (e) => deleteCollectionMenu(col, e.currentTarget) }, ['Delete']),
   ];
   const keywords = col.keywords || [];
   return el('div', { class: 'collection-hero' }, [
@@ -3068,15 +3175,43 @@ async function confirmSharedKeywords(col, keywords) {
   return null;
 }
 
-async function deleteCollection(col) {
-  const count = state.items.filter((i) => i.collectionId === col.id).length;
-  const deleteItemsCheck = el('input', { type: 'checkbox' });
-  const extra = count ? el('label', { class: 'check' }, [deleteItemsCheck, el('span', {}, [`Also delete the ${pluralize(count, 'item', 'items')} inside (otherwise they'll be uncategorized, waiting in Review)`])]) : null;
-  const ok = await UI.confirmDialog({ title: `Delete “${col.name}”?`, message: count ? `This collection holds ${pluralize(count, 'item', 'items')}.` : 'This collection is empty.', confirmLabel: 'Delete collection', danger: true, extra });
-  if (!ok) return;
-  await store.deleteCollection(col.id, { deleteItems: !!deleteItemsCheck.checked });
-  UI.toast('Collection deleted.');
-  navigate('#all');
+// Deleting a collection needs no confirmation: Undo puts the collection back with its saves filed in it.
+// Its saves wait in Review, or go to the Trash with it.
+function deleteCollectionEntries(col) {
+  const count = state.items.filter((i) => i.collectionId === col.id && isActive(i)).length;
+  if (!count) return [{ label: 'Delete collection', icon: UI.trashIcon(), danger: true, onClick: () => deleteCollections([col]) }];
+  return [
+    { label: 'Delete collection, keep its saves', icon: UI.folderIcon(), danger: true, onClick: () => deleteCollections([col]) },
+    { label: `Delete it and its ${pluralize(count, 'save', 'saves')}`, icon: UI.trashIcon(), danger: true, onClick: () => deleteCollections([col], { deleteItems: true }) },
+  ];
+}
+
+function deleteCollectionMenu(col, anchor) {
+  openMenu(anchor, deleteCollectionEntries(col));
+}
+
+async function deleteCollections(cols, { deleteItems = false } = {}) {
+  const undo = await store.deleteCollections(cols.map((c) => c.id), { deleteItems });
+  if (!undo) return;
+  const n = undo.collections.length;
+  const saves = undo.items.filter((i) => !i.deletedAt).length;
+  const what = n === 1 ? `Deleted “${undo.collections[0].name}”` : `Deleted ${pluralize(n, 'collection', 'collections')}`;
+  const after = !saves ? '.' : deleteItems ? ` and moved ${pluralize(saves, 'save', 'saves')} to Trash.` : `. ${pluralize(saves, 'save waits', 'saves wait')} in Review.`;
+  UI.toast(what + after, {
+    duration: 8000,
+    action: { label: 'Undo', onClick: () => store.restoreCollections(undo) },
+  });
+  if (state.route.name === 'c' && cols.some((c) => c.id === state.route.id)) navigate('#collections');
+}
+
+function collectionMenu(c) {
+  const entries = [
+    { label: 'Open', icon: UI.folderIcon(), onClick: () => navigate(`#c/${c.id}`) },
+    { label: c.pinned ? 'Unpin' : 'Pin to the top', icon: UI.pinIcon(c.pinned), onClick: () => togglePin(c) },
+    { label: 'Edit keywords…', icon: UI.pencilIcon(), onClick: () => editCollection(c) },
+  ];
+  if (state.route.name === 'collections') entries.push({ label: 'Select', icon: UI.selectIcon(), onClick: () => enterSelection(c.id) });
+  return [...entries, { sep: true }, ...deleteCollectionEntries(c)];
 }
 
 // --- home ------------------------------------------------------------------------------------------
@@ -3178,8 +3313,16 @@ function collectionTile(c, stats) {
     art.append(el('img', { src, alt: '', loading: 'lazy', decoding: 'async', onError: (e) => { e.target.remove(); layout(); } }));
   }
   layout();
-  return el('div', { class: `tile ${c.pinned ? 'pinned' : ''}` }, [
-    el('a', { class: 'tile-hit', href: `#c/${c.id}` }, [
+  const selecting = state.selecting && state.route.name === 'collections';
+  const tile = el('div', { class: `tile ${c.pinned ? 'pinned' : ''} ${selecting ? 'selecting' : ''} ${selecting && state.selected.has(c.id) ? 'selected' : ''}` });
+  if (selecting) tile.append(selectBox(c.id, c.name, tile));
+  bindContextMenu(tile, () => collectionMenu(c));
+  tile.append(...[
+    el('a', { class: 'tile-hit', href: `#c/${c.id}`, onClick: (e) => {
+      if (!selecting) return;
+      e.preventDefault();
+      toggleBox(tile);
+    } }, [
       art,
       el('div', { class: 'tile-body' }, [
         el('span', { class: 'tile-name' }, [c.name]),
@@ -3195,6 +3338,8 @@ function collectionTile(c, stats) {
       onClick: () => togglePin(c),
     }, [UI.pinIcon(c.pinned)]),
   ]);
+  if (selecting) tile.querySelector('.tile-pin')?.remove();
+  return tile;
 }
 
 // --- all collections ---------------------------------------------------------------------------------
@@ -3213,6 +3358,18 @@ function libraryTabs(current) {
   return el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Library' }, [tab('saves', 'Saves', '#all'), tab('collections', `Collections${state.collections.length ? ` · ${state.collections.length}` : ''}`, '#collections')]);
 }
 
+// The Collections page's collections: matching the name search, pinned first, then in the chosen sort.
+function visibleCollections(stats = collectionStats()) {
+  const q = state.colSearch.toLowerCase();
+  const list = state.collections.filter((c) => !q || c.name.toLowerCase().includes(q) || (c.keywords || []).some((k) => k.toLowerCase().includes(q)));
+  const pinned = list.filter((c) => c.pinned);
+  let rest = list.filter((c) => !c.pinned);
+  if (state.colSort === 'name') rest.sort((a, b) => a.name.localeCompare(b.name));
+  else if (state.colSort === 'recent') rest = byRecentActivity(rest, stats);
+  else rest = bySize(rest, stats);
+  return [...pinned, ...rest];
+}
+
 function renderCollections(view) {
   view.append(libraryTabs('collections'));
   const page = el('div', { class: 'collections-page' });
@@ -3220,14 +3377,7 @@ function renderCollections(view) {
   const stats = collectionStats();
   const fill = () => {
     clear(grid);
-    const q = state.colSearch.toLowerCase();
-    let list = state.collections.filter((c) => !q || c.name.toLowerCase().includes(q) || (c.keywords || []).some((k) => k.toLowerCase().includes(q)));
-    const pinned = list.filter((c) => c.pinned);
-    let rest = list.filter((c) => !c.pinned);
-    if (state.colSort === 'name') rest.sort((a, b) => a.name.localeCompare(b.name));
-    else if (state.colSort === 'recent') rest = byRecentActivity(rest, stats);
-    else rest = bySize(rest, stats);
-    list = [...pinned, ...rest];
+    const list = visibleCollections(stats);
     if (!list.length) {
       grid.append(UI.emptyState({ title: 'No matching collections', message: `Nothing is called “${state.colSearch}”.`, icon: UI.folderIcon() }));
       return;
@@ -3238,6 +3388,7 @@ function renderCollections(view) {
   search.addEventListener('input', debounce(() => {
     state.colSearch = search.value.trim();
     fill();
+    updateBulkbar();
   }, 100));
   const sort = el('select', { class: 'select select-sm', 'aria-label': 'Sort collections' },
     Object.entries(COLLECTION_SORTS).map(([value, text]) => el('option', { value, text })));
