@@ -4,9 +4,10 @@ import SwiftUI
 
 /// Music while cooking: ten original instrumentals bundled in App/Music (ios/tools/make-cooking-music.py
 /// composes and renders them), shuffled and played one after another while Cooking mode is open.
-/// The audio session is playback that mixes with others: turning music on is asking for it, so Silent mode
-/// does not mute it (it used to be ambient, and with the phone on silent nothing played). It mixes under
-/// anything else that is playing instead of stopping it; when another app is already playing, it waits for a tap.
+/// It starts on its own when Cooking opens, in the ambient session, so with the phone on silent it plays
+/// muted. Pressing a volume button (or tapping play, or turning music on from the bar) is asking to hear it,
+/// so the session moves to playback, which Silent mode does not mute. Either way it mixes under anything
+/// else that is playing instead of stopping it; when another app is already playing, it waits for a tap.
 @MainActor @Observable
 final class CookingMusic {
     static let enabledKey = "cookingMusic"
@@ -34,17 +35,23 @@ final class CookingMusic {
     private var heldByUser = false
     @ObservationIgnored private let relay = Relay()
     @ObservationIgnored private var interruptions: NSObjectProtocol?
+    @ObservationIgnored private var volumeButtons: NSKeyValueObservation?
 
     init() {
         relay.finished = { [weak self] in self?.skip() }
     }
 
     /// Opens Cooking mode's music: a fresh shuffle, starting unless something else is already playing.
-    func start() {
+    /// `audible` (the cook turned music on just now) skips the muted-on-silent start.
+    func start(audible: Bool = false) {
         guard !Self.tracks.isEmpty, player == nil else { return }
         let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, options: .mixWithOthers)
+        if audible { makeAudible() } else { try? session.setCategory(.ambient) }
         try? session.setActive(true)
+        // A volume press changes outputVolume; at the very top or bottom of the range it does not, so a tap on play also works.
+        volumeButtons = session.observe(\.outputVolume) { [weak self] _, _ in
+            Task { @MainActor in self?.makeAudible() }
+        }
         order = Self.tracks.shuffled()
         index = 0
         heldByUser = session.secondaryAudioShouldBeSilencedHint
@@ -59,6 +66,8 @@ final class CookingMusic {
     func stop() {
         if let interruptions { NotificationCenter.default.removeObserver(interruptions) }
         interruptions = nil
+        volumeButtons?.invalidate()
+        volumeButtons = nil
         guard let p = player else { return }
         player = nil; current = nil; playing = false
         p.setVolume(0, fadeDuration: 0.6)
@@ -74,7 +83,7 @@ final class CookingMusic {
 
     func toggle() {
         guard let p = player else { return }
-        if p.isPlaying { p.pause(); playing = false; heldByUser = true } else { heldByUser = false; fadeIn(p) }
+        if p.isPlaying { p.pause(); playing = false; heldByUser = true } else { heldByUser = false; makeAudible(); fadeIn(p) }
     }
 
     func skip() {
@@ -93,6 +102,13 @@ final class CookingMusic {
     func suspend() {
         player?.pause()
         playing = false
+    }
+
+    /// Playback mixed with others: heard even with the phone on silent.
+    private func makeAudible() {
+        let session = AVAudioSession.sharedInstance()
+        guard session.category != .playback else { return }
+        try? session.setCategory(.playback, options: .mixWithOthers)
     }
 
     private func load(play: Bool) {
