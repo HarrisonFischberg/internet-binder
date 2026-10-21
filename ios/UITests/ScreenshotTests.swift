@@ -333,4 +333,98 @@ final class ScreenshotTests: XCTestCase {
         }
         XCUIDevice.shared.appearance = .light
     }
+
+    /// Select mode, the long-press menu and swipe to delete (replica/m3/screens/selection): Pantry Pop,
+    /// light and dark, on the demo library. On iPad: a collection in Select mode.
+    func testSelectionScreens() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        let regular = UIDevice.current.userInterfaceIdiom == .pad
+        let modes = (ProcessInfo.processInfo.environment["KEEPSAKE_SHOT_MODES"] ?? (regular ? "light" : "light,dark")).split(separator: ",").map(String.init)
+        for mode in modes {
+            let tag = "pantry-\(mode)"
+            let app = XCUIApplication()
+            app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "pantry", "-ksMode", mode]
+            app.launch()
+            XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+            sleep(2)   // pictures load
+            if regular {
+                app.cells.containing(.staticText, identifier: "Kitchen").firstMatch.tap()
+                XCTAssertTrue(card(app, "Stoneware mugs").waitForExistence(timeout: 5))
+                app.buttons["Select"].tap()
+                card(app, "Stoneware mugs").tap()
+                XCTAssertTrue(app.staticTexts["1 save selected"].waitForExistence(timeout: 3))
+                try shoot(app, folder, "ipad-\(tag)-collection-select")
+                app.terminate()
+                continue
+            }
+            // A Lifestyle view in Select mode, one ticked.
+            app.tabBars.buttons["Library"].tap()
+            openRecipes(app)
+            XCTAssertTrue(card(app, "Spaghetti alla carbonara").waitForExistence(timeout: 5))
+            app.buttons["Select"].tap()
+            card(app, "Spaghetti alla carbonara").tap()
+            XCTAssertTrue(app.staticTexts["1 save selected"].waitForExistence(timeout: 3))
+            try shoot(app, folder, "\(tag)-recipes-select")
+            // Everything ticked, to the Trash: the toast, then Undo.
+            app.buttons["Select all"].tap()
+            app.buttons["Move 4 to Trash"].tap()
+            XCTAssertTrue(app.staticTexts["Moved 4 saves to Trash"].waitForExistence(timeout: 5))
+            try shoot(app, folder, "\(tag)-bulk-delete-toast")
+            app.buttons["Undo"].tap()
+            // The long-press menu on a card.
+            let shakshuka = card(app, "Shakshuka")
+            XCTAssertTrue(shakshuka.waitForExistence(timeout: 5))
+            shakshuka.press(forDuration: 1.0)
+            XCTAssertTrue(app.buttons["Move to Trash"].waitForExistence(timeout: 3))
+            try shoot(app, folder, "\(tag)-card-menu")
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.06)).tap()
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            // Collections, two ticked.
+            app.tabBars.buttons["Home"].tap()
+            app.buttons["Collections"].tap()
+            XCTAssertTrue(app.staticTexts["For things to buy"].waitForExistence(timeout: 5))
+            sleep(1)
+            app.buttons["Select"].tap()
+            app.buttons["Collection Kitchen"].tap()
+            app.buttons["Collection Home Decor"].tap()
+            XCTAssertTrue(app.staticTexts["2 collections selected"].waitForExistence(timeout: 3))
+            try shoot(app, folder, "\(tag)-collections-select")
+            app.terminate()
+        }
+    }
+
+    /// Places for the selection screens: the header's Select, then a row half-swiped to show Delete.
+    func testSelectionPlacesScreens() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
+        for mode in (ProcessInfo.processInfo.environment["KEEPSAKE_SHOT_MODES"] ?? "light,dark").split(separator: ",").map(String.init) {
+            let tag = "pantry-\(mode)"
+            let app = XCUIApplication()
+            app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "pantry", "-ksMode", mode]
+            app.launch()
+            XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+            app.tabBars.buttons["Places"].tap()
+            var row = app.staticTexts["Tartine Bakery"]
+            if !row.waitForExistence(timeout: 3) {
+                app.segmentedControls.buttons.element(boundBy: 2).tap()
+                row = app.staticTexts["Tartine Bakery"]
+            }
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
+            sleep(1)
+            try shoot(app, folder, "\(tag)-places-header")
+            // A sideways drag from the row's right side, released short of a full swipe: Delete stays open.
+            let y = row.frame.midY, w = app.windows.firstMatch.frame.width
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let from = origin.withOffset(CGVector(dx: w * 0.8, dy: y))
+            from.press(forDuration: 0.01, thenDragTo: from.withOffset(CGVector(dx: -130, dy: 0)), withVelocity: 400, thenHoldForDuration: 0.2)
+            XCTAssertTrue(app.buttons["Move to Trash"].waitForExistence(timeout: 3), "Delete shows behind the row")
+            try shoot(app, folder, "\(tag)-places-swipe")
+            app.terminate()
+        }
+    }
 }
