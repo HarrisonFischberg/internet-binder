@@ -887,7 +887,7 @@ test('right-click on a card opens its menu at the pointer, with Select and Copy 
   await settle();
   assert.match(window.document.getElementById('bulkCount').textContent, /^1 selected/);
   assert.ok(view().querySelector('.card.selected'));
-  window.document.getElementById('bulkCancel').click();
+  window.document.getElementById('selectToggle').click();
   await settle();
 });
 

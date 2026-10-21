@@ -249,7 +249,6 @@ function bindChrome() {
   $('bulkFav').addEventListener('click', () => bulkPatch((items) => ({ favorite: !items.every((i) => i.favorite) })));
   $('bulkDelete').addEventListener('click', () => bulkDelete());
   $('bulkAi').addEventListener('click', () => bulkAi());
-  $('bulkCancel').addEventListener('click', () => exitSelection(true));
   document.addEventListener('keydown', (e) => {
     if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement?.tagName || '') && !document.body.classList.contains('modal-open')) {
       e.preventDefault();
@@ -1280,7 +1279,7 @@ function selectableIds() {
 function updateBulkbar() {
   const n = state.selected.size;
   const cols = selectingCollections();
-  $('bulkCount').textContent = cols ? `${pluralize(n, 'collection', 'collections')} selected` : `${n} selected`;
+  $('bulkCount').textContent = !n ? (cols ? 'Tick collections to delete' : 'Tick saves to move or delete') : cols ? `${pluralize(n, 'collection', 'collections')} selected` : `${n} selected`;
   for (const id of ['bulkMove', 'bulkFav', 'bulkDelete', 'bulkAi']) $(id).disabled = n === 0;
   for (const id of ['bulkMove', 'bulkFav']) $(id).classList.toggle('hidden', cols);
   $('bulkAi').classList.toggle('hidden', cols || !state.settings?.ai?.on);
