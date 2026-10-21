@@ -6,22 +6,17 @@ import KeepsakeUI
 
 /// The Share Sheet way in. Saves first (one tap, no waiting), then a card shows where it went: flick
 /// the slip to put it somewhere else, add a note, or undo. Stays open until you tap Done (or Undo).
+///
+/// iOS presents it as its own sheet. It used to ask for `.overFullScreen` with a clear background,
+/// which iOS 27 shows for a moment and then drops; and a swipe down no longer closes it either, so
+/// the save is only finished (and its "Saved to …" notification sent) from Done.
 final class ShareViewController: UIViewController {
     private let state = ShareState()
 
-    override init(nibName: String?, bundle: Bundle?) {
-        super.init(nibName: nibName, bundle: bundle)
-        modalPresentationStyle = .overFullScreen
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        modalPresentationStyle = .overFullScreen
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
+        isModalInPresentation = true
+        view.backgroundColor = .systemBackground
         state.finish = { [weak self] in self?.extensionContext?.completeRequest(returningItems: nil) }
         let look = Appearance.load()
         let host = UIHostingController(rootView: ShareCard(state: state).keepsakeAppearance(look))
@@ -46,8 +41,8 @@ final class ShareState {
     var phase: Phase = .saving
     var save: Save?
     var destinations: [Destination] = []
-    /// Everything saved, for each group's cover and count.
-    var saves: [Save] = []
+    /// A few saves from each group for its cover, and how many each holds (never the whole library).
+    var shelfPreview = Library.Shelf()
     var destination: String?          // Destination.value, or `review`
     var destinationLabel = ""
     /// The library being looked through; nil shows the two library cards.
@@ -80,7 +75,7 @@ final class ShareState {
             Haptic.saved()
             phase = .saved
             destinations = (try? await library.destinations()) ?? []
-            saves = (try? library.saves()) ?? []
+            shelfPreview = (try? library.shelf(excluding: s.id)) ?? Library.Shelf()
             let here = s.hasOwnView ? "kind:\(s.kind)" : s.collectionId
             if let d = destinations.first(where: { $0.value == here }) {
                 destination = d.value
@@ -105,16 +100,19 @@ final class ShareState {
     /// One library's groups, most saves first (a tie A–Z), as in the app.
     func groups(_ shelf: Shelf) -> [Destination] {
         destinations.filter { $0.group == (shelf == .lifestyle ? "lifestyle" : "collection") }
-            .mostFirst(count: { members($0).count }, name: \.label)
+            .mostFirst(count: count, name: \.label)
     }
 
-    /// What's already in a group (not counting this save), for its tile.
+    /// How many saves a group already holds (not counting this one).
+    func count(_ d: Destination) -> Int { shelfPreview.counts[d.value] ?? 0 }
+
+    /// A few saves already in a group (not this one), pictures first, for its tile.
     func members(_ d: Destination) -> [Save] {
-        saves.filter { s in s.id != save?.id && (d.kind.map { s.kind == $0 } ?? (s.collectionId == d.value)) }
+        shelfPreview.saves.filter { s in d.kind.map { s.kind == $0 } ?? (s.collectionId == d.value) }
     }
 
     func members(_ shelf: Shelf) -> [Save] {
-        saves.filter { $0.id != save?.id && (shelf == .lifestyle ? $0.hasOwnView : !($0.collectionId ?? "").isEmpty) }
+        shelfPreview.saves.filter { shelf == .lifestyle ? $0.hasOwnView : !($0.collectionId ?? "").isEmpty }
     }
 
     func open(_ shelf: Shelf?) {
@@ -468,11 +466,11 @@ struct ShareCard: View {
                             .buttonStyle(PressStyle())
                     }
                     ForEach(state.groups(shelf)) { d in
-                        let items = state.members(d)
+                        let items = state.members(d), n = state.count(d)
                         let k = d.kind.map(KindStyle.init)
                         let here = state.destination == d.value
                         Button { state.put(d) } label: {
-                            GroupTile(d.label, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
+                            GroupTile(d.label, subtitle: n == 0 ? "Empty" : (n == 1 ? "1 save" : "\(n) saves"),
                                       cover: items.first(where: \.hasImage) ?? items.first, symbol: k?.symbol ?? "bag",
                                       tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here, compact: true)
                                 .overlay(alignment: .topLeading) {

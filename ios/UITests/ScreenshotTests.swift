@@ -155,6 +155,9 @@ final class ScreenshotTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-importOnLaunch", demo]
         app.launch()
+        // The app asks once whether "Saved to …" notifications may show; allow it for the end of this test.
+        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
+        if allow.waitForExistence(timeout: 3) { allow.tap() }
         XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
         sleep(3)
         app.terminate()
@@ -175,8 +178,14 @@ final class ScreenshotTests: XCTestCase {
             keepsake.tap()
             let collections = safari.buttons["Collections"].firstMatch
             XCTAssertTrue(collections.waitForExistence(timeout: 10))
-            sleep(2)
+            // It stays open until Done or Undo (it used to drop a moment after it appeared).
+            sleep(5)
+            XCTAssertTrue(collections.exists, "the share sheet closed by itself")
             try shoot(safari, folder, "\(tag)-share-libraries")
+            // A swipe down doesn't close it either.
+            safari.buttons["Done"].firstMatch.swipeDown()
+            sleep(1)
+            XCTAssertTrue(collections.exists, "a swipe down closed the share sheet")
             collections.tap()
             sleep(2)
             try shoot(safari, folder, "\(tag)-share-collections")
@@ -184,7 +193,30 @@ final class ScreenshotTests: XCTestCase {
             safari.buttons["Lifestyle"].firstMatch.tap()
             sleep(2)
             try shoot(safari, folder, "\(tag)-share-lifestyle")
-            safari.buttons["Undo"].firstMatch.tap()
+            guard mode == .dark else {
+                safari.buttons["Undo"].firstMatch.tap()
+                safari.terminate()
+                continue
+            }
+            // Put it in the first Lifestyle view, then Done: "Saved to …" drops in from the top, and
+            // tapping it opens that save in Keepsake.
+            let firstView = safari.scrollViews.buttons.firstMatch
+            XCTAssertTrue(firstView.waitForExistence(timeout: 5))
+            firstView.tap()
+            sleep(1)
+            safari.buttons["Done"].firstMatch.tap()
+            XCTAssertTrue(collections.waitForNonExistence(timeout: 5), "Done didn't close the share sheet")
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Saved to'")).firstMatch
+            XCTAssertTrue(banner.waitForExistence(timeout: 10), "no Saved to notification")
+            try shoot(springboard, folder, "\(tag)-share-notice")
+            banner.tap()
+            XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+            XCTAssertTrue(app.navigationBars.buttons.element(boundBy: 0).waitForExistence(timeout: 10))
+            sleep(1)
+            XCTAssertFalse(app.tabBars.buttons["Home"].isHittable, "the save didn't open")
+            try shoot(app, folder, "\(tag)-share-notice-opened")
+            app.terminate()
             safari.terminate()
         }
         XCUIDevice.shared.appearance = .light

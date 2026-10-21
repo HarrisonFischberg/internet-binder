@@ -88,8 +88,8 @@ public final class Library: @unchecked Sendable {
         try database.pool.read { try Self.fetchSaves($0, trash: trash) }
     }
 
-    static func fetchSaves(_ db: Database, trash: Bool) throws -> [Save] {
-        let sql = "SELECT body, fact FROM item WHERE deletedAt IS \(trash ? "NOT " : "")NULL ORDER BY createdAt DESC"
+    static func fetchSaves(_ db: Database, trash: Bool, limit: Int? = nil) throws -> [Save] {
+        let sql = "SELECT body, fact FROM item WHERE deletedAt IS \(trash ? "NOT " : "")NULL ORDER BY createdAt DESC" + (limit.map { " LIMIT \($0)" } ?? "")
         let decoder = JSONDecoder()
         return try Row.fetchAll(db, sql: sql).compactMap { row in
             guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
@@ -98,10 +98,49 @@ public final class Library: @unchecked Sendable {
         }
     }
 
+    /// A few saves from each kind and each collection (pictures first, then newest) and how many each
+    /// holds, for the Share Sheet's library cards and group tiles. Never the whole library: a share
+    /// extension gets far less memory than the app, and a big library with pictures would not fit.
+    public struct Shelf: Sendable {
+        public var saves: [Save] = []
+        /// Keyed like `Destination.value`: "kind:recipe", or a collection's id.
+        public var counts: [String: Int] = [:]
+        public init() {}
+    }
+
+    public func shelf(perGroup: Int = 3, excluding id: String? = nil) throws -> Shelf {
+        var shelf = Shelf()
+        shelf.saves = try database.pool.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                WITH live AS (
+                  SELECT key, kind, collectionId, createdAt, body, fact,
+                         COALESCE(json_extract(body, '$.image'), '') != '' AS pictured
+                  FROM item WHERE deletedAt IS NULL AND key IS NOT ?
+                ), ranked AS (
+                  SELECT key, createdAt, body, fact,
+                         ROW_NUMBER() OVER (PARTITION BY kind ORDER BY pictured DESC, createdAt DESC) AS byKind,
+                         CASE WHEN COALESCE(collectionId, '') = '' THEN NULL
+                              ELSE ROW_NUMBER() OVER (PARTITION BY collectionId ORDER BY pictured DESC, createdAt DESC) END AS byCollection
+                  FROM live
+                )
+                SELECT body, fact FROM ranked WHERE byKind <= ? OR byCollection <= ? ORDER BY createdAt DESC
+                """, arguments: [id, perGroup, perGroup])
+            let decoder = JSONDecoder()
+            return rows.compactMap { row in
+                guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
+                save.fact = row["fact"]
+                return save
+            }
+        }
+        for (kind, n) in try database.liveItemCounts(by: "kind", excluding: id) { shelf.counts["kind:\(kind)"] = n }
+        for (collection, n) in try database.liveItemCounts(by: "collectionId", excluding: id) { shelf.counts[collection] = n }
+        return shelf
+    }
+
     /// Recent saves for widgets: opens the shared library read-only-ish, without the JavaScript core.
     public static func recentSaves(limit: Int = 20, path: String? = nil) throws -> [Save] {
         let db = try RecordDatabase(path: path ?? RecordDatabase.defaultPath(), secrets: MemorySecrets())
-        return Array(try db.pool.read { try fetchSaves($0, trash: false) }.prefix(limit))
+        return try db.pool.read { try fetchSaves($0, trash: false, limit: limit) }
     }
 
     /// One save as stored now (with its key fact).
