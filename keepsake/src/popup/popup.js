@@ -226,14 +226,6 @@ function showHome({ reset = true, shelf } = {}) {
   $('homeAlready').textContent = dup ? `Already saved${dupCol ? ` in ${dupCol.name}` : ''}. Pick a place to update it or save a copy.` : '';
   $('homeAlready').classList.toggle('hidden', !dup);
 
-  // Keepsake's guess, said once.
-  const initial = state.initialChoice;
-  const cls = state.classification;
-  const guess = $('homeGuess');
-  clear(guess);
-  if (initial) guess.append('Keepsake thinks ', el('strong', {}, [choiceLabel(initial)]), '.');
-  else if (cls.suggested?.collectionName) guess.append('Keepsake isn’t sure. Maybe ', el('strong', {}, [cls.suggested.collectionName]), '?');
-  else guess.append('Keepsake isn’t sure yet.');
 
   // Each library with a fan of what's already in it.
   for (const [id, which] of [['libCollections', 'collections'], ['libLifestyle', 'lifestyle']]) {
@@ -292,9 +284,22 @@ function showHome({ reset = true, shelf } = {}) {
   if (reset) setTimeout(() => $('homeDashboard')?.focus(), 30);
 }
 
+// Keepsake's guess, said once; once you put it in Review, where it's waiting (as on the iPhone).
+function renderGuess(choice) {
+  const initial = state.initialChoice;
+  const cls = state.classification;
+  const guess = $('homeGuess');
+  clear(guess);
+  if (choice === '') guess.append('For now it’s waiting in ', el('strong', {}, ['Review']), '.');
+  else if (initial) guess.append('Keepsake thinks ', el('strong', {}, [choiceLabel(initial)]), '.');
+  else if (cls.suggested?.collectionName) guess.append('Keepsake isn’t sure. Maybe ', el('strong', {}, [cls.suggested.collectionName]), '?');
+  else guess.append('Keepsake isn’t sure yet.');
+}
+
 // Draws what changes as you pick: the object or the small card, libraries or groups, ticks, Save.
 function renderHome() {
   const choice = state.choice;
+  renderGuess(choice);
   const picked = choice !== null && choice !== undefined;
   const shelf = state.shelfOpen;
   $('homeObject').classList.toggle('hidden', picked || !!shelf);

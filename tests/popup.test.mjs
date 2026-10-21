@@ -128,6 +128,7 @@ test('popup: Not sure goes to Review with a note, and Undo comes back to the sta
   review.click();
   assert.ok(review.classList.contains('is-here'));
   assert.match(page.getElementById('reviewSub').textContent, /^Waiting here/);
+  assert.equal(page.getElementById('homeGuess').textContent, 'For now it’s waiting in Review.');
   assert.equal(page.getElementById('homeDest').textContent, 'In Review');
   page.getElementById('homeAddNote').click();
   page.getElementById('homeNote').value = 'for later';
