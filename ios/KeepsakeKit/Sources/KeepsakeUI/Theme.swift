@@ -251,30 +251,83 @@ public struct KindStyle: Sendable {
 /// solid navigation bars meet it without a seam; the style shows lower down, behind the tiles.
 /// With Increase Contrast on, the page is plain.
 public struct TableBackground: View {
+    public init() {}
+    public var body: some View {
+        TablePatch().ignoresSafeArea()
+    }
+}
+
+/// A piece of the page for a bar or pinned header to stand on: the same material as the page behind
+/// it, lined up with it, so a docked bar hides the tiles under it without leaving a flat plate.
+/// Every page and patch is a window onto one surface the size of the app's window (`ksTableFrame`).
+public struct TablePatch: View {
     @Environment(\.ks) private var t
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.ksTableFrame) private var table
     public init() {}
     public var body: some View {
         ZStack {
             t.table
-            if contrast != .increased {
-                Group {
-                    switch t.style {
-                    case .pantry: PantryShelf(dark: scheme == .dark)
-                    case .notebook: GraphPaper(dark: scheme == .dark, color: t.accent)
-                    case .atlas: AtlasChart(dark: scheme == .dark, line: t.rule)
-                    case .swiss: SwissGrid(dark: scheme == .dark, ink: t.ink, red: t.accent)
-                    case .gallery: EmptyView()
-                    }
+            if contrast != .increased && t.style != .gallery {
+                GeometryReader { g in
+                    let f = g.frame(in: .global), page = table ?? f
+                    TableSurface(style: t.style, dark: scheme == .dark, t: t)
+                        .frame(width: page.width, height: page.height)
+                        .offset(x: page.minX - f.minX, y: page.minY - f.minY)
                 }
-                .mask(LinearGradient(stops: [.init(color: .clear, location: 0.05), .init(color: .black, location: 0.24)],
-                                     startPoint: .top, endPoint: .bottom))
+                .clipped()
             }
         }
-        .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// The whole page's material. Plain for the first 100 points, under the status bar and its scrim
+/// (TopScrim, about 86 points), then fading in over the next 180.
+private struct TableSurface: View {
+    let style: KSTheme.Style, dark: Bool, t: KSTheme
+    var body: some View {
+        Group {
+            switch style {
+            case .pantry: PantryShelf(dark: dark)
+            case .notebook: GraphPaper(dark: dark, color: t.accent)
+            case .atlas: AtlasChart(dark: dark, line: t.rule)
+            case .swiss: SwissGrid(dark: dark, ink: t.ink, red: t.accent)
+            case .gallery: EmptyView()
+            }
+        }
+        .mask {
+            GeometryReader { g in
+                let h = max(g.size.height, 1)
+                LinearGradient(stops: [.init(color: .clear, location: min(1, 100 / h)), .init(color: .black, location: min(1, 280 / h))],
+                               startPoint: .top, endPoint: .bottom)
+            }
+        }
+    }
+}
+
+private struct TableFrameKey: EnvironmentKey { static let defaultValue: CGRect? = nil }
+extension EnvironmentValues {
+    /// Where the app's whole window sits (global coordinates), so every page and bar draws its part
+    /// of one table. Set by `keepsakeAppearance`; without it a patch draws a page of its own size.
+    public var ksTableFrame: CGRect? {
+        get { self[TableFrameKey.self] }
+        set { self[TableFrameKey.self] = newValue }
+    }
+}
+
+/// Measures the root view, safe areas included, for `ksTableFrame`.
+private struct TableFrameReader: ViewModifier {
+    @State private var frame: CGRect?
+    func body(content: Content) -> some View {
+        content
+            .environment(\.ksTableFrame, frame)
+            .background {
+                Color.clear.ignoresSafeArea()
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            }
     }
 }
 
@@ -296,9 +349,9 @@ struct PantryShelf: View {
     var body: some View {
         let mustard = Color(uiColor: UIColor(hex: 0xFFC23D)), tomato = Color(uiColor: UIColor(hex: 0xFF5A36)), teal = Color(uiColor: UIColor(hex: 0x12A08F))
         ZStack {
-            Glow(color: mustard.opacity(dark ? 0.16 : 0.34), at: UnitPoint(x: 1.05, y: 0.62), radius: 0.62)
-            Glow(color: tomato.opacity(dark ? 0.13 : 0.16), at: UnitPoint(x: -0.1, y: 1.0), radius: 0.6)
-            Glow(color: teal.opacity(dark ? 0.10 : 0.08), at: UnitPoint(x: 0.85, y: 1.12), radius: 0.4)
+            Glow(color: mustard.opacity(dark ? 0.09 : 0.34), at: UnitPoint(x: 1.05, y: 0.62), radius: 0.62)
+            Glow(color: tomato.opacity(dark ? 0.10 : 0.16), at: UnitPoint(x: -0.1, y: 1.0), radius: 0.6)
+            Glow(color: teal.opacity(dark ? 0.08 : 0.08), at: UnitPoint(x: 0.85, y: 1.12), radius: 0.4)
             Canvas { ctx, size in
                 let step: CGFloat = 14
                 let ink = dark ? Color(uiColor: UIColor(hex: 0xFFF7E8)).opacity(0.07) : Color(uiColor: UIColor(hex: 0x16130F)).opacity(0.075)
@@ -340,11 +393,11 @@ struct GraphPaper: View {
                     p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: size.width, y: y))
                     if i % 5 == 0 { major = p } else { minor = p }
                 }
-                ctx.stroke(minor, with: .color(color.opacity(dark ? 0.07 : 0.08)), lineWidth: 1)
-                ctx.stroke(major, with: .color(color.opacity(dark ? 0.13 : 0.15)), lineWidth: 1)
+                ctx.stroke(minor, with: .color(color.opacity(0.06)), lineWidth: 1)
+                ctx.stroke(major, with: .color(color.opacity(dark ? 0.10 : 0.11)), lineWidth: 1)
             }
             // A warm vignette: the middle of the page stays clean.
-            EllipticalGradient(colors: [.clear, Color(uiColor: UIColor(hex: dark ? 0x000000 : 0x8A6A3A)).opacity(dark ? 0.32 : 0.11)],
+            EllipticalGradient(colors: [.clear, Color(uiColor: UIColor(hex: dark ? 0x000000 : 0x8A6A3A)).opacity(dark ? 0.32 : 0.07)],
                                center: UnitPoint(x: 0.5, y: 0.42), startRadiusFraction: 0.35, endRadiusFraction: 0.8)
             // Late afternoon light on the lower page.
             LinearGradient(colors: [.clear, Color(uiColor: UIColor(hex: dark ? 0xE9CF52 : 0xF2D57A)).opacity(dark ? 0.05 : 0.16)],
@@ -408,9 +461,11 @@ struct SwissGrid: View {
                 p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: size.height))
             }
             ctx.stroke(p, with: .color(ink.opacity(dark ? 0.08 : 0.07)), lineWidth: 1)
-            let r = min(size.width, size.height) * 0.48
-            let c = CGPoint(x: size.width - r * 0.35, y: size.height - r * 0.55)
-            ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(red.opacity(dark ? 0.16 : 0.1)))
+            // Small and pale, tucked into the corner: red is the colour for actions, so the disc
+            // stays a mark rather than a second red block behind them.
+            let r = min(size.width, size.height) * 0.34
+            let c = CGPoint(x: size.width - r * 0.45, y: size.height - r * 0.75)
+            ctx.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)), with: .color(red.opacity(dark ? 0.1 : 0.07)))
         }
     }
 }
@@ -529,6 +584,7 @@ extension View {
         Haptic.sound = a.sound
         return self.environment(\.ks, theme).environment(\.appearance, a).tint(theme.accent).fontDesign(theme.bodyDesign)
             .preferredColorScheme(a.colorScheme)
+            .modifier(TableFrameReader())
     }
 }
 #endif

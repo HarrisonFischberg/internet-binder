@@ -37,7 +37,8 @@ final class ScreenshotTests: XCTestCase {
                 let tag = "\(theme)-\(mode == .dark ? "dark" : "light")"
                 let app = XCUIApplication()
                 app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
-                app.launchArguments += ["-importOnLaunch", fixture, "-ksTheme", theme]
+                // The simulator doesn't always take XCUIDevice's appearance, so the app is told too.
+                app.launchArguments += ["-importOnLaunch", fixture, "-ksTheme", theme, "-ksMode", mode == .dark ? "dark" : "light"]
                 app.launch()
                 XCTAssertTrue(app.staticTexts["1 save needs a collection"].waitForExistence(timeout: 10))
                 try shoot(app, folder, "\(tag)-home")

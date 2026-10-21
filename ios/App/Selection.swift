@@ -105,7 +105,7 @@ struct SelectionBar<Actions: View>: View {
         .frame(maxWidth: 600)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
-        .background(t.table.ignoresSafeArea(edges: .bottom))
+        .background(TablePatch().ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Rectangle().fill(t.rule).frame(height: 1) }
     }
 }

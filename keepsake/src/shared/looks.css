@@ -500,8 +500,8 @@
 
 :root:not([data-style]) body:has(> .app) {
   background:
-    radial-gradient(ellipse 60% 55% at 105% 62%, color-mix(in srgb, var(--c-kind-product-fill) 26%, transparent), transparent 70%),
-    radial-gradient(ellipse 55% 50% at -5% 105%, color-mix(in srgb, var(--c-kind-recipe-fill) 14%, transparent), transparent 70%),
+    radial-gradient(ellipse 60% 55% at 105% 62%, color-mix(in srgb, var(--c-kind-product-fill) var(--page-glow, 26%), transparent), transparent 70%),
+    radial-gradient(ellipse 55% 50% at -5% 105%, color-mix(in srgb, var(--c-kind-recipe-fill) var(--page-glow-2, 14%), transparent), transparent 70%),
     radial-gradient(ellipse 35% 35% at 85% 112%, color-mix(in srgb, var(--c-kind-place-fill) 9%, transparent), transparent 70%),
     linear-gradient(var(--c-bg) 30%, color-mix(in srgb, var(--c-bg) 0%, transparent) 95%),
     radial-gradient(circle, color-mix(in srgb, var(--c-text) 8%, transparent) 1.4px, transparent 1.9px) 0 0 / 14px 14px,
@@ -510,12 +510,12 @@
 
 :root[data-style="notebook"] body:has(> .app) {
   background:
-    radial-gradient(ellipse 80% 75% at 50% 42%, transparent 55%, color-mix(in srgb, #8A6A3A 10%, transparent)),
+    radial-gradient(ellipse 80% 75% at 50% 42%, transparent 55%, color-mix(in srgb, #8A6A3A 6%, transparent)),
     linear-gradient(transparent 35%, color-mix(in srgb, var(--c-accent-soft) 45%, transparent)),
-    linear-gradient(color-mix(in srgb, var(--c-text) 11%, transparent) 1px, transparent 1px) 0 0 / 120px 120px,
-    linear-gradient(90deg, color-mix(in srgb, var(--c-text) 11%, transparent) 1px, transparent 1px) 0 0 / 120px 120px,
-    linear-gradient(color-mix(in srgb, var(--c-text) 6%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
-    linear-gradient(90deg, color-mix(in srgb, var(--c-text) 6%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(color-mix(in srgb, var(--c-text) 8%, transparent) 1px, transparent 1px) 0 0 / 120px 120px,
+    linear-gradient(90deg, color-mix(in srgb, var(--c-text) 8%, transparent) 1px, transparent 1px) 0 0 / 120px 120px,
+    linear-gradient(color-mix(in srgb, var(--c-text) 4.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, color-mix(in srgb, var(--c-text) 4.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
     var(--c-bg);
 }
 
@@ -531,10 +531,17 @@
 
 :root[data-style="swiss"] body:has(> .app) {
   background:
-    radial-gradient(circle at calc(100% - 9vmin) calc(100% - 13vmin), color-mix(in srgb, var(--c-accent) 9%, transparent) 0 26vmin, transparent calc(26vmin + 1px)),
+    radial-gradient(circle at calc(100% - 8vmin) calc(100% - 14vmin), color-mix(in srgb, var(--c-accent) var(--page-disc, 6%), transparent) 0 18vmin, transparent calc(18vmin + 1px)),
     repeating-linear-gradient(90deg, color-mix(in srgb, var(--c-text) 7%, transparent) 0 1px, transparent 1px 160px) 280px 0 / auto,
     var(--c-bg);
 }
+
+/* After dark the warm glows turn muddy at full strength, and the red disc needs a little more
+   to show; the halftone carries Pantry Pop. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --page-glow: 12%; --page-glow-2: 10%; --page-disc: 9%; }
+}
+:root[data-theme="dark"] { --page-glow: 12%; --page-glow-2: 10%; --page-disc: 9%; }
 
 @media (prefers-contrast: more) {
   :root body:has(> .app) {

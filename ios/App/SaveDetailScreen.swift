@@ -438,7 +438,7 @@ struct SaveDetailScreen: View {
                 .accessibilityShowsLargeContentViewer()
                 .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
                 .frame(maxWidth: .infinity)
-                .background(t.table.ignoresSafeArea(edges: .bottom))
+                .background(TablePatch().ignoresSafeArea(edges: .bottom))
                 .overlay(alignment: .top) { Rectangle().fill(t.style == .pantry ? t.line : t.rule).frame(height: t.style == .pantry ? 2 : 1) }
         }
     }
