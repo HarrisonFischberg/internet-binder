@@ -10,13 +10,16 @@ struct KindScreen: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
 
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
+
     private var saves: [Save] { model.saves.filter { $0.kind == kind } }
     private var todo: [Save] { saves.filter { $0.status != "done" } }
     private var done: [Save] { saves.filter { $0.status == "done" } }
 
     var body: some View {
         let k = KindStyle(kind)
-        ZStack {
+        ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -24,22 +27,37 @@ struct KindScreen: View {
                     if saves.isEmpty {
                         EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Keepsake and it lands here.")
                     } else {
-                        SaveGrid(saves: todo, zoom: zoom)
+                        SaveGrid(saves: todo, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
                         if !done.isEmpty {
                             Text(k.doneVerb).font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                            SaveGrid(saves: done, zoom: zoom)
+                            SaveGrid(saves: done, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
                         }
                     }
                 }
-                .padding(.horizontal, 18).padding(.bottom, 40)
+                .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+            }
+            if selecting {
+                SaveSelectionBar(all: (todo + done).map(\.id), selected: $selected, selecting: $selecting)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(KSMotion.settle, value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if model.aiReady && !saves.isEmpty {
+            if model.aiReady && !saves.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) \(k.plural.lowercased())") }
             }
+            if !saves.isEmpty {
+                ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
+            }
         }
+        .onChange(of: saves.isEmpty) { _, empty in if empty { selecting = false } }
+    }
+
+    private func startSelecting(_ id: String) {
+        Haptic.detent()
+        selected = [id]
+        selecting = true
     }
 }
 
@@ -126,6 +144,8 @@ struct ReviewScreen: View {
             }
         }
         .padding(14).ksSurface()
+        .contextMenu { SaveMenu(save: save) }
+        .swipeToDelete { Task { await model.trash(save) } }
     }
 
     private func file(_ save: Save, _ target: String, _ label: String) { model.file(save, into: target, label: label) }

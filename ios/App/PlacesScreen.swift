@@ -13,22 +13,31 @@ struct PlacesScreen: View {
     @State private var view: PlacesView?
     @State private var editing: Save?
     @State private var reading: String?
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
 
     enum Mode: String, CaseIterable { case list = "List", map = "Map", review = "Review" }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             TableBackground()
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(title: "Places", subtitle: subtitle)
+                    HStack(alignment: .center) {
+                        ScreenHeader(title: "Places", subtitle: subtitle)
+                        if mode != .map && !shownPlaces.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
+                    }
                     Picker("Show", selection: $mode) {
                         ForEach(Mode.allCases, id: \.self) { m in
                             Text(m == .review && waiting > 0 ? "Review \(waiting)" : m.rawValue).tag(m)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: mode) { Haptic.detent() }
+                    .onChange(of: mode) {
+                        Haptic.detent()
+                        selecting = false
+                        selected = []
+                    }
                 }
                 .padding(.horizontal, 18).padding(.bottom, 12)
                 switch mode {
@@ -37,7 +46,12 @@ struct PlacesScreen: View {
                 case .review: review
                 }
             }
+            if selecting {
+                SaveSelectionBar(all: shownPlaces.map(\.id), selected: $selected, selecting: $selecting)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(KSMotion.settle, value: selecting)
         .toolbar(.hidden, for: .navigationBar)
         .task(id: model.saves.map(\.id).joined() + model.saves.map { $0.status ?? "" }.joined()) {
             view = try? await model.library?.places()
@@ -48,6 +62,10 @@ struct PlacesScreen: View {
     }
 
     private var waiting: Int { view?.review.count ?? 0 }
+    /// What Select all ticks: the list's places, or the ones waiting in review.
+    private var shownPlaces: [Save] {
+        mode == .review ? (view?.review.map(\.item) ?? []) : (view?.groups.flatMap { $0.cities.flatMap(\.items) } ?? [])
+    }
     private var ready: Int { view?.groups.reduce(0) { $0 + $1.cities.reduce(0) { $0 + $1.items.count } } ?? 0 }
     private var subtitle: String {
         guard view != nil else { return "" }
@@ -87,30 +105,52 @@ struct PlacesScreen: View {
                     }
                 }
             }
-            .padding(.horizontal, 18).padding(.bottom, 40)
+            .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
         }
     }
 
-    private func row(_ place: Save) -> some View {
-        NavigationLink(value: model.saves.first { $0.id == place.id } ?? place) {
-            HStack(spacing: 14) {
-                SaveImage(place, symbolSize: 18).frame(width: 56, height: 56).clipped()
-                    .ksSurface(radius: min(t.radius, 10), scale: 0.5)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(place.title).font(KSFont.name(.headline)).foregroundStyle(t.ink)
-                    if let fact = place.fact, !fact.isEmpty { Text(fact).font(.footnote).foregroundStyle(t.inkMuted) }
-                }
-                Spacer()
-                if place.status == "done" {
-                    Label("Been", systemImage: "checkmark.seal.fill").labelStyle(.iconOnly).foregroundStyle(t.stamp)
-                        .accessibilityLabel("Been")
-                }
+    @ViewBuilder private func row(_ place: Save) -> some View {
+        let save = model.saves.first { $0.id == place.id } ?? place
+        if selecting {
+            let on = selected.contains(place.id)
+            Button {
+                Haptic.checked()
+                if on { selected.remove(place.id) } else { selected.insert(place.id) }
+            } label: {
+                rowBody(place).selectionCheck(on, alignment: .trailing)
             }
-            .padding(10)
-            .ksSurface()
-            .matchedTransitionSource(id: place.id, in: zoom)
+            .buttonStyle(PressStyle())
+            .accessibilityLabel(place.title)
+        } else {
+            NavigationLink(value: save) { rowBody(place).matchedTransitionSource(id: place.id, in: zoom) }
+                .buttonStyle(PressStyle())
+                .contextMenu { SaveMenu(save: save) { startSelecting(place.id) } }
+                .swipeToDelete { Task { await model.trash(save) } }
         }
-        .buttonStyle(PressStyle())
+    }
+
+    private func startSelecting(_ id: String) {
+        Haptic.detent()
+        selected = [id]
+        selecting = true
+    }
+
+    private func rowBody(_ place: Save) -> some View {
+        HStack(spacing: 14) {
+            SaveImage(place, symbolSize: 18).frame(width: 56, height: 56).clipped()
+                .ksSurface(radius: min(t.radius, 10), scale: 0.5)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(place.title).font(KSFont.name(.headline)).foregroundStyle(t.ink)
+                if let fact = place.fact, !fact.isEmpty { Text(fact).font(.footnote).foregroundStyle(t.inkMuted) }
+            }
+            Spacer()
+            if place.status == "done" {
+                Label("Been", systemImage: "checkmark.seal.fill").labelStyle(.iconOnly).foregroundStyle(t.stamp)
+                    .accessibilityLabel("Been")
+            }
+        }
+        .padding(10)
+        .ksSurface()
     }
 
     // MARK: map
@@ -159,6 +199,22 @@ struct PlacesScreen: View {
                     EmptyNote(symbol: "checkmark.circle", text: "Every place has a name and a state.")
                 }
                 ForEach(view?.review ?? [], id: \.item.id) { w in
+                    if selecting {
+                        let on = selected.contains(w.item.id)
+                        Button {
+                            Haptic.checked()
+                            if on { selected.remove(w.item.id) } else { selected.insert(w.item.id) }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
+                                Text(w.reasons.map(Self.why).joined(separator: " · ")).font(.footnote).foregroundStyle(t.stamp)
+                            }
+                            .padding(14).padding(.trailing, 44).frame(maxWidth: .infinity, alignment: .leading).ksSurface()
+                            .selectionCheck(on, alignment: .trailing)
+                        }
+                        .buttonStyle(PressStyle())
+                        .accessibilityLabel(w.item.title)
+                    } else {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
@@ -182,9 +238,12 @@ struct PlacesScreen: View {
                         }
                     }
                     .padding(14).ksSurface()
+                    .contextMenu { SaveMenu(save: model.saves.first { $0.id == w.item.id } ?? w.item) { startSelecting(w.item.id) } }
+                    .swipeToDelete { Task { await model.trash(w.item) } }
+                    }
                 }
             }
-            .padding(.horizontal, 18).padding(.bottom, 40)
+            .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
         }
     }
 

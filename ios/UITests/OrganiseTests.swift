@@ -77,7 +77,6 @@ final class OrganiseTests: XCTestCase {
     func testSelectSeveralAndMove() {
         let app = launch()
         app.tabBars.buttons["Library"].tap()
-        app.buttons["More"].tap()
         app.buttons["Select"].tap()
         card(app, "Push-up ladder").tap()
         card(app, "The case for slow cities").tap()

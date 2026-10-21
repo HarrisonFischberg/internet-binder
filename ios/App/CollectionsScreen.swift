@@ -2,7 +2,8 @@ import SwiftUI
 import KeepsakeKit
 import KeepsakeUI
 
-/// Collections are for shopping: products sorted into collections, with Purchased.
+/// Collections are for shopping: products sorted into collections, with Purchased. Select mode ticks
+/// collections to delete several at once (with Undo).
 struct CollectionsScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
@@ -10,24 +11,36 @@ struct CollectionsScreen: View {
     @State private var collections: [SaveCollection] = []
     @State private var naming = false
     @State private var newName = ""
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
     private var collected: [Save] { model.saves.filter { !($0.collectionId ?? "").isEmpty } }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ScreenHeader(title: "Collections", subtitle: "For things to buy")
-                    CollectionTiles(collections: collections) { naming = true }
+                    CollectionTiles(collections: collections, onNew: { naming = true }, selection: selecting ? $selected : nil) { id in
+                        selected = [id]
+                        selecting = true
+                    }
                 }
-                .padding(.horizontal, 18).padding(.bottom, 40)
+                .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
             }
+            if selecting { selectionBar.transition(.move(edge: .bottom).combined(with: .opacity)) }
         }
+        .animation(KSMotion.settle, value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { Button("New collection", systemImage: "plus") { naming = true } }
-            if model.aiReady && !collected.isEmpty {
+            if !selecting {
+                ToolbarItem(placement: .primaryAction) { Button("New collection", systemImage: "plus") { naming = true } }
+            }
+            if model.aiReady && !collected.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: collected, what: "all \(collected.count) saves in Collections") }
+            }
+            if !collections.isEmpty {
+                ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
             }
         }
         .alert("New collection", isPresented: $naming) {
@@ -35,7 +48,37 @@ struct CollectionsScreen: View {
             Button("Cancel", role: .cancel) { newName = "" }
             Button("Create") { Task { _ = try? await model.library?.createCollection(named: newName); newName = ""; await load() } }
         }
-        .task(id: model.saves.count) { await load() }
+        .task(id: "\(model.saves.count)|\(model.collectionsChanged)") { await load() }
+    }
+
+    /// Delete the ticked collections. With saves inside, it asks whether they wait in Review or go too.
+    private var selectionBar: some View {
+        let chosen = collections.filter { selected.contains($0.id) }
+        let inside = model.saves.filter { selected.contains($0.collectionId ?? "") }.count
+        return SelectionBar(noun: { $0 == 1 ? "collection" : "collections" }, all: collections.map(\.id), selected: $selected) {
+            if inside == 0 {
+                Button { delete(chosen, saves: false) } label: { BarTrashLabel(title: "Delete") }
+                    .disabled(chosen.isEmpty)
+                    .keyboardShortcut(.delete, modifiers: [])
+            } else {
+                Menu {
+                    Button("Delete, keep the \(inside) \(inside == 1 ? "save" : "saves")", systemImage: "folder.badge.minus") { delete(chosen, saves: false) }
+                    Button("Delete them and their \(inside) \(inside == 1 ? "save" : "saves")", systemImage: "trash", role: .destructive) { delete(chosen, saves: true) }
+                } label: {
+                    BarTrashLabel(title: "Delete \(chosen.count)")
+                }
+                .disabled(chosen.isEmpty)
+            }
+        }
+    }
+
+    private func delete(_ chosen: [SaveCollection], saves: Bool) {
+        Task {
+            await model.deleteCollections(chosen, deleteSaves: saves)
+            selected = []
+            selecting = false
+            await load()
+        }
     }
 
     private func load() async { collections = (try? model.library?.collections()) ?? [] }
@@ -50,37 +93,57 @@ struct CollectionScreen: View {
     @Environment(\.ks) private var t
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
     private var saves: [Save] { model.saves.filter { $0.collectionId == id } }
 
     var body: some View {
-        ZStack {
+        let toBuy = saves.filter { $0.purchased != true }
+        let bought = saves.filter { $0.purchased == true }
+        ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     ScreenHeader(title: name, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
                     if saves.isEmpty { EmptyNote(symbol: "bag", text: "Nothing here yet. Move a save here from Review or its own screen.") }
-                    SaveGrid(saves: saves.filter { $0.purchased != true }, zoom: zoom)
-                    let bought = saves.filter { $0.purchased == true }
+                    SaveGrid(saves: toBuy, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
                     if !bought.isEmpty {
                         Text("Purchased").font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                        SaveGrid(saves: bought, zoom: zoom)
+                        SaveGrid(saves: bought, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
                     }
                 }
-                .padding(.horizontal, 18).padding(.bottom, 40)
+                .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+            }
+            if selecting {
+                SaveSelectionBar(all: (toBuy + bought).map(\.id), selected: $selected, selecting: $selecting)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(KSMotion.settle, value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } }
-            if model.aiReady && !saves.isEmpty {
+            if !selecting {
+                ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } }
+            }
+            if model.aiReady && !saves.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) in \(name)") }
             }
+            if !saves.isEmpty {
+                ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
+            }
         }
+        .onChange(of: saves.isEmpty) { _, empty in if empty { selecting = false } }
         .sheet(isPresented: $editing) {
             if let c = try? model.library?.collections().first(where: { $0.id == id }) {
                 CollectionEditor(collection: c) { deleted in if deleted { dismiss() } }
             }
         }
+    }
+
+    private func startSelecting(_ id: String) {
+        Haptic.detent()
+        selected = [id]
+        selecting = true
     }
 }
 
@@ -94,7 +157,6 @@ struct CollectionEditor: View {
     @State private var name = ""
     @State private var keywords = ""
     @State private var pinned = false
-    @State private var confirmDelete = false
 
     var body: some View {
         NavigationStack {
@@ -106,8 +168,8 @@ struct CollectionEditor: View {
                 } header: { Text("Keywords") } footer: { Text("Saves with these words in them are filed here. Separate them with commas.") }
                 Section { Toggle("Pinned", isOn: $pinned) }
                 Section {
-                    Button("Delete collection", role: .destructive) { confirmDelete = true }
-                } footer: { Text("Its saves go back to Review.") }
+                    Button("Delete collection", role: .destructive) { delete() }
+                } footer: { Text("Its saves go back to Review. You can undo it.") }
             }
             .navigationTitle("Edit collection").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -126,22 +188,20 @@ struct CollectionEditor: View {
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .confirmationDialog("Delete “\(collection.name)”?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Delete collection", role: .destructive) {
-                    Task {
-                        try? await model.library?.deleteCollection(collection.id)
-                        model.refresh()
-                        Haptic.trashed()
-                        dismiss()
-                        done(true)
-                    }
-                }
-            } message: { Text("Its saves go back to Review.") }
             .onAppear {
                 name = collection.name
                 keywords = (collection.keywords ?? []).joined(separator: ", ")
                 pinned = collection.pinned ?? false
             }
+        }
+    }
+
+    /// No "Are you sure?": the toast's Undo brings it back with its saves filed in it.
+    private func delete() {
+        Task {
+            await model.deleteCollections([collection])
+            dismiss()
+            done(true)
         }
     }
 }

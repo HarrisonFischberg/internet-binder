@@ -73,7 +73,7 @@ struct SplitRootView: View {
             Button("Search") { section = .library; model.focusSearch = true }
                 .keyboardShortcut("f", modifiers: .command).hidden()
         }
-        .task(id: model.saves.count) { collections = (try? model.library?.collections()) ?? [] }
+        .task(id: "\(model.saves.count)|\(model.collectionsChanged)") { collections = (try? model.library?.collections()) ?? [] }
     }
 
     private func put(_ ids: [String], _ target: String, _ name: String) -> Bool {

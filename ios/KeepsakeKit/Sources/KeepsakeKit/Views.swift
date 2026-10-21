@@ -157,6 +157,20 @@ extension Library {
     /// Deletes a collection; its saves go back to Review (Chrome's rule).
     public func deleteCollection(_ id: String) async throws { try await core.call("store.deleteCollection", [id]) }
 
+    /// Deletes several collections at once (their saves wait in Review, or go to the Trash with
+    /// `deleteSaves`). Returns what `restoreCollections` needs to undo it exactly, or nil if none existed.
+    public func deleteCollections(_ ids: [String], deleteSaves: Bool = false) async throws -> String? {
+        try await prepare()
+        let args = String(decoding: try JSONSerialization.data(withJSONObject: [ids, ["deleteItems": deleteSaves]]), as: UTF8.self)
+        let undo = try await core.callJSON("store.deleteCollections", argsJSON: args)
+        return undo == "null" || undo.isEmpty ? nil : undo
+    }
+
+    /// Undo for `deleteCollections`: the collections come back with their saves filed in them again.
+    public func restoreCollections(_ undo: String) async throws {
+        _ = try await core.callJSON("store.restoreCollections", argsJSON: "[\(undo)]")
+    }
+
     /// "3× a week for 4 weeks".
     @discardableResult
     public func createGoal(itemId: String, perWeek: Int, weeks: Int) async throws -> String {

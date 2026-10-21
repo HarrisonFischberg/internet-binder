@@ -3,32 +3,61 @@ import KeepsakeKit
 import KeepsakeUI
 
 /// Lifestyle: every Lifestyle view that has saves (Places, Recipes, Workouts…), each a stack you open.
+/// Select mode ticks whole views: delete every save in them at once (with Undo).
 struct LifestyleScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
+    @State private var selecting = false
+    @State private var selected: Set<String> = []
     private var lifestyle: [Save] { model.saves.filter(\.hasOwnView) }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ScreenHeader(title: "Lifestyle", subtitle: "Places, recipes, workouts and more")
                     if model.saves.contains(where: \.hasOwnView) {
-                        LifestyleTiles()
+                        LifestyleTiles(selection: selecting ? $selected : nil) { kind in
+                            selected = [kind]
+                            selecting = true
+                        }
                     } else {
                         EmptyNote(symbol: "sparkles", text: "Nothing here yet. Share a recipe, a place or a workout to Keepsake and it lands here.")
                     }
                 }
-                .padding(.horizontal, 18).padding(.bottom, 40)
+                .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+            }
+            if selecting {
+                let inside = lifestyle.filter { selected.contains($0.kind) }.count
+                SelectionBar(noun: { $0 == 1 ? "view" : "views" }, all: KindStyle.lifestyle.filter { k in lifestyle.contains { $0.kind == k } }, selected: $selected) {
+                    Button {
+                        let kinds = selected
+                        Task {
+                            await model.trashKinds(kinds)
+                            selected = []
+                            selecting = false
+                        }
+                    } label: {
+                        BarTrashLabel(title: inside == 0 ? "Delete" : "Delete \(inside) \(inside == 1 ? "save" : "saves")")
+                    }
+                    .disabled(inside == 0)
+                    .keyboardShortcut(.delete, modifiers: [])
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(KSMotion.settle, value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if model.aiReady && !lifestyle.isEmpty {
+            if model.aiReady && !lifestyle.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: lifestyle, what: "all \(lifestyle.count) Lifestyle saves") }
             }
+            if !lifestyle.isEmpty {
+                ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
+            }
         }
+        .onChange(of: lifestyle.isEmpty) { _, empty in if empty { selecting = false } }
     }
 }
 
@@ -38,6 +67,10 @@ let groupColumns = [GridItem(.adaptive(minimum: 150), spacing: 16)]
 /// Each Lifestyle view with saves, as a stack linking to its view: most saves first (a tie A–Z), until
 /// you drag them into your own order (kept on this iPhone). "Sort by most saves" goes back.
 struct LifestyleTiles: View {
+    /// Select mode: a tap ticks a view instead of opening it.
+    var selection: Binding<Set<String>>?
+    /// Long press → Select (only where the screen has Select mode).
+    var onSelect: ((String) -> Void)?
     @Environment(LibraryModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var order: [String] = []
@@ -57,15 +90,30 @@ struct LifestyleTiles: View {
                 ForEach(order, id: \.self) { kind in
                     let items = model.saves.filter { $0.kind == kind }
                     let k = KindStyle(kind)
-                    NavigationLink(value: Route.kind(kind)) {
-                        GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                                  cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind)
+                    let tile = GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
+                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind)
+                    if let selection {
+                        let on = selection.wrappedValue.contains(kind)
+                        Button {
+                            Haptic.checked()
+                            if on { selection.wrappedValue.remove(kind) } else { selection.wrappedValue.insert(kind) }
+                        } label: { tile.selectionCheck(on) }
+                        .buttonStyle(PressStyle())
+                        .accessibilityLabel(k.plural)
+                    } else {
+                        NavigationLink(value: Route.kind(kind)) { tile }
+                        .buttonStyle(PressStyle())
+                        .reorderable(kind, in: $order, dragging: $dragging, reduce: reduce) { SavedOrder.set(Self.key, $0); manual = true }
+                        .contextMenu {
+                            if let onSelect { Button("Select", systemImage: "checkmark.circle") { Haptic.detent(); onSelect(kind) } }
+                            Button("Delete all \(items.count) \(k.plural.lowercased())", systemImage: "trash", role: .destructive) {
+                                Task { await model.trashKinds([kind]) }
+                            }
+                        }
                     }
-                    .buttonStyle(PressStyle())
-                    .reorderable(kind, in: $order, dragging: $dragging, reduce: reduce) { SavedOrder.set(Self.key, $0); manual = true }
                 }
             }
-            if manual {
+            if manual && selection == nil {
                 SortByMostButton {
                     SavedOrder.set(Self.key, [])
                     manual = false
@@ -83,6 +131,10 @@ struct LifestyleTiles: View {
 struct CollectionTiles: View {
     let collections: [SaveCollection]
     var onNew: (() -> Void)?
+    /// Select mode: a tap ticks a collection instead of opening it.
+    var selection: Binding<Set<String>>?
+    /// Long press → Select (only where the screen has Select mode).
+    var onSelect: ((String) -> Void)?
     @Environment(LibraryModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var order: [String] = []
@@ -113,23 +165,33 @@ struct CollectionTiles: View {
             LazyVGrid(columns: groupColumns, spacing: 20) {
                 ForEach(order.compactMap { id in collections.first { $0.id == id } }) { c in
                     let items = model.saves.filter { $0.collectionId == c.id }
-                    NavigationLink(value: Route.collection(c.id, c.name)) {
-                        GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                                  cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
-                    }
-                    .buttonStyle(PressStyle())
-                    .reorderable(c.id, in: $order, dragging: $dragging, reduce: reduce) { ids in
-                        SavedOrder.set(Self.key, ["on"])
-                        manual = true
-                        Task { try? await model.library?.reorderCollections(ids) }
+                    let tile = GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
+                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
+                    if let selection {
+                        let on = selection.wrappedValue.contains(c.id)
+                        Button {
+                            Haptic.checked()
+                            if on { selection.wrappedValue.remove(c.id) } else { selection.wrappedValue.insert(c.id) }
+                        } label: { tile.selectionCheck(on) }
+                        .buttonStyle(PressStyle())
+                        .accessibilityLabel("Collection \(c.name)")
+                    } else {
+                        NavigationLink(value: Route.collection(c.id, c.name)) { tile }
+                        .buttonStyle(PressStyle())
+                        .reorderable(c.id, in: $order, dragging: $dragging, reduce: reduce) { ids in
+                            SavedOrder.set(Self.key, ["on"])
+                            manual = true
+                            Task { try? await model.library?.reorderCollections(ids) }
+                        }
+                        .contextMenu { CollectionMenu(collection: c, saves: items.count, onSelect: onSelect.map { f in { f(c.id) } }) }
                     }
                 }
-                if let onNew {
+                if let onNew, selection == nil {
                     Button(action: onNew) { NewGroupTile("New collection") }
                         .buttonStyle(PressStyle())
                 }
             }
-            if manual && collections.count > 1 {
+            if manual && collections.count > 1 && selection == nil {
                 SortByMostButton {
                     SavedOrder.set(Self.key, [])
                     manual = false
@@ -171,6 +233,40 @@ struct GroupSection<Content: View>: View {
                 Text(detail).font(.footnote).foregroundStyle(t.inkMuted)
             }
             content
+        }
+    }
+}
+
+/// What a long press on a collection offers: pin it, select it, or delete it (its saves wait in Review,
+/// or go with it). Undo brings it back either way.
+struct CollectionMenu: View {
+    let collection: SaveCollection
+    let saves: Int
+    var onSelect: (() -> Void)?
+    @Environment(LibraryModel.self) private var model
+
+    var body: some View {
+        Button(collection.pinned == true ? "Unpin" : "Pin to the top", systemImage: collection.pinned == true ? "pin.slash" : "pin") {
+            Task {
+                try? await model.library?.updateCollection(collection.id, ["pinned": collection.pinned != true])
+                Haptic.settled()
+                model.refresh()
+                model.collectionsChanged += 1
+            }
+        }
+        if let onSelect {
+            Button("Select", systemImage: "checkmark.circle") { Haptic.detent(); onSelect() }
+        }
+        Divider()
+        if saves == 0 {
+            Button("Delete collection", systemImage: "trash", role: .destructive) { Task { await model.deleteCollections([collection]) } }
+        } else {
+            Button("Delete collection, keep its saves", systemImage: "folder.badge.minus", role: .destructive) {
+                Task { await model.deleteCollections([collection]) }
+            }
+            Button("Delete it and its \(saves) \(saves == 1 ? "save" : "saves")", systemImage: "trash", role: .destructive) {
+                Task { await model.deleteCollections([collection], deleteSaves: true) }
+            }
         }
     }
 }

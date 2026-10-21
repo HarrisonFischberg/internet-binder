@@ -241,29 +241,41 @@ struct ScreenHeader: View {
     }
 }
 
-/// Saves as objects, linking to their screens.
+/// Saves as objects, linking to their screens. With a selection, Select mode: a tap ticks a save instead,
+/// and a long press offers Select to start it.
 struct SaveGrid: View {
     let saves: [Save]
     let zoom: Namespace.ID
+    var selecting = false
+    var selected: Binding<Set<String>>?
+    /// Long press → Select: starts Select mode with this save ticked.
+    var onSelect: ((String) -> Void)?
     @Environment(LibraryModel.self) private var model
     @Environment(\.dynamicTypeSize) private var typeSize
     var body: some View {
         Masonry(saves, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: 170) { save in
-            NavigationLink(value: save) { SaveObject(save).matchedTransitionSource(id: save.id, in: zoom) }
+            if selecting, let selected {
+                let on = selected.wrappedValue.contains(save.id)
+                Button {
+                    Haptic.checked()
+                    if on { selected.wrappedValue.remove(save.id) } else { selected.wrappedValue.insert(save.id) }
+                } label: {
+                    SaveObject(save).selectionCheck(on)
+                }
                 .buttonStyle(PressStyle())
-                .draggable(save.id) { SaveObject(save).frame(width: 160) }
-                // VoiceOver rotor: the card's own actions without opening it.
-                .accessibilityAction(named: save.status == "done" ? "Mark not \(KindStyle(save.kind).doneVerb.lowercased())" : "Mark \(KindStyle(save.kind).doneVerb.lowercased())") {
-                    Task { await model.setDone(save, save.status != "done") }
-                }
-                .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
-                .contextMenu {
-                    if model.aiReady {
-                        Button("Fix with AI", systemImage: "sparkles") { Task { await model.fixWithAI([save]) } }
-                            .disabled(model.aiRun != nil)
+                .accessibilityLabel(save.title)
+                .accessibilityHint(on ? "Selected. Tap to leave it out." : "Tap to select.")
+            } else {
+                NavigationLink(value: save) { SaveObject(save).matchedTransitionSource(id: save.id, in: zoom) }
+                    .buttonStyle(PressStyle())
+                    .draggable(save.id) { SaveObject(save).frame(width: 160) }
+                    // VoiceOver rotor: the card's own actions without opening it.
+                    .accessibilityAction(named: save.status == "done" ? "Mark not \(KindStyle(save.kind).doneVerb.lowercased())" : "Mark \(KindStyle(save.kind).doneVerb.lowercased())") {
+                        Task { await model.setDone(save, save.status != "done") }
                     }
-                    Button("Move to Trash", systemImage: "trash", role: .destructive) { Task { await model.trash(save) } }
-                }
+                    .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
+                    .contextMenu { SaveMenu(save: save, onSelect: onSelect.map { f in { f(save.id) } }) }
+            }
         }
     }
 }
