@@ -95,7 +95,9 @@ final class OrganiseTests: XCTestCase {
         XCTAssertTrue(card(app, "Linen apron").waitForExistence(timeout: 3))
         XCTAssertFalse(card(app, "Café Azulejo").exists)
         app.chip("Remove filter Purchased").tap()
-        // Nothing narrows the saves now, so All is back to its stacks.
-        XCTAssertTrue(card(app, "Workouts,").waitForExistence(timeout: 3))
+        // Nothing narrows the saves now, so All is back to its stacks (Workouts sits low, below Collections).
+        let workouts = card(app, "Workouts,")
+        for _ in 0..<5 where !workouts.exists || !workouts.isHittable { app.swipeUp() }
+        XCTAssertTrue(workouts.waitForExistence(timeout: 3))
     }
 }

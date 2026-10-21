@@ -101,20 +101,26 @@ struct SelectionBar<Actions: View>: View {
             }
             HStack(spacing: 10) { actions }
         }
+        // On iPad the actions keep a phone-like width instead of stretching across the detail pane.
+        .frame(maxWidth: 600)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
         .background(t.table.ignoresSafeArea(edges: .bottom))
         .overlay(alignment: .top) { Rectangle().fill(t.rule).frame(height: 1) }
     }
 }
 
-/// The filled action in a selection bar ("Move to…").
+/// The filled action in a selection bar ("Move to…"). Fades while nothing is ticked: its own colours
+/// would otherwise hide that it's disabled.
 struct BarLabel: View {
     let title: String
     let symbol: String
     @Environment(\.ks) private var t
+    @Environment(\.isEnabled) private var enabled
     var body: some View {
         Label(title, systemImage: symbol).font(.headline).foregroundStyle(t.onPrimary)
             .frame(maxWidth: .infinity, minHeight: 54).background(t.primary, in: ControlShapeView.shape(t))
+            .opacity(enabled ? 1 : 0.4)
     }
 }
 
@@ -122,6 +128,7 @@ struct BarLabel: View {
 struct BarTrashLabel: View {
     var title: String?
     @Environment(\.ks) private var t
+    @Environment(\.isEnabled) private var enabled
     var body: some View {
         Group {
             if let title {
@@ -132,6 +139,7 @@ struct BarTrashLabel: View {
                     .frame(width: 54, height: 54).ksSurface(radius: 27, scale: 0.75)
             }
         }
+        .opacity(enabled ? 1 : 0.4)
     }
 }
 
@@ -227,6 +235,8 @@ struct SwipeToDelete: ViewModifier {
     @State private var offset: CGFloat = 0
     @State private var width: CGFloat = 320
     @State private var sideways: Bool?
+    /// While a sideways swipe is on, the row's own tap is off: letting go over the row must not open it.
+    @State private var swiping = false
     private let reveal: CGFloat = 92
 
     func body(content: Content) -> some View {
@@ -235,15 +245,27 @@ struct SwipeToDelete: ViewModifier {
                 Button {
                     trash()
                 } label: {
-                    Label("Delete", systemImage: "trash").labelStyle(.iconOnly)
-                        .font(.title3.weight(.semibold)).foregroundStyle(.white)
-                        .frame(width: max(reveal, -offset), alignment: .center).frame(maxHeight: .infinity)
-                        .background(t.stamp, in: RoundedRectangle(cornerRadius: min(t.radius, 14), style: .continuous))
+                    // Icon and word, like the system's swipe actions.
+                    VStack(spacing: 4) {
+                        Image(systemName: "trash").font(.title3.weight(.semibold))
+                        Text("Delete").font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    // Paper on the stamp colour: white fails on dark mode's light coral.
+                    .foregroundStyle(t.paper)
+                    .frame(width: max(reveal, -offset), alignment: .center).frame(maxHeight: .infinity)
+                    .background(t.stamp, in: RoundedRectangle(cornerRadius: min(t.radius, 14), style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(label)
             }
-            content.offset(x: offset)
+            content.offset(x: offset).disabled(swiping)
+                // With Delete showing, a tap on the row closes it (the system's swipe actions do the same).
+                .overlay {
+                    if offset < 0 && !swiping {
+                        Color.clear.contentShape(Rectangle()).offset(x: offset).onTapGesture { settle(0) }
+                            .accessibilityHidden(true)
+                    }
+                }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .simultaneousGesture(
@@ -251,13 +273,18 @@ struct SwipeToDelete: ViewModifier {
                 .onChanged { v in
                     if sideways == nil { sideways = abs(v.translation.width) > abs(v.translation.height) * 1.4 }
                     guard sideways == true else { return }
+                    swiping = true
                     let start: CGFloat = offset <= -reveal + 1 && v.translation.width > 0 ? -reveal : 0
                     offset = min(0, start + v.translation.width)
                 }
                 .onEnded { v in
-                    defer { sideways = nil }
+                    defer {
+                        sideways = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { swiping = false }
+                    }
                     guard sideways == true else { return }
-                    if -offset > width * 0.55 || v.predictedEndTranslation.width < -width * 0.8 { trash() }
+                    // Capped, so a full swipe on a wide iPad row is no longer than on a phone.
+                    if -offset > min(width * 0.55, 240) || v.predictedEndTranslation.width < -min(width * 0.8, 360) { trash() }
                     else { settle(-offset > reveal * 0.6 ? -reveal : 0) }
                 }
         )

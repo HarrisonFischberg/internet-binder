@@ -20,8 +20,17 @@ final class SelectionTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
     }
 
+    /// A main section: a tab on iPhone, a sidebar row on iPad.
+    func go(_ app: XCUIApplication, _ section: String) {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            app.cells.containing(.staticText, identifier: section).firstMatch.tap()
+        } else {
+            app.tabBars.buttons[section].tap()
+        }
+    }
+
     func openRecipes(_ app: XCUIApplication) {
-        app.tabBars.buttons["Library"].tap()
+        go(app, "Library")
         let recipes = card(app, "Recipes,")
         XCTAssertTrue(recipes.waitForExistence(timeout: 5))
         for _ in 0..<4 where !recipes.isHittable { app.swipeUp() }
@@ -73,7 +82,7 @@ final class SelectionTests: XCTestCase {
 
     func testSwipeARowToDelete() {
         let app = launch()
-        app.tabBars.buttons["Places"].tap()
+        go(app, "Places")
         var row = app.staticTexts["Café Azulejo"]
         if !row.waitForExistence(timeout: 3) {
             app.segmentedControls.buttons.element(boundBy: 2).tap()
@@ -81,6 +90,26 @@ final class SelectionTests: XCTestCase {
         }
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.swipeLeft(velocity: .fast)
+        XCTAssertTrue(app.staticTexts["Moved to Trash"].waitForExistence(timeout: 5))
+        app.buttons["Undo"].tap()
+        XCTAssertTrue(app.staticTexts["Café Azulejo"].waitForExistence(timeout: 5))
+    }
+
+    func testHalfSwipeShowsDeleteWithoutOpeningTheRow() {
+        let app = launch()
+        go(app, "Places")
+        var row = app.staticTexts["Café Azulejo"]
+        if !row.waitForExistence(timeout: 3) {
+            app.segmentedControls.buttons.element(boundBy: 2).tap()
+            row = app.staticTexts["Café Azulejo"]
+        }
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        let from = row.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 120, dy: 0))
+        from.press(forDuration: 0.01, thenDragTo: from.withOffset(CGVector(dx: -130, dy: 0)), withVelocity: 400, thenHoldForDuration: 0.2)
+        let delete = app.buttons["Move to Trash"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "Delete stays open behind the row")
+        XCTAssertFalse(app.buttons["Directions"].exists, "letting go over the row doesn't open it")
+        delete.tap()
         XCTAssertTrue(app.staticTexts["Moved to Trash"].waitForExistence(timeout: 5))
         app.buttons["Undo"].tap()
         XCTAssertTrue(app.staticTexts["Café Azulejo"].waitForExistence(timeout: 5))
