@@ -194,10 +194,17 @@ final class ScreenshotTests: XCTestCase {
             sleep(2)
             try shoot(safari, folder, "\(tag)-share-lifestyle")
             guard mode == .dark else {
-                // Not sure: the Review card files it in one tap and wears the check.
+                // Not sure: the Review card files it in one tap and wears the check. A new save starts in
+                // Review, so it goes into the first collection first, or the tap would change nothing.
                 safari.buttons.matching(NSPredicate(format: "label == 'Back' AND identifier != 'BackButton'")).firstMatch.tap()
+                collections.tap()
+                sleep(2)
+                safari.scrollViews.buttons.element(boundBy: 1).tap()   // the first collection (after New collection)
+                sleep(2)
                 let review = safari.buttons["Review"].firstMatch
                 XCTAssertTrue(review.waitForExistence(timeout: 5))
+                XCTAssertFalse(review.isSelected, "Review still picked after filing it in a collection")
+                try shoot(safari, folder, "\(tag)-share-review-unpicked")
                 review.tap()
                 sleep(1)
                 XCTAssertTrue(review.isSelected, "Review card didn't take the save")
