@@ -388,6 +388,15 @@ a.sidebar-brand:hover .brand-name {
   flex: none;
 }
 
+.places-map-toggle {
+  align-self: center;
+  flex: none;
+}
+
+.places-map-toggle[aria-pressed='true'] {
+  background: var(--c-surface-2);
+}
+
 .view-count {
   flex: none;
   padding-bottom: 2px;

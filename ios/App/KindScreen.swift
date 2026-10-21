@@ -9,8 +9,11 @@ struct KindScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
+    /// Places only: the Map button next to the title swaps the cards for a map (kept on this iPhone).
+    @AppStorage("placesShowMap") private var showMap = false
 
     private var saves: [Save] { model.saves.filter { $0.kind == kind } }
+    private var onMap: Bool { kind == "place" && showMap && !saves.isEmpty }
     private var todo: [Save] { saves.filter { $0.status != "done" } }
     private var done: [Save] { saves.filter { $0.status == "done" } }
 
@@ -18,26 +21,55 @@ struct KindScreen: View {
         let k = KindStyle(kind)
         ZStack {
             TableBackground()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    ScreenHeader(title: k.plural, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
-                    if saves.isEmpty {
-                        EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Keepsake and it lands here.")
-                    } else {
-                        SaveGrid(saves: todo, zoom: zoom)
-                        if !done.isEmpty {
-                            Text(k.doneVerb).font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                            SaveGrid(saves: done, zoom: zoom)
+            if onMap {
+                VStack(spacing: 0) {
+                    header(k).padding(.horizontal, 18).padding(.bottom, 12)
+                    PlacesMap(places: saves)
+                }
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        header(k)
+                        if saves.isEmpty {
+                            EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Keepsake and it lands here.")
+                        } else {
+                            SaveGrid(saves: todo, zoom: zoom)
+                            if !done.isEmpty {
+                                Text(k.doneVerb).font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                                SaveGrid(saves: done, zoom: zoom)
+                            }
                         }
                     }
+                    .padding(.horizontal, 18).padding(.bottom, 40)
                 }
-                .padding(.horizontal, 18).padding(.bottom, 40)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if model.aiReady && !saves.isEmpty {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) \(k.plural.lowercased())") }
+            }
+        }
+    }
+
+    /// The title, and for Places a Map button beside it that switches between the cards and the map.
+    private func header(_ k: KindStyle) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            ScreenHeader(title: k.plural, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
+            if kind == "place" && !saves.isEmpty {
+                Button {
+                    Haptic.detent()
+                    withAnimation(.easeOut(duration: 0.2)) { showMap.toggle() }
+                } label: {
+                    Image(systemName: showMap ? "square.grid.2x2" : "map")
+                        .font(.title3.weight(.semibold)).foregroundStyle(t.ink)
+                        .frame(width: 44, height: 44)
+                        .ksSurface(radius: 22, scale: 0.5)
+                }
+                .buttonStyle(PressStyle())
+                .padding(.top, 8)
+                .accessibilityLabel(showMap ? "Show cards" : "Show map")
+                .accessibilityIdentifier("placesMapToggle")
             }
         }
     }

@@ -123,4 +123,20 @@ final class LifestyleTests: XCTestCase {
         app.buttons["Recipes, 2 saves"].tap()
         XCTAssertTrue(app.staticTexts["Recipes"].waitForExistence(timeout: 3))
     }
+
+    func testLifestylePlacesMapButton() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 5))
+        app.buttons["Lifestyle"].tap()
+        app.buttons["Places, 2 saves"].tap()
+        // Next to the Places title: one tap swaps the cards for the map, another brings them back.
+        let toggle = app.buttons["placesMapToggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 3))
+        XCTAssertEqual(toggle.label, "Show map")
+        toggle.tap()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: 3))
+        XCTAssertEqual(toggle.label, "Show cards")
+        toggle.tap()
+        XCTAssertFalse(app.maps.firstMatch.waitForExistence(timeout: 1))
+    }
 }
