@@ -231,6 +231,7 @@ function bindChrome() {
   });
   $('selectToggle').addEventListener('click', () => (state.selecting ? exitSelection(true) : enterSelection()));
   $('aiCheck').addEventListener('click', () => checkWithAI());
+  $('placesMapToggle').addEventListener('click', () => setPlacesView(placesView() === 'map' ? 'list' : 'map'));
   $('themeToggle').addEventListener('click', async () => {
     const order = ['system', 'light', 'dark'];
     const cur = state.settings?.theme || 'system';
@@ -601,6 +602,17 @@ function renderToolbar() {
   const aiHere = !!state.settings?.ai?.on && ['all', 'c', 'kind', 'favorites', 'review'].includes(r.name);
   $('aiCheck').classList.toggle('hidden', !aiHere);
   if (aiHere) $('aiCheck').title = aiCheckHint(r);
+  // Places: a Map button next to the title, the quick way between the map and the list.
+  const placesHere = r.name === 'kind' && r.id === 'place';
+  const toggle = $('placesMapToggle');
+  toggle.classList.toggle('hidden', !placesHere);
+  if (placesHere) {
+    // One name ("Map") with pressed state; the List/Map tabs below say which view is showing.
+    toggle.setAttribute('aria-pressed', placesView() === 'map' ? 'true' : 'false');
+    toggle.setAttribute('aria-label', 'Map');
+    toggle.title = 'Map';
+    if (!toggle.firstChild) toggle.append(UI.mapIcon());
+  }
 }
 
 function aiCheckHint(r) {
@@ -1638,18 +1650,20 @@ function placesView() {
   try { const v = localStorage.getItem(PLACES_VIEW_KEY); return v === 'map' || v === 'review' ? v : 'list'; } catch { return 'list'; }
 }
 
+function setPlacesView(value) {
+  placesViewChoice = value;
+  try { localStorage.setItem(PLACES_VIEW_KEY, value); } catch { /* this page only */ }
+  renderView({ keepScroll: true });
+  renderToolbar();
+}
+
 // Places: the list (by state, then city) and the map show places that are ready: named, with a state.
 // The rest wait in Places review, where your AI provider (or you) can name them and say where they are.
 function renderPlaces(view, items) {
   const review = items.filter((i) => placeReviewReasons(i).length);
   const ready = items.filter((i) => !placeReviewReasons(i).length);
   const current = placesView();
-  const seg = (value, label) => el('button', { type: 'button', class: `library-tab ${current === value ? 'on' : ''}`, role: 'tab', 'aria-selected': current === value ? 'true' : 'false', onClick: () => {
-    placesViewChoice = value;
-    try { localStorage.setItem(PLACES_VIEW_KEY, value); } catch { /* this page only */ }
-    renderView({ keepScroll: true });
-    renderToolbar();
-  } }, [label]);
+  const seg = (value, label) => el('button', { type: 'button', class: `library-tab ${current === value ? 'on' : ''}`, role: 'tab', 'aria-selected': current === value ? 'true' : 'false', onClick: () => setPlacesView(value) }, [label]);
   view.append(el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Places view' }, [seg('list', 'List'), seg('map', 'Map'), seg('review', review.length ? `Places review · ${review.length}` : 'Places review')]));
   if (current === 'map') renderPlacesMap(view, ready);
   else if (current === 'review') renderPlacesReview(view, review, items);
