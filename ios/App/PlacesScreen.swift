@@ -291,11 +291,12 @@ struct PlacesMap: View {
             }
         }
         // Say when some places aren't on the map (no pin yet), so a short map doesn't look like a lost save.
-        .overlay(alignment: .bottom) {
+        // At the top, so it never covers the Apple Maps logo and Legal link at the bottom.
+        .overlay(alignment: .top) {
             if !pinned.isEmpty && pinned.count < places.count {
                 Text("\(pinned.count) of \(places.count) on the map").font(KSFont.note).foregroundStyle(t.ink)
                     .padding(.horizontal, 14).padding(.vertical, 8).ksSurface(radius: 24)
-                    .padding(.bottom, 16)
+                    .padding(.top, 12)
             }
         }
     }
