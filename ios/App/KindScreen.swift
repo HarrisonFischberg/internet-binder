@@ -64,10 +64,11 @@ struct KindScreen: View {
                     Haptic.detent()
                     withAnimation(.easeOut(duration: 0.2)) { showMap.toggle() }
                 } label: {
-                    Image(systemName: showMap ? "square.grid.2x2" : "map")
-                        .font(.title3.weight(.semibold)).foregroundStyle(t.ink)
+                    // Always the map glyph; filled in while the map is showing (Chrome's pressed look).
+                    Image(systemName: "map")
+                        .font(.title3.weight(.semibold)).foregroundStyle(showMap ? t.onAccent : t.ink)
                         .frame(width: mapButton, height: mapButton)
-                        .ksSurface(radius: mapButton / 2, scale: 0.5)
+                        .ksSurface(showMap ? t.accent : nil, radius: mapButton / 2, scale: 0.5)
                 }
                 .buttonStyle(PressStyle())
                 .padding(.top, 8)
