@@ -104,6 +104,9 @@ final class LibraryModel {
         #if DEBUG
         if let theme = UserDefaults.standard.string(forKey: "ksTheme") { a.theme = theme }
         if let mode = UserDefaults.standard.string(forKey: "ksMode") { a.mode = mode }
+        // Review card mockup: -ksReviewCard A|B tells the Share Extension which card to draw.
+        if let v = UserDefaults.standard.string(forKey: "ksReviewCard") { Appearance.defaults.set(v, forKey: "ks.mock.reviewCard") }
+        if let m = UserDefaults.standard.string(forKey: "ksShareMode") { Appearance.defaults.set(m, forKey: "ks.mode") }
         #endif
         return a
     }

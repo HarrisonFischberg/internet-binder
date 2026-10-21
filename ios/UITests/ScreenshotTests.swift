@@ -222,6 +222,97 @@ final class ScreenshotTests: XCTestCase {
         XCUIDevice.shared.appearance = .light
     }
 
+    /// Mockup: the Share card's Review card, variant A (one tap) and B (opens a page). The demo library
+    /// with two more pictured products moved to Review, so its fan has pictures.
+    /// KEEPSAKE_REVIEW_VARIANTS, KEEPSAKE_SHOT_MODES and KEEPSAKE_SHOT_LIBRARIES_ONLY (the large-text
+    /// shots, with the host turning Dynamic Type up: see replica/m3/screens/review-card/shoot.sh) trim the run.
+    func testReviewCardMock() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let env = ProcessInfo.processInfo.environment
+        let variants = (env["KEEPSAKE_REVIEW_VARIANTS"] ?? "A,B").split(separator: ",").map(String.init)
+        let modes: [XCUIDevice.Appearance] = (env["KEEPSAKE_SHOT_MODES"] ?? "light,dark").split(separator: ",").map { $0 == "dark" ? .dark : .light }
+        let librariesOnly = env["KEEPSAKE_SHOT_LIBRARIES_ONLY"] != nil
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized
+        var export = try JSONSerialization.jsonObject(with: Data(contentsOf: demo)) as! [String: Any]
+        var items = export["items"] as! [String: [String: Any]]
+        for (id, item) in items where ["Molded plywood lounge chair", "Glass pour-over coffee maker, 6 cup"].contains(item["title"] as? String) {
+            var moved = item; moved["collectionId"] = NSNull(); items[id] = moved
+        }
+        export["items"] = items
+        let fixture = URL(fileURLWithPath: folder).appendingPathComponent(".review-fixture.json")
+        try JSONSerialization.data(withJSONObject: export).write(to: fixture)
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        for variant in variants {
+            for mode in modes {
+                // The simulator's Safari keeps its share sheet light, so the card is told (Appearance's Light or Dark).
+                let app = XCUIApplication()
+                app.launchArguments += ["-importOnLaunch", fixture.path, "-ksReviewCard", variant, "-ksShareMode", mode == .dark ? "dark" : "light"]
+                app.launch()
+                let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
+                if allow.waitForExistence(timeout: 3) { allow.tap() }
+                XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+                sleep(3)
+                app.terminate()
+                XCUIDevice.shared.appearance = mode
+                let tag = "\(variant)-\(mode == .dark ? "dark" : "light")"
+                let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+                safari.launch()
+                safari.open(URL(string: "https://example.com/?shot=\(UUID().uuidString.prefix(6))")!)
+                sleep(4)
+                safari.buttons["MoreMenuButton"].tap()
+                let shareItem = safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Share'")).firstMatch
+                XCTAssertTrue(shareItem.waitForExistence(timeout: 5))
+                shareItem.tap()
+                sleep(2)
+                let keepsake = safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Keepsake'")).firstMatch
+                XCTAssertTrue(keepsake.waitForExistence(timeout: 5), "Keepsake in the share sheet")
+                keepsake.tap()
+                let collections = safari.buttons["Collections"].firstMatch
+                XCTAssertTrue(collections.waitForExistence(timeout: 10))
+                sleep(2)
+                // Put it in a collection first, so the libraries screen shows Review not picked.
+                collections.tap()
+                sleep(2)
+                safari.scrollViews.buttons.element(boundBy: 1).tap()   // the first collection (after New collection)
+                sleep(2)
+                if librariesOnly {
+                    // Large text: the share sheet's own large-text layout hides Keepsake off its row's edge, so the
+                    // card opens at the default size and the host script turns Dynamic Type up while it is open.
+                    let ready = URL(fileURLWithPath: folder).appendingPathComponent(".xl-ready"), go = URL(fileURLWithPath: folder).appendingPathComponent(".xl-go")
+                    try Data().write(to: ready)
+                    for _ in 0..<60 where !FileManager.default.fileExists(atPath: go.path) { sleep(1) }
+                    XCTAssertTrue(FileManager.default.fileExists(atPath: go.path), "the host didn't turn the text size up")
+                    sleep(3)
+                    try shoot(safari, folder, "\(tag)-libraries-xl")
+                    try? FileManager.default.removeItem(at: go)
+                    try Data().write(to: URL(fileURLWithPath: folder).appendingPathComponent(".xl-done"))
+                    for _ in 0..<60 where FileManager.default.fileExists(atPath: URL(fileURLWithPath: folder).appendingPathComponent(".xl-done").path) { sleep(1) }
+                } else {
+                    try shoot(safari, folder, "\(tag)-libraries")
+                    let review = safari.buttons["Review"].firstMatch
+                    review.tap()
+                    sleep(2)
+                    if variant == "B" {
+                        try shoot(safari, folder, "\(tag)-review-page")
+                        safari.buttons["Put it in Review"].firstMatch.tap()
+                        sleep(2)
+                    }
+                    try shoot(safari, folder, "\(tag)-review-picked")
+                    if variant == "B" {
+                        review.tap()
+                        sleep(2)
+                        try shoot(safari, folder, "\(tag)-review-page-waiting")
+                    }
+                }
+                safari.buttons["Undo"].firstMatch.tap()
+                sleep(1)
+                safari.terminate()
+            }
+        }
+        XCUIDevice.shared.appearance = .light
+    }
+
     /// Every style, light and dark, from the demo library: Home, Review, Library, a recipe, Places and
     /// Appearance. Files are <style>-<mode>-<screen>.png; KEEPSAKE_SHOT_THEMES picks the styles.
     func testStyles() throws {
