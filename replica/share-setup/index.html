@@ -278,7 +278,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .tip .t{display:flex;gap:10px;align-items:flex-start}
 .tip .t .nm{font-size:18px;line-height:1.2}
 .tip p{margin:0;font-size:15px;line-height:1.35;color:var(--ink)}
-.tip .x{margin-left:auto;color:var(--muted);padding:2px}
+.tip .x{color:var(--muted)}
 .where{display:flex;flex-direction:column;gap:2px}
 .where .nm{font-size:21px}
 .where span{font-size:15px;color:var(--muted)}
@@ -293,6 +293,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .dock{position:absolute;left:18px;right:18px;bottom:34px;display:flex;gap:12px;z-index:3}
 .dock .btn{flex:1}
 .extscroll{display:flex;flex-direction:column;gap:14px;flex:1;overflow:hidden;padding-bottom:110px}
+.pp{position:absolute;right:8px;bottom:8px;z-index:5;width:26px;height:26px;border-radius:13px;background:rgba(120,120,128,.24);display:flex;gap:3px;align-items:center;justify-content:center}
+.pp i{width:3px;height:10px;border-radius:1px;background:var(--sys-ink)}
+.demo.paused .pp i:first-child{width:0;height:0;border-radius:0;background:none;border-left:9px solid var(--sys-ink);border-top:6px solid transparent;border-bottom:6px solid transparent;margin-left:3px}
+.demo.paused .pp i:last-child{display:none}
+.demo.paused *{animation-play-state:paused!important}
+.demo{cursor:pointer}
+.demo:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.tip .x{width:44px;height:44px;margin:-12px -12px -12px auto;padding:12px;box-sizing:border-box}
 .ksapp{display:inline-block;width:18px;height:18px;border-radius:5px;background:var(--ks-icon) center/cover;vertical-align:-3px}
 </style>
 
@@ -318,7 +326,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 
 <template id="t-status"><div class="island"></div><div class="status"><span>9:41</span><span class="sys"><svg width="18" height="11" viewBox="0 0 18 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="6" rx="1"/><rect x="10" y="2.5" width="3" height="8.5" rx="1"/><rect x="15" y="0" width="3" height="11" rx="1"/></svg><svg width="26" height="12" viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="17" height="8" rx="2" fill="currentColor"/><rect x="23.5" y="4" width="2" height="4" rx="1" fill="currentColor" opacity=".45"/></svg></span></div></template>
 
-<template id="t-demo"><div class="demo" role="img" aria-label="Animation: in the Share sheet, swipe the apps to the end and tap More, tap Edit, tap the plus by Keepsake and drag it to the top, then Keepsake shows next to AirDrop.">
+<template id="t-demo"><div class="demo" tabindex="0" role="img" aria-label="Animation: in the Share sheet, swipe the apps to the end and tap More, tap Edit, tap the plus by Keepsake and drag it to the top, then Keepsake shows next to AirDrop. Tap to pause.">
+  <span class="pp" aria-hidden="true"><i></i><i></i></span>
   <div class="fr a"><div class="grab"></div>
     <div class="pv"><div class="th"></div><div><b>Shakshuka with feta</b><span>cooking.nytimes.com</span></div></div>
     <div class="approw">
@@ -349,7 +358,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 </div></template>
 
 <template id="t-steps"><ol class="steps">
-  <li>Share, swipe to the end, tap More</li>
+  <li>Tap Share, swipe to the end, tap More</li>
   <li>Tap Edit</li>
   <li>Tap + by Keepsake, drag it to the top</li>
   <li>Tap Done. It sits next to AirDrop</li>
@@ -393,8 +402,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
           <span class="skip">Skip</span>
           <div class="content" style="gap:12px;justify-content:center;padding-bottom:30px">
             <div class="stack" aria-hidden="true">
-              <div class="card place surf" style="left:14px;top:52px;transform:rotate(-8deg)"><span class="lbl"><svg class="ico"><use href="#i-pin"/></svg>Place</span><div><div class="nm">Ramen Kiri</div><div class="meta">Lisbon</div></div></div>
-              <div class="card product surf" style="right:6px;top:40px;transform:rotate(7deg)"><span class="lbl"><svg class="ico"><use href="#i-bag"/></svg>Product</span><div><div class="nm">Stoneware mugs</div><div class="meta">$38</div></div></div>
+              <div class="card place surf" style="left:14px;top:52px;transform:rotate(-8deg)"><span class="lbl"><svg class="ico"><use href="#i-pin"/></svg>Place</span><div><div class="meta">Lisbon</div></div></div>
+              <div class="card product surf" style="right:6px;top:40px;transform:rotate(7deg)"><span class="lbl"><svg class="ico"><use href="#i-bag"/></svg>Product</span><div><div class="meta">$38</div></div></div>
               <div class="card recipe surf" style="left:86px;top:74px;transform:rotate(-1deg)"><span class="lbl"><svg class="ico"><use href="#i-pot"/></svg>Recipe</span><div><div class="nm">Shakshuka with feta</div><div class="meta">35 min</div></div></div>
             </div>
             <div class="hero-copy">
@@ -411,7 +420,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
       <div class="shot">
         <div class="phone k"><div class="table"></div><div class="screen">
           <div data-t="t-status"></div>
-          <span class="skip">Skip</span>
+          <span class="skip">Done</span>
           <div class="content" style="gap:14px;padding-top:52px">
             <h2 class="disp" style="font-size:32px">Put Keepsake next to AirDrop</h2>
             <p class="why" style="margin-top:-4px">New apps start at the far end of the Share sheet. Move Keepsake up once and every save is one tap.</p>
@@ -421,7 +430,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
           <div class="foot" style="padding-bottom:34px;gap:4px"><div class="pager" aria-hidden="true" style="margin-bottom:8px"><i></i><i class="on"></i></div><div class="btn primary">Try it now</div></div>
           <div class="home-ind"></div>
         </div></div>
-        <p class="cap"><b>Screen 2.</b> The looping how-to. Try it now opens the Share sheet on a sample page, so they can do it right there.</p>
+        <p class="cap"><b>Screen 2.</b> The looping how-to (tap it to pause). Try it now opens the Share sheet on a sample page, so they can do it right there.</p>
       </div>
 
       <div class="facts">
@@ -453,12 +462,12 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
               <p>Put Keepsake next to AirDrop in the Share sheet. It takes about 20 seconds.</p>
               <div class="btnrow"><div class="btn primary">Show me how</div><div class="btn quiet" style="flex:0 0 auto">Not now</div></div>
             </div>
-            <div class="empty"><svg class="ico"><use href="#i-bookmark"/></svg>Nothing saved yet. Share a page, a post or a place to Keepsake from any app.</div>
+            <div class="empty"><svg class="ico"><use href="#i-bookmark"/></svg>Nothing saved yet.</div>
             <div class="shelf surf place"><span class="fan"><svg class="ico"><use href="#i-bag"/></svg></span><div><div class="nm" style="font-size:24px">Collections</div><div class="sub muted" style="font-size:15px">0 collections · 0 saves</div></div><svg class="ico chev"><use href="#i-chev"/></svg></div>
           </div>
           <div data-t="t-tabbar"></div>
         </div></div>
-        <p class="cap"><b>Empty Home.</b> The card leads, above the empty note. Not now hides it, and it's always in Settings.</p>
+        <p class="cap"><b>Empty Home.</b> The card leads and the empty note shrinks to one line. Not now hides the card; Settings keeps it.</p>
       </div>
 
       <div class="shot">
@@ -531,7 +540,7 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
             <div class="saved"><span class="ok"><i><svg class="ico" style="width:13px;height:13px;stroke-width:3"><use href="#i-check"/></svg></i>Saved</span><span class="undo">Undo</span></div>
             <div class="extscroll" style="gap:12px">
               <div class="sheethd"><span class="nm" style="font-size:22px">Next time, one tap</span></div>
-              <p class="why">Tap Done, then share again and follow these steps. Your save is already in Recipes.</p>
+              <p class="why">Your save is already in Recipes. Tap Got it, share any page again, then follow these steps.</p>
               <div data-t="t-demo"></div>
               <div data-t="t-steps"></div>
             </div>
@@ -583,6 +592,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
   }
   document.getElementById('styles').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;state.style=b.dataset.style;apply();});
   document.getElementById('modes').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;state.mode=b.dataset.mode;apply();});
+  document.querySelectorAll('.demo').forEach(function(d){
+    function t(){d.classList.toggle('paused');}
+    d.addEventListener('click',t);
+    d.addEventListener('keydown',function(e){if(e.key===' '||e.key==='Enter'){e.preventDefault();t();}});
+  });
   apply();
 })();
 </script>
