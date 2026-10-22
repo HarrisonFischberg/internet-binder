@@ -263,7 +263,7 @@ Local vs cloud in one sentence: everything in Patchwork (saving, extraction, cat
 
 ## Privacy, export, import, erase
 
-See [keepsake/PRIVACY.md](keepsake/PRIVACY.md) (browser extension), [ios/PRIVACY-iOS.md](ios/PRIVACY-iOS.md) (iPhone and iPad), the in-extension **Privacy** page, and the privacy policy at [rarecreatures.app/apps/patchwork/privacy](https://rarecreatures.app/apps/patchwork/privacy/). In short:
+See [keepsake/PRIVACY.md](keepsake/PRIVACY.md) (browser extension), [ios/PRIVACY-iOS.md](ios/PRIVACY-iOS.md) (iPhone and iPad), the in-extension **Privacy** page, and the privacy policy at [rarecreatures.app/apps/keepsake/privacy](https://rarecreatures.app/apps/keepsake/privacy/). In short:
 
 - **Export** (Settings → Data): downloads `keepsake-export-<date>.json` with collections, items, learned preferences, settings and import history. Never the API key.
 - **Import**: pick a JSON export. Patchwork validates it (format, schema version, every field sanitized, URLs must be http(s)) and either **merges** (collections dedupe by name, items by URL; duplicates are reported) or **replaces** everything after a typed confirmation.
