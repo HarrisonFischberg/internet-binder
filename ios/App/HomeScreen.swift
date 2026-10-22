@@ -20,6 +20,7 @@ struct HomeScreen: View {
     /// Recent shelf cards: all one size, growing with Dynamic Type.
     @ScaledMetric(relativeTo: .headline) private var shelfWidth: CGFloat = 170
     @Environment(\.horizontalSizeClass) private var size
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var lifestyleSaves: [Save] { model.saves.filter(\.hasOwnView) }
     private var collectedSaves: [Save] { model.saves.filter { !($0.collectionId ?? "").isEmpty } }
@@ -39,7 +40,8 @@ struct HomeScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack(alignment: .top) {
+                    // At accessibility sizes the buttons drop below the name, so the name gets the full width.
+                    (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 4)) : AnyLayout(HStackLayout(alignment: .top))) {
                         ScreenHeader(title: "Patchwork", subtitle: nil)
                         if size != .regular {
                             HStack(spacing: 10) {

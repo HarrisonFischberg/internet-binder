@@ -233,7 +233,9 @@ struct ScreenHeader: View {
     @Environment(\.ks) private var t
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            // A one-word title shrinks to fit rather than breaking mid-word ("Patchw / ork" at the largest sizes).
             Text(title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                .lineLimit(title.contains(" ") ? nil : 1).minimumScaleFactor(0.5)
             if let subtitle { Text(subtitle).font(KSFont.note).foregroundStyle(t.inkMuted) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
