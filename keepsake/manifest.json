@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Keepsake",
+  "name": "Patchwork",
   "version": "2.2.1",
   "description": "Save products, places, recipes, workouts, videos and more from any site. Sorted for you and kept on your device. No account.",
   "minimum_chrome_version": "121",
@@ -11,7 +11,7 @@
     "128": "icons/styles/pantry/icon128.png"
   },
   "action": {
-    "default_title": "Save to Keepsake",
+    "default_title": "Save to Patchwork",
     "default_popup": "src/popup/popup.html",
     "default_icon": {
       "16": "icons/styles/pantry/icon16.png",
@@ -40,7 +40,7 @@
       "suggested_key": {
         "default": "Alt+Shift+K"
       },
-      "description": "Open Keepsake for the current page"
+      "description": "Open Patchwork for the current page"
     }
   },
   "content_security_policy": {

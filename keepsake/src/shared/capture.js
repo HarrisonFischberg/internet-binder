@@ -1,4 +1,4 @@
-// Keepsake capture rules: what a page (or a share) becomes when you save it. Its kind and that kind's
+// Patchwork capture rules: what a page (or a share) becomes when you save it. Its kind and that kind's
 // details, where it's filed, and the save itself. Shared by the Chrome extension's background worker
 // and the iOS Share Extension (through JavaScriptCore), so a page saved on either is the same save.
 // Pure apart from the store passed in; the after-save work (AI tidy, Lifestyle fill-in) is the caller's,

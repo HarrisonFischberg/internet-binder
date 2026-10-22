@@ -11,7 +11,7 @@
 		846E4DA93082138100BA0257 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846E4DA83082138100BA0257 /* ViewController.swift */; };
 		846E4DAC3082138100BA0257 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DAA3082138100BA0257 /* Main.storyboard */; };
 		846E4DAE3082138200BA0257 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DAD3082138200BA0257 /* Assets.xcassets */; };
-		846E4DB53082138200BA0257 /* Keepsake Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 846E4DB43082138200BA0257 /* Keepsake Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		846E4DB53082138200BA0257 /* Patchwork Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 846E4DB43082138200BA0257 /* Patchwork Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		846E4DBA3082138200BA0257 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846E4DB93082138200BA0257 /* SafariWebExtensionHandler.swift */; };
 		846E4DCD3082138200BA0257 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DC63082138200BA0257 /* LICENSE */; };
 		846E4DCE3082138200BA0257 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DC73082138200BA0257 /* background.js */; };
@@ -39,20 +39,20 @@
 			dstPath = "";
 			dstSubfolder = PlugIns;
 			files = (
-				846E4DB53082138200BA0257 /* Keepsake Extension.appex in Embed Foundation Extensions */,
+				846E4DB53082138200BA0257 /* Patchwork Extension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		846E4D993082138100BA0257 /* Keepsake.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsake.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		846E4D993082138100BA0257 /* Patchwork.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Patchwork.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		846E4D9C3082138100BA0257 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		846E4DA83082138100BA0257 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		846E4DAB3082138100BA0257 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		846E4DAD3082138200BA0257 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		846E4DAF3082138200BA0257 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		846E4DB43082138200BA0257 /* Keepsake Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Keepsake Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		846E4DB43082138200BA0257 /* Patchwork Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Patchwork Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		846E4DB93082138200BA0257 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
 		846E4DBB3082138200BA0257 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		846E4DC63082138200BA0257 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = ../../dist/LICENSE; sourceTree = "<group>"; };
@@ -91,8 +91,8 @@
 		846E4D9A3082138100BA0257 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				846E4D993082138100BA0257 /* Keepsake.app */,
-				846E4DB43082138200BA0257 /* Keepsake Extension.appex */,
+				846E4D993082138100BA0257 /* Patchwork.app */,
+				846E4DB43082138200BA0257 /* Patchwork Extension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -162,7 +162,7 @@
 			);
 			name = Keepsake;
 			productName = Keepsake;
-			productReference = 846E4D993082138100BA0257 /* Keepsake.app */;
+			productReference = 846E4D993082138100BA0257 /* Patchwork.app */;
 			productType = "com.apple.product-type.application";
 		};
 		846E4DB33082138200BA0257 /* Keepsake Extension */ = {
@@ -178,7 +178,7 @@
 			);
 			name = "Keepsake Extension";
 			productName = "Keepsake Extension";
-			productReference = 846E4DB43082138200BA0257 /* Keepsake Extension.appex */;
+			productReference = 846E4DB43082138200BA0257 /* Patchwork Extension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -426,7 +426,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Keepsake Extension/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Keepsake Extension";
+				INFOPLIST_KEY_CFBundleDisplayName = "Patchwork Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -440,7 +440,7 @@
 					SafariServices,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.safari-extension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Patchwork Extension";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -461,7 +461,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Keepsake Extension/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Keepsake Extension";
+				INFOPLIST_KEY_CFBundleDisplayName = "Patchwork Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -475,7 +475,7 @@
 					SafariServices,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake.safari-extension;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Patchwork Extension";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -500,7 +500,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Keepsake/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				INFOPLIST_KEY_CFBundleDisplayName = Patchwork;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -517,7 +517,7 @@
 					WebKit,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Patchwork;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -543,7 +543,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Keepsake/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Keepsake;
+				INFOPLIST_KEY_CFBundleDisplayName = Patchwork;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainStoryboardFile = Main;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -560,7 +560,7 @@
 					WebKit,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.harrisonfischberg.keepsake;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Patchwork;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

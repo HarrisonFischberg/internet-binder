@@ -1,5 +1,5 @@
 // Reads a page a save links to, for your AI provider (src/shared/understand.js): only a site this
-// browser already lets Keepsake read (Fix with AI's access to all sites, or that site's own), without
+// browser already lets Patchwork read (Fix with AI's access to all sites, or that site's own), without
 // cookies, and only its HTML.
 export async function fetchPage(url) {
   let u;
@@ -28,7 +28,7 @@ export async function fetchPage(url) {
 }
 
 // A small copy of a save's picture for your AI provider (src/shared/understand.js), when the picture is a
-// link rather than a stored thumbnail: fetched like a page (only a site this browser already lets Keepsake
+// link rather than a stored thumbnail: fetched like a page (only a site this browser already lets Patchwork
 // read, without cookies), shrunk to at most 640 px and sent as a JPEG.
 export async function loadImage(url) {
   let u;

@@ -40,7 +40,7 @@ struct HomeScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     HStack(alignment: .top) {
-                        ScreenHeader(title: "Keepsake", subtitle: nil)
+                        ScreenHeader(title: "Patchwork", subtitle: nil)
                         if size != .regular {
                             HStack(spacing: 10) {
                                 if model.aiReady && !model.saves.isEmpty {
@@ -61,7 +61,7 @@ struct HomeScreen: View {
                             .ksSurface(radius: 14)
                     }
                     if model.saves.isEmpty && model.loaded {
-                        EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Keepsake from any app.")
+                        EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Patchwork from any app.")
                     }
                     if !model.saves.isEmpty { recent.padding(.bottom, -8) }
                     VStack(spacing: 12) {
@@ -148,7 +148,7 @@ struct HomeScreen: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.reviewCount == 1 ? "1 save needs a collection" : "\(model.reviewCount) saves need a collection")
                         .font(t.style == .pantry ? KSFont.name(.headline) : .headline).foregroundStyle(ink)
-                    Text("One tap each, and Keepsake learns.").font(.subheadline.weight(t.style == .pantry ? .semibold : .regular)).foregroundStyle(ink)
+                    Text("One tap each, and Patchwork learns.").font(.subheadline.weight(t.style == .pantry ? .semibold : .regular)).foregroundStyle(ink)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.body.weight(.bold)).foregroundStyle(ink)

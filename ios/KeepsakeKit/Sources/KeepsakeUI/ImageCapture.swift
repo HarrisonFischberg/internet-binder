@@ -2,7 +2,7 @@
 import UIKit
 import Vision
 
-/// A screenshot or photo shared to Keepsake: a small copy of the picture (Chrome keeps thumbnails as
+/// A screenshot or photo shared to Patchwork: a small copy of the picture (Chrome keeps thumbnails as
 /// `data:` images up to 400 KB) and its text, read on this device by Vision. Nothing is sent anywhere.
 public enum ImageCapture {
     /// The product to save: the first line of text as the title, all of it as the description.

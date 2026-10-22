@@ -44,7 +44,7 @@ struct RootView: View {
             if UserDefaults.standard.bool(forKey: "noticeFirstSave") {
                 while model.saves.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
                 await SaveNotice.ask()
-                // Time for the test to send Keepsake to the background first.
+                // Time for the test to send Patchwork to the background first.
                 try? await Task.sleep(for: .seconds(5))
                 let s = model.saves[0]
                 await SaveNotice.post(id: s.id, title: s.title, destination: KindStyle(s.kind).plural)
@@ -54,7 +54,7 @@ struct RootView: View {
             guard SaveNotice.enabled, ProcessInfo.processInfo.environment["KEEPSAKE_DB"] == nil else { return }
             await SaveNotice.ask()
         }
-        // A Keepsake export sent by AirDrop, or opened from Files with "Open in Keepsake": imported
+        // A Patchwork export sent by AirDrop, or opened from Files with "Open in Patchwork": imported
         // the way Settings → Import from Chrome does (merged; saves already here are skipped).
         .onOpenURL { url in
             guard url.isFileURL else { return }

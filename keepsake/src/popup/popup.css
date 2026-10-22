@@ -1242,7 +1242,7 @@ body[data-state="state-home"] #openDashboard {
   letter-spacing: 0;
 }
 
-/* Keepsake's guess says "Suggested" where the count would be */
+/* Patchwork's guess says "Suggested" where the count would be */
 .group.is-guess:not(.is-here) .group-sub {
   font-size: 0;
 }

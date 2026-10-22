@@ -179,7 +179,7 @@ export async function analyzePost(post, settings, apiKey) {
 // Uses the provider's own web-search tool (Anthropic Messages API web_search,
 // OpenAI Responses API web_search). Every URL in the result is checked
 // against the URLs the search actually returned; anything else is dropped, so
-// Keepsake never shows a link the model made up.
+// Patchwork never shows a link the model made up.
 
 export function supportsWebLookup(settings) {
   const p = providerConfig(settings).provider;
@@ -462,9 +462,9 @@ export async function identifyForKind(kind, item, settings, apiKey) {
 
 // --- Understand a save (what it is, and that kind's details) ------------------------------------------
 // One save per request: its title, caption or description, hashtags, location tag, site, the text of
-// pages it links to (when Keepsake could read them) and its locally stored thumbnail (never a remote
+// pages it links to (when Patchwork could read them) and its locally stored thumbnail (never a remote
 // image link). The answer is checked and applied by src/shared/understand.js.
-const UNDERSTAND_SYSTEM = `You read one thing a person saved (an Instagram post or reel, a TikTok, a video, a web page or a link) and turn it into a card in their Keepsake app.
+const UNDERSTAND_SYSTEM = `You read one thing a person saved (an Instagram post or reel, a TikTok, a video, a web page or a link) and turn it into a card in their Patchwork app.
 Decide what it is, then fill in that kind's details as completely as you can.
 Return ONLY JSON: {"kind":"…","confidence":0-1,"title":"…","details":{…},"drafted":["field", …],"reason":"one short sentence"}
 Kinds and their details:

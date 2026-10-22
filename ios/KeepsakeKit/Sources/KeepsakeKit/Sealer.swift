@@ -1,7 +1,7 @@
 import Foundation
 import CryptoKit
 
-/// Seals Keepsake bundles so only the person's own devices can read them (replica/m3/sync-bridge.md).
+/// Seals Patchwork bundles so only the person's own devices can read them (replica/m3/sync-bridge.md).
 ///
 /// Pairing: Chrome shows `keepsake-pair:v1:<mailboxId>:<chromePublicKey>` (base64url, no padding).
 /// The iPhone agrees a key with X25519, then HKDF-SHA256 (salt = the mailbox id, info =
