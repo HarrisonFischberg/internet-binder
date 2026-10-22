@@ -188,16 +188,16 @@ enum AppIcon: String, CaseIterable, Identifiable {
     var asset: String { "Icon-\(rawValue)" }
     var label: String {
         switch self {
-        case .pantry: "Pantry Pop"; case .notebook: "Field Notebook"
+        case .pantry: "Keepsake"; case .notebook: "Field Notebook"
         case .gallery: "Gallery"; case .atlas: "Night Atlas"; case .swiss: "Swiss Index"
         }
     }
-    /// Pantry Pop is the bundle's own icon; a saved "pocket" (now gone) lands on it too.
+    /// pantry is the bundle's own (Patchwork) icon; a saved "pocket" (now gone) lands on it too.
     static var current: AppIcon { AppIcon(rawValue: UserDefaults.standard.string(forKey: "appIcon") ?? "") ?? .pantry }
 
     @MainActor func apply() {
         UserDefaults.standard.set(rawValue, forKey: "appIcon")
-        // nil puts back the bundle's own icon (Pantry Pop).
+        // nil puts back the bundle's own icon.
         NSApplication.shared.applicationIconImage = self == .pantry ? nil : NSImage(named: asset)
     }
 }

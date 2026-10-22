@@ -60,8 +60,9 @@ export const STYLES = [
   { value: 'swiss', label: 'Swiss Index', about: 'Hairlines, condensed type, one signal red.', swatch: ['#FAFAF7', '#FFFFFF', '#CC2A1E', '#0A0A0A'] },
 ];
 
-// Toolbar icons (Settings → Appearance): one per style. Pantry Pop is the default.
-export const ICONS = STYLES.map((s) => ({ value: s.value, label: s.label }));
+// Toolbar icons (Settings → Appearance): one per style. The first (id pantry) is the app's own Patchwork
+// icon and the default, so it carries the app's name rather than its style's.
+export const ICONS = STYLES.map((s, i) => ({ value: s.value, label: i ? s.label : 'Keepsake' }));
 
 // Sets data-style / data-theme on <html> (or any element) from settings. Pantry Pop needs no attribute.
 // Styles from before 1.5 (modern, moss, minimal) fall back to the default.

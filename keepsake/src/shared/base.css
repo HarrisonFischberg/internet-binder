@@ -526,3 +526,8 @@ button {
   width: 13px;
   height: 13px;
 }
+
+/* The Patchwork mark only shows in Pantry Pop (looks.css); other styles keep the bookmark. */
+.mark .mark-patch {
+  display: none;
+}

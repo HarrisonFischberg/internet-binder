@@ -5,7 +5,7 @@ export const STYLE_ICONS = ['pantry', 'notebook', 'gallery', 'atlas', 'swiss'];
 
 export const ICON_LABELS = {
   pocket: 'Felt pocket',
-  pantry: 'Pantry Pop',
+  pantry: 'Keepsake', // the app's own icon (Patchwork art), shown with the other styles' icons
   notebook: 'Field Notebook',
   gallery: 'Gallery',
   atlas: 'Night Atlas',
@@ -17,17 +17,22 @@ const bookmark = (x, y, size, attrs) =>
   `<path transform="translate(${x} ${y}) scale(${size / 24})" d="M6 3h12v18l-6-4-6 4z" ${attrs}/>`;
 
 const ICONS = {
-  pantry(dark) {
-    const bg = dark ? '#1B1A17' : '#FFF7E8';
-    const shadow = dark ? '#FFF7E8' : '#16130F';
-    const tile = (fill, stroke) =>
-      `<rect x="232" y="232" width="560" height="560" rx="150" fill="${fill}" ${stroke ? `stroke="${stroke}" stroke-width="34"` : ''}/>`;
-    return `<rect width="1024" height="1024" fill="${bg}"/>
-      <g transform="rotate(-6 512 512)">
-        <g transform="translate(36 40)">${tile(shadow)}</g>
-        ${tile('#FF5A36', '#16130F')}
-        ${bookmark(272, 262, 480, 'fill="#FFF7E8" stroke="#16130F" stroke-width="2.3" stroke-linejoin="round"')}
-      </g>`;
+  // The app's own icon (Patchwork, Oct 22 2026): four pastel scraps, the big one terracotta with a cream
+  // bookmark tag, tilted with an offset shadow. Toolbar sizes (small) sit straight, larger, with thicker lines.
+  pantry(dark, small) {
+    const ink = '#2A2420', cream = '#FFF7E8';
+    const T = 232, W = 560;
+    const tile = (attrs) => `<rect x="${T}" y="${T}" width="${W}" height="${W}" rx="150" ${attrs}/>`;
+    const scraps = [[0, 0, 330, 330, '#D9694A'], [330, 0, 230, 210, '#FFE4A0'], [330, 210, 230, 350, '#C7DDF6'], [0, 330, 330, 230, '#BFE6D3']]
+      .map(([x, y, w, h, fill]) => `<rect x="${T + x}" y="${T + y}" width="${w}" height="${h}" fill="${fill}" stroke="${ink}" stroke-width="${small ? 30 : 20}"/>`).join('');
+    const tagSize = small ? 250 : 190;
+    const tag = `<path transform="translate(${T + 165 - (small ? 0 : 10) - tagSize / 2} ${T + 175 - tagSize / 2}) scale(${tagSize / 24})" d="M6 3h12v18l-6-4-6 4z" fill="${cream}" stroke="${ink}" stroke-width="${(24 / tagSize) * 20}" stroke-linejoin="round"/>`;
+    const body = `<g clip-path="url(#qt)">${tile(`fill="${dark ? '#302D27' : cream}"`)}${scraps}</g>${tag}${tile(`fill="none" stroke="${ink}" stroke-width="${small ? 44 : 32}"`)}`;
+    const framed = small
+      ? `<g transform="translate(512 512) scale(1.5) translate(-512 -512)">${body}</g>`
+      : `<g transform="rotate(-6 512 512)"><g class="shadow" transform="translate(36 40)">${tile(`fill="${dark ? cream : ink}"`)}</g>${body}</g>`;
+    return `<defs><clipPath id="qt"><rect x="${T}" y="${T}" width="${W}" height="${W}" rx="150"/></clipPath></defs>
+      <rect width="1024" height="1024" fill="${dark ? '#1B1A17' : cream}"/>${framed}`;
   },
 
   notebook(dark) {
@@ -87,8 +92,11 @@ const ICONS = {
   },
 };
 
-export function iconSVG(id, dark, { rounded = false } = {}) {
-  const art = ICONS[id](dark);
+// `small` is for toolbar sizes (48 px and under); only the app's own icon draws differently there.
+// `noShadow` drops the offset shadow, which turns into a bright halo once tinted mode greys the art.
+export function iconSVG(id, dark, { rounded = false, small = false, noShadow = false } = {}) {
+  let art = ICONS[id](dark, small);
+  if (noShadow) art = art.replace(/<g class="shadow"[^>]*>.*?<\/g>/s, '');
   const clip = rounded
     ? `<defs><clipPath id="tile"><rect width="1024" height="1024" rx="230"/></clipPath></defs><g clip-path="url(#tile)">${art}</g>`
     : art;
