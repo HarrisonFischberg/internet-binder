@@ -285,7 +285,7 @@ struct SaveDetailScreen: View {
                             Spacer(minLength: 0)
                         }
                         .padding(.vertical, 8)
-                        .overlay(alignment: .bottom) { rule }
+                        .overlay(alignment: .bottom) { if label != facts.last?.0 { rule } }   // the card's edge closes the last
                         .accessibilityElement(children: .combine)
                     }
                 }
@@ -297,13 +297,15 @@ struct SaveDetailScreen: View {
         func s(_ k: String) -> String { d?[k]?.string ?? "" }
         func n(_ k: String) -> Int? { d?[k]?.number.map { Int($0) } }
         let genres = d?["genres"]?.array?.compactMap(\.string).joined(separator: ", ") ?? ""
+        // What the line under the title already says ("Henry David Thoreau · 1854") isn't repeated here.
+        let said = Set((current.fact ?? "").components(separatedBy: " · "))
         var out: [(String, String)] = []
         if current.kind == "book" {
             if !s("author").isEmpty { out.append(("By", s("author"))) }
             if let y = n("year") { out.append(("Published", String(y))) }
             if let p = n("pages") { out.append(("Pages", String(p))) }
             if !genres.isEmpty { out.append(("Genre", genres)) }
-            return out
+            return out.filter { !said.contains($0.1) }
         }
         let series = s("format") == "series"
         if let y = n("year") { out.append((series ? "Aired" : "Year", series && n("endYear") != nil && n("endYear") != y ? "\(y)–\(n("endYear")!)" : String(y))) }
@@ -315,12 +317,13 @@ struct SaveDetailScreen: View {
         }
         if !series, let m = n("runtimeMinutes") { out.append(("Runtime", m >= 60 ? "\(m / 60) h \(m % 60) min" : "\(m) min")) }
         if !genres.isEmpty { out.append(("Genre", genres)) }
-        return out
+        return out.filter { !said.contains($0.1) }
     }
 
     /// Where to watch: each service opens its page for the title when the search found one.
     private func watchCard(_ watch: [JSONValue]) -> some View {
-        let region = d?["watchRegion"]?.string ?? ""
+        let code = d?["watchRegion"]?.string ?? ""
+        let region = code.isEmpty ? "" : Locale.current.localizedString(forRegionCode: code) ?? code
         let checked = (d?["watchCheckedOn"]?.string).flatMap { day -> String? in
             let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
             return f.date(from: day)?.formatted(.dateTime.month(.abbreviated).day().year())
@@ -349,7 +352,7 @@ struct SaveDetailScreen: View {
                 .accessibilityLabel([service, kind].filter { !$0.isEmpty }.joined(separator: ", "))
                 .accessibilityHint(link == nil ? "" : "Opens \(service)")
             }
-            Text(["Found by AI", region.isEmpty ? nil : "in \(region)", checked.map { "on \($0)" }].compactMap { $0 }.joined(separator: " ") + ". Run AI again to check.")
+            Text(["Found by AI", region.isEmpty ? nil : code == "US" || code == "GB" ? "in the \(region)" : "in \(region)", checked.map { "on \($0)" }].compactMap { $0 }.joined(separator: " ") + ". Run AI again to check.")
                 .font(.footnote).foregroundStyle(t.inkMuted).padding(.top, 8)
         }
     }

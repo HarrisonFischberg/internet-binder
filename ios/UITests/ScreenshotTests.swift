@@ -161,25 +161,25 @@ final class ScreenshotTests: XCTestCase {
                 let app = XCUIApplication()
                 app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
                 app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-ksMode", mode == .dark ? "dark" : "light"]
-                app.launch()
-                XCTAssertTrue(app.tabBars.buttons["Library"].waitForExistence(timeout: 10))
-                app.tabBars.buttons["Library"].tap()
-                for (stack, title, name) in [("Books,", "Walden", "book"), ("Films & shows,", "Severance", "show")] {
-                    let kind = card(app, stack)
-                    for _ in 0..<5 where !(kind.exists && kind.isHittable) { app.swipeUp() }
-                    kind.tap()
+                // Each save from a fresh launch: Library, then its search (the kind stacks scroll sideways).
+                for (title, name) in [("Walden", "book"), ("Severance", "show")] {
+                    app.launch()
+                    XCTAssertTrue(app.tabBars.buttons["Library"].waitForExistence(timeout: 10))
+                    app.tabBars.buttons["Library"].tap()
+                    let search = app.textFields.firstMatch
+                    XCTAssertTrue(search.waitForExistence(timeout: 5))
+                    search.tap()
+                    search.typeText(title)
                     let save = card(app, title)
-                    for _ in 0..<4 where !(save.exists && save.isHittable) { app.swipeUp() }
+                    XCTAssertTrue(save.waitForExistence(timeout: 5))
                     save.tap()
                     XCTAssertTrue(app.staticTexts["AI summary"].waitForExistence(timeout: 5))
                     sleep(2)   // the cover loads
                     try shoot(app, folder, "\(tag)-\(name)")
                     app.swipeUp()
                     try shoot(app, folder, "\(tag)-\(name)-scrolled")
-                    app.navigationBars.buttons.element(boundBy: 0).tap()
-                    app.navigationBars.buttons.element(boundBy: 0).tap()
+                    app.terminate()
                 }
-                app.terminate()
             }
         }
         XCUIDevice.shared.appearance = .light

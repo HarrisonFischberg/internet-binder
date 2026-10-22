@@ -1809,13 +1809,13 @@
    "currency": "",
    "retailer": "Open Library",
    "host": "openlibrary.org",
-   "url": "https://openlibrary.org/works/OL52953W/Walden",
-   "canonicalUrl": "https://openlibrary.org/works/OL52953W/Walden",
-   "sourceUrl": "https://openlibrary.org/works/OL52953W/Walden",
-   "urlKey": "openlibrary.org/works/ol52953w/walden",
-   "image": "https://covers.openlibrary.org/b/id/12819593-L.jpg",
+   "url": "https://openlibrary.org/works/OL55649W/Walden",
+   "canonicalUrl": "https://openlibrary.org/works/OL55649W/Walden",
+   "sourceUrl": "https://openlibrary.org/works/OL55649W/Walden",
+   "urlKey": "openlibrary.org/works/ol55649w/walden",
+   "image": "https://covers.openlibrary.org/b/id/11248037-L.jpg",
    "images": [
-    "https://covers.openlibrary.org/b/id/12819593-L.jpg"
+    "https://covers.openlibrary.org/b/id/11248037-L.jpg"
    ],
    "productType": "",
    "tags": [],
