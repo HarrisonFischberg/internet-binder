@@ -1,4 +1,4 @@
-// Keepsake Instagram scan. Injected (after adapter.js) into an Instagram Saved
+// Bowerbird Instagram scan. Injected (after adapter.js) into an Instagram Saved
 // collection tab only when the user explicitly starts an import. It reads the
 // post links visible in the opened collection, optionally scrolls to load
 // more, captures small local copies of thumbnails (Instagram image links

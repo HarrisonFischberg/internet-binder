@@ -1,4 +1,4 @@
-# Keepsake for iPhone and iPad
+# Bowerbird for iPhone and iPad
 
 Local-first, no account. Design and plan: `replica/m3/` (`PROMPT.md`, `progress.md`, `decisions.md`).
 

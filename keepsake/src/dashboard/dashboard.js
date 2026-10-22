@@ -1,4 +1,4 @@
-// Keepsake dashboard (full-tab page). Talks to Keepsake's storage (IndexedDB + chrome.storage.local) directly
+// Bowerbird dashboard (full-tab page). Talks to Bowerbird's storage (IndexedDB + chrome.storage.local) directly
 // through the shared store and to the background worker only for a couple of
 // helpers (opening tabs, refreshing floating buttons). No network access.
 
@@ -343,7 +343,7 @@ function renderKindNav(live) {
   const box = $('navKinds');
   if (!box) return;
   clear(box);
-  // Every Lifestyle view is listed, so you can see what Keepsake can hold; empty ones are dimmed.
+  // Every Lifestyle view is listed, so you can see what Bowerbird can hold; empty ones are dimmed.
   // Most saves first (a tie A–Z), so the views you use most sit at the top.
   const counts = new Map();
   for (const i of live) counts.set(kindOf(i), (counts.get(kindOf(i)) || 0) + 1);
@@ -594,7 +594,7 @@ function renderToolbar() {
   else if (r.name === 'welcome') title = 'Welcome';
   else if (r.name === 'c') title = ctx.collectionById(r.id)?.name || 'Collection';
   $('viewTitle').textContent = title;
-  document.title = `${title} · Keepsake`;
+  document.title = `${title} · Bowerbird`;
   if (isGrid) {
     $('searchInput').value = state.search;
     // Typing in Home's search box lands here; keep the caret in the toolbar's box.
@@ -1044,7 +1044,7 @@ function gridEmptyState() {
   if (r.name === 'kind') {
     const copy = {
       place: 'Save a restaurant or place and it shows up here with its address.',
-      recipe: 'Save a recipe or a dish you’d like to cook. Keepsake pulls out the ingredients.',
+      recipe: 'Save a recipe or a dish you’d like to cook. Bowerbird pulls out the ingredients.',
       workout: 'Save a workout and turn it into a goal.',
       media: 'Save a film, show or book you want to get to.',
       book: 'Save a film, show or book you want to get to.',
@@ -1055,14 +1055,14 @@ function gridEmptyState() {
   }
   if (r.name === 'favorites') return UI.emptyState({ title: 'No favorites yet', message: 'Tap the star on any card to keep it close.', icon: UI.starIcon(true) });
   if (r.name === 'purchased') return UI.emptyState({ title: 'Nothing purchased yet', message: 'Mark something as purchased from its ⋯ menu or its details, and it’s kept here.', icon: UI.bagIcon() });
-  if (r.name === 'c') return UI.emptyState({ title: 'This collection is empty', message: 'Save something from a product page and Keepsake will file it here when it fits.', icon: UI.folderIcon() });
+  if (r.name === 'c') return UI.emptyState({ title: 'This collection is empty', message: 'Save something from a product page and Bowerbird will file it here when it fits.', icon: UI.folderIcon() });
   return nothingSavedState();
 }
 
 function nothingSavedState() {
   return UI.emptyState({
     title: 'Nothing saved yet',
-    message: 'Nothing saved yet. Save a page with the Keepsake button or Alt+Shift+K, or try the sample library. Everything you keep stays in this browser.',
+    message: 'Nothing saved yet. Save a page with the Bowerbird button or Alt+Shift+K, or try the sample library. Everything you keep stays in this browser.',
     icon: UI.bagIcon(),
     actions: [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: () => loadSample() }, ['Load sample data']),
@@ -1395,7 +1395,7 @@ async function moveDialog(items) {
     select,
     newRow,
     el('label', { class: 'check' }, [learnCheck, el('span', {}, ['Use this choice for similar items in the future'])]),
-    el('p', { class: 'help' }, ['Keepsake always learns a little from moves. Ticking this makes the lesson stronger.']),
+    el('p', { class: 'help' }, ['Bowerbird always learns a little from moves. Ticking this makes the lesson stronger.']),
     source ? el('label', { class: 'check' }, [mergeCheck, el('span', {}, [`Merge: move everything in “${source.name}” and remove “${source.name}”. Its name becomes an alias of the new collection.`])]) : null,
   ];
   const result = await UI.openModal({
@@ -1668,7 +1668,7 @@ function renderShelfList(view, items, kind) {
   view.append(box);
 }
 
-// "Open in Maps": Apple Maps or Google Maps, in a new tab. The links are built from what's saved; Keepsake
+// "Open in Maps": Apple Maps or Google Maps, in a new tab. The links are built from what's saved; Bowerbird
 // looks nothing up itself, and the maps site only hears about the place when you click.
 function mapsMenuButton(item, { small = false, primary = false } = {}) {
   const links = mapsLinks(item.title, item.details || {});
@@ -1744,7 +1744,7 @@ async function openPlace(id) {
 
 // Places as a list grouped by city, each with Open in Maps (Chrome has no map: no third-party map tiles).
 // Places: a list grouped by city, or a map of the ones with a pin. The map is OpenStreetMap data drawn
-// by MapLibre (bundled in Keepsake), with tiles from OpenFreeMap; it loads only once Places lookups are on.
+// by MapLibre (bundled in Bowerbird), with tiles from OpenFreeMap; it loads only once Places lookups are on.
 const PLACES_VIEW_KEY = 'keepsake.places.view';
 let placesViewChoice = null;
 function placesView() {
@@ -1809,7 +1809,7 @@ function renderPlacesReview(view, items, all = items) {
       el('p', {}, [`${pluralize(items.length, 'place needs', 'places need')} a name or a state before ${items.length === 1 ? 'it goes' : 'they go'} on your list.`]),
       el('p', { class: 'help' }, [aiOn
         ? 'Fix with AI sends each one’s title, caption and location tag to your AI provider, which names the place and says where it is; Lookups then add the address and pin. A post about several places (a top-10 list) stays here: open it to move it or delete it.'
-        : 'Read again checks each of these posts’ captions with Keepsake’s latest rules, on your device. To have places named from their posts, turn on Optional AI in Settings. Or open one and fill in its name and address.']),
+        : 'Read again checks each of these posts’ captions with Bowerbird’s latest rules, on your device. To have places named from their posts, turn on Optional AI in Settings. Or open one and fill in its name and address.']),
     ]),
     el('button', { type: 'button', class: 'btn btn-primary', disabled: running, onClick: () => fixAll() }, [running ? 'Working…' : aiOn ? `Fix ${items.length} with AI` : 'Read again']),
   ]));
@@ -1974,7 +1974,7 @@ async function openWorkout(id) {
       el('section', { class: 'recipe-col' }, [
         el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Exercises', isDrafted(d, 'exercises') ? draftTag() : null]), el('span', { class: 'recipe-count' }, [exercises.length ? pluralize(exercises.length, 'exercise', 'exercises') : ''])]),
         exercises.length ? el('div', { class: 'table-scroll' }, [table]) : el('div', { class: 'recipe-empty' }, [
-          el('p', {}, ['Keepsake couldn’t find exercises on this page. Add them yourself.']),
+          el('p', {}, ['Bowerbird couldn’t find exercises on this page. Add them yourself.']),
           el('p', { class: 'help' }, ['In Edit details, write one exercise per line, like “Squats 3×12” or “Plank 45s”.']),
         ]),
       ]),
@@ -2547,7 +2547,7 @@ async function openItem(id) {
   const urlField = el('div', { class: 'field' }, [
     el('label', { class: 'label' }, ['Link']),
     el('div', { class: 'url-row' }, [urlInput, copyBtn, openLink]),
-    el('p', { class: 'help' }, [item.type === 'instagram' ? 'The original post. Editing this changes where “Open post” goes.' : 'The page this was saved from. Edit it if Keepsake grabbed the wrong page.']),
+    el('p', { class: 'help' }, [item.type === 'instagram' ? 'The original post. Editing this changes where “Open post” goes.' : 'The page this was saved from. Edit it if Bowerbird grabbed the wrong page.']),
   ]);
 
   const col = ctx.collectionById(item.collectionId);
@@ -2570,7 +2570,7 @@ async function openItem(id) {
       el('strong', {}, ['Links in the caption: ']),
       el('div', { class: 'found-list' }, ig.links.map((l) => foundRow(item, { name: l.label || l.url, url: l.url, verified: true, note: 'Link the creator put in the caption.' }))),
     ]) : null,
-    ig.linkInBio && !ig.links?.length ? el('div', { class: 'help' }, ['The caption says “link in bio” — Keepsake can’t follow that, but the creator’s profile may have it.']) : null,
+    ig.linkInBio && !ig.links?.length ? el('div', { class: 'help' }, ['The caption says “link in bio” — Bowerbird can’t follow that, but the creator’s profile may have it.']) : null,
     !ig.details ? el('div', { class: 'help' }, ['Only the grid thumbnail was read for this post. Re-run the import and use “Read post details” to fill in the caption, links and tagged products.']) : null,
   ]) : null;
 
@@ -2672,7 +2672,7 @@ async function openItem(id) {
     box.append(el('div', { class: 'recipe-head' }, [el('h3', {}, ['Workout']), sourceLabel ? el('span', { class: 'recipe-facts' }, [sourceLabel]) : null]));
     const check = () => {
       const { exercises, unread } = readWorkoutLines();
-      workoutHelp.textContent = unread.length ? `Keepsake can’t read ${unread.length === 1 ? 'this line' : 'these lines'} yet: ${unread.slice(0, 3).join('; ')}. Write them like “Squats 3×12” or “Plank 45s”.` : exercises.length ? pluralize(exercises.length, 'exercise', 'exercises') : 'One exercise per line, like “Squats 3×12” or “Plank 45s”.';
+      workoutHelp.textContent = unread.length ? `Bowerbird can’t read ${unread.length === 1 ? 'this line' : 'these lines'} yet: ${unread.slice(0, 3).join('; ')}. Write them like “Squats 3×12” or “Plank 45s”.` : exercises.length ? pluralize(exercises.length, 'exercise', 'exercises') : 'One exercise per line, like “Squats 3×12” or “Plank 45s”.';
       workoutHelp.classList.toggle('help-error', unread.length > 0);
     };
     workoutLines.oninput = check;
@@ -2986,7 +2986,7 @@ function renderAiBox(box, item) {
   const eligible = item.type === 'instagram' || item.type === 'inspiration';
   if (!eligible) return;
   if (!ai?.on) {
-    box.append(el('div', { class: 'help' }, ['Want Keepsake to work out what product this post shows and find where to buy it? Turn on Optional AI (it uses your own API key).']));
+    box.append(el('div', { class: 'help' }, ['Want Bowerbird to work out what product this post shows and find where to buy it? Turn on Optional AI (it uses your own API key).']));
     return;
   }
   const s = item.ai;
@@ -3428,7 +3428,7 @@ function renderCollections(view) {
 function renderReview(view) {
   const items = state.items.filter((i) => needsCollection(i) && isActive(i));
   const page = el('div', { class: 'page page-wide' });
-  page.append(el('p', { class: 'page-intro' }, ['Keepsake wasn’t sure where these belong. Pick one of the suggestions, or select a row and press 1, 2 or 3, and Keepsake learns from your choice.']));
+  page.append(el('p', { class: 'page-intro' }, ['Bowerbird wasn’t sure where these belong. Pick one of the suggestions, or select a row and press 1, 2 or 3, and Bowerbird learns from your choice.']));
   if (items.length && state.settings?.ai?.on) {
     page.append(el('div', { class: 'actions-row review-ai' }, [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: () => runAiCleanup(ctx, { scope: 'review' }) }, [`Fix all ${items.length} with AI`]),
@@ -3560,7 +3560,7 @@ function renderWelcome(view) {
   const w = el('div', { class: 'welcome' }, [
     el('div', { class: 'welcome-hero' }, [
       el('h2', {}, ['Keep what catches your eye.']),
-      el('p', {}, ['Keepsake saves products from any site into collections that sort themselves. Everything stays in this browser — no account, no cloud, no tracking.']),
+      el('p', {}, ['Bowerbird saves products from any site into collections that sort themselves. Everything stays in this browser — no account, no cloud, no tracking.']),
       el('div', { class: 'actions-row', style: { marginTop: '18px' } }, [
         el('button', { type: 'button', class: 'btn btn-primary', onClick: () => navigate('#home') }, ['Start saving']),
         el('button', { type: 'button', class: 'btn', onClick: async () => { await loadSample(); navigate('#home'); } }, ['Load sample data']),
@@ -3568,9 +3568,9 @@ function renderWelcome(view) {
       ]),
     ]),
     el('div', { class: 'steps' }, [
-      step(1, 'Pin the icon', 'Click the puzzle-piece in Chrome’s toolbar and pin Keepsake so it’s one click away. Alt+Shift+K opens it too.'),
-      step(2, 'Save from any page', 'On a product page, click the icon. Keepsake reads the title, price and image and saves it straight to the right collection when it’s sure; otherwise it shows you first.'),
-      step(3, 'Let it learn', 'Move an item and Keepsake remembers. Unsure saves wait in Review instead of guessing.'),
+      step(1, 'Pin the icon', 'Click the puzzle-piece in Chrome’s toolbar and pin Bowerbird so it’s one click away. Alt+Shift+K opens it too.'),
+      step(2, 'Save from any page', 'On a product page, click the icon. Bowerbird reads the title, price and image and saves it straight to the right collection when it’s sure; otherwise it shows you first.'),
+      step(3, 'Let it learn', 'Move an item and Bowerbird remembers. Unsure saves wait in Review instead of guessing.'),
       step(4, 'Optional extras', 'On-page save buttons for product grids, and an Instagram Saved-collection importer — both off until you turn them on.'),
     ]),
   ]);
@@ -3584,5 +3584,5 @@ function step(n, title, text) {
 boot().catch((e) => {
   console.error(e);
   const view = $('view');
-  if (view) view.append(UI.emptyState({ title: 'Keepsake couldn’t start', message: String((e && e.message) || e) }));
+  if (view) view.append(UI.emptyState({ title: 'Bowerbird couldn’t start', message: String((e && e.message) || e) }));
 });

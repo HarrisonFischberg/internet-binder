@@ -29,8 +29,8 @@ export async function hasInstagramAccess() {
 export function instagramAccessHelp() {
   const safari = typeof location !== 'undefined' && location.protocol === 'safari-web-extension:';
   return safari
-    ? 'To allow it yourself: Safari → Settings → Extensions → Keepsake → Edit Websites…, then set instagram.com to Allow.'
-    : 'To allow it yourself: right-click the Keepsake icon → Manage extension → Site access, and add https://www.instagram.com.';
+    ? 'To allow it yourself: Safari → Settings → Extensions → Bowerbird → Edit Websites…, then set instagram.com to Allow.'
+    : 'To allow it yourself: right-click the Bowerbird icon → Manage extension → Site access, and add https://www.instagram.com.';
 }
 
 export async function requestInstagramAccess() {

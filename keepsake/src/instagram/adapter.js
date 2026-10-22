@@ -1,4 +1,4 @@
-// Keepsake Instagram adapter. Classic script; exposes globalThis.KeepsakeInstagram.
+// Bowerbird Instagram adapter. Classic script; exposes globalThis.KeepsakeInstagram.
 //
 // Every Instagram-specific selector, URL pattern and heuristic lives here so
 // it can be updated in one place when Instagram changes its markup. Semantic

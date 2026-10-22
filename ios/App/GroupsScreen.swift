@@ -23,7 +23,7 @@ struct LifestyleScreen: View {
                             selecting = true
                         }
                     } else {
-                        EmptyNote(symbol: "sparkles", text: "Nothing here yet. Share a recipe, a place or a workout to Keepsake and it lands here.")
+                        EmptyNote(symbol: "sparkles", text: "Nothing here yet. Share a recipe, a place or a workout to Bowerbird and it lands here.")
                     }
                 }
                 .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
@@ -140,7 +140,7 @@ struct CollectionTiles: View {
     @State private var order: [String] = []
     @State private var dragging: String?
     @State private var manual = !SavedOrder.get(Self.key).isEmpty
-    /// Set once you drag a collection: Keepsake stops sorting them by size on this iPhone.
+    /// Set once you drag a collection: Bowerbird stops sorting them by size on this iPhone.
     static let key = "collectionOrderManual"
 
     private var counts: [String: Int] { Dictionary(model.saves.compactMap { $0.collectionId.map { ($0, 1) } }, uniquingKeysWith: +) }

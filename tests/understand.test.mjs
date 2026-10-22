@@ -69,7 +69,7 @@ test('never moved: saves you filed or put in a view yourself, details you wrote,
   assert.deepEqual(planUnderstanding(post(caption), ai('recipe', { ingredients: ['mascarpone'] }, { confidence: 0.5 }), caption).patch, {});
   const yours = post(caption, { kind: 'workout', userFields: ['kind'], details: { exercises: [], source: 'you' } });
   assert.equal(planUnderstanding(yours, ai('recipe', { ingredients: ['mascarpone'] }, { confidence: 0.99 }), caption).patch.kind, undefined);
-  // A Lifestyle kind Keepsake picked changes only when the provider is very sure.
+  // A Lifestyle kind Bowerbird picked changes only when the provider is very sure.
   const picked = post(caption, { kind: 'workout', collectionId: null, details: {} });
   assert.equal(planUnderstanding(picked, ai('recipe', {}, { confidence: 0.8 }), caption).patch.kind, undefined);
   assert.equal(planUnderstanding(picked, ai('recipe', {}, { confidence: 0.9 }), caption).patch.kind, 'recipe');

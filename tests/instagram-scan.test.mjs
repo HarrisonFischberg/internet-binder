@@ -108,7 +108,7 @@ test('import all collections: each Instagram collection becomes a group; recipes
   assert.equal(saved.GRP0003.kind, 'recipe', '“Dinner ideas” sounds like recipes');
   assert.equal(cols[saved.GRP0004.collectionId], 'Camping & Outdoors', 'in no collection: sorted as usual');
   assert.equal(summary.imported, 4);
-  // Turned off: everything is sorted by Keepsake.
+  // Turned off: everything is sorted by Bowerbird.
   ctx.state.igKeepGroups = false;
   await importPosts(ctx, scan, [post('GRP0005', 'Two-person ultralight backpacking tent, green', ['Cozy corner'])]);
   const tent = (await store.db.all('items')).find((i) => i.url.includes('GRP0005'));

@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import CoreText
 
-/// Keepsake's look: five styles, each with light and dark (impeccable-review/mockups dir1 to dir5).
+/// Bowerbird's look: five styles, each with light and dark (impeccable-review/mockups dir1 to dir5).
 /// Pantry Pop is the default. A style is colour roles, a shape (corners, outlines, depth), a type
 /// voice and what a save without a picture becomes. Every text pair passes WCAG AA in both modes.
 public struct KSTheme: Sendable {
@@ -533,7 +533,7 @@ extension View {
 #endif
 
 #if canImport(UIKit)
-/// How someone likes Keepsake to look and feel. Kept in the App Group, so the Share Extension and the
+/// How someone likes Bowerbird to look and feel. Kept in the App Group, so the Share Extension and the
 /// widgets match the app. Device settings: never synced, never exported.
 public struct Appearance: Sendable, Equatable {
     public var theme = "pantry"

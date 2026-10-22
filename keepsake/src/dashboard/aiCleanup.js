@@ -87,7 +87,7 @@ export async function runAiCleanup(ctx, { scope = 'all' } = {}) {
   const go = await UI.openModal({
     title: `Fix ${pluralize(items.length, 'item', 'items')} with AI?`,
     body: [
-      el('p', { class: 'modal-text' }, [`Keepsake will check ${scopeLabel(ctx, scope)} and apply confident fixes straight away. Every change is logged and can be undone.`]),
+      el('p', { class: 'modal-text' }, [`Bowerbird will check ${scopeLabel(ctx, scope)} and apply confident fixes straight away. Every change is logged and can be undone.`]),
       el('ul', { class: 'modal-list' }, [
         el('li', {}, ['Work out what each save is. Recipes, workouts, places, films, books, videos and articles move to their Lifestyle view with everything their card shows: ingredients and steps, exercises with sets and reps, a place’s street, city and cuisine. What the post doesn’t say (a recipe that’s only in the video) is drafted and marked AI draft.']),
         el('li', {}, ['Tidy titles (store names, SEO filler and promo text removed).']),
@@ -622,7 +622,7 @@ export async function confirmAiRun(ctx, ids, { label = '' } = {}) {
     title: `Run AI on ${pluralize(todo.length, 'imported save', 'imported saves')}?`,
     body: [
       el('p', {}, [`Your AI provider (${modelName}) reads each one: what it is from its picture, caption and page, then its details or collection. That’s one to three requests a save, two at a time, so about ${minutes(todo.length)} for all of them${few ? `, or ${minutes(AI_RUN_FIRST)} for the newest ${AI_RUN_FIRST}` : ''}.`]),
-      el('p', { class: 'help' }, ['It runs in the background with progress under the header. Pause or cancel any time; whatever isn’t done yet stays waiting, so you can resume later. If your provider asks Keepsake to slow down, it waits and tries again. Every change can be undone from the AI change log.']),
+      el('p', { class: 'help' }, ['It runs in the background with progress under the header. Pause or cancel any time; whatever isn’t done yet stays waiting, so you can resume later. If your provider asks Bowerbird to slow down, it waits and tries again. Every change can be undone from the AI change log.']),
     ],
     actions: [
       { label: 'Not now', quiet: true, onClick: (c) => c('') },

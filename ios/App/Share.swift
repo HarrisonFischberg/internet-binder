@@ -2,14 +2,14 @@ import UIKit
 import KeepsakeKit
 
 /// Sharing a save from its screen: the system Share Sheet with the save's link. Messages also gets a
-/// line saying where it came from and a pointer to Keepsake on the App Store.
+/// line saying where it came from and a pointer to Bowerbird on the App Store.
 enum SaveSharing {
-    /// Keepsake's App Store page. Not listed yet: fill this in once it is, and Messages links to it.
+    /// Bowerbird's App Store page. Not listed yet: fill this in once it is, and Messages links to it.
     static let appStoreURL: URL? = nil
 
     static func messageText(for save: Save) -> String {
-        let callout = appStoreURL.map { "Get Keepsake on the App Store: \($0.absoluteString)" } ?? "Keepsake for iPhone is coming soon to the App Store."
-        return "Shared from Keepsake! \(save.title)\n\n\(callout)"
+        let callout = appStoreURL.map { "Get Bowerbird on the App Store: \($0.absoluteString)" } ?? "Bowerbird for iPhone is coming soon to the App Store."
+        return "Shared from Bowerbird! \(save.title)\n\n\(callout)"
     }
 
     @MainActor static func present(_ save: Save) {

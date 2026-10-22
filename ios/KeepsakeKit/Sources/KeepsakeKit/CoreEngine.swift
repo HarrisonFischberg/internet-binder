@@ -16,7 +16,7 @@ public enum CoreError: Error, LocalizedError, Equatable {
     }
 }
 
-/// Runs Keepsake's shared rules and store (keepsake/src/shared, bundled by ios/tools/bundle-core.mjs)
+/// Runs Bowerbird's shared rules and store (keepsake/src/shared, bundled by ios/tools/bundle-core.mjs)
 /// in JavaScriptCore, on top of `RecordDatabase`. One context and one serial queue: every call into
 /// JavaScript happens on `queue`, and the native backends answer synchronously, so the shared store
 /// behaves exactly as it does in Chrome.
@@ -37,7 +37,7 @@ public final class KeepsakeCore: @unchecked Sendable {
 
     private func load() throws {
         guard let ctx = JSContext() else { throw CoreError.loading("JavaScriptCore is unavailable.") }
-        ctx.name = "Keepsake core"
+        ctx.name = "Bowerbird core"
         ctx.exceptionHandler = { [weak self] _, ex in self?.loadError = ex?.toString() }
         let native = JSValue(newObjectIn: ctx)!
         let uuid: @convention(block) () -> String = { UUID().uuidString.lowercased() }
@@ -88,7 +88,7 @@ public final class KeepsakeCore: @unchecked Sendable {
             let secrets = ((try? db.settings([RecordDatabase.secretsKey]))?[RecordDatabase.secretsKey] as? [String: Any]) ?? [:]
             let allowed = NetworkPolicy.allowedHosts(settings: settings, hasAIKey: !((secrets["aiApiKey"] as? String) ?? "").isEmpty)
             guard let url = URL(string: urlString), url.scheme == "https", let host = url.host(), allowed.contains(host) else {
-                finish(0, "", "Keepsake isn't allowed to contact \(URL(string: urlString)?.host() ?? "that address"). Turn it on in Settings first.")
+                finish(0, "", "Bowerbird isn't allowed to contact \(URL(string: urlString)?.host() ?? "that address"). Turn it on in Settings first.")
                 return
             }
             var request = URLRequest(url: url)
