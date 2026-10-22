@@ -62,9 +62,9 @@ struct SettingsScreen: View {
                 Section {
                     NavigationLink("Privacy") { PrivacyScreen() }
                     Button("Erase everything", role: .destructive) { erasing = true }
-                } footer: { Text("Patchwork has no account and no server. Your library stays on this iPhone.") }
+                } footer: { Text("Keepsake has no account and no server. Your library stays on this iPhone.") }
                 Section {} footer: {
-                    Text("Patchwork \(Self.version)")
+                    Text("Keepsake \(Self.version)")
                         .frame(maxWidth: .infinity)
                         .accessibilityIdentifier("appVersion")
                 }
@@ -75,7 +75,7 @@ struct SettingsScreen: View {
             .task { await load() }
             .sheet(item: $consent) { c in ConsentSheet(consent: c) { accepted in Task { await decide(c, accepted) } } }
             .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }), document: exportDoc, contentType: .json,
-                          defaultFilename: "patchwork-export-\(Date.now.formatted(.iso8601.year().month().day()))") { _ in exportDoc = nil }
+                          defaultFilename: "keepsake-export-\(Date.now.formatted(.iso8601.year().month().day()))") { _ in exportDoc = nil }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { r in if case .success(let url) = r { Task { await model.importFile(url) } } }
             .sheet(isPresented: $erasing) { EraseSheet() }
             .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
@@ -160,8 +160,8 @@ struct SettingsScreen: View {
             }
         } header: { Text("Notifications") } footer: {
             Text(saveNotices && noticesBlocked
-                 ? "Notifications are off for Patchwork in iOS Settings, so nothing shows after a save."
-                 : "After you save from the Share Sheet, a notification drops in from the top saying where it went. Tap it to open that save in Patchwork.")
+                 ? "Notifications are off for Keepsake in iOS Settings, so nothing shows after a save."
+                 : "After you save from the Share Sheet, a notification drops in from the top saying where it went. Tap it to open that save in Keepsake.")
         }
         .task(id: phase) { noticesBlocked = await SaveNotice.blocked() }
     }
@@ -196,7 +196,7 @@ struct SettingsScreen: View {
                 Task { try? await model.library?.updateSettings(["instagram": ["readPostDetails": on]]) }
             }))
         } header: { Text("Instagram") } footer: {
-            Text("When you share a post or reel, Patchwork opens its public page once, without your account or cookies, to save its caption, creator, date and picture. Turn off to save just the link.")
+            Text("When you share a post or reel, Keepsake opens its public page once, without your account or cookies, to save its caption, creator, date and picture. Turn off to save just the link.")
         }
     }
 
@@ -262,9 +262,9 @@ struct ConsentSheet: View {
     private var points: [String] {
         switch consent {
         case .ai: [
-            "Uses your own key with the provider you choose. Patchwork has no AI server.",
+            "Uses your own key with the provider you choose. Keepsake has no AI server.",
             "After a save: its title, caption or description, hashtags, location tag, site and the thumbnail stored on this iPhone, to work out what it is (a recipe, workout, place…) and fill in its card. What the post doesn't say is drafted and marked AI draft. You can undo every change.",
-            "Something to buy (an Instagram or Facebook post of a product, say) is worked out from its picture, since a post's caption can be wrong. Your provider searches the web for the product, and Patchwork reads the one shop page it found, without cookies, for its name, price and details. The card shows the shop's facts first and the AI's summary beside them.",
+            "Something to buy (an Instagram or Facebook post of a product, say) is worked out from its picture, since a post's caption can be wrong. Your provider searches the web for the product, and Keepsake reads the one shop page it found, without cookies, for its name, price and details. The card shows the shop's facts first and the AI's summary beside them.",
             "Its price, shop and your collection names also go, to tidy the title and pick a collection.",
             "Nothing else is fetched from the pages a post links to on this iPhone.",
             "Nothing is sent until you add a key. Turning this off stops it at once.",
@@ -340,15 +340,15 @@ struct PrivacyScreen: View {
     var body: some View {
         List {
             Section("On this iPhone") {
-                Text("Your saves, collections, goals and settings live in Patchwork's storage on this device. No account, no Patchwork server, no analytics.")
+                Text("Your saves, collections, goals and settings live in Keepsake's storage on this device. No account, no Keepsake server, no analytics.")
                 Text("Your AI key is kept in the Keychain on this device and never exported.")
             }
-            Section("When Patchwork uses the network") {
+            Section("When Keepsake uses the network") {
                 Text("Pictures of your saves load from the sites they came from, as a web page loads them. A small copy is kept on this iPhone so the picture stays if the site removes it.")
                 Text("Maps are drawn by Apple Maps. Directions open Apple Maps with the place's name and address.")
                 Text("Optional AI and each Lookup: only when you turn them on, and only what their switch says.")
-                Text("Sharing from Safari: Patchwork reads the page you shared, on this iPhone.")
-                Text("Sharing an Instagram post or reel: Patchwork opens that post's public page once, without your account or cookies, to save its caption and picture. You can turn this off under Instagram.")
+                Text("Sharing from Safari: Keepsake reads the page you shared, on this iPhone.")
+                Text("Sharing an Instagram post or reel: Keepsake opens that post's public page once, without your account or cookies, to save its caption and picture. You can turn this off under Instagram.")
             }
         }
         .navigationTitle("Privacy")

@@ -1,4 +1,4 @@
-// Patchwork storage (schema 3).
+// Keepsake storage (schema 3).
 //
 // chrome.storage.local (the `kv` backend):
 //   keepsake_meta          { schemaVersion, installedAt, updatedAt, migratedToRecordsAt?, textRepairedAt? }
@@ -62,7 +62,7 @@ export const STYLES = [
 
 // Toolbar icons (Settings → Appearance): one per style. Pantry's (id pantry) is the app's own Patchwork
 // icon and the default, so it carries the app's name rather than its style's.
-export const ICONS = STYLES.map((s) => ({ value: s.value, label: s.value === 'pantry' ? 'Patchwork' : s.label }));
+export const ICONS = STYLES.map((s) => ({ value: s.value, label: s.value === 'pantry' ? 'Keepsake' : s.label }));
 
 // Sets data-style / data-theme on <html> (or any element) from settings. Pantry Pop needs no attribute.
 // Styles from before 1.5 (modern, moss, minimal) fall back to the default.
@@ -270,7 +270,7 @@ export function makeItem(input = {}) {
     productType: sanitizeText(input.productType, 80),
     tags: uniqStrings(input.tags, 12).map((t) => sanitizeText(t, 40)).filter(Boolean),
     // What it's about ("AI", "Video games"): guessed on save (topics.js) or set by you.
-    // When you last opened it in Patchwork (for Home's "Come back to"). Only ever set on this device.
+    // When you last opened it in Keepsake (for Home's "Come back to"). Only ever set on this device.
     openedAt: typeof input.openedAt === 'string' && !Number.isNaN(Date.parse(input.openedAt)) ? input.openedAt : null,
     topics: cleanTopics(input.topics).map((t) => sanitizeText(t, 30)).filter(Boolean),
     topicsBy: input.topicsBy === 'guess' || input.topicsBy === 'you' ? input.topicsBy : '',
@@ -388,7 +388,7 @@ function uniqStrings(list, max) {
 // versions for tests. On first run of schema 3 the store copies a schema 1/2 library out of
 // chrome.storage.local into `db`, checks the copy, and leaves the old keys in place for rollback.
 export function createStore(kv, db = memoryRecordBackend()) {
-  if (!db) throw new Error('Patchwork needs IndexedDB, which is turned off for this browser profile.');
+  if (!db) throw new Error('Keepsake needs IndexedDB, which is turned off for this browser profile.');
   const be = kv;
   let writeQueue = Promise.resolve();
   const serial = (fn) => {
@@ -434,7 +434,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
 
   // v1/v2 library in chrome.storage.local -> v3 records. Never overwrites a record that already
   // exists in `db`, so running it again is always safe. `since` (the first migration time) limits a
-  // re-run to saves and collections an older Patchwork created after that point: e.g. a rollback to
+  // re-run to saves and collections an older Keepsake created after that point: e.g. a rollback to
   // 1.3.x, or an old background worker still running after an update. Older v2 entries are not
   // brought back, so something deleted for good in schema 3 stays deleted.
   async function migrateToRecords(raw, { since = null } = {}) {
@@ -469,12 +469,12 @@ export function createStore(kv, db = memoryRecordBackend()) {
     const gotCols = mapOf(await db.all('collections'));
     const missingCols = collections.filter((c) => !gotCols[c.id]);
     if (missing.length || missingCols.length) {
-      throw new Error(`Patchwork couldn't finish updating its storage (${missing.length} saves and ${missingCols.length} collections didn't copy). Your saves are untouched; reload to try again.`);
+      throw new Error(`Keepsake couldn't finish updating its storage (${missing.length} saves and ${missingCols.length} collections didn't copy). Your saves are untouched; reload to try again.`);
     }
     return { items: items.length, collections: collections.length };
   }
 
-  // Saves made before Patchwork decoded HTML entities ("14&#215;8-inch"): decode them once. Only records
+  // Saves made before Keepsake decoded HTML entities ("14&#215;8-inch"): decode them once. Only records
   // that contain an entity are rewritten, and only their text changes (same id, dates, collection).
   const encodedText = (i) => [i.title, i.description, i.retailer, i.originalTitle, ...Object.values(i.details || {}).flat()].some(hasEntities);
   async function repairEncodedText() {
@@ -543,7 +543,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
         if (raw[LEGACY.items] || raw[LEGACY.collections]) {
           if (!since && version < SCHEMA_VERSION) migrated = await migrateToRecords(raw);
           else if (since) {
-            // An older Patchwork wrote to the v2 keys after the upgrade: bring its new saves across.
+            // An older Keepsake wrote to the v2 keys after the upgrade: bring its new saves across.
             const r = await migrateToRecords(raw, { since });
             if (r.items || r.collections) caughtUp = r;
           }
@@ -807,7 +807,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
       return (await db.all('items')).filter((i) => live(i) && i.needsAi).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     },
 
-    // Moves saves still waiting for the AI tidy into the imported-saves queue: they keep what Patchwork
+    // Moves saves still waiting for the AI tidy into the imported-saves queue: they keep what Keepsake
     // worked out on the device and wait for Run AI. A thousand of them would otherwise go to your provider
     // all at once the next time the extension wakes.
     async parkPending(ids) {
@@ -956,7 +956,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
     async addCheckin(goalId, result = {}, { at } = {}) {
       const goal = await db.get('goals', goalId);
       if (!goal || goal.deletedAt) throw new Error('That goal no longer exists.');
-      if ((await db.byIndex('checkins', 'goalId', goalId)).length >= LIMITS.maxCheckinsPerGoal) throw new Error('This goal has as many check-ins as Patchwork keeps. Start a new goal.');
+      if ((await db.byIndex('checkins', 'goalId', goalId)).length >= LIMITS.maxCheckinsPerGoal) throw new Error('This goal has as many check-ins as Keepsake keeps. Start a new goal.');
       const checkin = makeCheckin({ goalId, result, at });
       await db.put('checkins', [checkin]);
       return checkin;
@@ -1088,7 +1088,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
       return samples.length;
     },
 
-    // Wipes everything Patchwork keeps: records, settings, the AI key and the v2 rollback copy.
+    // Wipes everything Keepsake keeps: records, settings, the AI key and the v2 rollback copy.
     async clearAll() {
       await db.clear(STORES);
       await be.remove([...Object.values(KEYS), ...LEGACY_KEYS]);
@@ -1124,7 +1124,7 @@ function sortCollections(list) {
 // DEFAULT_TAXONOMY still exists and is used for auto-categorization —
 // ensureCollectionForTaxonomy() creates those collections on demand the
 // first time an item actually matches one (see categorizer.js). Items
-// Patchwork can't place confidently are simply left uncategorized
+// Keepsake can't place confidently are simply left uncategorized
 // (collectionId: null) and surface in the Review queue — there is no
 // separate "Inbox" collection to keep in sync.
 const STARTER_TAXONOMY_KEYS = ['home', 'clothing', 'tech'];
@@ -1178,8 +1178,8 @@ export function unpackImages(raw) {
 
 // Validates and sanitizes an export payload. Throws with a readable message.
 export function validateExport(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('This file is not a Patchwork export.');
-  if (payload.format !== 'keepsake-export') throw new Error('This file is not a Patchwork export (missing format marker).');
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('This file is not a Keepsake export.');
+  if (payload.format !== 'keepsake-export') throw new Error('This file is not a Keepsake export (missing format marker).');
   const version = Number(payload.schemaVersion);
   if (!Number.isFinite(version) || version < 1 || version > SCHEMA_VERSION) throw new Error(`Unsupported export version ${payload.schemaVersion}.`);
   const rawCollections = payload.collections && typeof payload.collections === 'object' ? payload.collections : {};

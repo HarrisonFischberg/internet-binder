@@ -1,4 +1,4 @@
-// Patchwork product-card detector. Classic script; exposes globalThis.__keepsakeDetector.
+// Keepsake product-card detector. Classic script; exposes globalThis.__keepsakeDetector.
 //
 // Detection is on-demand: floating.js calls resolveCard(element) for whatever
 // the pointer is over, so the page is never scanned wholesale. Results are

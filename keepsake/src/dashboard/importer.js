@@ -1,7 +1,7 @@
 // Instagram Saved-collection import: review screen for a scan captured by the
 // popup. Each post goes into a Lifestyle view (a restaurants collection into Places, with the
 // place's name, address and pin from the caption and location tag) or a collection, where it is an
-// inspiration card. Patchwork makes no claim about which product a post shows unless the optional AI
+// inspiration card. Keepsake makes no claim about which product a post shows unless the optional AI
 // feature is used explicitly.
 
 import { MSG } from '../shared/messages.js';
@@ -60,7 +60,7 @@ function draw(ctx, page) {
   }
   if (scan.bulk && (scan.status === 'scanning' || scan.status === 'starting')) {
     const b = scan.bulk;
-    page.append(UI.section('Scanning all your Saved collections…', 'Keep the Instagram tab open: Patchwork opens each collection there in turn. Posts appear here when it finishes.', [
+    page.append(UI.section('Scanning all your Saved collections…', 'Keep the Instagram tab open: Keepsake opens each collection there in turn. Posts appear here when it finishes.', [
       el('div', { class: 'stat-grid' }, [
         el('div', { class: 'stat' }, [el('div', { class: 'stat-value' }, [String(scan.posts.length)]), el('div', { class: 'stat-label' }, ['posts found so far'])]),
         el('div', { class: 'stat' }, [el('div', { class: 'stat-value' }, [`${Math.min(b.index + 1, b.total)} of ${b.total}`]), el('div', { class: 'stat-label' }, [b.current ? `now: ${b.current}` : 'collections'])]),
@@ -90,15 +90,15 @@ function draw(ctx, page) {
 }
 
 function instructions(ctx) {
-  return UI.section('Import a Saved collection', 'Bring the posts you saved on Instagram into Patchwork: each one filed where it belongs.', [
+  return UI.section('Import a Saved collection', 'Bring the posts you saved on Instagram into Keepsake: each one filed where it belongs.', [
     el('div', { class: 'steps' }, [
       stepNode(1, 'Open Instagram', 'Go to your profile → Saved, and open one collection (or “All posts”).'),
-      stepNode(2, 'Click Patchwork', 'The popup recognizes the Saved collection and offers “Import this collection”.'),
-      stepNode(3, 'Let it scroll', 'Patchwork scrolls the collection to load posts, then stops at the end, when nothing new appears, or at the safety limit. You can stop any time.'),
-      stepNode(4, 'Import', 'One click: Patchwork reads the posts, files each one, and tells you where everything went.'),
+      stepNode(2, 'Click Keepsake', 'The popup recognizes the Saved collection and offers “Import this collection”.'),
+      stepNode(3, 'Let it scroll', 'Keepsake scrolls the collection to load posts, then stops at the end, when nothing new appears, or at the safety limit. You can stop any time.'),
+      stepNode(4, 'Import', 'One click: Keepsake reads the posts, files each one, and tells you where everything went.'),
     ]),
     el('div', { class: 'prose' }, [
-      el('p', {}, [el('strong', {}, ['What Patchwork reads: ']), 'post links, thumbnails, captions and creator names visible in the collection you opened. ', el('strong', {}, ['What it never reads: ']), 'your login, cookies, messages, or any other page.']),
+      el('p', {}, [el('strong', {}, ['What Keepsake reads: ']), 'post links, thumbnails, captions and creator names visible in the collection you opened. ', el('strong', {}, ['What it never reads: ']), 'your login, cookies, messages, or any other page.']),
       el('p', {}, ['Instagram changes its layout often. If a scan finds nothing, reload the page and try again — and know that the importer may need an update when Instagram changes.']),
     ]),
     el('div', { class: 'actions-row' }, [el('a', { class: 'btn', href: 'https://www.instagram.com/', target: '_blank', rel: 'noopener noreferrer' }, ['Open Instagram'])]),
@@ -140,17 +140,17 @@ async function reviewScreen(ctx, page, scan) {
   const importBtn = el('button', { type: 'button', class: 'btn btn-primary', disabled: !todo || run.running, onClick: () => runImport(ctx, scan) }, [run.running ? 'Importing…' : `Import ${pluralize(todo, 'post', 'posts')}`]);
   page.append(UI.section(`“${igName}”`, scan.username ? `@${scan.username} · ${pluralize(scan.posts.length, 'post', 'posts')} found` : `${pluralize(scan.posts.length, 'post', 'posts')} found`, [
     el('p', {}, [
-      nameKind ? `“${igName}” sounds like ${kindInfo(nameKind).plural}, so the posts go there. ` : 'Patchwork reads each post (caption, creator, location, links) and files it: products into your collections; places, recipes and workouts into their Lifestyle views. Anything it isn’t sure about waits in Review. ',
-      already ? `${pluralize(already, 'post is', 'posts are')} already in Patchwork and will be skipped.` : '',
+      nameKind ? `“${igName}” sounds like ${kindInfo(nameKind).plural}, so the posts go there. ` : 'Keepsake reads each post (caption, creator, location, links) and files it: products into your collections; places, recipes and workouts into their Lifestyle views. Anything it isn’t sure about waits in Review. ',
+      already ? `${pluralize(already, 'post is', 'posts are')} already in Keepsake and will be skipped.` : '',
     ]),
     scan.reason === 'limit' ? el('p', { class: 'help' }, [`The scan stopped at the safety limit (${scan.posts.length}); scroll further on Instagram and scan again to get more.`]) : null,
-    el('p', { class: 'help' }, ['Reading the posts uses your own Instagram session, one post at a time with a short pause (about ', el('strong', {}, [`${Math.max(1, Math.ceil((todo * 2.3) / 60))} min`]), ' for these). Keep this tab open; you can keep using Patchwork meanwhile.']),
+    el('p', { class: 'help' }, ['Reading the posts uses your own Instagram session, one post at a time with a short pause (about ', el('strong', {}, [`${Math.max(1, Math.ceil((todo * 2.3) / 60))} min`]), ' for these). Keep this tab open; you can keep using Keepsake meanwhile.']),
     el('div', { class: 'actions-row' }, [importBtn, clearBtn(ctx)]),
   ]));
 }
 
 // Every collection at once: how many posts each had, and one choice: keep the collections as groups
-// (the default) or let Patchwork sort everything. Either way recipes, workouts and places go to their
+// (the default) or let Keepsake sort everything. Either way recipes, workouts and places go to their
 // Lifestyle views, where their cards get ingredients, exercises and map pins.
 function bulkReviewScreen(ctx, page, scan) {
   const history = (ctx.state.importHistory && ctx.state.importHistory.instagram) || {};
@@ -168,12 +168,12 @@ function bulkReviewScreen(ctx, page, scan) {
   const importBtn = el('button', { type: 'button', class: 'btn btn-primary', disabled: !todo || run.running, onClick: () => runImport(ctx, scan) }, [run.running ? 'Importing…' : `Import ${pluralize(todo, 'post', 'posts')}`]);
   page.append(UI.section('All your Saved collections', `${scan.username ? `@${scan.username} · ` : ''}${pluralize(scan.posts.length, 'post', 'posts')} in ${pluralize(rows.length - (loose ? 1 : 0), 'collection', 'collections')}`, [
     el('ul', { class: 'import-dests', role: 'list' }, rows),
-    el('label', { class: 'check' }, [keep, el('span', {}, ['Keep my Instagram collections as groups (posts in no collection are sorted by Patchwork)'])]),
-    el('p', { class: 'help' }, ['Recipes, workouts and places go to their Lifestyle views either way. A post saved in two collections goes to the first. ', already ? `${pluralize(already, 'post is', 'posts are')} already in Patchwork and will be skipped.` : '']),
+    el('label', { class: 'check' }, [keep, el('span', {}, ['Keep my Instagram collections as groups (posts in no collection are sorted by Keepsake)'])]),
+    el('p', { class: 'help' }, ['Recipes, workouts and places go to their Lifestyle views either way. A post saved in two collections goes to the first. ', already ? `${pluralize(already, 'post is', 'posts are')} already in Keepsake and will be skipped.` : '']),
     skipped.length ? el('p', { class: 'help' }, [`Not scanned: ${skipped.join(', ')}.`]) : null,
     scan.reason === 'limit' ? el('p', { class: 'help' }, [`The scan stopped at its limit of ${scan.posts.length} posts.`]) : null,
     scan.reason === 'error' && scan.error ? el('div', { class: 'notice notice-danger' }, [`The scan stopped early: ${scan.error}`]) : null,
-    el('p', { class: 'help' }, ['Reading the posts uses your own Instagram session, one post at a time with a short pause (about ', el('strong', {}, [`${Math.max(1, Math.ceil((todo * 2.3) / 60))} min`]), ' for these). Keep this tab open; you can stop at any point and keep what’s read. When it’s done, Settings → Export JSON makes a file you can AirDrop to Patchwork on your iPhone.']),
+    el('p', { class: 'help' }, ['Reading the posts uses your own Instagram session, one post at a time with a short pause (about ', el('strong', {}, [`${Math.max(1, Math.ceil((todo * 2.3) / 60))} min`]), ' for these). Keep this tab open; you can stop at any point and keep what’s read. When it’s done, Settings → Export JSON makes a file you can AirDrop to Keepsake on your iPhone.']),
     el('div', { class: 'actions-row' }, [importBtn, clearBtn(ctx)]),
   ]));
 }
@@ -382,13 +382,13 @@ async function showImportSummary(ctx, s, where) {
   if (s.review) rows.push(el('li', { class: 'import-dest is-review' }, [el('span', { class: 'import-dest-name' }, ['Review: for you to sort', aiOn ? ' (or with AI)' : '']), el('span', { class: 'import-dest-count' }, [String(s.review)])]));
   const hasPlaces = s.where.some((w) => w.kind === 'place') && !!ctx.state.settings?.lookups?.places;
   const notes = [
-    s.skipped ? `${pluralize(s.skipped, 'post was', 'posts were')} already in Patchwork, so ${s.skipped === 1 ? 'it was' : 'they were'} skipped.` : '',
+    s.skipped ? `${pluralize(s.skipped, 'post was', 'posts were')} already in Keepsake, so ${s.skipped === 1 ? 'it was' : 'they were'} skipped.` : '',
     s.unread ? `${pluralize(s.unread, 'post', 'posts')} couldn’t be read${s.loginWalls ? ' (Instagram showed a login page)' : ''}, so ${s.unread === 1 ? 'it was' : 'they were'} imported with what the grid showed.` : '',
     s.imported ? (aiOn
       ? 'Nothing was sent to your AI provider yet. Run AI on them now, or later from Home: your provider works out what each post is, and recipes, workouts and places move to their Lifestyle views with their details.'
       : 'Sorted on this device. To have AI read them later, turn on Optional AI in Settings; Home then offers Run AI on imported saves.') : '',
     hasPlaces ? 'Places are being filled in (addresses and map pins) in the background, with the Lookups you turned on.' : '',
-    s.bulk ? 'To bring them to your iPhone: Settings → Export JSON, then AirDrop the file to your iPhone and choose Patchwork.' : '',
+    s.bulk ? 'To bring them to your iPhone: Settings → Export JSON, then AirDrop the file to your iPhone and choose Keepsake.' : '',
   ].filter(Boolean);
   const choice = await UI.openModal({
     title: `Imported ${pluralize(s.imported, 'post', 'posts')} from ${where}`,

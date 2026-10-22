@@ -272,7 +272,7 @@ function amountIn(line) {
 // Exercises written in a caption or a page's lists. Needs two or more exercise lines; "4 rounds"
 // sets the sets for exercises that don't give their own, and "Rest 60s" applies to the line above
 // (or to all of them when it comes first).
-// Captions often reach Patchwork as one long line (page metadata drops the line breaks). Put them back
+// Captions often reach Keepsake as one long line (page metadata drops the line breaks). Put them back
 // before numbered items ("… Exercises: 1. Row 2. Press"), check-mark bullets and "Exercises:"-style headings.
 function unflatten(text) {
   const t = String(text || '').replace(/\r/g, '');

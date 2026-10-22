@@ -33,7 +33,7 @@ test('a version 1 database (M1) gains goals and checkins and keeps every save', 
   after.close();
 });
 
-test('a database from a newer Patchwork still opens (rolled back to this build)', async () => {
+test('a database from a newer Keepsake still opens (rolled back to this build)', async () => {
   const name = `upgrade-${process.pid}-2`;
   const newer = await open(name, DB_VERSION + 1, (db) => {
     db.createObjectStore('items', { keyPath: 'id' }).createIndex('urlKey', 'urlKey', { unique: false });

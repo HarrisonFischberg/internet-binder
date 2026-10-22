@@ -1,4 +1,4 @@
-// Patchwork categorization engine.
+// Keepsake categorization engine.
 //
 // Public interface (stable — other modules only depend on these):
 //   classify(product, context)              -> Classification

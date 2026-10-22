@@ -32,7 +32,7 @@ const tent = { title: 'Two-person ultralight backpacking tent', url: 'https://sh
 test('install: starter data, context menu, welcome page', async () => {
   assert.equal(F.local.keepsake_meta.schemaVersion, 3);
   assert.equal((await collections()).length, 3);
-  assert.equal(F.calls.contextMenus[0].title, 'Save to Patchwork');
+  assert.equal(F.calls.contextMenus[0].title, 'Save to Keepsake');
   assert.ok(F.calls.tabsCreated.some((t) => t.url.endsWith('#welcome')));
 });
 
@@ -727,7 +727,7 @@ test('instagram: "Import all collections" opens each collection in turn and merg
     return [{ result: null }];
   };
   try {
-    assert.equal((await F.send({ type: MSG.IG_START_ALL, tabId }, pageTab)).ok, false, 'only from Patchwork’s own pages');
+    assert.equal((await F.send({ type: MSG.IG_START_ALL, tabId }, pageTab)).ok, false, 'only from Keepsake’s own pages');
     const res = await F.send({ type: MSG.IG_START_ALL, tabId }, popup);
     assert.equal(res.ok, true);
     assert.deepEqual(res.collections, ['Recipes', 'Living room', 'All posts'], 'All posts last');

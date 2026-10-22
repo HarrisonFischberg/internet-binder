@@ -1,4 +1,4 @@
-// Patchwork toolbar popup.
+// Keepsake toolbar popup.
 // Reads the active tab on demand (activeTab + scripting). Opening it never saves: it offers the
 // dashboard, then asks where the page lives (Collections, Lifestyle or Review, as the iPhone share
 // sheet does), then lets you tidy the title before Save. Saves go through the background worker.
@@ -39,7 +39,7 @@ const state = {
   userOverride: false,
   savedItem: null,
   savedMode: 'saved', // saved | updated | existing (a video, recipe… already saved: shown, not saved again)
-  initialChoice: '', // the picker value for Patchwork's own guess
+  initialChoice: '', // the picker value for Keepsake's own guess
   choice: null, // where you've said it lives on the home: a picker value ('' is Review), null until you pick
   shelfOpen: null, // collections | lifestyle, while looking through a library's groups
   items: [],
@@ -95,7 +95,7 @@ async function boot() {
   state.tab = tab;
   if (!tab || !tab.id || isRestrictedUrl(tab.url || '')) {
     restricted(tab && tab.url && /^file:/i.test(tab.url)
-      ? 'Patchwork can’t read local files. Open a product page on a website and try again.'
+      ? 'Keepsake can’t read local files. Open a product page on a website and try again.'
       : 'Chrome doesn’t let extensions read this kind of page (browser pages, the Web Store and some protected sites). Open a product page on a regular website and try again.');
     return;
   }
@@ -126,7 +126,7 @@ async function loadProduct() {
   state.collections = collections;
   state.threshold = Number(prefs?.confidenceThreshold) || 0.6;
   if (!extracted.ok || !extracted.product) {
-    restricted(extracted.error || 'Patchwork could not read this page.');
+    restricted(extracted.error || 'Keepsake could not read this page.');
     return;
   }
   state.product = extracted.product;
@@ -152,7 +152,7 @@ async function loadProduct() {
 }
 
 // --- home: drawn like the iPhone share sheet -------------------------------------------------------
-// Opening Patchwork never saves. Open dashboard sits in the header. Under it the page is drawn as its object
+// Opening Keepsake never saves. Open dashboard sits in the header. Under it the page is drawn as its object
 // with "Where does it live?": Collections or Lifestyle (tap one to see its groups, tap a group to put it
 // there, or start a collection), or "Not sure? Put it in Review". Once there's a place, the page shrinks to a
 // small card whose title you can tidy, and Save (with Add a note beside it) appears.
@@ -284,16 +284,16 @@ function showHome({ reset = true, shelf } = {}) {
   if (reset) setTimeout(() => $('homeDashboard')?.focus(), 30);
 }
 
-// Patchwork's guess, said once; once you put it in Review, where it's waiting (as on the iPhone).
+// Keepsake's guess, said once; once you put it in Review, where it's waiting (as on the iPhone).
 function renderGuess(choice) {
   const initial = state.initialChoice;
   const cls = state.classification;
   const guess = $('homeGuess');
   clear(guess);
   if (choice === '') guess.append('For now it’s waiting in ', el('strong', {}, ['Review']), '.');
-  else if (initial) guess.append('Patchwork thinks ', el('strong', {}, [choiceLabel(initial)]), '.');
-  else if (cls.suggested?.collectionName) guess.append('Patchwork isn’t sure. Maybe ', el('strong', {}, [cls.suggested.collectionName]), '?');
-  else guess.append('Patchwork isn’t sure yet.');
+  else if (initial) guess.append('Keepsake thinks ', el('strong', {}, [choiceLabel(initial)]), '.');
+  else if (cls.suggested?.collectionName) guess.append('Keepsake isn’t sure. Maybe ', el('strong', {}, [cls.suggested.collectionName]), '?');
+  else guess.append('Keepsake isn’t sure yet.');
 }
 
 // Draws what changes as you pick: the object or the small card, libraries or groups, ticks, Save.
@@ -319,12 +319,12 @@ function renderHome() {
   review.classList.toggle('as-card', !shelf);
   if (shelf) {
     $('reviewTitle').textContent = choice === '' ? 'Going to Review' : 'Not sure? Put it in Review';
-    $('reviewSub').textContent = 'Patchwork suggests a home for it later.';
+    $('reviewSub').textContent = 'Keepsake suggests a home for it later.';
   } else {
     $('reviewTitle').textContent = 'Review';
     $('reviewSub').textContent = choice === ''
       ? (n ? `Waiting here with ${pluralize(n, 'other', 'others')}` : 'Waiting here')
-      : (n ? `${n} waiting · Patchwork suggests a home later` : 'Patchwork suggests a home later');
+      : (n ? `${n} waiting · Keepsake suggests a home later` : 'Keepsake suggests a home later');
   }
 
   const guess = state.initialChoice;
@@ -593,8 +593,8 @@ function updateConfidencePill() {
   if (state.userOverride) {
     pill.textContent = 'Your choice';
     pill.classList.add('pill-ok');
-    pill.title = 'Patchwork will learn from this';
-    reason.textContent = 'Patchwork will remember choices like this for similar items.';
+    pill.title = 'Keepsake will learn from this';
+    reason.textContent = 'Keepsake will remember choices like this for similar items.';
     return;
   }
   const pct = Math.round((cls.confidence || 0) * 100);
@@ -602,7 +602,7 @@ function updateConfidencePill() {
     pill.textContent = 'Needs sorting';
     pill.classList.add('pill-warn');
     pill.title = cls.reason || '';
-    reason.textContent = cls.suggested ? `Maybe ${cls.suggested.collectionName}? You can pick a collection above or sort it later.` : 'Patchwork couldn’t tell where this goes. Pick a collection above or sort it later from Review.';
+    reason.textContent = cls.suggested ? `Maybe ${cls.suggested.collectionName}? You can pick a collection above or sort it later.` : 'Keepsake couldn’t tell where this goes. Pick a collection above or sort it later from Review.';
   } else {
     const level = cls.confidence >= 0.75 ? 'High' : cls.confidence >= state.threshold ? 'Good' : 'Low';
     pill.textContent = `${level} · ${pct}%`;
@@ -625,7 +625,7 @@ function renderDuplicate() {
     return;
   }
   const col = state.collections.find((c) => c.id === dup.collectionId);
-  $('dupText').textContent = `“${cut(dup.title, 60)}” is already in ${col ? col.name : 'Patchwork'}.`;
+  $('dupText').textContent = `“${cut(dup.title, 60)}” is already in ${col ? col.name : 'Keepsake'}.`;
   row.classList.remove('hidden');
   $('saveActions').classList.add('hidden');
 }
@@ -735,7 +735,7 @@ async function save({ force }) {
       chosen = null;
     }
     const note = sanitizeText($('noteInput').value, 1000);
-    // Not sure: it waits in Review, where Patchwork suggests a home later.
+    // Not sure: it waits in Review, where Keepsake suggests a home later.
     const review = chosen === '';
     const res = await send({
       type: MSG.SAVE_ITEM, product, force, note, source: 'toolbar',
@@ -943,7 +943,7 @@ async function instagramPanel(ig) {
     // The Saved overview: every collection in turn, then "All posts" for the rest.
     $('igTitle').textContent = 'All your Saved collections';
     $('igSubtitle').textContent = ig.username ? `Saved · @${ig.username}` : 'Saved';
-    $('igExplain').textContent = 'Patchwork will open each of your collections in this tab, one after another, scroll each to the end, then “All posts” for anything in no collection. You review everything before it is saved, and each collection becomes a group with the same name. Nothing is sent anywhere.';
+    $('igExplain').textContent = 'Keepsake will open each of your collections in this tab, one after another, scroll each to the end, then “All posts” for anything in no collection. You review everything before it is saved, and each collection becomes a group with the same name. Nothing is sent anywhere.';
     $('igStart').textContent = 'Import all collections';
     $('igHelp').textContent = 'Keep this tab open while it runs; it moves at a browsing pace and you can stop at any time. Needs access to instagram.com. Your login, cookies and messages are never read.';
     if (!(await hasInstagramAccess())) igAccessHint();
@@ -983,7 +983,7 @@ async function instagramPanel(ig) {
 
 // Shown on the Saved overview until instagram.com access is granted.
 function igAccessHint() {
-  const text = el('span', {}, ['Patchwork doesn’t have access to instagram.com yet. ']);
+  const text = el('span', {}, ['Keepsake doesn’t have access to instagram.com yet. ']);
   const hint = el('div', { class: 'notice notice-warn', id: 'igAccess' }, [text, el('button', { type: 'button', class: 'btn-link small', onClick: async () => {
     if ((await requestInstagramAccess()) || (await hasInstagramAccess())) return hint.remove();
     text.textContent = `Access wasn’t granted. ${instagramAccessHelp()} `;
@@ -1012,13 +1012,13 @@ async function startScan() {
 }
 
 // The page's first report arrives within a second or two. If none has after a while, the scan never
-// reached Patchwork: say so instead of spinning on "Looking for posts…" for ever.
+// reached Keepsake: say so instead of spinning on "Looking for posts…" for ever.
 function watchStart(ms = 15000) {
   setTimeout(async () => {
     const res = await send({ type: MSG.IG_SCAN_STATE });
     if (!res.ok || res.scan?.status !== 'starting' || res.scan.tabId !== state.tab.id) return;
     const safari = location.protocol === 'safari-web-extension:';
-    $('igErrorNotice').textContent = `The scan didn’t start in this tab. Reload the Instagram page and try again. If it still doesn’t start, let Patchwork use instagram.com: ${safari ? 'Safari → Settings → Extensions → Patchwork → Edit Websites…, set instagram.com to Allow' : 'right-click the Patchwork icon → Manage extension → Site access, and add https://www.instagram.com'}.`;
+    $('igErrorNotice').textContent = `The scan didn’t start in this tab. Reload the Instagram page and try again. If it still doesn’t start, let Keepsake use instagram.com: ${safari ? 'Safari → Settings → Extensions → Keepsake → Edit Websites…, set instagram.com to Allow' : 'right-click the Keepsake icon → Manage extension → Site access, and add https://www.instagram.com'}.`;
     igView('error');
   }, ms);
 }
@@ -1027,7 +1027,7 @@ function watchStart(ms = 15000) {
 async function startAll() {
   const granted = (await hasInstagramAccess()) || (await requestInstagramAccess());
   if (!granted) {
-    $('igErrorNotice').textContent = 'Importing every collection needs access to instagram.com, so Patchwork can open each one in this tab. You can still import one collection at a time: open it, then click Patchwork.';
+    $('igErrorNotice').textContent = 'Importing every collection needs access to instagram.com, so Keepsake can open each one in this tab. You can still import one collection at a time: open it, then click Keepsake.';
     igView('error');
     return;
   }

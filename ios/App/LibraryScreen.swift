@@ -212,7 +212,7 @@ struct LibraryScreen: View {
         } else if !model.loaded {
             ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
         } else if model.saves.isEmpty {
-            EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Patchwork from any app, or import your Chrome library.") {
+            EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Keepsake from any app, or import your Chrome library.") {
                 importing = true
             }
         } else if grouped {

@@ -1,4 +1,4 @@
-// Patchwork floating save button. Classic content script registered only on
+// Keepsake floating save button. Classic content script registered only on
 // sites the user permitted. Depends on detector.js and toast.js being loaded
 // first. Renders a single button in a closed Shadow DOM that follows whichever
 // product card is hovered or focused. Nothing on the page is modified.
@@ -19,7 +19,7 @@
   const SIZES = { small: 28, medium: 34, large: 42 };
   // Styles other than the default (Pantry Pop), as in src/shared/storage.js.
   const STYLES = ['notebook', 'gallery', 'atlas', 'swiss'];
-  // Colours and shape come from the Patchwork design tokens (tokens-content.js, injected first); the host
+  // Colours and shape come from the Keepsake design tokens (tokens-content.js, injected first); the host
   // carries data-style / data-theme from the person's settings, like the capture card.
   const CSS = `
     :host { all: initial; }
@@ -94,8 +94,8 @@
     button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn';
-    button.setAttribute('aria-label', 'Save to Patchwork');
-    button.setAttribute('title', 'Save to Patchwork (Alt+Shift+S)');
+    button.setAttribute('aria-label', 'Save to Keepsake');
+    button.setAttribute('title', 'Save to Keepsake (Alt+Shift+S)');
     const mark = document.createElement('span');
     mark.className = 'mark';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -298,13 +298,13 @@
 
   function handleSaveResult(product, res) {
     if (!res || !res.ok) {
-      showCard({ title: 'Couldn’t save', message: res && res.error ? res.error : 'Patchwork could not reach its storage. Try reloading the page.' });
+      showCard({ title: 'Couldn’t save', message: res && res.error ? res.error : 'Keepsake could not reach its storage. Try reloading the page.' });
       return;
     }
     if (res.duplicate) {
       const ex = res.existing;
       showCard({
-        title: 'Already in Patchwork',
+        title: 'Already in Keepsake',
         message: `Saved ${ex.collectionName ? 'in ' + ex.collectionName : 'earlier'}. Update it with the current price and image, or save another copy.`,
         duration: 12000,
         actions: [
@@ -337,7 +337,7 @@
         actions: [
           { label: 'Move', primary: true, onClick: async ({ pickedId }) => {
             const up = await send({ type: MSG.UPDATE_ITEM, itemId: item.id, patch: { collectionId: pickedId }, learn: 'light' });
-            showCard({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Patchwork will remember this for similar items.' : (up && up.error) || '' });
+            showCard({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Keepsake will remember this for similar items.' : (up && up.error) || '' });
           } },
           { label: 'Undo', quiet: true, onClick: () => send({ type: MSG.UNDO_SAVE, itemId: item.id }) },
         ],
@@ -346,7 +346,7 @@
     }
     // Say where it went, with a one-step move in case that's the wrong collection.
     showCard({
-      title: `Saved to ${col ? col.name : 'Patchwork'}`,
+      title: `Saved to ${col ? col.name : 'Keepsake'}`,
       message: shorten(item.title, 70),
       picker: { options, selectedId: item.collectionId, label: 'Move to collection' },
       duration: 10000,
@@ -354,11 +354,11 @@
         { label: 'Move', onClick: async ({ pickedId }) => {
           if (!pickedId || pickedId === item.collectionId) return;
           const up = await send({ type: MSG.UPDATE_ITEM, itemId: item.id, patch: { collectionId: pickedId }, learn: 'light' });
-          showCard({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Patchwork will remember this for similar items.' : (up && up.error) || '' });
+          showCard({ title: up && up.ok ? `Moved to ${nameOf(pickedId)}` : 'Couldn’t move', message: up && up.ok ? 'Keepsake will remember this for similar items.' : (up && up.error) || '' });
         } },
         { label: 'Undo', quiet: true, onClick: async () => {
           const r = await send({ type: MSG.UNDO_SAVE, itemId: item.id });
-          showCard({ title: r && r.ok ? 'Removed' : 'Couldn’t undo', message: r && r.ok ? 'The item was removed from Patchwork.' : (r && r.error) || '', duration: 3000 });
+          showCard({ title: r && r.ok ? 'Removed' : 'Couldn’t undo', message: r && r.ok ? 'The item was removed from Keepsake.' : (r && r.error) || '', duration: 3000 });
         } },
         { label: 'Edit', quiet: true, onClick: () => send({ type: MSG.OPEN_DASHBOARD, hash: `#item/${item.id}` }) },
       ],
@@ -399,7 +399,7 @@
   });
 
   function sanitizeToast(t) {
-    return { title: String(t.title || 'Patchwork').slice(0, 120), message: String(t.message || '').slice(0, 300), duration: Number(t.duration) || 6000 };
+    return { title: String(t.title || 'Keepsake').slice(0, 120), message: String(t.message || '').slice(0, 300), duration: Number(t.duration) || 6000 };
   }
 
   globalThis.__keepsakeFloating = { start, stop: unbindListeners };

@@ -5,7 +5,7 @@ export const STYLE_ICONS = ['pantry', 'notebook', 'gallery', 'atlas', 'swiss'];
 
 export const ICON_LABELS = {
   pocket: 'Felt pocket',
-  pantry: 'Patchwork', // the app's own icon, shown with the other styles' icons
+  pantry: 'Keepsake', // the app's own icon (Patchwork art), shown with the other styles' icons
   notebook: 'Field Notebook',
   gallery: 'Gallery',
   atlas: 'Night Atlas',

@@ -36,7 +36,7 @@ struct KindScreen: View {
                     VStack(alignment: .leading, spacing: 20) {
                         header(k)
                         if saves.isEmpty {
-                            EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Patchwork and it lands here.")
+                            EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Keepsake and it lands here.")
                         } else {
                             SaveGrid(saves: todo, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
                             if !done.isEmpty {
@@ -99,7 +99,7 @@ struct KindScreen: View {
     }
 }
 
-/// Review: saves Patchwork wasn't sure where to put. Each shows why, and three places it most likely
+/// Review: saves Keepsake wasn't sure where to put. Each shows why, and three places it most likely
 /// goes (Chrome's topSuggestions); one tap files it and teaches the categorizer.
 struct ReviewScreen: View {
     let zoom: Namespace.ID
@@ -115,7 +115,7 @@ struct ReviewScreen: View {
             TableBackground()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(title: "Review", subtitle: "Patchwork wasn't sure where these go")
+                    ScreenHeader(title: "Review", subtitle: "Keepsake wasn't sure where these go")
                     if model.aiReady && !saves.isEmpty {
                         let asking = model.aiRun != nil
                         Button {
@@ -384,7 +384,7 @@ struct AIRunBar: View {
     }
 }
 
-/// Where a save in Review goes, on its own screen: Patchwork's best guesses, every Lifestyle view and
+/// Where a save in Review goes, on its own screen: Keepsake's best guesses, every Lifestyle view and
 /// collection, and Fix with AI when Optional AI is on. One tap files it (with Undo).
 struct FilingPanel: View {
     let save: Save
@@ -400,7 +400,7 @@ struct FilingPanel: View {
                 if let why = suggestions?.reason, !why.isEmpty {
                     Text(why).font(.footnote).foregroundStyle(t.inkMuted)
                 } else {
-                    Text("It's waiting in Review. Pick a place and Patchwork learns from it.").font(.footnote).foregroundStyle(t.inkMuted)
+                    Text("It's waiting in Review. Pick a place and Keepsake learns from it.").font(.footnote).foregroundStyle(t.inkMuted)
                 }
             }
             if model.aiReady {

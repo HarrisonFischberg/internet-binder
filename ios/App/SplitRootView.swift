@@ -45,7 +45,7 @@ struct SplitRootView: View {
                     Label("All collections", systemImage: "square.grid.2x2").tag(Section.collections)
                 }
             }
-            .navigationTitle("Patchwork")
+            .navigationTitle("Keepsake")
             .toolbar {
                 ToolbarItem { Button("Appearance", systemImage: "paintpalette") { appearance = true } }
                 ToolbarItem { Button("Settings", systemImage: "gearshape") { settings = true }.keyboardShortcut(",", modifiers: .command) }

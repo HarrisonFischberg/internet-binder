@@ -1,4 +1,4 @@
-// Patchwork record storage (schema 3). Saves, collections and learned data live in IndexedDB,
+// Keepsake record storage (schema 3). Saves, collections and learned data live in IndexedDB,
 // one record per item, so a save writes one record instead of rewriting the whole library, and
 // every read-modify-write runs inside a single transaction. Settings and the AI key stay in
 // chrome.storage.local (see storage.js).
@@ -12,7 +12,7 @@
 //   remove(store, keys[])
 //   update(store, keys[], fn)       atomic: fn(record|undefined) -> record to write, null to delete, undefined to leave
 //   clear(stores[])
-//   onChanged(fn)                   fn({ stores }) after any write, in this context and every other Patchwork context
+//   onChanged(fn)                   fn({ stores }) after any write, in this context and every other Keepsake context
 //
 // Stores: items (keyPath id, index urlKey), collections (keyPath id), kv (keyPath key: prefs, importHistory, aiLog),
 // goals (keyPath id, index itemId) and checkins (keyPath id, index goalId): workout goals, see goals.js.
@@ -28,7 +28,7 @@ const CHANNEL = 'keepsake-records';
 
 export class StorageFullError extends Error {
   constructor() {
-    super('Patchwork is out of space in this browser profile. Nothing already saved was lost. Free some space or export your library from Settings.');
+    super('Keepsake is out of space in this browser profile. Nothing already saved was lost. Free some space or export your library from Settings.');
     this.name = 'StorageFullError';
   }
 }
@@ -98,7 +98,7 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
             resolve(db);
           };
           r.onerror = (ev) => {
-            // A newer Patchwork already upgraded this database (rolled back to an older build): open it as is.
+            // A newer Keepsake already upgraded this database (rolled back to an older build): open it as is.
             if (retry && r.error && r.error.name === 'VersionError') {
               if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
               attach(factory.open(name), false);
@@ -107,9 +107,9 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
             dbp = null;
             reject(r.error);
           };
-          // An open Patchwork tab from before an upgrade closes its connection (onversionchange), so this is
+          // An open Keepsake tab from before an upgrade closes its connection (onversionchange), so this is
           // rare; dbp is reset so the next call tries again instead of failing for good.
-          r.onblocked = () => { dbp = null; reject(new Error('Patchwork storage is busy in another tab. Close other Patchwork tabs and try again.')); };
+          r.onblocked = () => { dbp = null; reject(new Error('Keepsake storage is busy in another tab. Close other Keepsake tabs and try again.')); };
         };
         attach(factory.open(name, DB_VERSION), true);
       });

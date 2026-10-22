@@ -16,7 +16,7 @@ final class ScrollPerformanceTests: XCTestCase {
     func testLaunchToUsableLibrary() throws {
         let app = try perfApp()
         app.launch()   // first launch fills the library
-        XCTAssertTrue(app.staticTexts["Patchwork"].waitForExistence(timeout: 60))
+        XCTAssertTrue(app.staticTexts["Keepsake"].waitForExistence(timeout: 60))
         app.terminate()
         measure(metrics: [XCTApplicationLaunchMetric(waitUntilResponsive: true)]) { app.launch() }
     }
@@ -24,7 +24,7 @@ final class ScrollPerformanceTests: XCTestCase {
     func testScrollingFiveThousandSaves() throws {
         let app = try perfApp()
         app.launch()
-        XCTAssertTrue(app.staticTexts["Patchwork"].waitForExistence(timeout: 60))
+        XCTAssertTrue(app.staticTexts["Keepsake"].waitForExistence(timeout: 60))
         let start = Date()
         app.tabBars.buttons["Library"].tap()
         XCTAssertTrue(app.staticTexts["5,000 saves"].waitForExistence(timeout: 60))

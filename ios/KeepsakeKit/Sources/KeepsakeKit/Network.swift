@@ -1,9 +1,9 @@
 import Foundation
 
-/// The only network Patchwork's shared code can reach on Apple devices (replica/m3/decisions.md D22).
+/// The only network Keepsake's shared code can reach on Apple devices (replica/m3/decisions.md D22).
 /// Every request is checked against an allowlist built from the person's settings at that moment:
 /// their AI provider's host while Optional AI is on and a key is set, and each Lookup they turned on.
-/// Nothing else is reachable: no Patchwork server, no analytics. Requests carry no cookies and nothing is cached.
+/// Nothing else is reachable: no Keepsake server, no analytics. Requests carry no cookies and nothing is cached.
 public enum NetworkPolicy {
     /// Lookups (lookups.js LOOKUP_SOURCES) and the hosts their requests go to.
     public static let lookupHosts: [String: String] = [

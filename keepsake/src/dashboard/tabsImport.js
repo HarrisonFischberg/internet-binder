@@ -59,12 +59,12 @@ function instructions(ctx, page) {
   return UI.section('Import from open tabs', 'Read every tab in this browser window and offer to save anything that looks like a product, filed into the collection it best matches.', [
     el('div', { class: 'steps' }, [
       stepNode(1, 'Open the tabs you want', 'Have the product pages you want to save open as tabs in this browser window — any number, any sites.'),
-      stepNode(2, 'Scan this window', 'Patchwork reads the title, price and image on each tab, one at a time, without switching tabs or sending anything anywhere.'),
+      stepNode(2, 'Scan this window', 'Keepsake reads the title, price and image on each tab, one at a time, without switching tabs or sending anything anywhere.'),
       stepNode(3, 'Review here', 'Deselect anything that isn’t a product, adjust collections, and import.'),
     ]),
     scan.error ? el('div', { class: 'notice notice-danger' }, [scan.error]) : null,
     el('div', { class: 'prose' }, [
-      el('p', {}, [el('strong', {}, ['What Patchwork reads: ']), 'the title, price, image and page text of every readable tab in this window, right now. ', el('strong', {}, ['What it never reads: ']), 'your logins, cookies, form fields, or anything you haven’t got open as a tab.']),
+      el('p', {}, [el('strong', {}, ['What Keepsake reads: ']), 'the title, price, image and page text of every readable tab in this window, right now. ', el('strong', {}, ['What it never reads: ']), 'your logins, cookies, form fields, or anything you haven’t got open as a tab.']),
       el('p', {}, ['This needs one-time permission to read other tabs — Chrome will ask you to confirm. You can revoke it any time from Settings → On-page save buttons or chrome://extensions.']),
     ]),
     el('div', { class: 'actions-row' }, [el('button', { type: 'button', class: 'btn btn-primary', onClick: () => startScan(ctx, page) }, ['Scan this window’s tabs'])]),
@@ -92,7 +92,7 @@ async function startScan(ctx, page) {
   if (!(await hasAllSitesAccess())) {
     const granted = await requestAllSitesAccess();
     if (!granted) {
-      UI.toast('Patchwork needs permission to read other tabs to do this.', { kind: 'danger', duration: 6000 });
+      UI.toast('Keepsake needs permission to read other tabs to do this.', { kind: 'danger', duration: 6000 });
       return;
     }
   }

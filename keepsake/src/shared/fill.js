@@ -1,4 +1,4 @@
-// Patchwork's after-save work, shared by the Chrome extension's background worker and the iOS app
+// Keepsake's after-save work, shared by the Chrome extension's background worker and the iOS app
 // (through JavaScriptCore): filling in a Lifestyle save (Optional AI, then the Lookups you turned on)
 // and the optional AI tidy of a new save. The caller supplies the network (`fetchFn`), which Lookups are
 // allowed (`allowed`), and the pace for OpenStreetMap (`waitTurn`, at most one request a second).

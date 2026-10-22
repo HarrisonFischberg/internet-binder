@@ -128,8 +128,8 @@ struct LatestWidgetView: View {
                 Text(latest.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(3)
                 if !latest.fact.isEmpty { Text(latest.fact).font(.caption2).foregroundStyle(t.inkMuted).lineLimit(1) }
             } else {
-                Text("Patchwork").font(KSFont.name(.headline)).foregroundStyle(t.ink)
-                Text("Share something to Patchwork and it shows up here.").font(.caption).foregroundStyle(t.inkMuted)
+                Text("Keepsake").font(KSFont.name(.headline)).foregroundStyle(t.ink)
+                Text("Share something to Keepsake and it shows up here.").font(.caption).foregroundStyle(t.inkMuted)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
