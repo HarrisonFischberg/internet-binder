@@ -46,9 +46,10 @@ struct SplitRootView: View {
                 }
             }
             .navigationTitle("Internet Binder")
+            // At the foot of the sidebar: beside them the two-word name truncated to "Internet Bin…".
             .toolbar {
-                ToolbarItem { Button("Appearance", systemImage: "paintpalette") { appearance = true } }
-                ToolbarItem { Button("Settings", systemImage: "gearshape") { settings = true }.keyboardShortcut(",", modifiers: .command) }
+                ToolbarItem(placement: .bottomBar) { Button("Appearance", systemImage: "paintpalette") { appearance = true } }
+                ToolbarItem(placement: .bottomBar) { Button("Settings", systemImage: "gearshape") { settings = true }.keyboardShortcut(",", modifiers: .command) }
             }
         } detail: {
             Stack(name: "split-\(String(describing: section))") { zoom in

@@ -150,7 +150,7 @@ struct HomeScreen: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.reviewCount == 1 ? "1 save needs a collection" : "\(model.reviewCount) saves need a collection")
                         .font(t.style == .pantry ? KSFont.name(.headline) : .headline).foregroundStyle(ink)
-                    Text("One tap each, and Internet Binder learns.").font(.subheadline.weight(t.style == .pantry ? .semibold : .regular)).foregroundStyle(ink)
+                    Text("One tap each, and it learns.").font(.subheadline.weight(t.style == .pantry ? .semibold : .regular)).foregroundStyle(ink)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.body.weight(.bold)).foregroundStyle(ink)
