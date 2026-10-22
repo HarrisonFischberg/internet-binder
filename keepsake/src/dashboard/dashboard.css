@@ -3617,6 +3617,17 @@ a.watch-service:hover {
   text-decoration: underline;
 }
 
+.watch-service svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.watch-services li,
+.watch-service {
+  white-space: nowrap;
+}
+
 .watch-how {
   font: var(--t-caption);
   color: var(--c-text-muted);
