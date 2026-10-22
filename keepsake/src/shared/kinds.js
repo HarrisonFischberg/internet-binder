@@ -1002,6 +1002,20 @@ const draftedOf = (kind, details) => {
 const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 // Where looked-up details came from (OpenStreetMap, Wikidata, Open Library, or your AI provider), with a link.
 const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI'];
+// Where a film or show streams: [{ service, how: 'subscription' | 'free' | 'rent' | 'buy' | '', url }].
+const WATCH_HOW = ['subscription', 'free', 'rent', 'buy'];
+function watchOf(v) {
+  const out = [];
+  for (const w of Array.isArray(v) ? v.slice(0, 12) : []) {
+    if (!w || typeof w !== 'object') continue;
+    const service = clean(w.service, 40);
+    if (!service || out.some((x) => x.service.toLowerCase() === service.toLowerCase())) continue;
+    const url = (() => { try { const u = new URL(String(w.url || '')); return u.protocol === 'https:' ? u.href.slice(0, 1000) : ''; } catch { return ''; } })();
+    out.push({ service, how: WATCH_HOW.includes(w.how) ? w.how : '', url });
+  }
+  return out.slice(0, 8);
+}
+
 function cleanLookup(v) {
   if (!v || typeof v !== 'object' || !LOOKUP_SOURCES.includes(v.source)) return undefined;
   const url = typeof v.url === 'string' && /^https:\/\//.test(v.url) ? v.url.slice(0, 300) : '';
@@ -1080,10 +1094,20 @@ export function sanitizeDetails(kind, details) {
   if (kind === 'media' || kind === 'book') {
     const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) <= max && v !== '' && v !== null ? Math.round(Number(v)) : null);
     const year = num(details.year, 2200);
-    const base = { year: year && year >= 1800 ? year : null, genres: list(details.genres, 4, 30), source: details.source === 'page' ? 'page' : 'you',
-      ...(cleanLookup(details.lookup) ? { lookup: cleanLookup(details.lookup) } : {}) };
+    const base = { year: year && year >= 1800 ? year : null, genres: list(details.genres, 4, 30), source: ['page', 'ai'].includes(details.source) ? details.source : 'you',
+      ...(cleanLookup(details.lookup) ? { lookup: cleanLookup(details.lookup) } : {}),
+      // What it's about, in your AI provider's words (understand.js readTitle).
+      ...(clean(details.summary, 800) ? { summary: clean(details.summary, 800) } : {}) };
     if (kind === 'media') {
-      return { format: details.format === 'series' ? 'series' : 'film', ...base, director: clean(details.director, 160), runtimeMinutes: num(details.runtimeMinutes, 2000), seasons: num(details.seasons, 200) };
+      const series = details.format === 'series';
+      const endYear = num(details.endYear, 2200);
+      const watch = watchOf(details.watch);
+      return { format: series ? 'series' : 'film', ...base, director: clean(details.director, 160), runtimeMinutes: num(details.runtimeMinutes, 2000), seasons: num(details.seasons, 200),
+        ...(series && num(details.episodes, 20000) ? { episodes: num(details.episodes, 20000) } : {}),
+        ...(series && endYear && endYear >= (year || 1800) ? { endYear } : {}),
+        ...(list(details.cast, 4, 60).length ? { cast: list(details.cast, 4, 60) } : {}),
+        // Where to watch it, as your provider's web search found it on watchCheckedOn, for watchRegion.
+        ...(watch.length ? { watch, watchRegion: /^[A-Z]{2}$/.test(String(details.watchRegion || '')) ? details.watchRegion : '', watchCheckedOn: DAY_ONLY.test(details.watchCheckedOn || '') ? details.watchCheckedOn : '' } : {}) };
     }
     const isbn = String(details.isbn || '').replace(/[^\dXx]/g, '');
     return { author: clean(details.author, 240), ...base, pages: num(details.pages, 20000), isbn: /^(?:\d{9}[\dXx]|\d{13})$/.test(isbn) ? isbn.toUpperCase() : '' };

@@ -1584,12 +1584,29 @@ function shelfFacts(item) {
   const series = d.format === 'series';
   return [
     ['Format', series ? 'TV series' : 'Film'],
-    d.year ? [series ? 'First aired' : 'Year', String(d.year)] : null,
+    d.year ? [series ? 'Aired' : 'Year', series && d.endYear && d.endYear !== d.year ? `${d.year}–${d.endYear}` : String(d.year)] : null,
     d.director ? [series ? 'Created by' : 'Directed by', d.director] : null,
+    d.cast?.length ? ['Starring', d.cast.join(', ')] : null,
     !series && d.runtimeMinutes ? ['Runtime', formatMinutes(d.runtimeMinutes)] : null,
-    series && d.seasons ? ['Seasons', String(d.seasons)] : null,
+    series && d.seasons ? ['Seasons', d.episodes ? `${d.seasons} · ${pluralize(d.episodes, 'episode')}` : String(d.seasons)] : null,
     d.genres?.length ? ['Genre', d.genres.join(', ')] : null,
   ];
+}
+
+const WATCH_HOW = { subscription: 'Subscription', free: 'Free', rent: 'Rent', buy: 'Buy' };
+
+// Where a film or show streams, as your AI provider's web search found it on the day it looked.
+function watchList(d) {
+  if (!d.watch?.length) return null;
+  const when = d.watchCheckedOn ? formatDate(`${d.watchCheckedOn}T12:00:00`) : '';
+  return el('section', { class: 'watch-list', 'aria-label': 'Where to watch' }, [
+    el('h3', { class: 'watch-title' }, ['Where to watch']),
+    el('ul', { class: 'watch-services' }, d.watch.map((w) => el('li', {}, [
+      w.url ? el('a', { class: 'watch-service', href: w.url, target: '_blank', rel: 'noopener noreferrer' }, [w.service, UI.externalIcon()]) : el('span', { class: 'watch-service' }, [w.service]),
+      w.how ? el('span', { class: 'watch-how' }, [WATCH_HOW[w.how]]) : null,
+    ]))),
+    el('p', { class: 'lookup-src' }, [['Found by your AI provider', d.watchRegion ? `in ${d.watchRegion}` : '', when ? `on ${when}` : ''].filter(Boolean).join(' '), '. Run AI again to check.']),
+  ]);
 }
 
 async function openShelfItem(id) {
@@ -1610,7 +1627,9 @@ async function openShelfItem(id) {
       el('h2', { class: 'recipe-title' }, [item.title]),
       facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
       lookupLink(item.details || {}),
-      item.description ? el('p', { class: 'media-summary' }, [cut(item.description, 600)]) : null,
+      item.details?.summary ? el('p', { class: 'media-summary' }, [el('span', { class: 'pill' }, ['AI summary']), ' ', item.details.summary]) : null,
+      item.description && !item.details?.summary ? el('p', { class: 'media-summary' }, [cut(item.description, 600)]) : null,
+      kind === 'media' ? watchList(item.details || {}) : null,
       item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
       done ? el('span', { class: 'badge' }, [verb]) : null,
     ]),

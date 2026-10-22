@@ -327,10 +327,8 @@
         }
         if (r && K.kinds.hasOwnView(r.kind)) {
           report.checked++;
-          if (r.changed) {
-            changed.add(it.id);
-            report.filed.push({ id: it.id, collection: K.kinds.kindInfo(r.kind).plural });
-          }
+          if (r.changed) changed.add(it.id);
+          if (r.moved) report.filed.push({ id: it.id, collection: K.kinds.kindInfo(r.kind).plural });
         } else {
           // Something to buy: your provider already named it from its picture and shop page (understandProduct);
           // the check below only files it and confirms a price.

@@ -611,3 +611,96 @@ export async function testConnection(settings, apiKey) {
   const raw = await callProvider(cfg, apiKey, { system: 'Reply with the single word OK.', userText: 'Connection test.', maxTokens: 5 });
   return String(raw || '').trim().slice(0, 40);
 }
+
+// --- Understand a book, film or show (what it is about, its cover, where to watch it) -------------------
+// For a save that is a book, film or TV show: the provider searches the web for the title, writes a short
+// summary in its own words, fills in the facts (author, seasons, cast…), names one page about it that shows
+// its cover or poster (read here for the picture), and for a film or show where it streams in your
+// country. Every link is checked against the search results (urlVerified); a service with no checked
+// source is dropped. Applied by src/shared/understand.js readTitle.
+const TITLE_SYSTEM = `You fill in a card for a book, film or TV show a person saved in their Internet Binder app.
+Work out exactly which title it is from what they saved (title, page, caption, already known facts).
+SEARCH
+Return ONLY JSON: {"kind":"book|media","title":"its official title","format":"film|series|","year":number|null,"endYear":number|null,"author":"","director":"director, or a show's creator","cast":["up to 4 main actors"],"seasons":number|null,"episodes":number|null,"runtimeMinutes":number|null,"pages":number|null,"genres":["up to 3"],"summary":"2-3 plain sentences in your own words: what it is about, no spoilers","page":"","watch":[{"service":"Netflix","how":"subscription|free|rent|buy","url":""}],"watchSource":"","confidence":0-1,"reason":"one short sentence"}
+Rules:
+- kind "media" is a film or TV show; format "series" for a TV show (seasons and episodes count what has aired so far; endYear only if it has ended).
+- Leave a fact empty or null when you are not sure; never guess numbers.
+- page: the exact address, from your search results, of one page about this title that shows its cover or poster (Wikipedia, Open Library, Goodreads, IMDb, TMDB, the publisher or studio).
+- watch: films and shows only, for the country given; leave it empty for a book. Only services a page in your search results says it is on now (JustWatch, Reelgood, the service's own page). url is that title's page on the service, only when it appeared in your search results. watchSource is the address of the page that told you.
+- confidence is how sure you are which title it is (0.9+ only when title and year or author clearly match).`;
+
+export async function understandTitleWithAI(input, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  if (!apiKey) throw new Error('Add your API key in Settings → Optional AI first.');
+  const cut = (v, n) => String(v || '').slice(0, n);
+  const text = [
+    `Saved as: ${input.kind === 'book' ? 'a book' : 'a film or TV show'}`,
+    `Title: ${cut(input.title, 200)}`,
+    input.caption ? `Caption: ${cut(input.caption, 1500)}` : '',
+    input.description ? `Description: ${cut(input.description, 1200)}` : '',
+    input.site ? `From: ${cut(input.site, 120)}` : '',
+    input.url ? `Link: ${cut(input.url, 300)}` : '',
+    input.known ? `Already known: ${cut(JSON.stringify(input.known), 1200)}` : '',
+    input.kind === 'book' ? '' : `Country for where to watch: ${cut(input.region || 'US', 2)}`,
+    ...(input.pages || []).slice(0, 2).map((pg) => `Linked page ${cut(pg.url, 300)}:\n${cut(pg.text, 2500)}`),
+  ].filter(Boolean).join('\n');
+  const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
+  let parsed;
+  let seen = null;
+  if (!supportsWebLookup(settings)) {
+    // A custom endpoint has no search tool: what it knows, and no links.
+    const system = TITLE_SYSTEM.replace(/SEARCH\n/, 'You cannot search the web: leave page and watch empty.\n');
+    parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system, userText: text, imageDataUrl: image, maxTokens: 900 }));
+  } else {
+    const system = TITLE_SYSTEM.replace('SEARCH\n', 'Search the web (a few searches at most) for it: a page about it, and for a film or show where it streams.\n');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90000);
+    try {
+      const opts = { system, maxTokens: 1600, searches: 4 };
+      const out = cfg.provider === 'anthropic' ? await findViaAnthropic(cfg, apiKey, text, image, controller, opts) : await findViaOpenAI(cfg, apiKey, text, image, controller, opts);
+      parsed = parseJsonBlock(out.text);
+      seen = out.seen;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') throw new Error('The provider didn’t return a usable answer.');
+  return titleAnswer(parsed, seen);
+}
+
+function titleAnswer(p, seen) {
+  const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) || Number(v) <= 0 ? null : Math.round(Number(v)));
+  const strings = (v, n, each) => (Array.isArray(v) ? v : []).map((x) => cut(x, each)).filter(Boolean).slice(0, n);
+  const checked = (u) => (seen && urlVerified(cut(u, 1000), seen) ? cut(u, 1000) : '');
+  const kind = p.kind === 'book' ? 'book' : 'media';
+  // Where to watch, only when the page that said so was in the search results.
+  const watch = kind === 'media' && checked(p.watchSource)
+    ? (Array.isArray(p.watch) ? p.watch : []).filter((w) => w && typeof w === 'object' && cut(w.service, 40)).slice(0, 8)
+      .map((w) => ({ service: cut(w.service, 40), how: ['subscription', 'free', 'rent', 'buy'].includes(w.how) ? w.how : '', url: checked(w.url) }))
+    : [];
+  return {
+    kind,
+    title: cut(p.title, 200),
+    details: {
+      format: p.format === 'series' ? 'series' : p.format === 'film' ? 'film' : '',
+      year: num(p.year),
+      endYear: num(p.endYear),
+      author: cut(p.author, 240),
+      director: cut(p.director, 160),
+      cast: strings(p.cast, 4, 60),
+      seasons: num(p.seasons),
+      episodes: num(p.episodes),
+      runtimeMinutes: num(p.runtimeMinutes),
+      pages: num(p.pages),
+      genres: strings(p.genres, 3, 30),
+      summary: cut(p.summary, 800),
+      watch,
+    },
+    page: checked(p.page),
+    watchSource: watch.length ? checked(p.watchSource) : '',
+    confidence: Math.max(0, Math.min(1, Number(p.confidence) || 0)),
+    reason: cut(p.reason, 200),
+    searched: !!seen,
+  };
+}

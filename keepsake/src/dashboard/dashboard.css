@@ -3574,6 +3574,65 @@ button.home-attention {
   max-width: 62ch;
 }
 
+.watch-list {
+  margin-top: 16px;
+}
+
+.watch-title {
+  font: var(--t-footnote);
+  font-weight: 600;
+  color: var(--c-text);
+  margin: 0 0 8px;
+}
+
+.watch-services {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.watch-services li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-pill, 999px);
+  background: var(--c-surface-2);
+}
+
+.watch-service {
+  font: var(--t-body-web);
+  font-weight: 600;
+  color: var(--c-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+a.watch-service:hover {
+  text-decoration: underline;
+}
+
+.watch-service svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.watch-services li,
+.watch-service {
+  white-space: nowrap;
+}
+
+.watch-how {
+  font: var(--t-caption);
+  color: var(--c-text-muted);
+}
+
 /* Kinds: a collapsible group in the menu */
 .nav-group-toggle {
   width: 100%;

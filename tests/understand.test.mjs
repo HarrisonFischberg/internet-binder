@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct } from '../keepsake/src/shared/understand.js';
-import { understandWithAI, understandProductWithAI } from '../keepsake/src/ai/provider.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture } from '../keepsake/src/shared/understand.js';
+import { understandWithAI, understandProductWithAI, understandTitleWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
 
@@ -226,4 +226,79 @@ test('understandProductWithAI: a link the search never returned is dropped', asy
   const r = await understandProductWithAI({ title: 't', image: '' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk');
   assert.equal(r.listing, null);
   assert.equal(r.name, 'Bathhaus Pole Shower Caddy');
+});
+
+// --- A book, film or show: what it's about, its cover or poster, where to watch it ----------------------
+
+const walden = () => ({ id: 'w1', type: 'link', kind: 'book', title: 'Walden', url: 'https://openlibrary.org/works/OL52953W/Walden', host: 'openlibrary.org', details: { author: 'Henry David Thoreau', year: 1854, source: 'page' }, userFields: [] });
+const titleAi = (extra = {}) => ({ kind: 'book', title: 'Walden', confidence: 0.95, reason: 'Thoreau\'s book', region: '', page: 'https://en.wikipedia.org/wiki/Walden',
+  details: { format: '', year: 1854, author: 'Someone Else', pages: 352, genres: ['Memoir'], summary: 'Thoreau lives two years in a cabin by Walden Pond.', watch: [], seasons: 3, cast: ['x'] }, ...extra });
+
+test('planTitle: a book gets its summary, pages and cover; what the page said stays', () => {
+  const { patch, changes } = planTitle(walden(), titleAi(), 'https://covers.openlibrary.org/b/id/1-L.jpg', { on: '2026-10-22' });
+  assert.equal(patch.details.author, 'Henry David Thoreau', 'the page\'s author stays');
+  assert.deepEqual([patch.details.pages, patch.details.summary.slice(0, 7), patch.details.source], [352, 'Thoreau', 'page']);
+  assert.equal(patch.details.seasons, undefined, 'no show fields on a book');
+  assert.equal(patch.image, 'https://covers.openlibrary.org/b/id/1-L.jpg');
+  assert.deepEqual(changes.map((c) => c.field), ['book details', 'picture']);
+  assert.equal(patch.title, undefined, 'a page\'s own title stays');
+});
+
+test('planTitle: a show gets seasons and where to watch, dated; unsure answers and pictures you have change nothing', () => {
+  const show = { id: 's1', type: 'instagram', kind: 'media', title: 'omg finally watching this 😭', image: 'https://cdn.example/post.jpg', details: { format: 'film', source: 'page' }, userFields: [] };
+  const ai = titleAi({ kind: 'media', title: 'Severance', region: 'US', details: { format: 'series', year: 2022, seasons: 2, episodes: 19, cast: ['Adam Scott'], summary: 'Office workers split their memories.', watch: [{ service: 'Apple TV+', how: 'subscription', url: 'https://tv.apple.com/show/severance' }], pages: 400 } });
+  const { patch } = planTitle(show, ai, 'https://img.example/poster.jpg', { on: '2026-10-22' });
+  assert.deepEqual([patch.details.format, patch.details.seasons, patch.details.episodes, patch.details.pages], ['series', 2, 19, undefined]);
+  assert.deepEqual([patch.details.watch[0].service, patch.details.watchRegion, patch.details.watchCheckedOn], ['Apple TV+', 'US', '2026-10-22']);
+  assert.equal(patch.image, undefined, 'the post\'s own picture stays');
+  assert.equal(patch.title, 'Severance', 'a post is renamed to the show');
+  assert.deepEqual(planTitle(show, { ...ai, confidence: 0.3 }, '').patch, {});
+  assert.equal(planTitle({ ...show, userFields: ['title'] }, ai, '').patch.title, undefined);
+});
+
+test('titlePicture: the schema.org or Open Graph cover, never a logo', () => {
+  assert.equal(titlePicture('<meta property="og:image" content="/b/id/1-L.jpg">', 'https://openlibrary.org/works/OL1W'), 'https://openlibrary.org/b/id/1-L.jpg');
+  assert.equal(titlePicture('<script type="application/ld+json">{"@type":"Movie","image":"https://img.example/p.jpg"}</script><meta property="og:image" content="https://img.example/still.jpg">'), 'https://img.example/p.jpg');
+  assert.equal(titlePicture('<meta property="og:image" content="https://site.example/static/logo.png">'), '');
+});
+
+test('understandTitleWithAI: links and services the search never showed are dropped', async () => {
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: [
+    { type: 'web_search_tool_result', content: [{ url: 'https://en.wikipedia.org/wiki/Severance_(TV_series)' }, { url: 'https://www.justwatch.com/us/tv-show/severance' }] },
+    { type: 'text', text: JSON.stringify({ kind: 'media', title: 'Severance', format: 'series', seasons: '2', page: 'https://en.wikipedia.org/wiki/Severance_(TV_series)', watchSource: 'https://www.justwatch.com/us/tv-show/severance',
+      watch: [{ service: 'Apple TV+', how: 'subscription', url: 'https://tv.apple.com/made-up' }], confidence: 0.9 }) },
+  ] }) });
+  const r = await understandTitleWithAI({ kind: 'media', title: 'Severance', region: 'US' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk');
+  assert.deepEqual([r.details.seasons, r.page, r.details.watch[0].service, r.details.watch[0].url], [2, 'https://en.wikipedia.org/wiki/Severance_(TV_series)', 'Apple TV+', '']);
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ kind: 'media', title: 'X', watchSource: 'https://made-up.example', watch: [{ service: 'Netflix' }], confidence: 0.9 }) }] }) });
+  assert.deepEqual((await understandTitleWithAI({ kind: 'media', title: 'X' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk')).details.watch, [], 'no checked source, no services');
+});
+
+test('understandItem: a book saved from Open Library is searched, filled in and given its cover (Walden)', async () => {
+  const kv = {};
+  const store = createStore({ get: async (k) => Object.fromEntries((Array.isArray(k) ? k : [k]).filter((x) => x in kv).map((x) => [x, kv[x]])), set: async (o) => Object.assign(kv, o), remove: async () => {}, clear: async () => {}, onChanged: () => () => {} }, memoryRecordBackend());
+  await store.init();
+  await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await store.setSecret('aiApiKey', 'sk');
+  const { id: _, ...w } = walden();
+  const it = await store.addItem(w);
+  const bodies = [];
+  globalThis.fetch = async (url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ content: [
+      { type: 'web_search_tool_result', content: [{ url: 'https://en.wikipedia.org/wiki/Walden' }] },
+      { type: 'text', text: JSON.stringify({ kind: 'book', title: 'Walden', year: 1854, pages: 352, genres: ['Memoir'], summary: 'Thoreau lives two years in a cabin by Walden Pond.', page: 'https://en.wikipedia.org/wiki/Walden', confidence: 0.95 }) },
+    ] }) };
+  };
+  const read = [];
+  const r = await understandItem(store, it.id, { force: true, runId: 'w' }, { fetchShopPage: async (u) => { read.push(u); return '<meta property="og:image" content="https://covers.openlibrary.org/b/id/1-L.jpg">'; }, region: 'US' });
+  assert.deepEqual([r.kind, r.changed, r.moved], ['book', true, false]);
+  assert.equal(bodies.length, 1, 'a book from a book site needs no first read');
+  assert.ok(bodies[0].tools, 'the title read searches the web');
+  assert.deepEqual(read, ['https://openlibrary.org/works/OL52953W/Walden'], 'the cover comes from the save\'s own page first');
+  const saved = await store.getItem(it.id);
+  assert.deepEqual([saved.image, saved.details.pages, saved.details.author], ['https://covers.openlibrary.org/b/id/1-L.jpg', 352, 'Henry David Thoreau']);
+  assert.match(saved.details.summary, /Walden Pond/);
+  const log = (await store.getAiLog()).at(-1);
+  assert.equal(log.before.image, '', 'Undo takes the cover off again');
 });

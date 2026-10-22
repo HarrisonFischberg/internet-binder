@@ -147,6 +147,44 @@ final class ScreenshotTests: XCTestCase {
         XCUIDevice.shared.appearance = .light
     }
 
+    /// A book and a show after AI read them: the cover, the AI summary, the facts and Where to watch.
+    /// Pantry Pop, light and dark, seeded with the demo library plus Walden and Severance.
+    func testShelfScreens() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-shelf-demo.json").standardized.path
+        let themes = ProcessInfo.processInfo.environment["KEEPSAKE_SHOT_THEMES"]?.split(separator: ",").map(String.init) ?? ["pantry"]
+        for theme in themes {
+            for mode in [XCUIDevice.Appearance.light, .dark] {
+                XCUIDevice.shared.appearance = mode
+                let tag = "\(theme)-\(mode == .dark ? "dark" : "light")"
+                let app = XCUIApplication()
+                app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+                app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-ksMode", mode == .dark ? "dark" : "light"]
+                // Each save from a fresh launch: Library, then its search (the kind stacks scroll sideways).
+                for (title, name) in [("Walden", "book"), ("Severance", "show")] {
+                    app.launch()
+                    XCTAssertTrue(app.tabBars.buttons["Library"].waitForExistence(timeout: 10))
+                    app.tabBars.buttons["Library"].tap()
+                    let search = app.textFields.firstMatch
+                    XCTAssertTrue(search.waitForExistence(timeout: 5))
+                    search.tap()
+                    search.typeText(title)
+                    let save = card(app, title)
+                    XCTAssertTrue(save.waitForExistence(timeout: 5))
+                    save.tap()
+                    XCTAssertTrue(app.staticTexts["AI summary"].waitForExistence(timeout: 5))
+                    sleep(2)   // the cover loads
+                    try shoot(app, folder, "\(tag)-\(name)")
+                    app.swipeUp()
+                    try shoot(app, folder, "\(tag)-\(name)-scrolled")
+                    app.terminate()
+                }
+            }
+        }
+        XCUIDevice.shared.appearance = .light
+    }
+
     /// The Share Extension's card from Safari: the two libraries, then one library's groups. The extension
     /// writes to the real (App Group) library, so the app first fills it from the demo if it's empty.
     func testShareCard() throws {
