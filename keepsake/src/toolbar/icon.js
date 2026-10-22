@@ -1,5 +1,5 @@
 // Toolbar icon: the style icon picked in Settings → Appearance, in the version that suits the
-// browser's light or dark theme. The manifest ships the light Pantry Pop icon; extension pages
+// browser's light or dark theme. The manifest ships the light four-scraps icon (style id pantry); extension pages
 // (which can read prefers-color-scheme, unlike the service worker) report the theme and the choice, and
 // the last ones seen are kept so the worker can restore them after a browser restart.
 
@@ -12,7 +12,7 @@ let choice = 'pantry';
 let chosen = false; // a page has said which icon to use
 
 // Path to one icon file. `icon` is a style id (see ICONS in src/shared/storage.js); anything else, such
-// as the felt pocket from 1.5 betas, gets Pantry Pop.
+// as the felt pocket from 1.5 betas, gets the app's own icon.
 export function iconPath(icon, mode, size) {
   const id = STYLE_IDS.includes(icon) ? icon : 'pantry';
   return `/icons/styles/${id}${mode === 'dark' ? '/dark' : ''}/icon${size}.png`;

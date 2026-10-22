@@ -1,8 +1,8 @@
 //
 //  ViewController.swift
-//  Keepsake
+//  Internet Binder
 //
-//  The Mac app's one window: whether Keepsake is on in Safari, how to turn it on, and the app icon.
+//  The Mac app's one window: whether Internet Binder is on in Safari, how to turn it on, and the app icon.
 //  Drawn in Pantry Pop (cream shelf, ink outlines, hard shadows), natively, with Safari's own settings
 //  one button away.
 //
@@ -76,7 +76,7 @@ struct ContainerView: View {
                     .rotationEffect(.degrees(-4))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Keepsake").font(Pantry.title(38)).foregroundStyle(Pantry.ink)
+                    Text("Internet Binder").font(Pantry.title(38)).foregroundStyle(Pantry.ink)
                         .accessibilityAddTraits(.isHeader)
                     statusSticker
                 }
@@ -105,9 +105,9 @@ struct ContainerView: View {
     private var message: String {
         switch status.state {
         case .checking: "Checking Safari…"
-        case .on: "Keepsake is ready. Click its button in Safari's toolbar, or press ⌥⇧K, to save the page you're on. Everything stays on this Mac."
-        case .off: "Keepsake is installed but turned off in Safari."
-        case .unknown: "Keepsake couldn't tell whether Safari has it turned on. Open Safari Settings and look under Extensions."
+        case .on: "Internet Binder is ready. Click its button in Safari's toolbar, or press ⌥⇧K, to save the page you're on. Everything stays on this Mac."
+        case .off: "Internet Binder is installed but turned off in Safari."
+        case .unknown: "Internet Binder couldn't tell whether Safari has it turned on. Open Safari Settings and look under Extensions."
         }
     }
 
@@ -126,14 +126,14 @@ struct ContainerView: View {
             .overlay(Capsule().strokeBorder(Pantry.onKind, lineWidth: 2))
             .compositingGroup()
             .shadow(color: Pantry.onKind, radius: 0, x: 2, y: 2)
-            .accessibilityLabel("Keepsake is \(text.lowercased())")
+            .accessibilityLabel("Internet Binder is \(text.lowercased())")
     }
 
     private var steps: some View {
         VStack(alignment: .leading, spacing: 10) {
             step(1, "Open Safari Settings")
-            step(2, "Choose Extensions, then turn on Keepsake")
-            step(3, "Save from Keepsake's button in the toolbar")
+            step(2, "Choose Extensions, then turn on Internet Binder")
+            step(3, "Save from Internet Binder's button in the toolbar")
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -154,7 +154,7 @@ struct ContainerView: View {
 }
 
 /// App icon: one per style. macOS keeps an app's icon in its bundle, so this changes the Dock icon
-/// while Keepsake is open; Finder and Launchpad keep Pantry Pop.
+/// while Internet Binder is open; Finder and Launchpad keep Pantry Pop.
 struct IconChooser: View {
     @State private var chosen = AppIcon.current
     var body: some View {
@@ -177,7 +177,7 @@ struct IconChooser: View {
                     .accessibilityAddTraits(chosen == icon ? .isSelected : [])
                 }
             }
-            Text("Shows in the Dock while Keepsake is open.").font(.system(.footnote, design: .rounded)).foregroundStyle(Pantry.muted)
+            Text("Shows in the Dock while Internet Binder is open.").font(.system(.footnote, design: .rounded)).foregroundStyle(Pantry.muted)
         }
     }
 }
@@ -188,16 +188,16 @@ enum AppIcon: String, CaseIterable, Identifiable {
     var asset: String { "Icon-\(rawValue)" }
     var label: String {
         switch self {
-        case .pantry: "Pantry Pop"; case .notebook: "Field Notebook"
+        case .pantry: "Internet Binder"; case .notebook: "Field Notebook"
         case .gallery: "Gallery"; case .atlas: "Night Atlas"; case .swiss: "Swiss Index"
         }
     }
-    /// Pantry Pop is the bundle's own icon; a saved "pocket" (now gone) lands on it too.
+    /// pantry is the bundle's own (four-scraps) icon; a saved "pocket" (now gone) lands on it too.
     static var current: AppIcon { AppIcon(rawValue: UserDefaults.standard.string(forKey: "appIcon") ?? "") ?? .pantry }
 
     @MainActor func apply() {
         UserDefaults.standard.set(rawValue, forKey: "appIcon")
-        // nil puts back the bundle's own icon (Pantry Pop).
+        // nil puts back the bundle's own icon.
         NSApplication.shared.applicationIconImage = self == .pantry ? nil : NSImage(named: asset)
     }
 }
@@ -228,7 +228,7 @@ enum Pantry {
     }
     static let registered: Bool = {
         guard let url = Bundle.main.builtInPlugInsURL?
-            .appendingPathComponent("Keepsake Extension.appex/Contents/Resources/fonts/BricolageGrotesque-400-800.woff2"),
+            .appendingPathComponent("Internet Binder Extension.appex/Contents/Resources/fonts/BricolageGrotesque-400-800.woff2"),
               FileManager.default.fileExists(atPath: url.path) else { return false }
         return CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
     }()

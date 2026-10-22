@@ -1,4 +1,4 @@
-// Keepsake page extraction. Injected on demand (toolbar click / context menu)
+// Internet Binder page extraction. Injected on demand (toolbar click / context menu)
 // into the active tab and returns a plain object describing the product on the
 // page. Runs in the isolated world; never sends anything anywhere itself.
 //

@@ -1,5 +1,5 @@
-// Keepsake Instagram post reader (tab fallback). Injected into a post/reel tab
-// that Keepsake opened in the background, only during "Read post details".
+// Internet Binder Instagram post reader (tab fallback). Injected into a post/reel tab
+// that Internet Binder opened in the background, only during "Read post details".
 // Collects meta tags and the embedded JSON blobs that describe the post and
 // returns them; parsing happens in the extension (src/instagram/post.js).
 // Reads nothing else: no cookies, storage, messages or other pages.

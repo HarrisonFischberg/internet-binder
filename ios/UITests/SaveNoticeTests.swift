@@ -26,7 +26,7 @@ final class SaveNoticeTests: XCTestCase {
         XCTAssertTrue(toggle.exists)
         for _ in 0..<8 where !version.exists { app.swipeUp() }
         XCTAssertTrue(version.waitForExistence(timeout: 3))
-        XCTAssertTrue(version.label.hasPrefix("Keepsake "), version.label)
+        XCTAssertTrue(version.label.hasPrefix("Internet Binder "), version.label)
         XCTAssertFalse(version.label.contains("0.1 "), "MARKETING_VERSION is still 0.1")
         shoot("settings-version")
     }

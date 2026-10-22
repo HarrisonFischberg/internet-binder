@@ -44,7 +44,7 @@ struct RootView: View {
             if UserDefaults.standard.bool(forKey: "noticeFirstSave") {
                 while model.saves.isEmpty { try? await Task.sleep(for: .milliseconds(200)) }
                 await SaveNotice.ask()
-                // Time for the test to send Keepsake to the background first.
+                // Time for the test to send Internet Binder to the background first.
                 try? await Task.sleep(for: .seconds(5))
                 let s = model.saves[0]
                 await SaveNotice.post(id: s.id, title: s.title, destination: KindStyle(s.kind).plural)
@@ -54,7 +54,7 @@ struct RootView: View {
             guard SaveNotice.enabled, ProcessInfo.processInfo.environment["KEEPSAKE_DB"] == nil else { return }
             await SaveNotice.ask()
         }
-        // A Keepsake export sent by AirDrop, or opened from Files with "Open in Keepsake": imported
+        // An Internet Binder export sent by AirDrop, or opened from Files with "Open in Internet Binder": imported
         // the way Settings → Import from Chrome does (merged; saves already here are skipped).
         .onOpenURL { url in
             guard url.isFileURL else { return }
@@ -233,7 +233,9 @@ struct ScreenHeader: View {
     @Environment(\.ks) private var t
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
+            // A one-word title shrinks to fit rather than breaking mid-word ("Patchw / ork" at the largest sizes).
             Text(title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                .lineLimit(title.contains(" ") ? nil : 1).minimumScaleFactor(0.5)
             if let subtitle { Text(subtitle).font(KSFont.note).foregroundStyle(t.inkMuted) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

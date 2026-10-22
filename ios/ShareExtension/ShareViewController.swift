@@ -72,7 +72,7 @@ final class ShareState {
                 phase = .duplicate
                 return
             }
-            guard let s = result.save else { phase = .failed("Keepsake couldn't read what was shared."); return }
+            guard let s = result.save else { phase = .failed("Internet Binder couldn't read what was shared."); return }
             save = s
             Haptic.saved()
             phase = .saved
@@ -138,7 +138,7 @@ final class ShareState {
         Task { _ = try? await library.put([save.id], in: value) }
     }
 
-    /// Not sure yet: it waits in Review, where Keepsake suggests a home later.
+    /// Not sure yet: it waits in Review, where Internet Binder suggests a home later.
     func toReview() {
         guard let save, let library, destination != Self.review else { shelf = nil; return }
         touched = true
@@ -382,7 +382,7 @@ struct ShareCard: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Where does it live?").font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                (Text(state.destination == ShareState.review ? "For now it's waiting in " : "Keepsake put it in ").foregroundStyle(t.inkMuted)
+                (Text(state.destination == ShareState.review ? "For now it's waiting in " : "Internet Binder put it in ").foregroundStyle(t.inkMuted)
                  + Text(state.destinationLabel).foregroundStyle(tint(state.destination)).fontWeight(.semibold))
                     .font(.subheadline)
                     .contentTransition(.opacity)
@@ -454,7 +454,7 @@ struct ShareCard: View {
                 Image(systemName: here ? "tray.full.fill" : "tray").font(.body.weight(.medium)).foregroundStyle(t.accent)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(here ? "Waiting in Review" : "Not sure? Put it in Review").font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
-                    Text("Keepsake suggests a home for it later.").font(.caption).foregroundStyle(t.inkMuted)
+                    Text("Internet Binder suggests a home for it later.").font(.caption).foregroundStyle(t.inkMuted)
                 }
                 Spacer(minLength: 0)
                 if here { Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(t.accent) }
@@ -535,12 +535,12 @@ struct ShareCard: View {
     // MARK: Review
 
     /// Not sure yet: Review as a third card, drawn like the two libraries, with a fan of what's already
-    /// waiting there. One tap files it; Keepsake suggests a home for it later.
+    /// waiting there. One tap files it; Internet Binder suggests a home for it later.
     private var reviewCard: some View {
         let here = state.destination == ShareState.review
         let n = state.waiting.count
         let others = n == 0 ? "Waiting here" : (n == 1 ? "Waiting here with 1 other" : "Waiting here with \(n) others")
-        let caption = here ? others : (n == 0 ? "Keepsake suggests a home later" : "\(n) waiting · Keepsake suggests a home later")
+        let caption = here ? others : (n == 0 ? "Internet Binder suggests a home later" : "\(n) waiting · Internet Binder suggests a home later")
         return Button { state.toReview() } label: {
             HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: 14) {
                 if !typeSize.isAccessibilitySize { CoverFan(state.waiting.saves, symbol: "tray", tint: t.accent, size: 46) }
