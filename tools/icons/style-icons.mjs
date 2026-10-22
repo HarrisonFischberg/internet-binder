@@ -5,7 +5,7 @@ export const STYLE_ICONS = ['pantry', 'notebook', 'gallery', 'atlas', 'swiss'];
 
 export const ICON_LABELS = {
   pocket: 'Felt pocket',
-  pantry: 'Keepsake', // the app's own icon (four-scraps art), shown with the other styles' icons
+  pantry: 'Internet Binder', // the app's own icon (binder with tabs), shown with the other styles' icons
   notebook: 'Field Notebook',
   gallery: 'Gallery',
   atlas: 'Night Atlas',
@@ -17,21 +17,24 @@ const bookmark = (x, y, size, attrs) =>
   `<path transform="translate(${x} ${y}) scale(${size / 24})" d="M6 3h12v18l-6-4-6 4z" ${attrs}/>`;
 
 const ICONS = {
-  // The app's own icon (four scraps, picked Oct 22 2026): four pastel scraps, the big one terracotta with a cream
-  // bookmark tag, tilted with an offset shadow. Toolbar sizes (small) sit straight, larger, with thicker lines.
+  // The app's own icon (Internet Binder, picked Oct 22 2026): a sky-blue binder with a dark spine and a cream
+  // bookmark tag, terracotta, butter and mint index tabs out of the right edge, tilted with an offset shadow.
+  // Toolbar sizes (small) sit straight, larger, with thicker lines.
   pantry(dark, small) {
     const ink = '#2A2420', cream = '#FFF7E8';
-    const T = 232, W = 560;
-    const tile = (attrs) => `<rect x="${T}" y="${T}" width="${W}" height="${W}" rx="150" ${attrs}/>`;
-    const scraps = [[0, 0, 330, 330, '#D9694A'], [330, 0, 230, 210, '#FFE4A0'], [330, 210, 230, 350, '#C7DDF6'], [0, 330, 330, 230, '#BFE6D3']]
-      .map(([x, y, w, h, fill]) => `<rect x="${T + x}" y="${T + y}" width="${w}" height="${h}" fill="${fill}" stroke="${ink}" stroke-width="${small ? 30 : 20}"/>`).join('');
-    const tagSize = small ? 250 : 190;
-    const tag = `<path transform="translate(${T + 165 - (small ? 0 : 10) - tagSize / 2} ${T + 175 - tagSize / 2}) scale(${tagSize / 24})" d="M6 3h12v18l-6-4-6 4z" fill="${cream}" stroke="${ink}" stroke-width="${(24 / tagSize) * 20}" stroke-linejoin="round"/>`;
-    const body = `<g clip-path="url(#qt)">${tile(`fill="${dark ? '#302D27' : cream}"`)}${scraps}</g>${tag}${tile(`fill="none" stroke="${ink}" stroke-width="${small ? 44 : 32}"`)}`;
+    const T = 232, W = 560, coverW = W - 70;
+    const tile = (attrs, w = W, rx = 150) => `<rect x="${T}" y="${T}" width="${w}" height="${W}" rx="${rx}" ${attrs}/>`;
+    const tabs = ['#D9694A', '#FFE4A0', '#BFE6D3'].map((fill, i) =>
+      `<rect x="${T + coverW - 40}" y="${T + 60 + i * 160}" width="${small ? 120 : 110}" height="${small ? 130 : 120}" rx="28" fill="${fill}" stroke="${ink}" stroke-width="${small ? 30 : 22}"/>`).join('');
+    const tagSize = small ? 300 : 240;
+    const tag = `<path transform="translate(${T + 290 - tagSize / 2} ${T + 260 - tagSize / 2}) scale(${tagSize / 24})" d="M6 3h12v18l-6-4-6 4z" fill="${cream}" stroke="${ink}" stroke-width="${(24 / tagSize) * 20}" stroke-linejoin="round"/>`;
+    const body = `${tabs}${tile(`fill="#9CC3EC" stroke="${ink}" stroke-width="${small ? 44 : 32}"`, coverW, 120)}` +
+      `<rect x="${T}" y="${T}" width="110" height="${W}" fill="${ink}" opacity=".18" clip-path="url(#cv)"/>` +
+      `<path d="M${T + 110} ${T + 20}V${T + W - 20}" stroke="${ink}" stroke-width="${small ? 24 : 16}"/>${tag}`;
     const framed = small
-      ? `<g transform="translate(512 512) scale(1.5) translate(-512 -512)">${body}</g>`
+      ? `<g transform="translate(512 512) scale(1.42) translate(-512 -512)">${body}</g>`
       : `<g transform="rotate(-6 512 512)"><g class="shadow" transform="translate(36 40)">${tile(`fill="${dark ? cream : ink}"`)}</g>${body}</g>`;
-    return `<defs><clipPath id="qt"><rect x="${T}" y="${T}" width="${W}" height="${W}" rx="150"/></clipPath></defs>
+    return `<defs><clipPath id="cv">${tile('', coverW, 120)}</clipPath></defs>
       <rect width="1024" height="1024" fill="${dark ? '#1B1A17' : cream}"/>${framed}`;
   },
 

@@ -1,4 +1,4 @@
-# Keepsake for iPhone and iPad
+# Internet Binder for iPhone and iPad
 
 Local-first, no account. Design and plan: `replica/m3/` (`PROMPT.md`, `progress.md`, `decisions.md`).
 

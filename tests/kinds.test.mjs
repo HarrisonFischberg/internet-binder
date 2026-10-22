@@ -176,7 +176,7 @@ test('workouts: exercise lines in the ways people write them', async () => {
   }
   for (const line of ['Rest 60s', '200 g flour', '2 x 400 g tins tomatoes', 'Sets: 3']) assert.equal(parseExerciseLine(line), null, line);
   assert.equal(formatExercise({ name: 'Plank', sets: 3, durationSeconds: 60, restSeconds: 30 }), 'Plank 3×1 min rest 30s');
-  assert.deepEqual(parseExerciseLine(formatExercise({ name: 'Squats', sets: 3, reps: 12 })), { name: 'Squats', sets: 3, reps: 12, durationSeconds: null, restSeconds: null }, 'what Keepsake writes, it reads back');
+  assert.deepEqual(parseExerciseLine(formatExercise({ name: 'Squats', sets: 3, reps: 12 })), { name: 'Squats', sets: 3, reps: 12, durationSeconds: null, restSeconds: null }, 'what Internet Binder writes, it reads back');
 });
 
 test('workouts: a caption with rounds and rest; recipe captions never become workouts', async () => {

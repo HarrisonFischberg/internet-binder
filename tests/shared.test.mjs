@@ -112,7 +112,7 @@ test('classify: threshold above the score sends to Review with a suggestion', ()
   assert.ok(r.suggested && r.suggested.collectionName);
 });
 
-test('classify: a user keyword wins and makes Keepsake at least 85% sure', () => {
+test('classify: a user keyword wins and makes Internet Binder at least 85% sure', () => {
   const gifts = makeCollection({ name: 'For Mum', keywords: ['scarf'] });
   const r = classify({ title: 'Cashmere scarf, grey' }, ctx([...starter(), gifts]));
   assert.equal(r.collectionId, gifts.id);

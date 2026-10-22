@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-/// Keepsake's local store on Apple devices: SQLite (GRDB, WAL) in the App Group container, shared by
+/// Internet Binder's local store on Apple devices: SQLite (GRDB, WAL) in the App Group container, shared by
 /// the app, the Share Extension and the widgets.
 ///
 /// Each record is kept exactly as the shared store wrote it (`body`, JSON), so a Chrome export comes

@@ -1,4 +1,4 @@
-// Keepsake categorization engine.
+// Internet Binder categorization engine.
 //
 // Public interface (stable — other modules only depend on these):
 //   classify(product, context)              -> Classification

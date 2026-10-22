@@ -1,20 +1,20 @@
-# Keepsake for iPhone and iPad: privacy (draft for review)
+# Internet Binder for iPhone and iPad: privacy (draft for review)
 
 Status: **draft**, to be merged into `keepsake/PRIVACY.md` (or published beside it) when the app ships.
 Everything here matches the Chrome extension's promises; the differences are the platform's.
 
-## What Keepsake stores, and where
-- Your saves, collections, goals, check-ins, learned sorting and settings: in Keepsake's storage on this
+## What Internet Binder stores, and where
+- Your saves, collections, goals, check-ins, learned sorting and settings: in Internet Binder's storage on this
   device (an App Group shared by the app, its Share Extension and its widgets). The same fields as
-  Chrome's (`PRIVACY.md`, "What Keepsake stores").
+  Chrome's (`PRIVACY.md`, "What Internet Binder stores").
 - Your AI key: in this device's Keychain, available after first unlock, never synced, never exported.
 - The AI change log: on this device, excluded from exports (as in Chrome).
 - A snapshot for widgets (active goals, your latest save's title): in the App Group.
 - Small copies (≤ 640 px) of your saves' pictures, made when a picture is first shown, so it stays if
   the site removes it: in the App Group. Not exported; erased with everything else.
 
-## When Keepsake uses the network
-Keepsake has no server, no account, no analytics and no advertising. It contacts:
+## When Internet Binder uses the network
+Internet Binder has no server, no account, no analytics and no advertising. It contacts:
 - **The sites your saves came from**, to show their pictures, as a web page would.
 - **Apple Maps** to draw maps of your places; **Directions** opens Apple Maps with the place's name and
   address (built from what's saved; nothing is looked up).
@@ -27,20 +27,20 @@ Keepsake has no server, no account, no analytics and no advertising. It contacts
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and
   covers load from Wikimedia Commons and `covers.openlibrary.org`.
-- **Instagram**, only when you share an Instagram post or reel into Keepsake: that post's public page
+- **Instagram**, only when you share an Instagram post or reel into Internet Binder: that post's public page
   on `www.instagram.com`, fetched once without cookies or your account, to save its caption, creator,
   date and picture (Chrome's "Read post details"). Settings → Instagram → Read posts you share turns it off.
 Any other request is refused by the app itself (an allowlist built from your settings).
 
-## Sharing into Keepsake
+## Sharing into Internet Binder
 When you share a screenshot or photo, its text is read on this device (Apple's Vision) and a small copy
 of the picture is kept with the save. Nothing is sent anywhere.
 
-When you share a page from Safari, Keepsake reads that page in Safari to save its title, picture and
+When you share a page from Safari, Internet Binder reads that page in Safari to save its title, picture and
 details (the same reader as Chrome's toolbar button). Nothing is sent anywhere.
 
 ## App Store privacy label (proposed)
-**Data Not Collected.** Keepsake's developer receives nothing. AI and Lookups requests go from your
+**Data Not Collected.** Internet Binder's developer receives nothing. AI and Lookups requests go from your
 device to services you turn on, under their policies; to confirm against Apple's definitions before
 submission.
 

@@ -619,7 +619,7 @@ test('Privacy lives in Settings as a dialog; the menu has no Privacy row; Trash 
   assert.equal(tools.at(-1), 'Trash');
   assert.ok(!window.document.querySelector('#collectionList .collection-all'), 'All collections lives in the Library now');
   await go('#settings');
-  [...view().querySelectorAll('button')].find((b) => b.textContent === 'See what Keepsake stores and sends').click();
+  [...view().querySelectorAll('button')].find((b) => b.textContent === 'See what Internet Binder stores and sends').click();
   await settle();
   const dlg = [...window.document.querySelectorAll('.modal')].find((m) => /Privacy/.test(m.querySelector('.modal-title')?.textContent || ''));
   assert.ok(dlg, 'the Privacy dialog opened');
@@ -739,7 +739,7 @@ test('Instagram import: already-saved posts are skipped; without instagram.com a
   try {
     await go('#import');
     await afterChange();
-    assert.match(view().textContent, /1 post is already in Keepsake and will be skipped/);
+    assert.match(view().textContent, /1 post is already in Internet Binder and will be skipped/);
     assert.doesNotMatch(view().textContent, /\bnull\b/);
     [...view().querySelectorAll('button')].find((b) => /^Import 2 posts$/.test(b.textContent)).click();
     let summary = null;
@@ -749,7 +749,7 @@ test('Instagram import: already-saved posts are skipped; without instagram.com a
     const rows = [...summary.querySelectorAll('.import-dest')].map((r) => r.textContent);
     assert.ok(rows.includes('Recipes1'), rows.join(' | '));
     assert.equal(rows.length, 2);
-    assert.match(summary.textContent, /1 post was already in Keepsake, so it was skipped/);
+    assert.match(summary.textContent, /1 post was already in Internet Binder, so it was skipped/);
     [...summary.querySelectorAll('button')].find((b) => b.textContent === 'Done').click();
     await settle();
   } finally {
