@@ -45,9 +45,11 @@ async function writeAppAssets(out) {
   copy(path.join(out, 'light-1024.png'), path.join(ios, 'AppIconPreview.imageset/preview.png'));
   copy(path.join(out, 'dark-1024.png'), path.join(ios, 'AppIconPreview.imageset/preview-dark.png'));
   const mac = path.join(ROOT, 'safari/Keepsake/Keepsake/Assets.xcassets');
+  // Finder lists, Spotlight and the menu bar show 64 px and under: those get the straight, bolder toolbar art.
+  const macSVG = (px) => iconSVG('pantry', false, { small: px <= 64 });
   for (const s of [16, 32, 128, 256, 512]) {
-    await renderMac(iconSVG('pantry', false), s, path.join(mac, `AppIcon.appiconset/mac-icon-${s}@1x.png`));
-    await renderMac(iconSVG('pantry', false), s * 2, path.join(mac, `AppIcon.appiconset/mac-icon-${s}@2x.png`));
+    await renderMac(macSVG(s), s, path.join(mac, `AppIcon.appiconset/mac-icon-${s}@1x.png`));
+    await renderMac(macSVG(s * 2), s * 2, path.join(mac, `AppIcon.appiconset/mac-icon-${s}@2x.png`));
   }
   await renderMac(iconSVG('pantry', false), 512, path.join(mac, 'Icon-pantry.imageset/icon.png'));
   await renderMac(iconSVG('pantry', true), 512, path.join(mac, 'Icon-pantry.imageset/icon-dark.png'));
