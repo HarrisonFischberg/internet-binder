@@ -6,7 +6,7 @@
 // `*` allows a prefix match (e.g. "lamp*" matches lamp, lamps, lampshade).
 // `strong` keywords are near-unambiguous and lift confidence on their own.
 //
-// There is no "Inbox" taxonomy entry: items Bowerbird can't confidently place
+// There is no "Inbox" taxonomy entry: items Keepsake can't confidently place
 // are simply left uncategorized (collectionId: null) and surface in Review.
 
 export const DEFAULT_TAXONOMY = [

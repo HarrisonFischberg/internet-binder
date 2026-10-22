@@ -174,8 +174,8 @@ final class ScreenshotTests: XCTestCase {
             XCTAssertTrue(shareItem.waitForExistence(timeout: 5))
             shareItem.tap()
             sleep(2)
-            let keepsake = safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Bowerbird'")).firstMatch
-            XCTAssertTrue(keepsake.waitForExistence(timeout: 5), "Bowerbird in the share sheet")
+            let keepsake = safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Keepsake'")).firstMatch
+            XCTAssertTrue(keepsake.waitForExistence(timeout: 5), "Keepsake in the share sheet")
             keepsake.tap()
             let collections = safari.buttons["Collections"].firstMatch
             XCTAssertTrue(collections.waitForExistence(timeout: 10))
@@ -215,7 +215,7 @@ final class ScreenshotTests: XCTestCase {
                 continue
             }
             // Put it in the first Lifestyle view, then Done: "Saved to …" drops in from the top, and
-            // tapping it opens that save in Bowerbird.
+            // tapping it opens that save in Keepsake.
             let firstView = safari.scrollViews.buttons.firstMatch
             XCTAssertTrue(firstView.waitForExistence(timeout: 5))
             firstView.tap()

@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import AVFoundation
 
-/// Every haptic in Bowerbird, named by what happened (replica/m3/haptics.md). Nothing else buzzes.
+/// Every haptic in Keepsake, named by what happened (replica/m3/haptics.md). Nothing else buzzes.
 @MainActor
 public enum Haptic {
     public static var enabled = true

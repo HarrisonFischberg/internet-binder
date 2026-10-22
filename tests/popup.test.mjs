@@ -76,7 +76,7 @@ test('popup: opening it never saves; Open dashboard is in the header and it asks
   assert.ok(shown('state-home'));
   assert.equal(await savedUrl(video.url), null, 'nothing saved just by opening it');
   assert.ok(shown('homeObject') && !shown('homeCompact'), 'the page drawn as its object');
-  assert.match(page.getElementById('homeGuess').textContent, /Bowerbird thinks Videos\./);
+  assert.match(page.getElementById('homeGuess').textContent, /Keepsake thinks Videos\./);
   assert.equal(page.querySelector('#libLifestyle .library-caption').textContent, 'Maybe Videos');
   assert.ok(!shown('homeActions'), 'no Save until a place is picked');
   F.calls.tabsCreated.length = 0;
@@ -123,7 +123,7 @@ test('popup: Not sure goes to Review with a note, and Undo comes back to the sta
   const review = page.getElementById('pickReview');
   assert.ok(review.classList.contains('as-card'), 'beside the libraries, Review is a card');
   assert.equal(page.getElementById('reviewTitle').textContent, 'Review');
-  assert.match(page.getElementById('reviewSub').textContent, /Bowerbird suggests a home later$/);
+  assert.match(page.getElementById('reviewSub').textContent, /Keepsake suggests a home later$/);
   assert.ok(review.querySelector('.fan').children.length > 0, 'a fan of what is waiting');
   review.click();
   assert.ok(review.classList.contains('is-here'));
@@ -212,7 +212,7 @@ test('popup: the Saved overview asks for instagram.com access up front, and the 
   try {
     page.querySelector('#igAccess button').click();
     await settle(50);
-    assert.match(page.getElementById('igAccess').textContent, /Access wasn’t granted\. To allow it yourself: right-click the Bowerbird icon/);
+    assert.match(page.getElementById('igAccess').textContent, /Access wasn’t granted\. To allow it yourself: right-click the Keepsake icon/);
   } finally {
     F.chrome.permissions.request = realRequest;
   }

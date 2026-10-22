@@ -1,7 +1,7 @@
-// Bowerbird in-page capture card (formerly a toast). Classic script; exposes globalThis.__keepsakeToast.
+// Keepsake in-page capture card (formerly a toast). Classic script; exposes globalThis.__keepsakeToast.
 // Rendered inside a closed Shadow DOM with adopted stylesheets so host page CSS
 // cannot leak in and ours cannot leak out. All text is set via textContent.
-// Colours, type and shape come from the Bowerbird design tokens (tokens-content.js, injected
+// Colours, type and shape come from the Keepsake design tokens (tokens-content.js, injected
 // first); the host element carries data-style / data-theme from the person's settings.
 
 (function keepsakeToastModule() {
@@ -154,7 +154,7 @@
     const head = el('div', 'head');
     const icon = el('span', 'icon');
     icon.append(svg(ICONS[tone]));
-    head.append(icon, el('span', 'heading', opts.title || 'Bowerbird'));
+    head.append(icon, el('span', 'heading', opts.title || 'Keepsake'));
 
     let pickerEl = null;
     if (opts.picker && Array.isArray(opts.picker.options) && opts.picker.options.length) {

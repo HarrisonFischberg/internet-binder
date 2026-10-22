@@ -98,7 +98,7 @@ extension Library {
         String(decoding: try JSONSerialization.data(withJSONObject: args, options: .fragmentsAllowed), as: UTF8.self)
     }
 
-    /// Saves Bowerbird wasn't sure where to put (Chrome's Review).
+    /// Saves Keepsake wasn't sure where to put (Chrome's Review).
     public func review() async throws -> [Save] { try await prepare(); return try await core.call("views.review", as: [Save].self) }
 
     /// One Lifestyle view or kind ("place", "recipe", "workout", "video", "article", "media", "book", "product").
@@ -243,7 +243,7 @@ extension Library {
 
 public struct ReviewSuggestions: Decodable, Sendable {
     public struct Pick: Decodable, Sendable, Hashable, Identifiable { public let value: String; public let label: String; public let isNew: Bool; public var id: String { value } }
-    /// Why Bowerbird wasn't sure (the categorizer's reason).
+    /// Why Keepsake wasn't sure (the categorizer's reason).
     public let reason: String
     public let picks: [Pick]
 }

@@ -3,7 +3,7 @@ import Foundation
 import UserNotifications
 
 /// "Saved to Recipes": a notification that drops in from the top after you save from the Share Sheet.
-/// Tapping it opens that save in Bowerbird (keepsake://save/<id>, the widgets' link). On unless turned
+/// Tapping it opens that save in Keepsake (keepsake://save/<id>, the widgets' link). On unless turned
 /// off in Settings; the app asks for permission, the Share Extension only posts.
 public enum SaveNotice {
     static let enabledKey = "ks.saveNotice"
@@ -55,7 +55,7 @@ public enum SaveNotice {
         }
     }
 
-    /// Whether iOS has turned Bowerbird's notifications off (Settings shows how to turn them back on).
+    /// Whether iOS has turned Keepsake's notifications off (Settings shows how to turn them back on).
     public static func blocked() async -> Bool {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .denied
     }

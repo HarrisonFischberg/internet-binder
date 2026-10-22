@@ -61,7 +61,7 @@ test('no HTML-string or eval APIs (one reviewed constant SVG allowed)', () => {
   const allowed = new Set([
     'src/dashboard/dashboard.js:insertAdjacentHTML',
     // MapLibre GL 4.7.1 (vendored CSP build, BSD-3): innerHTML for its attribution line (the map style's
-    // "© OpenStreetMap" credit), the scale control and Popup.setHTML. Bowerbird uses neither of the last two
+    // "© OpenStreetMap" credit), the scale control and Popup.setHTML. Keepsake uses neither of the last two
     // (popups use setDOMContent), and the extension CSP (script-src 'self', no inline) stops any script in
     // that markup from running. Reviewed 2026-10-13; no eval or new Function in this build.
     'vendor/maplibre/maplibre-gl-csp.js:innerHTML',

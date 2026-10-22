@@ -363,7 +363,7 @@ test('import replace wipes existing items and keeps the API key', async () => {
 });
 
 test('validateExport rejects foreign or future files', () => {
-  assert.throws(() => validateExport(null), /not a Bowerbird export/);
+  assert.throws(() => validateExport(null), /not a Keepsake export/);
   assert.throws(() => validateExport({ format: 'other' }), /missing format marker/);
   assert.throws(() => validateExport({ format: 'keepsake-export', schemaVersion: SCHEMA_VERSION + 1 }), /Unsupported export version/);
   assert.throws(() => validateExport({ format: 'keepsake-export', schemaVersion: 0 }), /Unsupported/);
@@ -476,7 +476,7 @@ test('AI log: append, mark undone, capped at 3000', async () => {
   assert.equal((await store.getAiLog()).find((e) => e.id === 'e10').undone, true);
 });
 
-test('clearAll removes every Bowerbird key and record, including the secret, the AI log and the v2 copy', async () => {
+test('clearAll removes every Keepsake key and record, including the secret, the AI log and the v2 copy', async () => {
   const { store, be, db } = await fresh({ [KEYS.items]: { a1b2: { id: 'a1b2', title: 'old' } } });
   await store.setSecret('aiApiKey', 'x');
   await store.appendAiLog([{ id: 'a' }]);
@@ -589,7 +589,7 @@ test('migration runs once; later edits are not overwritten by a second init', as
   assert.equal((await again.getItem('itm001')).title, 'Edited after migration');
 });
 
-test('an older Bowerbird saving after the upgrade (rollback or stale worker): its saves are caught up, nothing newer is overwritten', async () => {
+test('an older Keepsake saving after the upgrade (rollback or stale worker): its saves are caught up, nothing newer is overwritten', async () => {
   const { store, be, db } = await fresh(v2Library());
   await store.updateItem('itm001', { title: 'Edited in 1.4' });
   await store.deleteForever(['itm002']);

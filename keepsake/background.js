@@ -1,4 +1,4 @@
-// Bowerbird background service worker (MV3, ES module).
+// Keepsake background service worker (MV3, ES module).
 // It only wakes up for: install/startup, context-menu clicks, messages from
 // the popup/dashboard/content scripts, permission changes and settings changes.
 // It has no timers and no alarms. Its only network access is the optional AI
@@ -49,7 +49,7 @@ chrome.runtime.onStartup.addListener(async () => {
 
 async function createContextMenu() {
   await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve()));
-  chrome.contextMenus.create({ id: CONTEXT_MENU_ID, title: 'Save to Bowerbird', contexts: ['page', 'image', 'link', 'selection'] }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.create({ id: CONTEXT_MENU_ID, title: 'Save to Keepsake', contexts: ['page', 'image', 'link', 'selection'] }, () => void chrome.runtime.lastError);
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -69,7 +69,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       return;
     }
     const product = await extractFromTab(tab.id, hints);
-    if (!product) throw new Error('Bowerbird could not read this page.');
+    if (!product) throw new Error('Keepsake could not read this page.');
     if (info.linkUrl && !info.srcUrl && info.linkText && info.linkUrl !== pageUrl) {
       // Right-clicked a product link: save the link target, titled by the link text.
       product.url = info.linkUrl;
@@ -132,7 +132,7 @@ function friendlyError(e) {
   if (/cannot access|cannot be scripted|extensions gallery|chrome:\/\/|Missing host permission|The extensions gallery/i.test(m)) {
     return 'Chrome does not let extensions read this page (browser pages, the Web Store and some protected sites). Try a regular website.';
   }
-  if (/No tab with id|Receiving end does not exist|message port closed/i.test(m)) return 'The page changed before Bowerbird could finish. Try again.';
+  if (/No tab with id|Receiving end does not exist|message port closed/i.test(m)) return 'The page changed before Keepsake could finish. Try again.';
   return m || 'Something went wrong.';
 }
 
@@ -146,7 +146,7 @@ function saveProduct(rawProduct, options = {}) {
 
 
 // --- after the save: fill in a Lifestyle save ---------------------------------------------------------
-// A save you put into a Lifestyle view (or that Bowerbird recognised as one) gets what's missing filled in:
+// A save you put into a Lifestyle view (or that Keepsake recognised as one) gets what's missing filled in:
 //   1. Optional AI, only if you turned it on: names the place, film or book the post is about, lists a
 //      workout's exercises, or drafts a recipe. Logged in the AI change log with Undo.
 //   2. Lookups you turned on (Settings → Lookups, each site granted): OpenStreetMap for a place's address
@@ -347,7 +347,7 @@ async function showPageToast(tabId, res, product) {
         if (p.kind === 'error') t.show({ tone: 'error', look: p.look, title: 'Not saved', message: p.error });
         else if (p.kind === 'duplicate') {
           t.show({
-            tone: 'info', look: p.look, title: 'Already in Bowerbird',
+            tone: 'info', look: p.look, title: 'Already in Keepsake',
             message: `“${cut(p.existing.title || p.title, 70)}” is ${p.existing.collectionName ? 'in ' + p.existing.collectionName : 'already saved'}.`,
             actions: [{ label: 'Open', primary: true, onClick: () => send({ type: M.OPEN_DASHBOARD, hash: `#item/${p.existing.id}` }) }],
           });
@@ -359,7 +359,7 @@ async function showPageToast(tabId, res, product) {
             chrome.runtime.sendMessage({ type: M.UPDATE_ITEM, itemId: p.itemId, patch: { collectionId: id }, learn: 'light' }, (up) => {
               void chrome.runtime.lastError;
               t.show(up && up.ok
-                ? { tone: 'ok', look: p.look, title: `Moved to ${nameOf(id)}`, message: id.startsWith('kind:') ? 'Its details were worked out from the page.' : 'Bowerbird will remember this for similar items.', duration: 4000 }
+                ? { tone: 'ok', look: p.look, title: `Moved to ${nameOf(id)}`, message: id.startsWith('kind:') ? 'Its details were worked out from the page.' : 'Keepsake will remember this for similar items.', duration: 4000 }
                 : { tone: 'error', look: p.look, title: 'Couldn’t move', message: (up && up.error) || '' });
             });
           };
@@ -686,7 +686,7 @@ function sanitizePost(p) {
 }
 
 // A scan's reports come only from an Instagram tab. Safari leaves the tab's address out of the
-// sender when Bowerbird has no instagram.com access (the scan then runs on activeTab alone), so a
+// sender when Keepsake has no instagram.com access (the scan then runs on activeTab alone), so a
 // report from the very tab the scan was started in counts too.
 async function fromScanTab(sender) {
   if (!sender.tab) return false;
@@ -767,7 +767,7 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || (sender.tab && sender.tab.id);
       if (!tabId) throw new Error('No tab to read.');
       const product = await extractFromTab(tabId, msg.hints || {});
-      if (!product) throw new Error('Bowerbird could not read this page.');
+      if (!product) throw new Error('Keepsake could not read this page.');
       return { ok: true, product };
     }
     case MSG.CLASSIFY: {
@@ -905,7 +905,7 @@ async function handleMessage(msg, sender) {
       } catch (e) {
         // Say so instead of leaving the last good update ("Scanning…") showing for ever.
         lastSummary = '';
-        await writeScan({ ...summaryOf(scan), status: 'error', error: `Bowerbird couldn’t keep this scan (${friendlyError(e)}). Stop the scan, then try a smaller collection.`, updatedAt: Date.now() }).catch(() => {});
+        await writeScan({ ...summaryOf(scan), status: 'error', error: `Keepsake couldn’t keep this scan (${friendlyError(e)}). Stop the scan, then try a smaller collection.`, updatedAt: Date.now() }).catch(() => {});
         return { ok: false, error: friendlyError(e) };
       }
       return { ok: true };

@@ -127,7 +127,7 @@ struct ImportExportTests {
     @Test func rejectsWhatChromeRejects() async throws {
         let core = try KeepsakeCore(database: try tempDatabase())
         try await core.call("store.init")
-        await #expect(throws: CoreError.failed("This file is not a Bowerbird export (missing format marker).")) {
+        await #expect(throws: CoreError.failed("This file is not a Keepsake export (missing format marker).")) {
             try await core.call("store.importJSON", [["items": [:]]])
         }
         await #expect(throws: CoreError.self) {

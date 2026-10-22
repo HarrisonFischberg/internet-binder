@@ -24,7 +24,7 @@ import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, generic
 import { fillMissing } from './lookups.js';
 import { understandWithAI, understandProductWithAI } from '../ai/provider.js';
 
-// How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Bowerbird picked.
+// How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Keepsake picked.
 export const UNDERSTAND_CONFIDENCE = 0.7;
 export const REKIND_CONFIDENCE = 0.85;
 

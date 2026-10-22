@@ -73,11 +73,11 @@ function appearanceSection(ctx) {
     ]),
     el('div', { class: 'look-picker-block' }, [
       el('div', { class: 'setting-label', id: 'iconLabel' }, ['Toolbar icon']),
-      el('div', { class: 'help' }, ['The Bowerbird button in your browser’s toolbar. Each icon has a light and a dark version.']),
+      el('div', { class: 'help' }, ['The Keepsake button in your browser’s toolbar. Each icon has a light and a dark version.']),
       lookPicker({ label: 'iconLabel', value: ICONS.some((x) => x.value === s.icon) ? s.icon : ICONS[0].value, options: ICONS, onChange: (v) => ctx.store.updateSettings({ icon: v }), face: iconFace }),
     ]),
     UI.settingRow('Show “Come back to” on Home', UI.switchInput({ checked: s.home?.comeBack !== false, onChange: (v) => ctx.store.updateSettings({ home: { ...(s.home || {}), comeBack: v } }), label: 'Show Come back to on Home' }), 'Saves you haven’t finished or opened for six weeks, worked out on this device.'),
-    UI.settingRow('Keyboard shortcut', el('span', {}, [el('span', { class: 'kbd' }, ['Alt']), ' + ', el('span', { class: 'kbd' }, ['Shift']), ' + ', el('span', { class: 'kbd' }, ['K'])]), 'Opens Bowerbird for the current page. Change it at chrome://extensions/shortcuts.'),
+    UI.settingRow('Keyboard shortcut', el('span', {}, [el('span', { class: 'kbd' }, ['Alt']), ' + ', el('span', { class: 'kbd' }, ['Shift']), ' + ', el('span', { class: 'kbd' }, ['K'])]), 'Opens Keepsake for the current page. Change it at chrome://extensions/shortcuts.'),
   ]);
 }
 
@@ -156,12 +156,12 @@ function floatingSection(ctx) {
         if (value === 'all' && !all) {
           const ok = await requestOrigin(ALL_SITES);
           if (!ok) {
-            UI.toast('Bowerbird needs permission to run on sites to show buttons there. No permission was granted.', { duration: 6000 });
+            UI.toast('Keepsake needs permission to run on sites to show buttons there. No permission was granted.', { duration: 6000 });
             await draw();
             return;
           }
         }
-        // Leaving "all sites" gives the broad permission back: Bowerbird keeps
+        // Leaving "all sites" gives the broad permission back: Keepsake keeps
         // only what the current mode needs.
         let revoked = false;
         if (value !== 'all' && all) revoked = await removeOrigin(ALL_SITES);
@@ -175,7 +175,7 @@ function floatingSection(ctx) {
     box.append(el('div', { class: 'radio-group' }, [
       radio('off', 'Off (toolbar only)', 'The toolbar popup, keyboard shortcut and right-click menu always work. No scripts run on any site.'),
       radio('selected', 'Only on sites I choose', 'Grant access per site below. Chrome asks you once per site.'),
-      radio('all', 'On all sites', 'Chrome will ask you to allow Bowerbird to read and change data on all sites — that’s what it takes to show a button on product cards. Bowerbird still only reads product data when you hover a card, and never sends anything anywhere.'),
+      radio('all', 'On all sites', 'Chrome will ask you to allow Keepsake to read and change data on all sites — that’s what it takes to show a button on product cards. Keepsake still only reads product data when you hover a card, and never sends anything anywhere.'),
     ]));
 
     if (s.mode === 'all') {
@@ -263,7 +263,7 @@ function categorizationSection(ctx) {
     range.addEventListener('input', () => { val.textContent = `${Math.round(Number(range.value) * 100)}%`; });
     range.addEventListener('change', () => ctx.store.updatePrefs({ confidenceThreshold: Number(range.value) }));
     box.append(UI.settingRow('Confidence needed to auto-file', el('div', { class: 'slider-row' }, [range, val]), 'Below this, saves are left uncategorized and wait in Review. Higher = more items in Review, fewer mistakes.'));
-    box.append(UI.settingRow('Create default collections on demand', UI.switchInput({ checked: prefs.autoCreateCollections !== false, onChange: (v) => ctx.store.updatePrefs({ autoCreateCollections: v }), label: 'Create default collections on demand' }), 'If you deleted a default collection and a matching item shows up later, Bowerbird can recreate it instead of leaving the item uncategorized.'));
+    box.append(UI.settingRow('Create default collections on demand', UI.switchInput({ checked: prefs.autoCreateCollections !== false, onChange: (v) => ctx.store.updatePrefs({ autoCreateCollections: v }), label: 'Create default collections on demand' }), 'If you deleted a default collection and a matching item shows up later, Keepsake can recreate it instead of leaving the item uncategorized.'));
 
     // Learned preferences
     const learned = Object.entries(prefs.learnedKeywords || {});
@@ -277,10 +277,10 @@ function categorizationSection(ctx) {
     }).filter((x) => x.cid).sort((a, b) => b.n - a.n).slice(0, 15);
     const learnedBox = el('div', { class: 'field' }, [
       el('label', { class: 'label' }, [`Learned from your corrections (${learned.length} ${learned.length === 1 ? 'term' : 'terms'}, ${(prefs.corrections || []).length} moves)`]),
-      top.length ? el('div', { class: 'chips' }, top.map((x) => el('span', { class: 'chip', title: `weight ${x.w}` }, [`${x.term} → ${ctx.collectionById(x.cid)?.name || '?'}`]))) : el('p', { class: 'help' }, ['Nothing learned yet. Move an item between collections and Bowerbird will pick up the pattern.']),
+      top.length ? el('div', { class: 'chips' }, top.map((x) => el('span', { class: 'chip', title: `weight ${x.w}` }, [`${x.term} → ${ctx.collectionById(x.cid)?.name || '?'}`]))) : el('p', { class: 'help' }, ['Nothing learned yet. Move an item between collections and Keepsake will pick up the pattern.']),
       retailers.length ? el('p', { class: 'help' }, ['Retailer habits: ' + retailers.map((x) => `${x.host} → ${ctx.collectionById(x.cid)?.name || '?'}`).join(' · ')]) : null,
       el('div', { class: 'actions-row' }, [el('button', { type: 'button', class: 'btn btn-sm', disabled: !learned.length && !retailers.length, onClick: async () => {
-        const ok = await UI.confirmDialog({ title: 'Clear learned preferences?', message: 'Bowerbird forgets every word and retailer habit it picked up from your moves. Your collections and their keywords are kept.', confirmLabel: 'Clear', danger: true });
+        const ok = await UI.confirmDialog({ title: 'Clear learned preferences?', message: 'Keepsake forgets every word and retailer habit it picked up from your moves. Your collections and their keywords are kept.', confirmLabel: 'Clear', danger: true });
         if (ok) await ctx.store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
       } }, ['Clear learned preferences'])]),
     ]);
@@ -288,7 +288,7 @@ function categorizationSection(ctx) {
     box.append(el('p', { class: 'help' }, [`${ctx.state.items.filter((i) => i.needsReview && !i.purchased).length} low-confidence saves waiting in the `, el('a', { href: '#review' }, ['review queue']), '.']));
   };
   draw();
-  return UI.section('Categorization', 'How Bowerbird decides where a save goes: your collections’ keywords first, then collection names and built-in category words, then what it learned from your moves. All of it runs locally. Add keywords from a collection’s page.', [box]);
+  return UI.section('Categorization', 'How Keepsake decides where a save goes: your collections’ keywords first, then collection names and built-in category words, then what it learned from your moves. All of it runs locally. Add keywords from a collection’s page.', [box]);
 }
 
 function collectionsSection(ctx) {
@@ -302,7 +302,7 @@ function collectionsSection(ctx) {
   ]));
   return UI.section('Collections', `${pluralize(cols.length, 'collection', 'collections')}. Rename a collection, edit its keywords or delete it from its page.`, [
     el('div', { class: 'table-wrap' }, [el('table', { class: 'table' }, [el('thead', {}, [el('tr', {}, [el('th', {}, ['Name']), el('th', {}, ['Items']), el('th', {}, ['Your keywords'])])]), el('tbody', {}, rows)])]),
-    el('p', { class: 'help' }, [`${pluralize(counts.get(null) || 0, 'item', 'items')} uncategorized, waiting in Review. When a new collection’s name is close to an existing one, Bowerbird asks which you meant.`]),
+    el('p', { class: 'help' }, [`${pluralize(counts.get(null) || 0, 'item', 'items')} uncategorized, waiting in Review. When a new collection’s name is close to an existing one, Keepsake asks which you meant.`]),
   ]);
 }
 
@@ -345,14 +345,14 @@ function instagramSection(ctx) {
   const idleInput = el('input', { class: 'input', type: 'number', min: '2', max: '30', step: '1', 'aria-label': 'Idle timeout in seconds' });
   idleInput.value = String(Math.round(s.idleTimeoutMs / 1000));
   idleInput.addEventListener('change', () => ctx.store.updateSettings({ instagram: { idleTimeoutMs: Math.max(2, Math.min(30, Number(idleInput.value) || 6)) * 1000 } }));
-  return UI.section('Instagram import', 'Import posts from a Saved collection you have open. Bowerbird only reads the page in front of you and never touches your login.', [
+  return UI.section('Instagram import', 'Import posts from a Saved collection you have open. Keepsake only reads the page in front of you and never touches your login.', [
     UI.settingRow('Store small thumbnails locally', UI.switchInput({ checked: s.storeThumbnails, onChange: (v) => ctx.store.updateSettings({ instagram: { storeThumbnails: v } }), label: 'Store thumbnails' }), 'Keeps a ≤320px copy of each imported post image in your browser, so cards still show after Instagram links expire.'),
     UI.settingRow('Read post details after a scan', UI.switchInput({ checked: s.readPostDetails !== false, onChange: (v) => ctx.store.updateSettings({ instagram: { readPostDetails: v } }), label: 'Read post details' }), 'Opens each scanned post’s page (with your own Instagram session, one at a time) to fill in the caption, creator, hashtags, links and tagged products. Needs one-time permission for instagram.com; the review screen asks for it.'),
     UI.settingRow('instagram.com access', igAccessControl(ctx), 'Only used for reading post pages during an import.'),
     UI.settingRow('Safety limit (posts per scan)', limitInput, 'The scan stops on its own after this many posts.'),
     UI.settingRow('Stop after no new posts for (seconds)', idleInput),
     UI.settingRow('Imported post history', el('button', { type: 'button', class: 'btn btn-sm', disabled: !n, onClick: async () => {
-      const ok = await UI.confirmDialog({ title: 'Forget imported posts?', message: 'Bowerbird will no longer mark these posts as already imported. Items you imported are kept.', confirmLabel: 'Forget' });
+      const ok = await UI.confirmDialog({ title: 'Forget imported posts?', message: 'Keepsake will no longer mark these posts as already imported. Items you imported are kept.', confirmLabel: 'Forget' });
       if (ok) await ctx.store.clearImportHistory();
     } }, [`Forget ${pluralize(n, 'remembered post', 'remembered posts')}`]), 'Used to skip posts you already imported.'),
   ]);
@@ -444,7 +444,7 @@ function dataSection(ctx) {
       el('button', { type: 'button', class: 'btn btn-primary', onClick: async () => {
         const data = await ctx.store.exportJSON();
         const stamp = new Date().toISOString().slice(0, 10);
-        UI.download(`bowerbird-export-${stamp}.json`, JSON.stringify(data));
+        UI.download(`keepsake-export-${stamp}.json`, JSON.stringify(data));
       } }, ['Export JSON']),
       el('button', { type: 'button', class: 'btn', onClick: () => { importMode = 'merge'; fileInput.click(); } }, ['Import (merge)']),
       el('button', { type: 'button', class: 'btn', onClick: () => { importMode = 'replace'; fileInput.click(); } }, ['Import (replace all)']),
@@ -468,7 +468,7 @@ function dataSection(ctx) {
         ctx.navigate('#welcome');
         UI.toast('All local data deleted.');
       } }, ['Delete all local data']),
-      el('span', { class: 'help' }, ['Erases everything Bowerbird stored. Cannot be undone.']),
+      el('span', { class: 'help' }, ['Erases everything Keepsake stored. Cannot be undone.']),
     ]),
   ]);
 }
@@ -487,7 +487,7 @@ function stat(value, label) {
 function aboutSection(ctx) {
   const manifest = chrome.runtime.getManifest();
   return UI.section('About', '', [
-    el('p', { class: 'prose' }, [`Bowerbird ${manifest.version}. Open source, no account, no telemetry. `, el('button', { type: 'button', class: 'link-btn', onClick: () => openPrivacy(ctx) }, ['Privacy details'])]),
+    el('p', { class: 'prose' }, [`Keepsake ${manifest.version}. Open source, no account, no telemetry. `, el('button', { type: 'button', class: 'link-btn', onClick: () => openPrivacy(ctx) }, ['Privacy details'])]),
   ]);
 }
 
@@ -508,12 +508,12 @@ export function renderAI(ctx, view) {
 
     box.append(UI.section('What this does — and what leaves your browser', '', [
       el('div', { class: 'prose' }, [
-        el('p', {}, ['Bowerbird never needs the internet. Turning on Optional AI connects your own AI provider account, and then:']),
+        el('p', {}, ['Keepsake never needs the internet. Turning on Optional AI connects your own AI provider account, and then:']),
         el('ul', {}, [
-          el('li', {}, [el('strong', {}, ['Saves are instant: ']), 'every time you save, Bowerbird sends the item’s title, price, description, retailer and your collection names. The AI tidies the title and picks the collection, and the item is saved right away with no preview (“Saved to …”, with Undo and Move). If the AI isn’t confident, the item waits in Review.']),
-          el('li', {}, [el('strong', {}, ['Fix with AI: ']), 'when you start it (from Review or below), Bowerbird sends the same fields for each item being checked, plus the title, price and availability read from its live product page. Pages are fetched from this browser without your cookies.']),
-          el('li', {}, [el('strong', {}, ['Products from posts: ']), 'for something to buy (often an Instagram or Facebook post), Bowerbird sends its title, caption, site and picture and asks your provider what the product really is, from the picture first. With OpenAI or Anthropic it searches the web for the product’s own page; Bowerbird reads that page’s product data (only on sites you let it read, without cookies) and puts its name, price and details on the card, with the AI’s summary alongside. Every change can be undone.']),
-          el('li', {}, [el('strong', {}, ['Find products in Instagram saves: ']), 'for a post you select, Bowerbird sends the locally stored thumbnail (a small JPEG) plus the caption, creator name and the Saved-collection name, and shows back product guesses. It never invents purchase links, and results can be wrong.']),
+          el('li', {}, [el('strong', {}, ['Saves are instant: ']), 'every time you save, Keepsake sends the item’s title, price, description, retailer and your collection names. The AI tidies the title and picks the collection, and the item is saved right away with no preview (“Saved to …”, with Undo and Move). If the AI isn’t confident, the item waits in Review.']),
+          el('li', {}, [el('strong', {}, ['Fix with AI: ']), 'when you start it (from Review or below), Keepsake sends the same fields for each item being checked, plus the title, price and availability read from its live product page. Pages are fetched from this browser without your cookies.']),
+          el('li', {}, [el('strong', {}, ['Products from posts: ']), 'for something to buy (often an Instagram or Facebook post), Keepsake sends its title, caption, site and picture and asks your provider what the product really is, from the picture first. With OpenAI or Anthropic it searches the web for the product’s own page; Keepsake reads that page’s product data (only on sites you let it read, without cookies) and puts its name, price and details on the card, with the AI’s summary alongside. Every change can be undone.']),
+          el('li', {}, [el('strong', {}, ['Find products in Instagram saves: ']), 'for a post you select, Keepsake sends the locally stored thumbnail (a small JPEG) plus the caption, creator name and the Saved-collection name, and shows back product guesses. It never invents purchase links, and results can be wrong.']),
         ]),
         el('p', {}, ['Nothing else is ever sent: no browsing history, no cookies, no Instagram account data, no other items. Your key is stored only in this browser and is excluded from exports.']),
       ]),
@@ -556,7 +556,7 @@ export function renderAI(ctx, view) {
       try {
         if (!originGranted && origin) {
           const ok = await requestOrigin(origin);
-          if (!ok) throw new Error('Bowerbird needs permission to contact the provider’s address.');
+          if (!ok) throw new Error('Keepsake needs permission to contact the provider’s address.');
         }
         const reply = await testConnection(ctx.state.settings, key);
         UI.toast(`Connected. Provider replied: ${reply || '(empty)'}`, { duration: 4000 });
@@ -571,7 +571,7 @@ export function renderAI(ctx, view) {
       UI.settingRow('Provider', providerSel),
       ai.provider === 'custom' || ai.baseUrl ? UI.settingRow('Base URL', baseInput, ai.provider === 'custom' ? 'Any OpenAI-compatible chat completions endpoint (without /chat/completions).' : 'Leave empty to use the provider default.') : UI.settingRow('Base URL', el('span', { class: 'mono' }, [cfg.baseUrl]), 'Requests go only to this address.'),
       modelSel
-        ? UI.settingRow('Model', modelSel, models.find((m) => m.id === cfg.model)?.note || 'A model Bowerbird doesn’t list. Pick one above to use the current Claude models.')
+        ? UI.settingRow('Model', modelSel, models.find((m) => m.id === cfg.model)?.note || 'A model Keepsake doesn’t list. Pick one above to use the current Claude models.')
         : UI.settingRow('Model', modelInput, `Default: ${PROVIDERS[cfg.provider]?.model || '—'}`),
       effortSel ? UI.settingRow('Effort', effortSel, `${EFFORTS.find((e) => e.id === cfg.effort)?.note || ''} Default: Medium.`) : null,
       UI.settingRow('API key', el('div', { class: 'inline-form' }, [keyInput, saveKey, removeKey]), 'Stored under keepsake_secrets in chrome.storage.local. Never exported.'),
@@ -591,7 +591,7 @@ export function renderAI(ctx, view) {
         }
         const confirmed = await UI.confirmDialog({
           title: 'Turn on Optional AI?',
-          message: `After each save, once it’s stored on this device, Bowerbird will send the item’s title, price, description, retailer and your collection names to ${cfg.baseUrl}. The AI then tidies the title and may move the save to a better collection, unless you already changed them; every change can be undone. “Fix with AI” and “Find products” also become available; they only send anything when you start them.`,
+          message: `After each save, once it’s stored on this device, Keepsake will send the item’s title, price, description, retailer and your collection names to ${cfg.baseUrl}. The AI then tidies the title and may move the save to a better collection, unless you already changed them; every change can be undone. “Fix with AI” and “Find products” also become available; they only send anything when you start them.`,
           confirmLabel: 'Turn on',
         });
         if (!confirmed) return false;
@@ -722,7 +722,7 @@ export function openPrivacy(ctx) {
 
 function privacySection(ctx) {
   return UI.section('Privacy', 'Everything stays in this browser. No account, no tracking; the only network calls are the ones you turn on.', [
-    el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn', onClick: () => openPrivacy(ctx) }, ['See what Bowerbird stores and sends'])]),
+    el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn', onClick: () => openPrivacy(ctx) }, ['See what Keepsake stores and sends'])]),
   ]);
 }
 
@@ -731,7 +731,7 @@ export function renderPrivacy(ctx, view) {
   page.append(UI.section('The short version', '', [
     el('div', { class: 'prose' }, [
       el('ul', {}, [
-        el('li', {}, [el('strong', {}, ['Local only. ']), 'Everything you save lives in this browser profile (IndexedDB and chrome.storage.local). There is no Bowerbird server, account or sync. Deleted saves wait in the Trash for 30 days.']),
+        el('li', {}, [el('strong', {}, ['Local only. ']), 'Everything you save lives in this browser profile (IndexedDB and chrome.storage.local). There is no Keepsake server, account or sync. Deleted saves wait in the Trash for 30 days.']),
         el('li', {}, [el('strong', {}, ['No tracking. ']), 'No analytics, no telemetry, no crash reports, no ads, no third-party scripts.']),
         el('li', {}, [el('strong', {}, ['Nothing runs on pages until you ask. ']), 'The toolbar popup reads a page only when you click it. On-page buttons are off until you enable them and grant a site.']),
         el('li', {}, [el('strong', {}, ['Instagram: ']), 'the importer only reads the Saved collection you have open. It never reads cookies, tokens, messages, or anything about your account.']),
@@ -740,14 +740,14 @@ export function renderPrivacy(ctx, view) {
       ]),
     ]),
   ]));
-  page.append(UI.section('Permissions Bowerbird asks for', '', [
+  page.append(UI.section('Permissions Keepsake asks for', '', [
     el('div', { class: 'table-wrap' }, [el('table', { class: 'table' }, [
       el('thead', {}, [el('tr', {}, [el('th', {}, ['Permission']), el('th', {}, ['Why'])])]),
       el('tbody', {}, [
         permRow('storage', 'Keep your settings in your browser.'),
         permRow('unlimitedStorage', 'Let your library grow past Chrome’s 10 MB default. It still stays in this browser.'),
         permRow('activeTab + scripting', 'Read the page you clicked the icon on (title, price, images) at that moment only, and show the save toast.'),
-        permRow('contextMenus', 'The “Save to Bowerbird” right-click item.'),
+        permRow('contextMenus', 'The “Save to Keepsake” right-click item.'),
         permRow('Site access (optional)', 'Only requested if you enable on-page buttons for a site or all sites, use Import from tabs (all sites, to read the tabs you import), connect an AI provider (its address only), or let “Fix with AI” read your saved items’ product pages (all sites). Revoke any time here or at chrome://extensions.'),
       ]),
     ])]),
@@ -755,7 +755,7 @@ export function renderPrivacy(ctx, view) {
   page.append(UI.section('What is stored', '', [
     el('div', { class: 'prose' }, [
       el('p', {}, ['For each save: title, price, retailer, page URL, image URL (or, for Instagram imports, a small stored thumbnail), your note, flags such as favorite/purchased, which collection it is in and why, and the store’s product type and tags when the page publishes them. For categorization: your collections’ keywords, and word/retailer weights learned from moves. For Instagram: which post URLs were already imported. Optional AI: your API key and provider settings, and a log of what the AI changed (after a save or in “Fix with AI”) so it can be undone. Deleted saves stay in the Trash for 30 days.']),
-      el('p', {}, ['Bowerbird does not store browsing history, page contents beyond the fields above, or anything from pages you did not save from.']),
+      el('p', {}, ['Keepsake does not store browsing history, page contents beyond the fields above, or anything from pages you did not save from.']),
     ]),
   ]));
   page.append(el('div', { class: 'actions-row' }, [

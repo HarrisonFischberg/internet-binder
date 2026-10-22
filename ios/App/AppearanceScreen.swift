@@ -163,13 +163,13 @@ struct StyleCard: View {
     }
 }
 
-/// App icon: Bowerbird (the app's own four-scraps icon) or one per style, each following light, dark and tinted
+/// App icon: Keepsake (the app's own four-scraps icon) or one per style, each following light, dark and tinted
 /// home screens.
 struct IconPicker: View {
     @State private var current = UIApplication.shared.alternateIconName
     @Environment(\.ks) private var t
     static let icons: [(name: String?, label: String)] = [
-        (nil, "Bowerbird"), ("AppIconNotebook", "Field Notebook"),
+        (nil, "Keepsake"), ("AppIconNotebook", "Field Notebook"),
         ("AppIconAtlas", "Night Atlas"), ("AppIconSwiss", "Swiss Index"),
     ]
     var body: some View {
