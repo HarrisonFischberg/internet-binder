@@ -29,7 +29,7 @@ import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, generic
 import { fillMissing } from './lookups.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI } from '../ai/provider.js';
 
-// How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Keepsake picked.
+// How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Internet Binder picked.
 export const UNDERSTAND_CONFIDENCE = 0.7;
 export const REKIND_CONFIDENCE = 0.85;
 

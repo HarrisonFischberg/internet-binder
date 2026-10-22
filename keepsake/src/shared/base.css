@@ -1,4 +1,4 @@
-/* Keepsake shared tokens + base styles (popup and dashboard). */
+/* Internet Binder shared tokens + base styles (popup and dashboard). */
 
 /* The colour, shape, type and motion values come from tokens.css (generated from the design
    tokens: Pantry Pop, Field Notebook, Gallery, Night Atlas and Swiss Index, each light and dark; loaded
@@ -525,4 +525,9 @@ button {
 .mark svg {
   width: 13px;
   height: 13px;
+}
+
+/* The binder mark only shows in Pantry Pop (looks.css); other styles keep the bookmark. */
+.mark .mark-patch {
+  display: none;
 }

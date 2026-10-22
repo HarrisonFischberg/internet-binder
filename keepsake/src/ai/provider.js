@@ -179,7 +179,7 @@ export async function analyzePost(post, settings, apiKey) {
 // Uses the provider's own web-search tool (Anthropic Messages API web_search,
 // OpenAI Responses API web_search). Every URL in the result is checked
 // against the URLs the search actually returned; anything else is dropped, so
-// Keepsake never shows a link the model made up.
+// Internet Binder never shows a link the model made up.
 
 export function supportsWebLookup(settings) {
   const p = providerConfig(settings).provider;
@@ -462,9 +462,9 @@ export async function identifyForKind(kind, item, settings, apiKey) {
 
 // --- Understand a save (what it is, and that kind's details) ------------------------------------------
 // One save per request: its title, caption or description, hashtags, location tag, site, the text of
-// pages it links to (when Keepsake could read them) and its locally stored thumbnail (never a remote
+// pages it links to (when Internet Binder could read them) and its locally stored thumbnail (never a remote
 // image link). The answer is checked and applied by src/shared/understand.js.
-const UNDERSTAND_SYSTEM = `You read one thing a person saved (an Instagram post or reel, a TikTok, a video, a web page or a link) and turn it into a card in their Keepsake app.
+const UNDERSTAND_SYSTEM = `You read one thing a person saved (an Instagram post or reel, a TikTok, a video, a web page or a link) and turn it into a card in their Internet Binder app.
 Decide what it is, then fill in that kind's details as completely as you can.
 Return ONLY JSON: {"kind":"…","confidence":0-1,"title":"…","details":{…},"drafted":["field", …],"reason":"one short sentence"}
 Kinds and their details:
@@ -618,7 +618,7 @@ export async function testConnection(settings, apiKey) {
 // its cover or poster (read here for the picture), and for a film or show where it streams in your
 // country. Every link is checked against the search results (urlVerified); a service with no checked
 // source is dropped. Applied by src/shared/understand.js readTitle.
-const TITLE_SYSTEM = `You fill in a card for a book, film or TV show a person saved in their Keepsake app.
+const TITLE_SYSTEM = `You fill in a card for a book, film or TV show a person saved in their Internet Binder app.
 Work out exactly which title it is from what they saved (title, page, caption, already known facts).
 SEARCH
 Return ONLY JSON: {"kind":"book|media","title":"its official title","format":"film|series|","year":number|null,"endYear":number|null,"author":"","director":"director, or a show's creator","cast":["up to 4 main actors"],"seasons":number|null,"episodes":number|null,"runtimeMinutes":number|null,"pages":number|null,"genres":["up to 3"],"summary":"2-3 plain sentences in your own words: what it is about, no spoilers","page":"","watch":[{"service":"Netflix","how":"subscription|free|rent|buy","url":""}],"watchSource":"","confidence":0-1,"reason":"one short sentence"}

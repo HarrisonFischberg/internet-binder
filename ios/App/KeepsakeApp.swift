@@ -42,7 +42,7 @@ final class NoticeDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
         }
     }
 
-    /// Shown as a banner even while Keepsake is open (iPad, with Safari beside it).
+    /// Shown as a banner even while Internet Binder is open (iPad, with Safari beside it).
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
         Task { @MainActor in done([.banner, .list]) }
@@ -117,7 +117,7 @@ final class LibraryModel {
             library = try Library(path: name.map { NSTemporaryDirectory() + $0 + ".sqlite" })
         } catch {
             library = nil
-            problem = "Keepsake couldn't open your library. \(error.localizedDescription)"
+            problem = "Internet Binder couldn't open your library. \(error.localizedDescription)"
         }
     }
 

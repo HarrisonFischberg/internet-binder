@@ -20,6 +20,7 @@ struct HomeScreen: View {
     /// Recent shelf cards: all one size, growing with Dynamic Type.
     @ScaledMetric(relativeTo: .headline) private var shelfWidth: CGFloat = 170
     @Environment(\.horizontalSizeClass) private var size
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var lifestyleSaves: [Save] { model.saves.filter(\.hasOwnView) }
     private var collectedSaves: [Save] { model.saves.filter { !($0.collectionId ?? "").isEmpty } }
@@ -39,8 +40,9 @@ struct HomeScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    HStack(alignment: .top) {
-                        ScreenHeader(title: "Keepsake", subtitle: nil)
+                    // At accessibility sizes the buttons drop below the name, so the name gets the full width.
+                    (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 4)) : AnyLayout(HStackLayout(alignment: .top))) {
+                        ScreenHeader(title: "Internet Binder", subtitle: nil)
                         if size != .regular {
                             HStack(spacing: 10) {
                                 if model.aiReady && !model.saves.isEmpty {
@@ -61,7 +63,7 @@ struct HomeScreen: View {
                             .ksSurface(radius: 14)
                     }
                     if model.saves.isEmpty && model.loaded {
-                        EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Keepsake from any app.")
+                        EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Internet Binder from any app.")
                     }
                     if !model.saves.isEmpty { recent.padding(.bottom, -8) }
                     VStack(spacing: 12) {
@@ -148,7 +150,7 @@ struct HomeScreen: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(model.reviewCount == 1 ? "1 save needs a collection" : "\(model.reviewCount) saves need a collection")
                         .font(t.style == .pantry ? KSFont.name(.headline) : .headline).foregroundStyle(ink)
-                    Text("One tap each, and Keepsake learns.").font(.subheadline.weight(t.style == .pantry ? .semibold : .regular)).foregroundStyle(ink)
+                    Text("One tap each, and it learns.").font(.subheadline.weight(t.style == .pantry ? .semibold : .regular)).foregroundStyle(ink)
                 }
                 Spacer()
                 Image(systemName: "chevron.right").font(.body.weight(.bold)).foregroundStyle(ink)

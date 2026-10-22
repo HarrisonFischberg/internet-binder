@@ -1,13 +1,9 @@
 {
-  "default": "pocket",
+  "default": "pantry",
   "icons": [
     {
-      "id": "pocket",
-      "label": "Felt pocket"
-    },
-    {
       "id": "pantry",
-      "label": "Pantry Pop"
+      "label": "Internet Binder"
     },
     {
       "id": "notebook",
