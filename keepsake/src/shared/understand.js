@@ -18,11 +18,16 @@
 // wrong) gets a second read, understandProduct: the provider looks at the picture, works out what the product
 // really is, and searches the web for its own page. That page, read here, is the card's main source (its
 // name, price, description and specs); the provider's summary sits alongside it.
+//
+// A book, film or show gets a read of its own too, readTitle: the provider searches for it and writes what
+// it's about, fills in the facts the card is missing (a show's seasons, a book's pages), names a page about
+// it whose cover or poster becomes the card's picture when it has none, and for a film or show says where it
+// streams in your country, as found on the day it looked (watchCheckedOn).
 
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
-import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema } from './kinds.js';
+import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
-import { understandWithAI, understandProductWithAI } from '../ai/provider.js';
+import { understandWithAI, understandProductWithAI, understandTitleWithAI } from '../ai/provider.js';
 
 // How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Keepsake picked.
 export const UNDERSTAND_CONFIDENCE = 0.7;
@@ -181,7 +186,100 @@ export function planUnderstanding(item, ai, sourceText = '') {
   return { patch, changes, kind };
 }
 
-const LOGGED = ['kind', 'details', 'title', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
+const LOGGED = ['kind', 'details', 'title', 'image', 'images', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
+
+// --- A book, film or show ---------------------------------------------------------------------------
+
+// How sure the provider must be which title it is before its facts, picture and streaming go on the card.
+export const TITLE_CONFIDENCE = 0.6;
+export const TITLE_KINDS = ['book', 'media'];
+
+// The cover or poster on a page about a title (its Open Graph or schema.org image), without a DOM.
+export function titlePicture(html, baseUrl = '') {
+  const src = String(html || '').slice(0, 2_000_000);
+  const meta = (name) => decodeEntities((src.match(new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']*)`, 'i'))
+    || src.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${name}["']`, 'i')) || [])[1] || '').trim();
+  let schema = '';
+  for (const m of src.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try {
+      const nodes = [].concat(JSON.parse(m[1].trim())).flatMap((n) => (n && n['@graph'] ? [n, ...[].concat(n['@graph'])] : [n]));
+      const hit = nodes.find((n) => n && /^(book|movie|tvseries|tvseason|creativework)$/i.test(String([].concat(n['@type'])[0] || '')) && n.image);
+      if (hit) { const img = [].concat(hit.image)[0]; schema = typeof img === 'string' ? img : img?.url || img?.contentUrl || ''; break; }
+    } catch { /* not JSON */ }
+  }
+  for (const raw of [schema, meta('og:image'), meta('twitter:image')].filter((v) => typeof v === 'string' && v.trim())) {
+    try {
+      const u = new URL(String(raw || '').trim(), baseUrl || undefined);
+      // A site's own logo or placeholder isn't the cover.
+      if (u.protocol === 'https:' && !/logo|placeholder|default[-_]?(?:image|cover)|favicon|\.svg$/i.test(u.pathname)) return u.href;
+    } catch { /* not a URL */ }
+  }
+  return '';
+}
+
+const today = () => nowIso().slice(0, 10);
+const regionNow = () => { try { return (new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region || 'US').toUpperCase(); } catch { return 'US'; } };
+
+// The change the provider's title answer (and the picture found on a page about it) makes to a save (pure).
+export function planTitle(item, ai, picture = '', { on = today() } = {}) {
+  const kind = kindOf(item);
+  const mine = new Set(item.userFields || []);
+  const patch = {};
+  const changes = [];
+  if (!TITLE_KINDS.includes(kind) || ai.kind !== kind || ai.confidence < TITLE_CONFIDENCE) return { patch, changes };
+  const old = item.details || {};
+  const found = { ...ai.details };
+  if (kind === 'book') for (const k of ['format', 'endYear', 'director', 'cast', 'seasons', 'episodes', 'runtimeMinutes', 'watch']) delete found[k];
+  else for (const k of ['author', 'pages']) delete found[k];
+  const watch = found.watch || [];
+  delete found.watch;
+  let merged = fillMissing(old, found);
+  // A save that only guessed "film" (a title site that doesn't say) takes the provider's show.
+  if (kind === 'media' && found.format && found.format !== old.format && old.source !== 'you' && !mine.has('details')) merged.format = found.format;
+  if (watch.length) Object.assign(merged, { watch, watchRegion: ai.region || '', watchCheckedOn: on });
+  merged.source = ['page', 'you'].includes(old.source) ? old.source : 'ai';
+  merged = sanitizeDetails(kind, merged);
+  if (JSON.stringify(merged) !== JSON.stringify(sanitizeDetails(kind, old))) {
+    patch.details = merged;
+    const what = [!old.summary && merged.summary ? 'summary' : '', watch.length ? 'where to watch' : ''].filter(Boolean);
+    changes.push({ field: `${kindInfo(kind).label.toLowerCase()} details`, from: '—', to: what.length ? `filled in (${what.join(', ')})` : 'filled in' });
+  }
+  if (picture && !item.image && !mine.has('image')) {
+    Object.assign(patch, { image: picture, images: [picture] });
+    changes.push({ field: 'picture', from: 'none', to: kind === 'book' ? 'the cover' : 'the poster' });
+  }
+  if (ai.title && ai.title.length >= 2 && ai.title !== item.title && !mine.has('title') && (item.type === 'instagram' || genericTitle(item.title))) {
+    patch.title = ai.title;
+    changes.push({ field: 'title', from: item.title, to: ai.title });
+  }
+  return { patch, changes };
+}
+
+// The title read: the provider's search, then the cover or poster from the save's own page (a book or film
+// site) or the page the provider found.
+async function readTitle(item, settings, key, pages, image, { fetchShopPage, region }) {
+  const d = item.details || {};
+  const known = Object.fromEntries(Object.entries(d).filter(([k, v]) => !['source', 'lookup', 'watch', 'watchRegion', 'watchCheckedOn'].includes(k) && v !== null && v !== '' && !(Array.isArray(v) && !v.length)));
+  const ig = item.instagram || {};
+  const ai = await understandTitleWithAI({
+    kind: kindOf(item), title: item.title || '', caption: ig.caption || '', description: item.description && item.description !== ig.caption ? item.description : '',
+    site: item.retailer || item.host || '', url: item.url || '', known: Object.keys(known).length ? known : null, region, pages, image,
+  }, settings, key);
+  ai.region = ai.details.watch?.length ? region : '';
+  let picture = '';
+  if (!item.image && ai.confidence >= TITLE_CONFIDENCE) {
+    for (const url of [...new Set([titleSite(item.url || '') ? item.url : '', ai.page].filter(Boolean))]) {
+      try {
+        const html = await fetchShopPage(url);
+        picture = html ? titlePicture(html, url) : '';
+      } catch {
+        /* unreadable: try the next */
+      }
+      if (picture) break;
+    }
+  }
+  return { ai, picture };
+}
 
 // --- Something to buy -----------------------------------------------------------------------------
 
@@ -384,7 +482,7 @@ async function readProduct(item, settings, key, pages, image, { fetchShopPage })
 // found for a product (fetchPage unless the caller says otherwise); loadImage(url) returns a small data: copy
 // of a picture, or null.
 // Throws when the provider fails, so a batch can stop on a bad key.
-export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null } = {}) {
+export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null, region = '' } = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt || (item.understoodAt && !force)) return null;
   const settings = await store.getSettings();
@@ -402,17 +500,19 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
   }
   // A product saved from its own shop page needs no first read: it is a product.
   const shopPage = item.type === 'product' && kindOf(item) === 'product' && !/facebook\.com$/i.test(item.host || '');
+  // Nor does a book, film or show saved from its own page on a book or film site.
+  const titlePage = TITLE_KINDS.includes(kindOf(item)) && titleSite(item.url || '')?.kind === kindOf(item);
   const image = await pictureOf(item, loadImage);
   let input = null;
   let ai = null;
-  if (!shopPage) {
+  if (!shopPage && !titlePage) {
     input = { ...contextFor(item, pages), image };
     ai = await understandWithAI(input, settings, key);
   }
   // Anything you changed in the meantime wins.
   let current = await store.getItem(id);
   if (!current || current.deletedAt) return null;
-  let { patch, changes, kind } = ai ? planUnderstanding(current, ai, sourceTextOf(input)) : { patch: {}, changes: [], kind: 'product' };
+  let { patch, changes, kind } = ai ? planUnderstanding(current, ai, sourceTextOf(input)) : { patch: {}, changes: [], kind: kindOf(current) };
   let reason = ai?.reason || '';
   let confidence = ai?.confidence ?? null;
   if (!hasOwnView(kind) && isShopping(current, ai)) {
@@ -426,10 +526,19 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
     reason = found.reason || reason;
     confidence = found.confidence;
   }
+  if (TITLE_KINDS.includes(kind)) {
+    const { ai: found, picture } = await readTitle({ ...current, ...patch }, settings, key, pages, image, { fetchShopPage, region: region || regionNow() });
+    current = (await store.getItem(id)) || current;
+    const title = planTitle({ ...current, ...patch }, found, picture);
+    patch = { ...patch, ...title.patch };
+    changes = [...changes, ...title.changes];
+    reason = found.reason || reason;
+    confidence = found.confidence;
+  }
   const before = Object.fromEntries(LOGGED.filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
   await store.updateItem(id, { ...patch, understoodAt: nowIso(), needsAi: false }, { by: 'ai' });
   if (changes.length) {
     await store.appendAiLog([{ id: uid(), runId: runId || `understand-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason, undone: false }]);
   }
-  return { kind, changed: changes.length > 0, aiKind: ai?.kind || 'product', confidence };
+  return { kind, changed: changes.length > 0, moved: 'kind' in patch, aiKind: ai?.kind || kind, confidence };
 }

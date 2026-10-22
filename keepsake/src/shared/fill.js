@@ -17,8 +17,8 @@ function incompleteDetails(kind, d = {}) {
   if (kind === 'recipe') return !d.ingredients?.length || !d.steps?.length;
   if (kind === 'workout') return !d.exercises?.length;
   if (kind === 'place') return !d.address || !d.locality || !d.region;
-  if (kind === 'media') return !d.year;
-  if (kind === 'book') return !d.author;
+  if (kind === 'media') return !d.year || !d.summary || !d.watchCheckedOn;
+  if (kind === 'book') return !d.author || !d.summary;
   return false;
 }
 

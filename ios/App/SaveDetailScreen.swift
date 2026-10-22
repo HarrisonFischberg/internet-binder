@@ -138,6 +138,21 @@ struct SaveDetailScreen: View {
             }
             .ksSurface()
             .padding(.top, 8)
+        } else if current.hasImage && (current.kind == "book" || current.kind == "media") {
+            // A cover or poster stands upright, like the thing itself.
+            Button {
+                if let url = current.url.flatMap(URL.init(string:)) { openURL(url) }
+            } label: {
+                SaveImage(current, symbolSize: 48)
+                    .frame(width: 200, height: 300)
+                    .ksSurface()
+            }
+            .buttonStyle(PressStyle())
+            .disabled(current.url == nil)
+            .accessibilityLabel(current.kind == "book" ? "Cover of \(current.title)" : "Poster for \(current.title)")
+            .accessibilityHint(current.url == nil ? "" : "Opens \(current.host ?? "the page")")
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
         } else if current.hasImage {
             // The picture opens where it came from: an Instagram reel's thumbnail (with its play
             // button) plays the reel.
@@ -174,6 +189,7 @@ struct SaveDetailScreen: View {
         case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; recipePanel }
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         case "product": productPanel
+        case "book", "media": shelfPanel
         default:
             if let text = [current.description, current.instagram?.caption].compactMap({ $0 }).first(where: { !$0.isEmpty }) {
                 Text(text).font(reading).foregroundStyle(t.ink).lineSpacing(4)
@@ -226,15 +242,7 @@ struct SaveDetailScreen: View {
                     }
                 }
             }
-            if !summary.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("AI summary").font(.caption.weight(.semibold)).foregroundStyle(t.ink)
-                        .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(Capsule().fill(t.stamp.opacity(0.18)))
-                    Text(summary).font(reading).foregroundStyle(t.ink).lineSpacing(3)
-                }
-                .accessibilityElement(children: .combine)
-            }
+            if !summary.isEmpty { aiSummary(summary) }
             if let caption {
                 VStack(alignment: .leading, spacing: 6) {
                     if !summary.isEmpty || !shopText.isEmpty {
@@ -243,6 +251,106 @@ struct SaveDetailScreen: View {
                     Text(caption).font(reading).foregroundStyle(summary.isEmpty && shopText.isEmpty ? t.ink : t.inkMuted).lineSpacing(4)
                 }
             }
+        }
+    }
+
+    /// Your AI provider's own words, labelled as such.
+    private func aiSummary(_ summary: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("AI summary").font(.caption.weight(.semibold)).foregroundStyle(t.ink)
+                .padding(.horizontal, 8).padding(.vertical, 2)
+                .background(Capsule().fill(t.stamp.opacity(0.18)))
+            Text(summary).font(reading).foregroundStyle(t.ink).lineSpacing(3)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// A book, film or show (Chrome's shelfFacts): what it's about, its facts, and for a film or show where
+    /// it streams, as your provider's web search found it (understand.js readTitle).
+    @ViewBuilder private var shelfPanel: some View {
+        let summary = d?["summary"]?.string ?? ""
+        let caption = [current.description, current.instagram?.caption].compactMap { $0 }.first(where: { !$0.isEmpty })
+        let facts = shelfFacts
+        let watch = d?["watch"]?.array ?? []
+        VStack(alignment: .leading, spacing: 18) {
+            if !summary.isEmpty { aiSummary(summary) }
+            else if let caption { Text(caption).font(reading).foregroundStyle(t.ink).lineSpacing(4) }
+            if !watch.isEmpty { watchCard(watch) }
+            if !facts.isEmpty {
+                card("About it") {
+                    ForEach(facts, id: \.0) { label, value in
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(label).font(.subheadline).foregroundStyle(t.inkMuted).frame(minWidth: 96, alignment: .leading)
+                            Text(value).font(reading).foregroundStyle(t.ink)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 8)
+                        .overlay(alignment: .bottom) { rule }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        }
+    }
+
+    private var shelfFacts: [(String, String)] {
+        func s(_ k: String) -> String { d?[k]?.string ?? "" }
+        func n(_ k: String) -> Int? { d?[k]?.number.map { Int($0) } }
+        let genres = d?["genres"]?.array?.compactMap(\.string).joined(separator: ", ") ?? ""
+        var out: [(String, String)] = []
+        if current.kind == "book" {
+            if !s("author").isEmpty { out.append(("By", s("author"))) }
+            if let y = n("year") { out.append(("Published", String(y))) }
+            if let p = n("pages") { out.append(("Pages", String(p))) }
+            if !genres.isEmpty { out.append(("Genre", genres)) }
+            return out
+        }
+        let series = s("format") == "series"
+        if let y = n("year") { out.append((series ? "Aired" : "Year", series && n("endYear") != nil && n("endYear") != y ? "\(y)–\(n("endYear")!)" : String(y))) }
+        if !s("director").isEmpty { out.append((series ? "Created by" : "Directed by", s("director"))) }
+        if let cast = d?["cast"]?.array?.compactMap(\.string), !cast.isEmpty { out.append(("Starring", cast.joined(separator: ", "))) }
+        if series, let seasons = n("seasons") {
+            let eps = n("episodes").map { " · \($0) episode\($0 == 1 ? "" : "s")" } ?? ""
+            out.append(("Seasons", "\(seasons)\(eps)"))
+        }
+        if !series, let m = n("runtimeMinutes") { out.append(("Runtime", m >= 60 ? "\(m / 60) h \(m % 60) min" : "\(m) min")) }
+        if !genres.isEmpty { out.append(("Genre", genres)) }
+        return out
+    }
+
+    /// Where to watch: each service opens its page for the title when the search found one.
+    private func watchCard(_ watch: [JSONValue]) -> some View {
+        let region = d?["watchRegion"]?.string ?? ""
+        let checked = (d?["watchCheckedOn"]?.string).flatMap { day -> String? in
+            let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
+            return f.date(from: day)?.formatted(.dateTime.month(.abbreviated).day().year())
+        }
+        let how = ["subscription": "Subscription", "free": "Free", "rent": "Rent", "buy": "Buy"]
+        return card("Where to watch") {
+            ForEach(Array(watch.enumerated()), id: \.offset) { _, w in
+                let service = w["service"]?.string ?? ""
+                let kind = how[w["how"]?.string ?? ""] ?? ""
+                let link = (w["url"]?.string).flatMap(URL.init(string:))
+                Button {
+                    if let link { openURL(link) }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(service).font(KSFont.name(.body)).foregroundStyle(t.ink)
+                        if !kind.isEmpty { Text(kind).font(.subheadline).foregroundStyle(t.inkMuted) }
+                        Spacer(minLength: 0)
+                        if link != nil { Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold)).foregroundStyle(KindStyle("media").color).accessibilityHidden(true) }
+                    }
+                    .frame(minHeight: 44)
+                    .overlay(alignment: .bottom) { rule }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PressStyle())
+                .disabled(link == nil)
+                .accessibilityLabel([service, kind].filter { !$0.isEmpty }.joined(separator: ", "))
+                .accessibilityHint(link == nil ? "" : "Opens \(service)")
+            }
+            Text(["Found by AI", region.isEmpty ? nil : "in \(region)", checked.map { "on \($0)" }].compactMap { $0 }.joined(separator: " ") + ". Run AI again to check.")
+                .font(.footnote).foregroundStyle(t.inkMuted).padding(.top, 8)
         }
     }
 

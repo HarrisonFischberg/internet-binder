@@ -24,6 +24,9 @@ Keepsake has no server, no account, no analytics and no advertising. It contacts
   a small copy of the picture its card shows, made on the device). *Understanding a product* also lets
   the provider search the web for the product, then reads the one shop page it found (a page its search
   returned), without cookies, for that page's structured product data.
+  *Understanding a book, film or show* lets the provider search the web for the title (with your country,
+  for where it streams), then reads one page about it (the save's own page, else one the search returned),
+  without cookies, for its cover or poster.
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and
   covers load from Wikimedia Commons and `covers.openlibrary.org`.
