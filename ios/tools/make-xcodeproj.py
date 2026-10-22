@@ -17,7 +17,7 @@ with open(os.path.join(HERE, '..', '..', 'keepsake', 'manifest.json')) as f:
 
 T = {  # target key: (name, product, productType, folder, bundle id, extra settings)
  'app':   ('Keepsake', 'Keepsake.app', 'com.apple.product-type.application', 'App', 'com.harrisonfischberg.keepsake',
-           {'INFOPLIST_FILE': 'Config/App-Info.plist', 'INFOPLIST_KEY_CFBundleDisplayName': 'Keepsake', 'INFOPLIST_KEY_UILaunchScreen_Generation': 'YES',
+           {'INFOPLIST_FILE': 'Config/App-Info.plist', 'INFOPLIST_KEY_CFBundleDisplayName': 'Binder', 'INFOPLIST_KEY_UILaunchScreen_Generation': 'YES',
             'INFOPLIST_KEY_UIApplicationSceneManifest_Generation': 'YES',
             'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone': '"UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"',
             'INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad': '"UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"',
@@ -25,13 +25,13 @@ T = {  # target key: (name, product, productType, folder, bundle id, extra setti
             'ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES': '"AppIconNotebook AppIconAtlas AppIconSwiss"',
             'LD_RUNPATH_SEARCH_PATHS': '("$(inherited)", "@executable_path/Frameworks")'}),
  'share': ('KeepsakeShare', 'KeepsakeShare.appex', 'com.apple.product-type.app-extension', 'ShareExtension', 'com.harrisonfischberg.keepsake.share',
-           {'INFOPLIST_FILE': 'Config/Share-Info.plist', 'INFOPLIST_KEY_CFBundleDisplayName': 'Keepsake', 'CODE_SIGN_ENTITLEMENTS': 'Config/Share.entitlements',
+           {'INFOPLIST_FILE': 'Config/Share-Info.plist', 'INFOPLIST_KEY_CFBundleDisplayName': 'Binder', 'CODE_SIGN_ENTITLEMENTS': 'Config/Share.entitlements',
             'APPLICATION_EXTENSION_API_ONLY': 'YES', 'SKIP_INSTALL': 'YES',
             'LD_RUNPATH_SEARCH_PATHS': '("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks")'}),
  'uitests': ('KeepsakeUITests', 'KeepsakeUITests.xctest', 'com.apple.product-type.bundle.ui-testing', 'UITests', 'com.harrisonfischberg.keepsake.uitests',
            {'TEST_TARGET_NAME': 'Keepsake', 'LD_RUNPATH_SEARCH_PATHS': '("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks")'}),
  'widgets': ('KeepsakeWidgets', 'KeepsakeWidgets.appex', 'com.apple.product-type.app-extension', 'Widgets', 'com.harrisonfischberg.keepsake.widgets',
-           {'INFOPLIST_FILE': 'Config/Widgets-Info.plist', 'INFOPLIST_KEY_CFBundleDisplayName': 'Keepsake', 'CODE_SIGN_ENTITLEMENTS': 'Config/Widgets.entitlements',
+           {'INFOPLIST_FILE': 'Config/Widgets-Info.plist', 'INFOPLIST_KEY_CFBundleDisplayName': 'Binder', 'CODE_SIGN_ENTITLEMENTS': 'Config/Widgets.entitlements',
             'APPLICATION_EXTENSION_API_ONLY': 'YES', 'SKIP_INSTALL': 'YES',
             'LD_RUNPATH_SEARCH_PATHS': '("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks")'}),
 }
