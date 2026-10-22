@@ -2,7 +2,7 @@
 //   tools/icons/styles/<id>/{light,dark,tinted}-1024.png   full-bleed squares for iOS and Mac (the OS rounds them)
 //   keepsake/icons/styles/<id>/icon<N>.png, .../dark/icon<N>.png   rounded toolbar icons for Chrome and Safari
 //   tools/icons/styles/manifest.json
-//   and for the app's own icon (pantry, the Patchwork art) the Xcode assets that use it: the iOS AppIcon and
+//   and for the app's own icon (pantry, the four-scraps art) the Xcode assets that use it: the iOS AppIcon and
 //   its Appearance preview, and the Safari for Mac app icon plus its Icon-pantry picker tile.
 // Run from the repo root: node tools/icons/make-style-icons.mjs [id ...]   (no ids: every style)
 // Needs Playwright with Chromium (set PLAYWRIGHT_MODULE to its index.mjs if it is not resolvable).

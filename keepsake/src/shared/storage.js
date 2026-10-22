@@ -60,7 +60,7 @@ export const STYLES = [
   { value: 'swiss', label: 'Swiss Index', about: 'Hairlines, condensed type, one signal red.', swatch: ['#FAFAF7', '#FFFFFF', '#CC2A1E', '#0A0A0A'] },
 ];
 
-// Toolbar icons (Settings → Appearance): one per style. Pantry's (id pantry) is the app's own Patchwork
+// Toolbar icons (Settings → Appearance): one per style. Pantry's (id pantry) is the app's own four-scraps
 // icon and the default, so it carries the app's name rather than its style's.
 export const ICONS = STYLES.map((s) => ({ value: s.value, label: s.value === 'pantry' ? 'Keepsake' : s.label }));
 

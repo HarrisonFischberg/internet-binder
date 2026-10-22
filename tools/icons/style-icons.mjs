@@ -5,7 +5,7 @@ export const STYLE_ICONS = ['pantry', 'notebook', 'gallery', 'atlas', 'swiss'];
 
 export const ICON_LABELS = {
   pocket: 'Felt pocket',
-  pantry: 'Keepsake', // the app's own icon (Patchwork art), shown with the other styles' icons
+  pantry: 'Keepsake', // the app's own icon (four-scraps art), shown with the other styles' icons
   notebook: 'Field Notebook',
   gallery: 'Gallery',
   atlas: 'Night Atlas',
@@ -17,7 +17,7 @@ const bookmark = (x, y, size, attrs) =>
   `<path transform="translate(${x} ${y}) scale(${size / 24})" d="M6 3h12v18l-6-4-6 4z" ${attrs}/>`;
 
 const ICONS = {
-  // The app's own icon (Patchwork, Oct 22 2026): four pastel scraps, the big one terracotta with a cream
+  // The app's own icon (four scraps, picked Oct 22 2026): four pastel scraps, the big one terracotta with a cream
   // bookmark tag, tilted with an offset shadow. Toolbar sizes (small) sit straight, larger, with thicker lines.
   pantry(dark, small) {
     const ink = '#2A2420', cream = '#FFF7E8';

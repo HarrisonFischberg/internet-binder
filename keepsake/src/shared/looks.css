@@ -249,7 +249,7 @@
   color: var(--c-on-kind-fill);
 }
 
-/* The logo: the app icon's four scraps (Patchwork), tilted, with the same hard shadow. The outline is
+/* The logo: the app icon's four scraps, tilted, with the same hard shadow. The outline is
    always the icon's ink (it matches the seams); the shadow follows the line colour, cream in dark like the
    dark app icon. */
 :root:not([data-style]) .mark {

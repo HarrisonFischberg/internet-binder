@@ -1,5 +1,5 @@
 // Toolbar icon: the style icon picked in Settings → Appearance, in the version that suits the
-// browser's light or dark theme. The manifest ships the light Patchwork icon (style id pantry); extension pages
+// browser's light or dark theme. The manifest ships the light four-scraps icon (style id pantry); extension pages
 // (which can read prefers-color-scheme, unlike the service worker) report the theme and the choice, and
 // the last ones seen are kept so the worker can restore them after a browser restart.
 

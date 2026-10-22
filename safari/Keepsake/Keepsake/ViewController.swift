@@ -192,7 +192,7 @@ enum AppIcon: String, CaseIterable, Identifiable {
         case .gallery: "Gallery"; case .atlas: "Night Atlas"; case .swiss: "Swiss Index"
         }
     }
-    /// pantry is the bundle's own (Patchwork) icon; a saved "pocket" (now gone) lands on it too.
+    /// pantry is the bundle's own (four-scraps) icon; a saved "pocket" (now gone) lands on it too.
     static var current: AppIcon { AppIcon(rawValue: UserDefaults.standard.string(forKey: "appIcon") ?? "") ?? .pantry }
 
     @MainActor func apply() {

@@ -163,7 +163,7 @@ struct StyleCard: View {
     }
 }
 
-/// App icon: Keepsake (the app's own Patchwork icon) or one per style, each following light, dark and tinted
+/// App icon: Keepsake (the app's own four-scraps icon) or one per style, each following light, dark and tinted
 /// home screens.
 struct IconPicker: View {
     @State private var current = UIApplication.shared.alternateIconName
