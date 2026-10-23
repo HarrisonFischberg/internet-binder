@@ -157,6 +157,8 @@ struct CollectionEditor: View {
     @State private var name = ""
     @State private var keywords = ""
     @State private var pinned = false
+    @State private var words: CollectionWords?
+    @State private var allBuiltIn = false
 
     var body: some View {
         NavigationStack {
@@ -166,6 +168,7 @@ struct CollectionEditor: View {
                     TextField("e.g. dutch oven, skillet, knife", text: $keywords, axis: .vertical)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                 } header: { Text("Keywords") } footer: { Text("Saves with these words in them are filed here. Separate them with commas.") }
+                wordsSection
                 Section { Toggle("Pinned", isOn: $pinned) }
                 Section {
                     Button("Delete collection", role: .destructive) { delete() }
@@ -193,7 +196,57 @@ struct CollectionEditor: View {
                 keywords = (collection.keywords ?? []).joined(separator: ", ")
                 pinned = collection.pinned ?? false
             }
+            .task { words = try? await model.library?.words(forCollection: collection.id) }
         }
+    }
+
+    private var typed: Set<String> {
+        Set(keywords.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }.filter { !$0.isEmpty })
+    }
+
+    /// Words that already file saves here without being typed: learned from your moves, and the
+    /// built-in ones for a kind like Kitchen. Tapping one adds it to Keywords (kept on Save).
+    @ViewBuilder private var wordsSection: some View {
+        let mine = typed
+        let learned = (words?.learned ?? []).filter { !mine.contains($0) }
+        let builtIn = (words?.builtIn ?? []).filter { !mine.contains($0.word) }
+        if !learned.isEmpty || !builtIn.isEmpty {
+            Section {
+                if !learned.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Learned from your moves").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                        Flow(spacing: 8) { ForEach(learned, id: \.self) { addChip($0, $0) } }
+                    }
+                    .padding(.vertical, 4)
+                }
+                if !builtIn.isEmpty {
+                    let shown = allBuiltIn ? builtIn : Array(builtIn.prefix(12))
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Built in for \(words?.builtInName ?? name)").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                        Flow(spacing: 8) { ForEach(shown, id: \.self) { addChip($0.word, $0.label) } }
+                        if shown.count < builtIn.count {
+                            Button("Show all \(builtIn.count)") { allBuiltIn = true }
+                                .buttonStyle(.borderless).font(.subheadline).frame(minHeight: 44)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } header: { Text("Already files saves here") } footer: {
+                Text("These work without you typing them. Tap one to make it yours: your keywords count most.")
+            }
+        }
+    }
+
+    private func addChip(_ word: String, _ label: String) -> some View {
+        Button {
+            let current = keywords.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            keywords = (current + [word]).joined(separator: ", ")
+            Haptic.checked()
+        } label: {
+            Label(label, systemImage: "plus").font(.subheadline)
+        }
+        .buttonStyle(.bordered).buttonBorderShape(.capsule)
+        .accessibilityLabel("Add \(label) to keywords")
     }
 
     /// No "Are you sure?": the toast's Undo brings it back with its saves filed in it.

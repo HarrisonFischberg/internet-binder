@@ -115,6 +115,21 @@
     async review() {
       return (await store.getItems()).filter((i) => K.kinds.needsCollection(i) && !i.purchased).map(withFact);
     },
+    // What it learned from your moves (Chrome's Settings → Categorization).
+    async learned() {
+      const [prefs, cols] = await Promise.all([store.getPrefs(), store.getCollections()]);
+      return K.categorizer.learnedSummary(prefs, cols);
+    },
+    async clearLearned() {
+      await store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
+    },
+    // The words that already file saves into a collection besides yours (categorizer.collectionWords).
+    async collectionWords(collectionId) {
+      const [prefs, cols] = await Promise.all([store.getPrefs(), store.getCollections()]);
+      const col = cols.find((c) => c.id === collectionId);
+      const w = K.categorizer.collectionWords(col, cols, prefs);
+      return { learned: w.learned.map((x) => x.term), builtIn: w.builtIn.map((k) => ({ word: k, label: K.categorizer.keywordLabel(k) })), builtInName: w.builtInName };
+    },
     async ofKind(kind) {
       return (await store.getItems()).filter((i) => i.kind === kind).map(withFact);
     },

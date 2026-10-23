@@ -270,6 +270,9 @@ export function starIcon(filled = false) {
 export function moreIcon() {
   return svg(['M5 12h.01M12 12h.01M19 12h.01']);
 }
+export function plusIcon() {
+  return svg(['M12 5v14M5 12h14']);
+}
 export function checkIcon() {
   return svg(['m5 12.5 4.5 4.5L19 7.5']);
 }

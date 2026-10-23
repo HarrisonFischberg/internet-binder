@@ -52,6 +52,9 @@ struct SettingsScreen: View {
                 } footer: { Text("Ten quiet, original tunes play while you follow a recipe step by step. They stay silent when your iPhone is on silent and never stop a podcast or song you're already playing.") }
                 noticesSection
                 Section {
+                    NavigationLink("What it learned") { LearnedScreen() }
+                } header: { Text("Sorting") } footer: { Text("When you move a save or file one from Review, Internet Binder remembers which words and shops go where.") }
+                Section {
                     NavigationLink("Change log") { ChangeLogScreen() }
                 } footer: { Text("Every change AI made, with Undo.") }
                 Section("Your library") {
@@ -333,6 +336,56 @@ struct ChangeLogScreen: View {
         .task { await load() }
     }
     private func load() async { log = (try? await model.library?.aiLog()) ?? [] }
+}
+
+/// What sorting picked up from your moves (Chrome's Settings → Categorization), with Clear.
+/// Learning stays on this iPhone; Chrome and Safari learn on their own.
+struct LearnedScreen: View {
+    @Environment(LibraryModel.self) private var model
+    @State private var learned: LearnedView?
+    @State private var clearing = false
+    var body: some View {
+        List {
+            if let l = learned {
+                if l.terms.isEmpty && l.retailers.isEmpty {
+                    Section {
+                        Text("Nothing learned yet.").font(.headline)
+                        Text("Move a save to another collection, or file one from Review, and Internet Binder picks up the pattern for next time.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                } else {
+                    if !l.terms.isEmpty {
+                        Section {
+                            ForEach(l.terms, id: \.self) { t in row(t.term, t.collectionName) }
+                        } header: { Text("Words") } footer: {
+                            Text(l.termCount > l.terms.count ? "The \(l.terms.count) strongest of \(l.termCount) words, from \(l.moveCount) moves." : "From \(l.moveCount) \(l.moveCount == 1 ? "move" : "moves").")
+                        }
+                    }
+                    if !l.retailers.isEmpty {
+                        Section("Shops") { ForEach(l.retailers, id: \.self) { r in row(r.host, r.collectionName) } }
+                    }
+                    Section {
+                        Button("Clear what it learned", role: .destructive) { clearing = true }
+                    } footer: { Text("Your collections and their keywords are kept.") }
+                }
+            }
+        }
+        .navigationTitle("What it learned")
+        .task { await load() }
+        .confirmationDialog("Forget every word and shop it learned?", isPresented: $clearing, titleVisibility: .visible) {
+            Button("Clear", role: .destructive) { Task { try? await model.library?.clearLearned(); Haptic.settled(); await load() } }
+        }
+    }
+    private func row(_ word: String, _ collection: String) -> some View {
+        HStack {
+            Text(word)
+            Spacer()
+            Label(collection, systemImage: "arrow.right").labelStyle(.titleAndIcon).foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(word) goes to \(collection)")
+    }
+    private func load() async { learned = try? await model.library?.learned() }
 }
 
 /// Every network path in plain words (mirrors PRIVACY.md for iOS).
