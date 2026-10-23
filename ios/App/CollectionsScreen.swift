@@ -222,7 +222,7 @@ struct CollectionEditor: View {
                 if !builtIn.isEmpty {
                     let shown = allBuiltIn ? builtIn : Array(builtIn.prefix(12))
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Built in for \(words?.builtInName ?? name)").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                        Text("Built-in \(words?.builtInName ?? name) words").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
                         Flow(spacing: 8) { ForEach(shown, id: \.self) { addChip($0.word, $0.label) } }
                         if shown.count < builtIn.count {
                             Button("Show all \(builtIn.count)") { allBuiltIn = true }
@@ -243,9 +243,18 @@ struct CollectionEditor: View {
             keywords = (current + [word]).joined(separator: ", ")
             Haptic.checked()
         } label: {
-            Label(label, systemImage: "plus").font(.subheadline)
+            // One line at its own width: a bordered Label in a Form row sizes to a narrow column.
+            HStack(spacing: 5) {
+                Image(systemName: "plus").font(.caption.weight(.bold))
+                Text(label).lineLimit(1)
+            }
+            .font(.subheadline.weight(.medium)).foregroundStyle(.tint)
+            .padding(.horizontal, 14).frame(minHeight: 44)
+            .background(.tint.opacity(0.14), in: Capsule())
+            .fixedSize()
+            .contentShape(Capsule())
         }
-        .buttonStyle(.bordered).buttonBorderShape(.capsule)
+        .buttonStyle(PressStyle())
         .accessibilityLabel("Add \(label) to keywords")
     }
 

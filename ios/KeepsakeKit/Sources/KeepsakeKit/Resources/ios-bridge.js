@@ -120,8 +120,28 @@
       const [prefs, cols] = await Promise.all([store.getPrefs(), store.getCollections()]);
       return K.categorizer.learnedSummary(prefs, cols);
     },
+    // Returns what restoreLearned needs to bring it all back.
     async clearLearned() {
+      const { learnedKeywords, retailerPrefs, corrections } = await store.getPrefs();
       await store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
+      return { all: { learnedKeywords, retailerPrefs, corrections } };
+    },
+    // Forget one learned word ('term') or shop ('shop'); returns what restoreLearned needs to undo it.
+    async forgetLearned(kind, key) {
+      const field = kind === 'shop' ? 'retailerPrefs' : 'learnedKeywords';
+      const all = { ...((await store.getPrefs())[field] || {}) };
+      if (!all[key]) return null;
+      const entry = all[key];
+      delete all[key];
+      await store.updatePrefs({ [field]: all });
+      return { field, key, entry };
+    },
+    async restoreLearned(undo) {
+      if (!undo) return;
+      if (undo.all) return store.updatePrefs(undo.all);
+      const all = { ...((await store.getPrefs())[undo.field] || {}) };
+      all[undo.key] = undo.entry;
+      await store.updatePrefs({ [undo.field]: all });
     },
     // The words that already file saves into a collection besides yours (categorizer.collectionWords).
     async collectionWords(collectionId) {

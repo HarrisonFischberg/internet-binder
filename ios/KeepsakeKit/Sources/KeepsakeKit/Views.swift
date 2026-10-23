@@ -61,7 +61,6 @@ public struct Destination: Decodable, Sendable, Hashable, Identifiable {
     public var id: String { value }
 }
 
-/// A save's own screen: the save plus what Chrome's code formats for it.
 /// What Internet Binder learned from your moves (categorizer.js learnedSummary), strongest first.
 public struct LearnedView: Decodable, Sendable {
     public struct Term: Decodable, Sendable, Hashable { public let term: String; public let collectionId: String; public let collectionName: String; public let weight: Double }
@@ -81,6 +80,7 @@ public struct CollectionWords: Decodable, Sendable {
     public let builtInName: String?
 }
 
+/// A save's own screen: the save plus what Chrome's code formats for it.
 public struct SaveDetail: Decodable, Sendable {
     public struct Maps: Decodable, Sendable { public let google: String?; public let apple: String? }
     public let item: Save
@@ -138,8 +138,20 @@ extension Library {
 
     public func words(forCollection id: String) async throws -> CollectionWords { try await prepare(); return try await core.call("views.collectionWords", [id], as: CollectionWords.self) }
 
-    /// Forgets every learned word and shop habit; collections and their keywords stay.
-    public func clearLearned() async throws { try await prepare(); try await core.call("views.clearLearned") }
+    /// Forgets every learned word and shop habit; collections and their keywords stay. Returns what
+    /// `restoreLearned` needs to undo it.
+    public func clearLearned() async throws -> String { try await prepare(); return try await core.callJSON("views.clearLearned") }
+
+    /// Forgets one learned word (or, with `shop`, a shop's habit). Returns what `restoreLearned` needs to undo it.
+    public func forgetLearned(_ key: String, shop: Bool = false) async throws -> String? {
+        try await prepare()
+        let args = String(decoding: try JSONSerialization.data(withJSONObject: [shop ? "shop" : "term", key]), as: UTF8.self)
+        let undo = try await core.callJSON("views.forgetLearned", argsJSON: args)
+        return undo == "null" || undo.isEmpty ? nil : undo
+    }
+
+    /// Undo for `forgetLearned` and `clearLearned`.
+    public func restoreLearned(_ undo: String) async throws { _ = try await core.callJSON("views.restoreLearned", argsJSON: "[\(undo)]") }
 
     public func goals(for itemId: String) async throws -> [GoalView] { try await prepare(); return try await core.call("views.goals", [itemId], as: [GoalView].self) }
 
