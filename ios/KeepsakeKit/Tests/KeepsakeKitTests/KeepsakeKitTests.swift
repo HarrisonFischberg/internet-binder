@@ -493,6 +493,30 @@ struct DestinationTests {
         #expect(try lib.waiting().count == 1)
     }
 
+    /// Home's first frame: the glance matches what the whole library says, without reading it all.
+    @Test func glanceMatchesTheWholeLibrary() async throws {
+        let lib = try library()
+        let col = try await lib.createCollection(named: "Gifts")
+        var ids: [String] = []
+        for i in 0..<10 {
+            let s = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/g-\(i)", title: "Gift \(i)", text: nil)).save)
+            ids.append(s.id)
+        }
+        try await lib.put(Array(ids[0..<3]), in: col.id)
+        try await lib.put([ids[3]], in: "kind:place")
+        try await lib.put([ids[4]], in: "kind:recipe")
+        try await lib.trash([ids[9]])
+        let all = try lib.saves()
+        let g = try lib.glance()
+        #expect(g.recent.map(\.id) == Array(all.prefix(8)).map(\.id))
+        #expect(g.collectedCount == 3)
+        #expect(g.collected.count == 3)
+        #expect(g.lifestyleCount == 2)
+        #expect(g.lifestyleKinds == 2)
+        #expect(g.reviewCount == all.filter { $0.needsCollection && $0.purchased != true }.count)
+        #expect(g.collections == (try lib.collections()).count)
+    }
+
     @Test func undoRemovesOutright() async throws {
         let lib = try library()
         let saved = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/oops", title: "Oops", text: nil)).save)

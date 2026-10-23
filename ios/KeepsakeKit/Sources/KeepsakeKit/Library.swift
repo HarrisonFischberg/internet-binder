@@ -167,6 +167,49 @@ public final class Library: @unchecked Sendable {
         }
     }
 
+    /// What Home shows first: the newest saves, a few for each shelf's pictures, and the counts, read
+    /// through indexed columns so no other save is decoded. The app draws this on its first frame;
+    /// `observeSaves` (every save decoded, which takes a moment on a big library) replaces it.
+    public struct Glance: Sendable {
+        public var recent: [Save] = []
+        public var collected: [Save] = []
+        public var lifestyle: [Save] = []
+        public var collections = 0
+        public var collectedCount = 0
+        public var lifestyleCount = 0
+        public var lifestyleKinds = 0
+        public var reviewCount = 0
+        public init() {}
+    }
+
+    public func glance(recent: Int = 8, perShelf: Int = 12) throws -> Glance {
+        var g = Glance()
+        try database.pool.read { db in
+            let decoder = JSONDecoder()
+            func saves(_ filter: String, _ limit: Int) throws -> [Save] {
+                try Row.fetchAll(db, sql: "SELECT body, fact FROM item WHERE deletedAt IS NULL \(filter) ORDER BY createdAt DESC LIMIT ?", arguments: [limit])
+                    .compactMap { row in
+                        guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
+                        save.fact = row["fact"]
+                        return save
+                    }
+            }
+            g.recent = try saves("", recent)
+            g.collected = try saves("AND COALESCE(collectionId, '') != ''", perShelf)
+            g.lifestyle = try saves("AND kind NOT IN ('product', 'link')", perShelf)
+            g.collections = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM collection") ?? 0
+            g.reviewCount = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM item WHERE deletedAt IS NULL AND COALESCE(collectionId, '') = ''
+                AND kind IN ('product', 'link') AND COALESCE(purchased, 0) = 0
+                """) ?? 0
+        }
+        g.collectedCount = try database.liveItemCounts(by: "collectionId").values.reduce(0, +)
+        let lifestyle = try database.liveItemCounts(by: "kind").filter { $0.key != "product" && $0.key != "link" }
+        g.lifestyleCount = lifestyle.values.reduce(0, +)
+        g.lifestyleKinds = lifestyle.count
+        return g
+    }
+
     /// Recent saves for widgets: opens the shared library read-only-ish, without the JavaScript core.
     public static func recentSaves(limit: Int = 20, path: String? = nil) throws -> [Save] {
         let db = try RecordDatabase(path: path ?? RecordDatabase.defaultPath(), secrets: MemorySecrets())

@@ -56,6 +56,8 @@ final class LibraryModel {
     private(set) var reviewCount = 0
     private(set) var problem: String?
     private(set) var loaded = false
+    /// Home's first frame (Recent, the shelves, their counts) until every save is read.
+    private(set) var glance: Library.Glance?
     var toast: Toast?
     /// "🎉 Cooked!": a moment in the middle of the screen when a stamp lands.
     var celebration: Toast?
@@ -114,7 +116,11 @@ final class LibraryModel {
         do {
             // UI tests pass a name in KEEPSAKE_DB for a fresh library in the app's temporary folder.
             let name = ProcessInfo.processInfo.environment["KEEPSAKE_DB"]
-            library = try Library(path: name.map { NSTemporaryDirectory() + $0 + ".sqlite" })
+            let library = try Library(path: name.map { NSTemporaryDirectory() + $0 + ".sqlite" })
+            self.library = library
+            // A few indexed reads, so Home opens filled in rather than waiting on the whole library.
+            glance = try? library.glance()
+            reviewCount = glance?.reviewCount ?? 0
         } catch {
             library = nil
             problem = "Internet Binder couldn't open your library. \(error.localizedDescription)"
@@ -151,6 +157,7 @@ final class LibraryModel {
                 saves = list
                 reviewCount = list.filter { $0.needsCollection && $0.purchased != true }.count
                 loaded = true
+                glance = nil
                 widgetsChanged()
             }
         } catch {
