@@ -52,6 +52,7 @@ const state = {
   selected: new Set(), // saves, or collections on the Collections page
   shown: 120,
   scan: null,
+  placeLookup: null, // places being found on the map (session storage: keepsake_placeLookup)
   fillJob: null, // the background check running now or last (session storage: keepsake_fillJob)
   localJob: null, // a job running in this page (an Instagram import), shown in the same bar
 };
@@ -114,6 +115,11 @@ async function boot() {
     state.fillJob = null;
   }
   renderJobBar();
+  try {
+    state.placeLookup = (await chrome.storage.session.get(SESSION_KEYS.placeLookup))?.[SESSION_KEYS.placeLookup] || null;
+  } catch {
+    state.placeLookup = null;
+  }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'session' && changes[SESSION_KEYS.fillJob]) {
       const was = state.fillJob;
@@ -121,6 +127,14 @@ async function boot() {
       renderJobBar();
       // Finished: say so once, and take the bar away after a while.
       if (was?.running && state.fillJob && !state.fillJob.running) setTimeout(renderJobBar, JOB_SHOWN_MS + 200);
+    }
+    if (area === 'session' && changes[SESSION_KEYS.placeLookup]) {
+      state.placeLookup = changes[SESSION_KEYS.placeLookup].newValue || null;
+      if (placesMap?.box.isConnected) {
+        const note = placesMapNote(mapPlaces().filter((i) => !hasPin(i)));
+        placesMap.note.replaceWith(note);
+        placesMap.note = note;
+      }
     }
     // The session copy is the scan's summary; its posts come with the scan from the worker.
     if (area === 'session' && changes.keepsake_igScan && state.route.name === 'import') {
@@ -1788,6 +1802,7 @@ function renderPlaces(view, items) {
   const current = placesView();
   const seg = (value, label) => el('button', { type: 'button', class: `library-tab ${current === value ? 'on' : ''}`, role: 'tab', 'aria-selected': current === value ? 'true' : 'false', onClick: () => setPlacesView(value) }, [label]);
   view.append(el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Places view' }, [seg('list', 'List'), seg('map', 'Map'), seg('review', review.length ? `Places review · ${review.length}` : 'Places review')]));
+  findPlacesOnMap();
   if (current === 'map') renderPlacesMap(view, ready);
   else if (current === 'review') renderPlacesReview(view, review, items);
   else renderPlaceList(view, ready, review.length);
@@ -1866,11 +1881,70 @@ async function mapAllowed() {
   try { return await chrome.permissions.contains({ origins: LOOKUP_SOURCES.places.origins }); } catch { return false; }
 }
 
+// Places with no pin are looked up on their own (the background worker, Lookups only, at OpenStreetMap's
+// pace) whenever Places is open: no button. Asked at most every half minute; the worker skips any it has
+// already searched for with the same name and address.
+const PLACE_LOOKUP_EVERY_MS = 30000;
+let placeLookupAskedAt = 0;
+async function findPlacesOnMap() {
+  if (Date.now() - placeLookupAskedAt < PLACE_LOOKUP_EVERY_MS || state.placeLookup?.running) return;
+  placeLookupAskedAt = Date.now();
+  if (!(await mapAllowed())) return;
+  const res = await send({ type: MSG.LOOKUP_PLACES }).catch(() => null);
+  if (res?.job) state.placeLookup = res.job;
+}
+
+// The map is drawn once and kept: pins come and go as places are found, without redrawing it (and
+// losing where you'd panned to) every time a save changes.
+let placesMap = null; // { box, mapEl, note, map, style, markers: Map(id -> { marker, sig }), moved }
+
+// Under the map: places being found right now, or the ones that couldn't be, by name, each opening its
+// save so you can give it a street address.
+function placesMapNote(missing) {
+  const job = state.placeLookup;
+  if (job?.running) {
+    return el('p', { class: 'help map-note', role: 'status' }, [el('span', { class: 'map-note-dot', 'aria-hidden': 'true' }),
+      `Finding places on the map… ${Math.min(job.done, job.total)} of ${job.total}`]);
+  }
+  if (!missing.length) return el('p', { class: 'help map-note', role: 'status' });
+  const one = missing.length === 1;
+  const shown = missing.slice(0, 3);
+  const names = [];
+  shown.forEach((item, n) => {
+    if (n) names.push(n === shown.length - 1 && missing.length <= 3 ? ' and ' : ', ');
+    names.push(el('button', { type: 'button', class: 'link-btn', onClick: () => openSave(item.id) }, [item.title]));
+  });
+  if (missing.length > 3) names.push(` and ${missing.length - 3} more`);
+  const why = job?.offline ? `OpenStreetMap didn’t answer, so ${one ? 'it’s' : 'they’re'} looked up again next time.`
+    : `OpenStreetMap couldn’t find ${one ? 'it' : 'them'} from the name and city. Open ${one ? 'it' : 'one'} to add a street address.`;
+  return el('p', { class: 'help map-note', role: 'status' }, [...names, ` ${one ? 'isn’t' : 'aren’t'} on the map. ${why}`]);
+}
+
+const hasPin = (i) => Number.isFinite(i.details?.lat) && Number.isFinite(i.details?.lng);
+// The places the map shows: the ones on your list (named, with a state).
+const mapPlaces = () => state.items.filter((i) => !i.deletedAt && kindOf(i) === 'place' && !placeReviewReasons(i).length);
+
 function renderPlacesMap(view, items) {
+  const pinned = items.filter(hasPin);
+  const unpinned = items.filter((i) => !hasPin(i));
+  // Lookups turned off in Settings: the map goes with them.
+  if (placesMap && !state.settings?.lookups?.places) {
+    placesMap.map?.remove();
+    placesMap = null;
+  }
+  if (placesMap) {
+    view.append(placesMap.box);
+    const note = placesMapNote(unpinned);
+    placesMap.note.replaceWith(note);
+    placesMap.note = note;
+    if (placesMap.map) {
+      placesMap.map.resize();
+      syncPlacePins(pinned);
+    }
+    return;
+  }
   const box = el('div', { class: 'places-map-wrap' });
   view.append(box);
-  const pinned = items.filter((i) => Number.isFinite(i.details?.lat) && Number.isFinite(i.details?.lng));
-  const unpinned = items.length - pinned.length;
   mapAllowed().then(async (ok) => {
     if (!ok) {
       box.append(el('div', { class: 'recipe-empty map-off' }, [
@@ -1881,45 +1955,82 @@ function renderPlacesMap(view, items) {
           try { granted = await chrome.permissions.request({ origins: LOOKUP_SOURCES.places.origins }); } catch { granted = false; }
           if (!granted) { UI.toast('Chrome didn’t grant access, so the map stays off.', { kind: 'danger' }); return; }
           await store.updateSettings({ lookups: { ...(state.settings.lookups || {}), places: true } });
-          const res = await send({ type: MSG.FILL_KIND, kind: 'place' });
-          if (res?.count) UI.toast(`Finding ${pluralize(res.count, 'place', 'places')} on the map…`, { duration: 3000 });
+          placeLookupAskedAt = 0;
+          findPlacesOnMap();
         } }, ['Turn on the map and place lookups'])]),
       ]));
       return;
     }
-    const mapEl = el('div', { class: 'places-map', role: 'region', 'aria-label': `Map of ${pluralize(pinned.length, 'place', 'places')}` });
-    box.append(mapEl);
-    if (unpinned) {
-      box.append(el('p', { class: 'help map-note' }, [`${pluralize(unpinned, 'place has', 'places have')} no pin yet. `,
-        el('button', { type: 'button', class: 'link-btn', onClick: async () => { await send({ type: MSG.FILL_KIND, kind: 'place' }); UI.toast('Looking them up…', { duration: 2500 }); } }, ['Look them up']),
-        ' · or add an address in Edit details.']));
-    }
+    const mapEl = el('div', { class: 'places-map', role: 'region', 'aria-label': 'Map of your places' });
+    const note = placesMapNote(unpinned);
+    box.append(mapEl, note);
+    placesMap = { box, mapEl, note, map: null, style: '', markers: new Map(), moved: false };
     let maplibregl;
-    try { maplibregl = await loadMapLibre(); } catch (e) { mapEl.replaceWith(el('p', { class: 'help help-error' }, [e.message])); return; }
-    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
-    const map = new maplibregl.Map({ container: mapEl, style: `https://tiles.openfreemap.org/styles/${dark ? 'dark' : 'positron'}`, center: [0, 20], zoom: 1.4, attributionControl: { compact: true }, cooperativeGestures: false });
+    try { maplibregl = await loadMapLibre(); } catch (e) { mapEl.replaceWith(el('p', { class: 'help help-error' }, [e.message])); placesMap = null; return; }
+    const map = new maplibregl.Map({ container: mapEl, style: placesMapStyle(), center: [0, 20], zoom: 1.4, attributionControl: { compact: true }, cooperativeGestures: false });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-    const bounds = new maplibregl.LngLatBounds();
-    for (const item of pinned) {
-      const d = item.details;
-      const approx = !!d.lookup?.approximate;
-      const dot = el('button', { type: 'button', class: `map-pin ${item.status === 'done' ? 'is-done' : ''} ${approx ? 'is-approx' : ''}`, 'aria-label': approx ? `${item.title} (approximate)` : item.title, title: approx ? 'Approximate: on the right street, not at the door' : '' });
-      const links = mapsLinks(item.title, d);
-      const pop = el('div', { class: 'map-pop' }, [
-        el('strong', {}, [item.title]),
-        el('span', { class: 'help' }, [[d.cuisine || d.category, d.priceRange, addressLine(d)].filter(Boolean).join(' · ')]),
-        el('div', { class: 'review-actions' }, [
-          el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => openSave(item.id) }, ['Open']),
-          links ? el('a', { class: 'btn btn-sm', href: links.google, target: '_blank', rel: 'noopener noreferrer' }, ['Google Maps']) : null,
-          links ? el('a', { class: 'btn btn-sm', href: links.apple, target: '_blank', rel: 'noopener noreferrer' }, ['Apple Maps']) : null,
-        ]),
-      ]);
-      new maplibregl.Marker({ element: dot }).setLngLat([d.lng, d.lat]).setPopup(new maplibregl.Popup({ offset: 14, closeButton: true }).setDOMContent(pop)).addTo(map);
-      bounds.extend([d.lng, d.lat]);
-    }
-    if (pinned.length === 1) map.jumpTo({ center: [pinned[0].details.lng, pinned[0].details.lat], zoom: 14 });
-    else if (pinned.length > 1) map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 0 });
+    // Once you pan or zoom, newly found pins don't move the map out from under you.
+    map.on('dragstart', () => { placesMap && (placesMap.moved = true); });
+    map.on('zoomstart', (e) => { if (e.originalEvent && placesMap) placesMap.moved = true; });
+    placesMap.map = map;
+    placesMap.style = placesMapStyle();
+    // The pins as they are now, not as they were when the map started loading.
+    syncPlacePins(mapPlaces().filter(hasPin));
   });
+}
+
+function placesMapStyle() {
+  const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  return `https://tiles.openfreemap.org/styles/${dark ? 'dark' : 'positron'}`;
+}
+
+// Adds the pins for newly found places, moves or drops changed ones, and fits the map to them until
+// you've moved it yourself.
+function syncPlacePins(pinned) {
+  const pm = placesMap;
+  const maplibregl = globalThis.maplibregl;
+  if (!pm?.map || !maplibregl) return;
+  const { map, markers } = pm;
+  pm.mapEl.setAttribute('aria-label', `Map of ${pluralize(pinned.length, 'place', 'places')}`);
+  const style = placesMapStyle();
+  if (style !== pm.style) { pm.style = style; map.setStyle(style); }
+  const keep = new Set();
+  let added = false;
+  for (const item of pinned) {
+    const d = item.details;
+    const sig = JSON.stringify([item.title, item.status, d.lat, d.lng, d.lookup?.approximate, d.cuisine, d.category, d.priceRange, addressLine(d)]);
+    keep.add(item.id);
+    const had = markers.get(item.id);
+    if (had?.sig === sig) continue;
+    had?.marker.remove();
+    markers.set(item.id, { marker: placeMarker(item).addTo(map), sig });
+    if (!had) added = true;
+  }
+  for (const [id, m] of markers) if (!keep.has(id)) { m.marker.remove(); markers.delete(id); }
+  if (!added || pm.moved) return;
+  if (pinned.length === 1) map.jumpTo({ center: [pinned[0].details.lng, pinned[0].details.lat], zoom: 14 });
+  else if (pinned.length > 1) {
+    const bounds = new maplibregl.LngLatBounds();
+    for (const i of pinned) bounds.extend([i.details.lng, i.details.lat]);
+    map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: markers.size > pinned.length / 2 ? 400 : 0 });
+  }
+}
+
+function placeMarker(item) {
+  const d = item.details;
+  const approx = !!d.lookup?.approximate;
+  const dot = el('button', { type: 'button', class: `map-pin ${item.status === 'done' ? 'is-done' : ''} ${approx ? 'is-approx' : ''}`, 'aria-label': approx ? `${item.title} (approximate)` : item.title, title: approx ? 'Approximate: on the right street, not at the door' : '' });
+  const links = mapsLinks(item.title, d);
+  const pop = el('div', { class: 'map-pop' }, [
+    el('strong', {}, [item.title]),
+    el('span', { class: 'help' }, [[d.cuisine || d.category, d.priceRange, addressLine(d)].filter(Boolean).join(' · ')]),
+    el('div', { class: 'review-actions' }, [
+      el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => openSave(item.id) }, ['Open']),
+      links ? el('a', { class: 'btn btn-sm', href: links.google, target: '_blank', rel: 'noopener noreferrer' }, ['Google Maps']) : null,
+      links ? el('a', { class: 'btn btn-sm', href: links.apple, target: '_blank', rel: 'noopener noreferrer' }, ['Apple Maps']) : null,
+    ]),
+  ]);
+  return new globalThis.maplibregl.Marker({ element: dot }).setLngLat([d.lng, d.lat]).setPopup(new globalThis.maplibregl.Popup({ offset: 14, closeButton: true }).setDOMContent(pop));
 }
 
 function renderPlaceList(view, items, waiting = 0) {

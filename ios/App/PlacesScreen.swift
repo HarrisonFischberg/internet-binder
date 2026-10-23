@@ -9,6 +9,8 @@ struct PlacesScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var mode: Mode = .list
     @State private var view: PlacesView?
     @State private var editing: Save?
@@ -23,7 +25,8 @@ struct PlacesScreen: View {
             TableBackground()
             VStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .center) {
+                    // At accessibility sizes Select drops below the title, so the subtitle gets the full width.
+                    (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 4)) : AnyLayout(HStackLayout(alignment: .center))) {
                         ScreenHeader(title: "Places", subtitle: subtitle)
                         if mode != .map && !shownPlaces.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
                     }
@@ -182,36 +185,96 @@ struct PlacesScreen: View {
                         .buttonStyle(PressStyle())
                         .accessibilityLabel(w.item.title)
                     } else {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
-                            Text(w.reasons.map(Self.why).joined(separator: " · ")).font(.footnote).foregroundStyle(t.stamp)
-                        }
-                        Spacer()
-                        VStack(spacing: 6) {
-                            // Chrome's Read again / Fix with AI: the caption read again on this iPhone, then
-                            // your AI and Lookups if they're on. Never changes what you typed.
-                            Button {
-                                readAgain(w.item)
-                            } label: {
-                                if reading == w.item.id { ProgressView() } else { Text("Read again") }
-                            }
-                            .buttonStyle(.bordered).frame(minHeight: 44)
-                            .disabled(reading != nil)
-                            .accessibilityLabel("Read \(w.item.title) again")
-                            Button("Fix") { editing = w.item }
-                                .buttonStyle(.bordered).frame(minHeight: 44)
-                                .accessibilityLabel("Fix \(w.item.title)")
-                        }
-                    }
-                    .padding(14).ksSurface()
-                    .contextMenu { SaveMenu(save: model.saves.first { $0.id == w.item.id } ?? w.item) { startSelecting(w.item.id) } }
-                    .swipeToDelete { Task { await model.trash(w.item) } }
+                        reviewRow(w)
                     }
                 }
             }
             .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
         }
+    }
+
+    /// A place waiting in review. The top opens the save (its picture, caption and details); the post
+    /// itself is one tap away, to see where it really is; Read again and Fix sit beside it.
+    private func reviewRow(_ w: PlacesView.Waiting) -> some View {
+        let save = model.saves.first { $0.id == w.item.id } ?? w.item
+        return VStack(alignment: .leading, spacing: 12) {
+            NavigationLink(value: save) {
+                // At accessibility sizes the picture sits above the words, so the name is never cut short.
+                Group {
+                    if typeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack { reviewThumb(save); Spacer(minLength: 0); reviewChevron }
+                            reviewText(w)
+                        }
+                    } else {
+                        HStack(spacing: 12) {
+                            reviewThumb(save)
+                            reviewText(w)
+                            Spacer(minLength: 0)
+                            reviewChevron
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityHint("Opens the save")
+            // On one line while it fits; stacked at large text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { reviewActions(w, save: save) }
+                VStack(alignment: .leading, spacing: 8) { reviewActions(w, save: save) }
+            }
+            // The buttons keep their usual size, like the save's own action row; a long press shows them large.
+            .dynamicTypeSize(...DynamicTypeSize.large)
+            .accessibilityShowsLargeContentViewer()
+        }
+        .padding(14).ksSurface()
+        .contextMenu { SaveMenu(save: save) { startSelecting(w.item.id) } }
+        .swipeToDelete { Task { await model.trash(save) } }
+    }
+
+    private func reviewThumb(_ save: Save) -> some View {
+        SaveImage(save, symbolSize: 18).frame(width: 56, height: 56).clipped()
+            .ksSurface(radius: min(t.radius, 10), scale: 0.5)
+            .matchedTransitionSource(id: save.id, in: zoom)
+    }
+
+    private var reviewChevron: some View {
+        Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted)
+            .accessibilityHidden(true)
+    }
+
+    private func reviewText(_ w: PlacesView.Waiting) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink)
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                .multilineTextAlignment(.leading)
+            Text(w.reasons.map(Self.why).joined(separator: " · ")).font(.footnote).foregroundStyle(t.stamp)
+        }
+    }
+
+    @ViewBuilder private func reviewActions(_ w: PlacesView.Waiting, save: Save) -> some View {
+        let instagram = (save.host ?? "").hasSuffix("instagram.com")
+        if let link = save.url.flatMap(URL.init(string:)), link.scheme?.hasPrefix("http") == true {
+            Button(instagram ? "Open post" : "Open website", systemImage: instagram ? "camera" : "safari") { openURL(link) }
+                .buttonStyle(ReviewActionStyle())
+                .accessibilityLabel(instagram ? "Open the post for \(w.item.title) on Instagram" : "Open \(save.host ?? "the page") for \(w.item.title)")
+        }
+        // Chrome's Read again / Fix with AI: the caption read again on this iPhone, then your AI and
+        // Lookups if they're on. Never changes what you typed.
+        Button {
+            readAgain(w.item)
+        } label: {
+            // The label keeps its width under the spinner, so the row doesn't jump.
+            Text("Read again").opacity(reading == w.item.id ? 0 : 1)
+                .overlay { if reading == w.item.id { ProgressView() } }
+        }
+        .buttonStyle(ReviewActionStyle())
+        .disabled(reading != nil)
+        .accessibilityLabel("Read \(w.item.title) again")
+        Button("Fix") { editing = w.item }
+            .buttonStyle(ReviewActionStyle())
+            .accessibilityLabel("Fix \(w.item.title)")
     }
 
     /// Reads the place again and says what came of it, so a tap that finds nothing new still answers.
@@ -241,6 +304,25 @@ struct PlacesScreen: View {
         case "no state": "Needs a state or country"
         default: reason
         }
+    }
+}
+
+/// Places review's Open post, Read again and Fix: outlined pills, the same as Select beside the title.
+private struct ReviewActionStyle: ButtonStyle {
+    @Environment(\.ks) private var t
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduce
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
+            .padding(.horizontal, 14).frame(minHeight: 44)
+            .background(t.paper, in: Capsule())
+            .overlay(Capsule().strokeBorder(t.style == .pantry ? t.line : t.rule, lineWidth: t.style == .pantry ? 2 : 1))
+            .opacity(enabled ? (configuration.isPressed && reduce ? 0.8 : 1) : 0.5)
+            .scaleEffect(configuration.isPressed && !reduce ? 0.96 : 1)
+            .animation(KSMotion.or(KSMotion.press, reduce: reduce), value: configuration.isPressed)
+            .contentShape(Capsule())
     }
 }
 

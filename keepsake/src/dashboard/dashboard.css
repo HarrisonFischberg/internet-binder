@@ -4770,3 +4770,19 @@ button.library-tab.on {
 .tile.selected .tile-art {
   opacity: 1;
 }
+
+/* Places being found on the map: a quiet pulsing dot beside the count. */
+.map-note-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--c-kind-place);
+  vertical-align: 1px;
+  animation: map-note-pulse 1.4s ease-in-out infinite;
+}
+@keyframes map-note-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) {
+  .map-note-dot { animation: none; }
+}
