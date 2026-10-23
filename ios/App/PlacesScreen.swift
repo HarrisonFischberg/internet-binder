@@ -9,6 +9,7 @@ struct PlacesScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
+    @Environment(\.openURL) private var openURL
     @State private var mode: Mode = .list
     @State private var view: PlacesView?
     @State private var editing: Save?
@@ -182,36 +183,69 @@ struct PlacesScreen: View {
                         .buttonStyle(PressStyle())
                         .accessibilityLabel(w.item.title)
                     } else {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
-                            Text(w.reasons.map(Self.why).joined(separator: " · ")).font(.footnote).foregroundStyle(t.stamp)
-                        }
-                        Spacer()
-                        VStack(spacing: 6) {
-                            // Chrome's Read again / Fix with AI: the caption read again on this iPhone, then
-                            // your AI and Lookups if they're on. Never changes what you typed.
-                            Button {
-                                readAgain(w.item)
-                            } label: {
-                                if reading == w.item.id { ProgressView() } else { Text("Read again") }
-                            }
-                            .buttonStyle(.bordered).frame(minHeight: 44)
-                            .disabled(reading != nil)
-                            .accessibilityLabel("Read \(w.item.title) again")
-                            Button("Fix") { editing = w.item }
-                                .buttonStyle(.bordered).frame(minHeight: 44)
-                                .accessibilityLabel("Fix \(w.item.title)")
-                        }
-                    }
-                    .padding(14).ksSurface()
-                    .contextMenu { SaveMenu(save: model.saves.first { $0.id == w.item.id } ?? w.item) { startSelecting(w.item.id) } }
-                    .swipeToDelete { Task { await model.trash(w.item) } }
+                        reviewRow(w)
                     }
                 }
             }
             .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
         }
+    }
+
+    /// A place waiting in review. The top opens the save (its picture, caption and details); the post
+    /// itself is one tap away, to see where it really is; Read again and Fix sit beside it.
+    private func reviewRow(_ w: PlacesView.Waiting) -> some View {
+        let save = model.saves.first { $0.id == w.item.id } ?? w.item
+        return VStack(alignment: .leading, spacing: 12) {
+            NavigationLink(value: save) {
+                HStack(spacing: 12) {
+                    SaveImage(save, symbolSize: 18).frame(width: 56, height: 56).clipped()
+                        .ksSurface(radius: min(t.radius, 10), scale: 0.5)
+                        .matchedTransitionSource(id: save.id, in: zoom)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Text(w.reasons.map(Self.why).joined(separator: " · ")).font(.footnote).foregroundStyle(t.stamp)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityHint("Opens the save")
+            // On one line while it fits; stacked at large text sizes.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { reviewActions(w, save: save) }
+                VStack(alignment: .leading, spacing: 8) { reviewActions(w, save: save) }
+            }
+            .dynamicTypeSize(...DynamicTypeSize.large)
+        }
+        .padding(14).ksSurface()
+        .contextMenu { SaveMenu(save: save) { startSelecting(w.item.id) } }
+        .swipeToDelete { Task { await model.trash(save) } }
+    }
+
+    @ViewBuilder private func reviewActions(_ w: PlacesView.Waiting, save: Save) -> some View {
+        let instagram = (save.host ?? "").hasSuffix("instagram.com")
+        if let link = save.url.flatMap(URL.init(string:)), link.scheme?.hasPrefix("http") == true {
+            Button(instagram ? "Open post" : "Open website", systemImage: instagram ? "camera" : "safari") { openURL(link) }
+                .buttonStyle(.bordered).frame(minHeight: 44)
+                .accessibilityLabel(instagram ? "Open the post for \(w.item.title) on Instagram" : "Open \(save.host ?? "the page") for \(w.item.title)")
+        }
+        // Chrome's Read again / Fix with AI: the caption read again on this iPhone, then your AI and
+        // Lookups if they're on. Never changes what you typed.
+        Button {
+            readAgain(w.item)
+        } label: {
+            if reading == w.item.id { ProgressView() } else { Text("Read again") }
+        }
+        .buttonStyle(.bordered).frame(minHeight: 44)
+        .disabled(reading != nil)
+        .accessibilityLabel("Read \(w.item.title) again")
+        Button("Fix") { editing = w.item }
+            .buttonStyle(.bordered).frame(minHeight: 44)
+            .accessibilityLabel("Fix \(w.item.title)")
     }
 
     /// Reads the place again and says what came of it, so a tap that finds nothing new still answers.

@@ -16,7 +16,7 @@ import { LOOKUP_SOURCES, lookupPlace, lookupAddressAt, lookupFilm, lookupBook, f
 import { isKind, kindOf, kindInfo, hasOwnView, kindChangePatch, shoppingKindFor, detailsForKind, placeFromText, genericTitle, LIFESTYLE, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './src/shared/kinds.js';
 import { guessTopics } from './src/shared/topics.js';
 import { normalizeProduct, captureFacts, classifyCapture, saveCapture, FILLED_KINDS } from './src/shared/capture.js';
-import { fillSave, tidySave, readImported, pendingToTidy } from './src/shared/fill.js';
+import { fillSave, tidySave, readImported, pendingToTidy, lookupSave, placeToLookUp, placeLookupKey } from './src/shared/fill.js';
 import { runAiQueue } from './src/shared/aiQueue.js';
 import { understandItem } from './src/shared/understand.js';
 import { fetchPage, loadImage } from './src/ai/pages.js';
@@ -270,6 +270,59 @@ async function fillKind(id, opts = {}) {
     }
   }
   return fillSave(store, id, opts, { fetchFn: fetch, allowed: lookupAllowed, waitTurn, fetchPage, loadImage });
+}
+
+// --- finding places on the map --------------------------------------------------------------------
+// Opening Places (or its map) looks up every place that has no pin yet, with no button to press: Lookups
+// only (no AI), one place at a time through the same queue, at OpenStreetMap's pace. A place that wasn't
+// found is remembered with what it was searched by, and searched for again only once you change its
+// name or address. Progress goes in session storage, for the quiet note on the map.
+const TRIED_KEY = 'placeLookupsTried'; // not keepsake_*: remembering a search doesn't redraw the dashboard
+let placeLookup = null;
+async function publishPlaceLookup() {
+  try {
+    await chrome.storage.session.set({ [SESSION_KEYS.placeLookup]: placeLookup });
+  } catch {
+    /* no session storage: the lookups still run */
+  }
+}
+async function startPlaceLookups() {
+  if (placeLookup?.running) return { ok: true, job: placeLookup };
+  const settings = await store.getSettings();
+  if (!(await lookupAllowed(settings, 'places'))) return { ok: false, off: true };
+  let tried = {};
+  try { tried = (await chrome.storage.local.get(TRIED_KEY))?.[TRIED_KEY] || {}; } catch { tried = {}; }
+  const todo = (await store.getItems()).filter((i) => placeToLookUp(i) && tried[i.id] !== placeLookupKey(i)).map((i) => i.id);
+  if (!todo.length) return { ok: true, job: null };
+  const job = { id: uid(), total: todo.length, done: 0, found: 0, running: true, startedAt: nowIso(), finishedAt: '' };
+  placeLookup = job;
+  await publishPlaceLookup();
+  (async () => {
+    let failures = 0;
+    for (const id of todo) {
+      // Offline, or OpenStreetMap isn't answering: stop for now, and try again next time.
+      if (failures >= 3) break;
+      // Through the fill-in queue, so a save being filled in right now isn't looked up twice at once.
+      await (fillQueue = fillQueue.then(async () => {
+        const item = await store.getItem(id);
+        if (!placeToLookUp(item)) return;
+        const found = await lookupSave(store, item, settings, { fetchFn: fetch, allowed: lookupAllowed, waitTurn: nominatimTurn });
+        if (found === null) { failures++; return; }
+        failures = 0;
+        if (found) job.found++;
+        else tried[id] = placeLookupKey(item);
+      }).catch(() => {}));
+      job.done++;
+      await publishPlaceLookup();
+    }
+    // Only places that still exist are remembered.
+    const live = new Set((await store.getItems()).map((i) => i.id));
+    for (const id of Object.keys(tried)) if (!live.has(id)) delete tried[id];
+    try { await chrome.storage.local.set({ [TRIED_KEY]: tried }); } catch { /* searched again next time */ }
+    Object.assign(job, { running: false, offline: failures >= 3, finishedAt: nowIso() });
+    await publishPlaceLookup();
+  })();
+  return { ok: true, job };
 }
 
 // --- after the save: optional AI tidy ---------------------------------------------------------------
@@ -847,6 +900,10 @@ async function handleMessage(msg, sender) {
         }
       }
       return { ok: true };
+    }
+    case MSG.LOOKUP_PLACES: {
+      if (!fromExtensionPage) throw new Error('Not allowed.');
+      return startPlaceLookups();
     }
     case MSG.FILL_KIND: {
       const ids = (await store.getItems()).filter((i) => kindOf(i) === msg.kind && !i.deletedAt).map((i) => i.id);
