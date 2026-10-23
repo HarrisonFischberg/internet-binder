@@ -100,31 +100,7 @@ export async function fillSave(store, id, { review = false, verify = false, forc
       /* the provider didn't answer: the save stays as it was */
     }
   }
-  if (genericTitle(item.title)) return; // nothing to look up by
-  try {
-    let found = null;
-    if (kind === 'place' && d.lat == null && await allowed(settings, 'places')) {
-      found = await lookupPlace({ name: item.title, locality: d.locality, address: d.address, region: d.region }, fetchFn, waitTurn);
-    } else if (kind === 'place' && d.lat != null && !d.address && await allowed(settings, 'places')) {
-      // A pin but no street address (a shared maps link): the address at the pin.
-      await waitTurn();
-      found = await lookupAddressAt({ lat: d.lat, lng: d.lng }, fetchFn);
-    } else if (kind === 'media' && (!d.year || !d.director) && await allowed(settings, 'media')) {
-      found = await lookupFilm({ title: item.title, year: d.year, format: d.format === 'series' ? 'series' : '' }, fetchFn);
-    } else if (kind === 'book' && (!d.author || !d.year) && await allowed(settings, 'books')) {
-      found = await lookupBook({ title: item.title, author: d.author }, fetchFn);
-    }
-    if (found) {
-      const patch = { details: fillMissing(d, found) };
-      if (found.image && !item.image) {
-        patch.image = found.image;
-        patch.images = [found.image];
-      }
-      await store.updateItem(id, patch, { by: 'lookup' });
-    }
-  } catch {
-    /* offline or the service didn't answer: try again from Settings → Lookups */
-  }
+  await lookupSave(store, item, settings, { fetchFn, allowed, waitTurn });
 }
 
 // Runs once per pending item. Your provider first works out what the save is (src/shared/understand.js):
@@ -223,3 +199,55 @@ export async function pendingToTidy(store) {
   if (pending.length > PENDING_AT_ONCE) await store.parkPending(pending.slice(PENDING_AT_ONCE).map((i) => i.id));
   return pending.slice(0, PENDING_AT_ONCE);
 }
+
+// Lookups only (no AI): the address and pin for a place, the facts for a film, show or book, from the
+// public sources you turned on. Only missing fields are filled. Takes the save or its id. Returns true
+// when something was found, false when nothing was, and null when the service couldn't be asked.
+export async function lookupSave(store, itemOrId, settings, { fetchFn, allowed, waitTurn = async () => {} }) {
+  const item = typeof itemOrId === 'string' ? await store.getItem(itemOrId) : itemOrId;
+  if (!item || item.deletedAt) return false;
+  if (!settings) settings = await store.getSettings();
+  const kind = kindOf(item);
+  const d = item.details || {};
+  if (genericTitle(item.title)) return false; // nothing to look up by
+  try {
+    let found = null;
+    if (kind === 'place' && d.lat == null && await allowed(settings, 'places')) {
+      found = await lookupPlace({ name: item.title, locality: d.locality, address: d.address, region: d.region }, fetchFn, waitTurn);
+    } else if (kind === 'place' && d.lat != null && !d.address && await allowed(settings, 'places')) {
+      // A pin but no street address (a shared maps link): the address at the pin.
+      await waitTurn();
+      found = await lookupAddressAt({ lat: d.lat, lng: d.lng }, fetchFn);
+    } else if (kind === 'media' && (!d.year || !d.director) && await allowed(settings, 'media')) {
+      found = await lookupFilm({ title: item.title, year: d.year, format: d.format === 'series' ? 'series' : '' }, fetchFn);
+    } else if (kind === 'book' && (!d.author || !d.year) && await allowed(settings, 'books')) {
+      found = await lookupBook({ title: item.title, author: d.author }, fetchFn);
+    }
+    if (!found) return false;
+    const patch = { details: fillMissing(d, found) };
+    if (found.image && !item.image) {
+      patch.image = found.image;
+      patch.images = [found.image];
+    }
+    await store.updateItem(item.id, patch, { by: 'lookup' });
+    return true;
+  } catch {
+    /* offline or the service didn't answer: try again from Settings → Lookups */
+    return null;
+  }
+}
+
+// A place that Lookups could find on the map: no pin yet (or a pin with no street), and something to
+// search by beyond its name (a street, city or state), since a name alone could be anywhere.
+export function placeToLookUp(item) {
+  if (!item || item.deletedAt || kindOf(item) !== 'place' || genericTitle(item.title)) return false;
+  const d = item.details || {};
+  if (d.lat != null) return !d.address;
+  return !!(d.address || d.locality || d.region);
+}
+
+// What a lookup searched by, so a place that wasn't found isn't searched for again until you change it.
+export const placeLookupKey = (item) => {
+  const d = item.details || {};
+  return [item.title, d.address, d.locality, d.region, d.lat, d.lng].map((x) => String(x ?? '').trim().toLowerCase()).join('|');
+};

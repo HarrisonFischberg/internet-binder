@@ -23,6 +23,7 @@ export const MSG = {
   FILL_ITEM: 'keepsake:fill-item', // extension pages -> background { itemId }: fill in a Lifestyle save (AI if on, lookups if on)
   FILL_KIND: 'keepsake:fill-kind', // extension pages -> background { kind }: the same for every save of that kind
   FILL_BATCH: 'keepsake:fill-batch', // extension pages -> background { itemIds, review, label } -> { ok, job }: fill in these, one at a time, with progress
+  LOOKUP_PLACES: 'keepsake:lookup-places', // extension pages -> background -> { ok, job, off? }: find every place with no pin on the map (Lookups only)
   FILL_STOP: 'keepsake:fill-stop', // extension pages -> background: stop the batch after the current save
   AI_BACKLOG_RUN: 'keepsake:ai-backlog-run', // extension pages -> background { itemIds?, label } -> { ok, job }: Run AI on imported saves (all flagged, or these)
   AI_BACKLOG_PAUSE: 'keepsake:ai-backlog-pause', // extension pages -> background { cancel? }: pause (Resume later) or cancel the run
@@ -33,4 +34,6 @@ export const SESSION_KEYS = {
   // The fill-in batch running now or last: { id, label, kind, total, done, ready, changed, running, stopped }.
   // Run AI on imported saves adds { backlog: true, scope, failed, paused, waitingUntil, error }.
   fillJob: 'keepsake_fillJob',
+  // Finding places on the map (Lookups, no AI): { id, total, done, found, running, finishedAt }.
+  placeLookup: 'keepsake_placeLookup',
 };

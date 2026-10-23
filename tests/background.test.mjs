@@ -271,6 +271,46 @@ test('fill-in: a place saved with lookups on gets its address and pin; with look
   assert.deepEqual([filled.details.address, filled.details.locality, filled.details.lat, filled.details.lookup.source], ['727 Manhattan Avenue', 'Greenpoint', 40.726, 'OpenStreetMap']);
 });
 
+test('places with no pin are found on the map without asking; one not found is not searched again until it changes', async () => {
+  const add = (title, details) => S.addItem({ title, url: `https://example.com/${encodeURIComponent(title)}`, kind: 'place', details });
+  const donut = await add('Peter Pan Donut & Pastry Shop', { locality: 'Greenpoint', region: 'NY' });
+  const lost = await add('Nowhere Diner', { locality: 'Greenpoint', region: 'NY' });
+  const vague = await add('Somewhere Cafe', {}); // a name alone could be anywhere: never searched
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(decodeURIComponent(String(url)));
+    const hit = /Peter Pan/.test(decodeURIComponent(String(url)));
+    return { ok: true, status: 200, json: async () => (hit ? [{ name: 'Peter Pan Donut & Pastry Shop', lat: '40.726', lon: '-73.952', type: 'bakery', address: { house_number: '727', road: 'Manhattan Avenue', suburb: 'Greenpoint', city: 'New York', 'ISO3166-2-lvl4': 'US-NY' } }] : []) };
+  };
+  const done = async () => { for (let i = 0; i < 100 && F.session.keepsake_placeLookup?.running !== false; i++) await new Promise((r) => setTimeout(r, 50)); };
+
+  assert.equal((await F.send({ type: MSG.LOOKUP_PLACES }, popup)).off, true, 'lookups off: nothing sent');
+  assert.equal(calls.length, 0);
+
+  F.local.keepsake_settings = { ...F.local.keepsake_settings, lookups: { places: true, media: false, books: false } };
+  F.state.granted.push('https://nominatim.openstreetmap.org/*', 'https://tiles.openfreemap.org/*');
+  const res = await F.send({ type: MSG.LOOKUP_PLACES }, popup);
+  assert.equal(res.job.total, 2);
+  await done();
+  assert.deepEqual([F.session.keepsake_placeLookup.done, F.session.keepsake_placeLookup.found], [2, 1]);
+  assert.equal((await S.getItem(donut.id)).details.lat, 40.726);
+  assert.equal((await S.getItem(lost.id)).details.lat ?? null, null);
+  assert.ok(!calls.some((u) => u.includes('Somewhere Cafe')));
+
+  // Opening Places again: the diner was already searched for as it is, so nothing is sent.
+  calls.length = 0;
+  assert.equal((await F.send({ type: MSG.LOOKUP_PLACES }, popup)).job, null);
+  assert.equal(calls.length, 0);
+  // Once you give it a street, it's searched for again.
+  await S.updateItem(lost.id, { details: { ...(await S.getItem(lost.id)).details, address: '1 Main St' } });
+  assert.equal((await F.send({ type: MSG.LOOKUP_PLACES }, popup)).job.total, 1);
+  await done();
+  assert.ok(calls.some((u) => u.includes('Nowhere Diner')));
+  void vague;
+  // Web pages can't start it.
+  assert.match((await F.send({ type: MSG.LOOKUP_PLACES }, pageTab)).error, /Not allowed/);
+});
+
 test('with AI on: a post your provider recognises as a place becomes one, named, logged with Undo', async () => {
   await aiOn();
   globalThis.fetch = aiReply({ kind: 'place', confidence: 0.9, title: 'Doughnut Plant', details: { locality: 'Lower East Side', region: 'NY', cuisine: 'Doughnuts' }, reason: 'A doughnut shop' });
