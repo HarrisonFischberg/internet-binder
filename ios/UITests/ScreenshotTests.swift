@@ -513,4 +513,86 @@ final class ScreenshotTests: XCTestCase {
             app.terminate()
         }
     }
+
+    /// App Store screens from ios/demo/store-demo.json (made-up shops, places and titles; original art):
+    /// Home, Lifestyle, Library, a recipe, cooking, Places on the map, a workout goal and Review in Pantry
+    /// Pop light, then Home in every style, light and dark. Files are store-<screen>.png.
+    func testStoreScreens() throws {
+        guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
+        try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+        let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/store-demo.json").standardized.path
+        let regular = UIDevice.current.userInterfaceIdiom == .pad   // iPad: sidebar, not tabs
+        func launch(_ theme: String = "pantry", _ mode: String = "light") -> XCUIApplication {
+            XCUIDevice.shared.appearance = mode == "dark" ? .dark : .light
+            let app = XCUIApplication()
+            app.launchEnvironment["KEEPSAKE_DB"] = "store-\(UUID().uuidString)"
+            app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-ksMode", mode]
+            app.launch()
+            XCTAssertTrue(app.buttons["Lifestyle"].waitForExistence(timeout: 10))
+            sleep(2)   // pictures load
+            return app
+        }
+        func go(_ app: XCUIApplication, _ tab: String) {
+            if regular { app.cells.containing(.staticText, identifier: tab).firstMatch.tap() } else { app.tabBars.buttons[tab].tap() }
+            sleep(1)
+        }
+        func find(_ app: XCUIApplication, _ title: String) {
+            go(app, "Search")
+            let field = app.searchFields.firstMatch.exists ? app.searchFields.firstMatch : app.textFields.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap()
+            field.typeText(title)
+            let save = card(app, title)
+            XCTAssertTrue(save.waitForExistence(timeout: 5))
+            save.tap()
+        }
+
+        var app = launch()
+        try shoot(app, folder, "store-home")
+        app.buttons["Lifestyle"].tap()
+        sleep(1)
+        try shoot(app, folder, "store-lifestyle")
+        go(app, "Library")
+        try shoot(app, folder, "store-library")
+        go(app, "Places")
+        try shoot(app, folder, "store-places")
+        app.buttons["Map"].firstMatch.tap()
+        sleep(4)   // map tiles
+        try shoot(app, folder, "store-places-map")
+        app.terminate()
+
+        app = launch()
+        find(app, "Smoky shakshuka")
+        XCTAssertTrue(app.buttons["Start cooking"].waitForExistence(timeout: 5))
+        sleep(1)
+        try shoot(app, folder, "store-recipe")
+        app.buttons["Start cooking"].tap()
+        XCTAssertTrue(app.buttons["Next step"].waitForExistence(timeout: 5))
+        app.buttons["Next step"].tap()
+        sleep(1)
+        try shoot(app, folder, "store-cooking")
+        app.terminate()
+
+        app = launch()
+        find(app, "Kettlebell full body")
+        XCTAssertTrue(app.buttons["Done today"].waitForExistence(timeout: 5))
+        sleep(1)
+        try shoot(app, folder, "store-workout")
+        app.terminate()
+
+        app = launch()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH '2 saves need a collection'")).firstMatch.tap()
+        sleep(1)
+        try shoot(app, folder, "store-review")
+        app.terminate()
+
+        for theme in ["pantry", "notebook", "atlas", "swiss"] {
+            for mode in ["light", "dark"] {
+                app = launch(theme, mode)
+                try shoot(app, folder, "store-home-\(theme)-\(mode)")
+                app.terminate()
+            }
+        }
+        XCUIDevice.shared.appearance = .light
+    }
 }
