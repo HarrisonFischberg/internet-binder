@@ -22,9 +22,14 @@ struct HomeScreen: View {
     @Environment(\.horizontalSizeClass) private var size
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private var lifestyleSaves: [Save] { model.saves.filter(\.hasOwnView) }
-    private var collectedSaves: [Save] { model.saves.filter { !($0.collectionId ?? "").isEmpty } }
-    private var lifestyleViews: Int { Set(lifestyleSaves.map(\.kind)).count }
+    private var lifestyleSaves: [Save] { model.glance?.lifestyle ?? model.saves.filter(\.hasOwnView) }
+    private var collectedSaves: [Save] { model.glance?.collected ?? model.saves.filter { !($0.collectionId ?? "").isEmpty } }
+    /// Until the whole library is read, Home draws from the launch glance (newest saves, counts).
+    private var newest: [Save] { model.glance?.recent ?? Array(model.saves.prefix(8)) }
+    private var collectionCount: Int { model.glance?.collections ?? collections.count }
+    private var collectedCount: Int { model.glance?.collectedCount ?? collectedSaves.count }
+    private var lifestyleCount: Int { model.glance?.lifestyleCount ?? lifestyleSaves.count }
+    private var lifestyleViews: Int { model.glance?.lifestyleKinds ?? Set(lifestyleSaves.map(\.kind)).count }
 
     /// Saved over six weeks ago and not opened since (Home's "Come back to" in Chrome).
     private var comeBackTo: Save? {
@@ -65,16 +70,16 @@ struct HomeScreen: View {
                     if model.saves.isEmpty && model.loaded {
                         EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Internet Binder from any app.")
                     }
-                    if !model.saves.isEmpty { recent.padding(.bottom, -8) }
+                    if !newest.isEmpty { recent.padding(.bottom, -8) }
                     VStack(spacing: 12) {
                         ForEach(sectionOrder, id: \.self) { section in
                             Group {
                                 if section == "collections" {
                                     shelfRow("Collections", route: .collections, saves: collectedSaves, symbol: "bag", tint: KindStyle("product").color, fill: "place",
-                                             detail: count(collections.count, "collection") + " · " + count(collectedSaves.count, "save"))
+                                             detail: count(collectionCount, "collection") + " · " + count(collectedCount, "save"))
                                 } else {
                                     shelfRow("Lifestyle", route: .lifestyle, saves: lifestyleSaves, symbol: "sparkles", tint: KindStyle("recipe").color, fill: "video",
-                                             detail: lifestyleSaves.isEmpty ? "Places, recipes, workouts and more" : count(lifestyleViews, "kind") + " · " + count(lifestyleSaves.count, "save"))
+                                             detail: lifestyleCount == 0 ? "Places, recipes, workouts and more" : count(lifestyleViews, "kind") + " · " + count(lifestyleCount, "save"))
                                 }
                             }
                             .reorderable(section, in: $sectionOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set(HomeSections.key, $0) }
@@ -97,7 +102,7 @@ struct HomeScreen: View {
         .task(id: model.saves.count) { collections = (try? model.library?.collections()) ?? [] }
         .onAppear { sectionOrder = HomeSections.order() }
         // The newest eight, in your order; a new save joins at the front.
-        .onChange(of: model.saves.prefix(8).map(\.id), initial: true) { _, latest in
+        .onChange(of: newest.map(\.id), initial: true) { _, latest in
             recentOrder = latest.arranged(by: SavedOrder.get("recentOrder"), newFirst: true) { $0 }
         }
     }
@@ -166,7 +171,7 @@ struct HomeScreen: View {
             section("Recent")
             ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 16) {
-                    ForEach(recentOrder.compactMap { id in model.saves.first { $0.id == id } }) { save in
+                    ForEach(recentOrder.compactMap { id in newest.first { $0.id == id } }) { save in
                         NavigationLink(value: save) {
                             ShelfCard(save, width: min(shelfWidth, 320)).matchedTransitionSource(id: save.id, in: zoom)
                         }
