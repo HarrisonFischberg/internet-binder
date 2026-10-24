@@ -63,6 +63,7 @@ struct SaveDetailScreen: View {
                 Menu {
                     Button("Edit", systemImage: "pencil") { editing = true }
                     Menu("Move to…", systemImage: "folder") {
+                        Button("New collection…", systemImage: "plus") { model.newCollectionFor = [current.id] }
                         ForEach(destinations) { d in
                             Button(d.label) {
                                 Task {

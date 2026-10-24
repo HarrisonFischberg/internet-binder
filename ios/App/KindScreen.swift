@@ -173,6 +173,7 @@ struct ReviewScreen: View {
                         .accessibilityLabel("File in \(pick.label)")
                 }
                 Menu {
+                    Button("New collection…", systemImage: "plus") { model.newCollectionFor = [save.id] }
                     ForEach(destinations) { d in Button(d.label) { file(save, d.value, d.label) } }
                 } label: {
                     Text("Another collection…").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted)
@@ -438,8 +439,9 @@ struct FilingPanel: View {
                 }
             }
             let collections = destinations.filter { $0.group == "collection" }
-            if !collections.isEmpty {
+            if !destinations.isEmpty {
                 group("Collections") {
+                    Chip("New collection", symbol: "plus", selected: false) { model.newCollectionFor = [save.id] }
                     ForEach(collections) { d in
                         Chip(d.label, symbol: "folder", selected: false) { model.file(save, into: d.value, label: d.label) }
                             .accessibilityLabel("File in \(d.label)")

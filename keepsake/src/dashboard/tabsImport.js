@@ -16,6 +16,7 @@ const NONE = '__none'; // leave uncategorized, for Review
 // selection persists across re-renders within the same dashboard session:
 // tabId -> { selected, collectionId, defaultChoice, touched }
 const selection = new Map();
+const made = []; // collections created from this screen's pickers
 const scan = { rows: null, scanning: false, progress: null, error: '' };
 
 async function hasAllSitesAccess() {
@@ -148,7 +149,15 @@ async function buildRows(ctx, found) {
 }
 
 function reviewScreen(ctx, page) {
-  const regular = ctx.regularCollections();
+  // Collections made here show at once, before the library reloads.
+  const regular = [...ctx.regularCollections(), ...made.filter((m) => !ctx.collectionById(m.id))];
+  const NEW = { value: '__new', label: '＋ New collection…' };
+  // "＋ New collection…" picked: make it, then draw again with it in every picker. Null if cancelled.
+  const makeNew = async () => {
+    const c = await ctx.askNewCollection();
+    if (c) made.push(c);
+    return c;
+  };
   const rows = scan.rows;
 
   const counts = () => rows.filter((r) => selection.get(r.key).selected).length;
@@ -159,9 +168,15 @@ function reviewScreen(ctx, page) {
 
   const bulkSel = UI.selectInput({
     value: '',
-    options: [{ value: '', label: 'Set collection for all selected…' }, ...regular.map((c) => ({ value: c.id, label: c.name })), { value: NONE, label: 'Leave uncategorized (Review)' }],
-    onChange: (v) => {
+    options: [{ value: '', label: 'Set collection for all selected…' }, ...regular.map((c) => ({ value: c.id, label: c.name })), NEW, { value: NONE, label: 'Leave uncategorized (Review)' }],
+    onChange: async (v) => {
       if (!v) return;
+      if (v === NEW.value) {
+        const c = await makeNew();
+        if (c) for (const r of rows) if (selection.get(r.key).selected) Object.assign(selection.get(r.key), { collectionId: c.id, touched: true });
+        draw(ctx, page);
+        return;
+      }
       for (const r of rows) if (selection.get(r.key).selected) Object.assign(selection.get(r.key), { collectionId: v, touched: true });
       bulkSel.value = '';
       grid.querySelectorAll('select[data-key]').forEach((s) => { if (selection.get(s.dataset.key).selected) s.value = v; });
@@ -201,8 +216,17 @@ function reviewScreen(ctx, page) {
     });
     const options = [...regular.map((c) => ({ value: c.id, label: c.name }))];
     if (r.cls.isNew && r.cls.taxonomyKey) options.push({ value: `new:${r.cls.taxonomyKey}`, label: `${r.cls.collectionName} (new)` });
-    options.push({ value: NONE, label: 'Leave uncategorized (Review)' });
-    const colSel = UI.selectInput({ value: sel.collectionId, options, onChange: (v) => { sel.collectionId = v; sel.touched = true; }, label: `Collection for ${r.product.title}` });
+    options.push(NEW, { value: NONE, label: 'Leave uncategorized (Review)' });
+    const colSel = UI.selectInput({ value: sel.collectionId, options, onChange: async (v) => {
+      if (v === NEW.value) {
+        const c = await makeNew();
+        if (c) Object.assign(sel, { collectionId: c.id, touched: true });
+        draw(ctx, page);
+        return;
+      }
+      sel.collectionId = v;
+      sel.touched = true;
+    }, label: `Collection for ${r.product.title}` });
     colSel.dataset.key = r.key;
     if (colSel.value !== sel.collectionId) { colSel.value = NONE; sel.collectionId = NONE; }
     const price = priceLabel(r.product);

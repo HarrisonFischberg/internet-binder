@@ -78,6 +78,7 @@ const ctx = {
   navigate: (hash) => navigate(hash),
   openItem: (id) => openItem(id),
   regularCollections: () => state.collections,
+  askNewCollection: () => askNewCollection(),
   collectionById: (id) => state.collections.find((c) => c.id === id) || null,
   applyTheme: () => applyTheme(),
 };
@@ -2547,8 +2548,13 @@ async function openItem(id) {
   // A Lifestyle save has no collection field (collections are for shopping); one still in a
   // collection from before can be taken out with "No collection".
   const lifestyleSave = hasOwnView(kindOf(item));
-  const colOptions = [...(item.collectionId ? (lifestyleSave ? [{ value: '__none', label: 'No collection' }] : []) : [{ value: '', label: 'Not sorted yet' }]), ...collections.map((c) => ({ value: c.id, label: c.name }))];
-  const colSelect = UI.selectInput({ value: item.collectionId || '', options: colOptions, onChange: () => learnRow.classList.toggle('hidden', colSelect.value === item.collectionId), label: 'Collection' });
+  const colOptions = [...(item.collectionId ? (lifestyleSave ? [{ value: '__none', label: 'No collection' }] : []) : [{ value: '', label: 'Not sorted yet' }]), ...collections.map((c) => ({ value: c.id, label: c.name })), { value: '__new', label: '＋ New collection…' }];
+  let colBefore = item.collectionId || '';
+  const colSelect = UI.selectInput({ value: colBefore, options: colOptions, onChange: async (v) => {
+    if (v === '__new') await pickNewCollection(colSelect, colBefore);
+    colBefore = colSelect.value;
+    learnRow.classList.toggle('hidden', colSelect.value === item.collectionId);
+  }, label: 'Collection' });
   const learnCheck = el('input', { type: 'checkbox' });
   const learnRow = el('label', { class: 'check hidden' }, [learnCheck, el('span', {}, ['Use this choice for similar items in the future'])]);
 
@@ -3177,10 +3183,22 @@ function collectionHero(col) {
 }
 
 async function newCollection() {
-  const name = await UI.promptDialog({ title: 'New collection', label: 'Name', placeholder: 'e.g. Garden', confirmLabel: 'Create' });
-  if (!name) return;
-  const collection = await createNamedCollection(name);
+  const collection = await askNewCollection();
   if (collection) navigate(`#c/${collection.id}`);
+}
+
+// Asks for a name and creates that collection. Resolves it, or null if cancelled.
+async function askNewCollection() {
+  const name = await UI.promptDialog({ title: 'New collection', label: 'Name', placeholder: 'e.g. Garden', confirmLabel: 'Create' });
+  return name ? createNamedCollection(name) : null;
+}
+
+// A picker's "＋ New collection…": names one, adds it to the picker and picks it (back to `prev` if cancelled).
+async function pickNewCollection(select, prev) {
+  const c = await askNewCollection();
+  if (c && ![...select.options].some((o) => o.value === c.id)) select.querySelector('option[value="__new"]').before(el('option', { value: c.id, text: c.name }));
+  select.value = c ? c.id : prev;
+  return c;
 }
 
 // Creates the collection the user named. When an existing one is close but not the
@@ -3589,9 +3607,7 @@ function renderReview(view) {
         if (!v) return;
         if (v === '__new') {
           select.value = '';
-          const name = await UI.promptDialog({ title: 'New collection', label: 'Name', placeholder: 'e.g. Garden', confirmLabel: 'Create' });
-          if (!name) return;
-          const collection = await createNamedCollection(name);
+          const collection = await askNewCollection();
           if (collection) await fileItem(item, collection.id);
           return;
         }

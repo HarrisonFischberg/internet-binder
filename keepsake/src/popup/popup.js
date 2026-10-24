@@ -360,8 +360,18 @@ function openShelf(shelf) {
   const cls = state.classification;
   state.shelfOpen = shelf;
   $('groupsTitle').textContent = lifestyle ? 'Lifestyle' : 'Collections';
-  $('groupsSub').textContent = lifestyle ? 'Pick the view it belongs in' : 'Pick a collection, or start one';
+  $('groupsSub').textContent = lifestyle ? 'Pick the view it belongs in' : '';
   const grid = $('groupGrid');
+  // Collections only (Lifestyle's views are few): a name search, the new-collection tile always there.
+  const find = $('groupSearch');
+  find.classList.toggle('hidden', lifestyle);
+  find.value = '';
+  find.oninput = () => {
+    const q = find.value.trim().toLowerCase();
+    for (const g of grid.querySelectorAll('.group:not(.group-new)')) g.classList.toggle('hidden', !!q && !g.dataset.name.includes(q));
+    const title = grid.querySelector('.group-new .group-title');
+    if (title) title.textContent = find.value.trim() ? `New “${find.value.trim()}”` : 'New collection';
+  };
   clear(grid);
   const saves = (n) => (n ? pluralize(n, 'save', 'saves') : 'Empty');
   const tile = (value, title, members, kind, stamp) => {
@@ -374,7 +384,7 @@ function openShelf(shelf) {
       box.append(st);
     }
     const node = el('button', {
-      type: 'button', class: `group ${value === state.initialChoice ? 'is-guess' : ''}`.trim(), dataset: { value },
+      type: 'button', class: `group ${value === state.initialChoice ? 'is-guess' : ''}`.trim(), dataset: { value, name: title.toLowerCase() },
       'aria-label': `${title}, ${saves(members.length)}`, onClick: () => choose(value),
     }, [box, el('span', { class: 'group-title' }, [title]), el('span', { class: 'group-sub' }, [saves(members.length)])]);
     return node;
@@ -399,6 +409,8 @@ function openShelf(shelf) {
 // A place picked: it's ticked, the page becomes a small card with its title ready to tidy, Save appears.
 function choose(value) {
   state.choice = value;
+  // A search that found nothing names the new collection.
+  if (value === '__new' && !$('homeNewName').value) $('homeNewName').value = sanitizeText($('groupSearch').value, 80);
   renderHome();
   setTimeout(() => (value === '__new' ? $('homeNewName') : $('homeTitleInput')).focus(), 30);
 }

@@ -239,7 +239,10 @@ struct ShareCard: View {
     @State private var writing = false
     @State private var naming = false
     @State private var newName = ""
+    @State private var query = ""
     @FocusState private var noteFocused: Bool
+    // Finding a collection: the keyboard takes half the sheet, so the save card, Review and Done step aside.
+    @FocusState private var searching: Bool
 
     // iOS presents a share extension as a full-height sheet, so the whole sheet is the table: the save
     // drawn as its object, and under the thumb the two libraries it can live in (Collections and
@@ -263,7 +266,7 @@ struct ShareCard: View {
                             .opacity(appeared ? 1 : 0)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         Spacer(minLength: 12)
-                    } else {
+                    } else if !searching {
                         compact(save).transition(.opacity)
                     }
                 } else if case .saving = state.phase {
@@ -286,7 +289,7 @@ struct ShareCard: View {
                         .font(KSFont.note)
                         .padding(12).ksSurface(radius: min(t.radius, 12), scale: 0)
                 }
-                HStack(spacing: 10) {
+                if !searching { HStack(spacing: 10) {
                     if case .saved = state.phase, !writing {
                         secondary("Add a note", "square.and.pencil") {
                             state.touched = true
@@ -295,18 +298,21 @@ struct ShareCard: View {
                         }
                     }
                     PrimarySlab("Done", symbol: "checkmark") { state.done() }
-                }
+                } }
             }
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
             .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: state.shelf)
             .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: state.destination)
+            .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: searching)
         }
         .simultaneousGesture(TapGesture().onEnded { state.touched = true })
         .onAppear { withAnimation(KSMotion.or(KSMotion.lift, reduce: reduce).delay(0.05)) { appeared = true } }
+        .onChange(of: state.shelf) { query = "" }
         .alert("New collection", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) { newName = "" }
             Button("Create") { state.createCollection(newName); newName = "" }
+                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
         } message: { Text("It goes straight in.") }
     }
 
@@ -476,13 +482,35 @@ struct ShareCard: View {
         let lifestyle = shelf == .lifestyle
         return VStack(alignment: .leading, spacing: 12) {
             pageHeader(lifestyle ? "Lifestyle" : "Collections", lifestyle ? "Pick the view it belongs in" : "Pick a collection, or start one")
+            // Collections only (Lifestyle's views are few): find one by name; nothing found names a new one.
+            if !lifestyle {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(t.inkMuted)
+                    TextField("Find a collection", text: $query)
+                        .focused($searching)
+                        .textInputAutocapitalization(.words).autocorrectionDisabled().submitLabel(.search)
+                        // Search with nothing found starts the collection it names.
+                        .onSubmit {
+                            let q = query.trimmingCharacters(in: .whitespaces)
+                            if !q.isEmpty, !state.groups(shelf).contains(where: { $0.label.localizedStandardContains(q) }) { newName = q; naming = true }
+                        }
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(t.inkMuted) }
+                            .accessibilityLabel("Clear")
+                    }
+                }
+                .font(.subheadline).foregroundStyle(t.ink)
+                .padding(.horizontal, 12).frame(minHeight: 44)
+                .ksSurface(radius: min(t.radius, 12), scale: 0)
+            }
+            let q = query.trimmingCharacters(in: .whitespaces)
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 14)], spacing: 16) {
                     if !lifestyle {
-                        Button { naming = true } label: { NewGroupTile("New collection") }
+                        Button { newName = q; naming = true } label: { NewGroupTile(q.isEmpty ? "New collection" : "New “\(q)”") }
                             .buttonStyle(PressStyle())
                     }
-                    ForEach(state.groups(shelf)) { d in
+                    ForEach(state.groups(shelf).filter { lifestyle || q.isEmpty || $0.label.localizedStandardContains(q) }) { d in
                         let items = state.members(d), n = state.count(d)
                         let k = d.kind.map(KindStyle.init)
                         let here = state.destination == d.value
@@ -511,8 +539,9 @@ struct ShareCard: View {
                     LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom).frame(height: 28)
                 }
             }
+            .scrollDismissesKeyboard(.immediately)
             .frame(maxHeight: .infinity)
-            reviewRow
+            if !searching { reviewRow }
         }
     }
 
