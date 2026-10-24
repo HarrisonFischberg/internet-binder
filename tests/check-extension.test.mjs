@@ -27,6 +27,11 @@ test('manifest is MV3 with a semver version', () => {
   assert.equal(manifest.background.type, 'module');
 });
 
+test('description fits both stores (Safari allows 112 characters, Chrome 132)', () => {
+  assert.equal(typeof manifest.description, 'string');
+  assert.ok(manifest.description.length <= 112, `description is ${manifest.description.length} characters`);
+});
+
 test('every file the manifest references exists', () => {
   const refs = [manifest.background.service_worker, manifest.action.default_popup, manifest.options_page,
     ...Object.values(manifest.icons), ...Object.values(manifest.action.default_icon)];
