@@ -69,12 +69,16 @@ public final class Library: @unchecked Sendable {
     public var database: RecordDatabase { core.database }
     private let ready: Task<Void, Error>
 
-    public init(path: String? = nil, secrets: SecretStore = KeychainSecrets(), transport: NetworkTransport = URLSessionTransport()) throws {
+    /// `tidy` empties old Trash and fills in missing card facts when the library opens. Both read
+    /// across the whole library, so the Share Extension and the widgets pass false: they get far less
+    /// memory than the app, and a big library got the share sheet shut down the moment it opened.
+    public init(path: String? = nil, secrets: SecretStore = KeychainSecrets(), transport: NetworkTransport = URLSessionTransport(), tidy: Bool = true) throws {
         let db = try RecordDatabase(path: path ?? RecordDatabase.defaultPath(), secrets: secrets)
         let core = try KeepsakeCore(database: db, transport: transport)
         self.core = core
         ready = Task {
             try await core.call("store.init")
+            guard tidy else { return }
             // Saves in the Trash for more than 30 days go for good (Chrome does this when the dashboard opens).
             _ = try? await core.call("store.purgeTrash")
             try await core.call("backfillFacts")

@@ -57,7 +57,7 @@ final class ShareState {
     func save(items: [NSExtensionItem]) async {
         let shared = await SharedContent.read(from: items)
         do {
-            let library = try Library()
+            let library = try Library(tidy: false)
             self.library = library
             var product: [String: Any]
             if let page = shared.page { product = page } else { product = await library.sharedProduct(url: shared.url, title: shared.title, text: shared.text) }

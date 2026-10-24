@@ -14,7 +14,7 @@ struct CheckInIntent: AppIntent {
     init(goalId: String) { self.goalId = goalId }
 
     func perform() async throws -> some IntentResult {
-        let library = try Library()
+        let library = try Library(tidy: false)
         _ = try await library.checkIn(goalId: goalId)
         _ = try await library.writeWidgetSnapshot()
         WidgetCenter.shared.reloadAllTimelines()
