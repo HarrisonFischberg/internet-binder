@@ -124,6 +124,8 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
       out = fn(tx);
       await done(tx);
     } catch (e) {
+      // fn threw partway (a put loop on its third record): undo the writes it already made.
+      try { tx.abort(); } catch { /* already finished */ }
       if (isQuota(e)) throw new StorageFullError();
       throw e;
     }

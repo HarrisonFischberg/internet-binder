@@ -1,2 +1,8 @@
 node_modules/
 .DS_Store
+# Screenshot rounds (UI tests, /impeccable): keep them in the project files folder, not in git.
+# The ones committed before 2.2.4 are still in history (git checkout 6656c47 -- replica/m3/screens).
+replica/m3/screens/
+impeccable-review/before/
+impeccable-review/after/
+impeccable-review/img/

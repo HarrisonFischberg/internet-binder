@@ -177,6 +177,18 @@ test('popup: the collection search hides other collections and names a new one',
   assert.equal(page.getElementById('homeNewName').value, 'Reading nook');
 });
 
+test('popup: the collection search sets accents aside, as on the iPhone', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  await createStore(chromeBackend(), idbBackend()).createCollection({ name: 'Café finds' });
+  await openPopup({ title: 'Espresso cups', url: 'https://shop.example/cups-popup', price: 20, priceText: '$20.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] });
+  page.getElementById('libCollections').click();
+  const find = page.getElementById('groupSearch');
+  find.value = 'cafe';
+  find.dispatchEvent(new window.Event('input'));
+  const shownTiles = [...page.querySelectorAll('#groupGrid .group:not(.group-new):not(.hidden)')];
+  assert.deepEqual(shownTiles.map((g) => g.querySelector('.group-title').textContent), ['Café finds']);
+});
+
 test('popup: a page already saved goes to the editor to update it or save a copy, with its price', async () => {
   const lamp = { title: 'Lamp', url: 'https://shop.example/lamp-popup', price: 12, priceText: '$12.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] };
   await openPopup(lamp);

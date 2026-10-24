@@ -5,7 +5,7 @@
 // feature is used explicitly.
 
 import { MSG } from '../shared/messages.js';
-import { LIFESTYLE, kindInfo, kindForCollectionName, detailsForKind, recipeFromText, workoutFromText, looksLikeWorkout, hasIngredientHeading, isWorkoutPost, placeFromText } from '../shared/kinds.js';
+import { LIFESTYLE, kindInfo, kindForCollectionName, detailsForKind, recipeOrWorkout, isWorkoutPost, placeFromText } from '../shared/kinds.js';
 import { el, clear, sanitizeText, pluralize } from '../shared/util.js';
 import { classify } from '../shared/categorizer.js';
 import { getThumbs, thumbKey } from '../instagram/scanStore.js';
@@ -292,17 +292,15 @@ export async function importPosts(ctx, scan, posts) {
     const nameKind = kindForCollectionName(collectionNameFor(post, scan));
     if (nameKind) return nameKind;
     const cap = post.caption || '';
-    const workout = looksLikeWorkout(cap) || isWorkoutPost(cap) ? workoutFromText(cap, { source: 'caption' }) : null;
-    // Same rules as a single save (capture.js): a routine listed with no "Ingredients" heading is a workout.
-    if (recipeFromText(cap) && !(workout && workout.exercises.length >= 3 && !hasIngredientHeading(cap))) return 'recipe';
-    if (workout) return 'workout';
+    const found = recipeOrWorkout(cap);
+    if (found) return found.kind;
     if (placeFromText(cap)) return 'place';
     // The routine is in the video: a Workout with no exercises listed.
     if (isWorkoutPost(cap)) return 'workout';
     return null;
   };
-  const created = [];
-  const entries = [];
+  const inputs = [];
+  const seen = new Set(); // links already in this import (they reach the store together at the end)
   const places = new Map();
   const newCollections = new Map();
   let review = 0;
@@ -311,10 +309,12 @@ export async function importPosts(ctx, scan, posts) {
   const thumbs = await getThumbs(posts.map(thumbKey)).catch(() => new Map());
   for (const raw of posts) {
     const post = raw.thumbnail?.startsWith('data:') || !thumbs.has(thumbKey(raw)) ? raw : { ...raw, thumbnail: thumbs.get(thumbKey(raw)) };
-    if (await ctx.store.findByUrl(post.url)) {
+    const urlKey = normalizeUrl(post.url);
+    if (seen.has(urlKey) || await ctx.store.findByUrl(post.url)) {
       skipped++;
       continue;
     }
+    seen.add(urlKey);
     const product = productFor(post, scan);
     const kind = kindOfPost(post);
     const fromName = !!kind && !!kindForCollectionName(collectionNameFor(post, scan));
@@ -333,7 +333,7 @@ export async function importPosts(ctx, scan, posts) {
         collectionId = newCollections.get(cls.taxonomyKey);
       } else collectionId = cls.collectionId || null;
     }
-    const item = await ctx.store.addItem({
+    inputs.push({
       ...product,
       ...kindFields,
       type: 'instagram',
@@ -351,13 +351,12 @@ export async function importPosts(ctx, scan, posts) {
       // Not sent to your AI provider now: Run AI on imported saves reads it when you ask.
       needsAi: true,
     });
-    created.push(item);
-    entries.push([post.url, item.id]);
     const key = kind ? `kind:${kind}` : collectionId || 'review';
     if (key === 'review') review++;
     else places.set(key, (places.get(key) || 0) + 1);
   }
-  await ctx.store.markImported(entries);
+  const created = await ctx.store.addItems(inputs);
+  await ctx.store.markImported(created.map((item) => [item.url, item.id]));
   for (const item of created) {
     if (!item.collectionId) continue;
     const col = await ctx.store.getCollection(item.collectionId);

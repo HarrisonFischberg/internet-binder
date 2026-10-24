@@ -9,18 +9,18 @@
 //   collections            one record per collection
 //   kv: prefs              categorization preferences (threshold, learned keywords…)
 //   kv: importHistory      { instagram: { [normalizedUrl]: itemId } }
-//   kv: aiLog              [AiChange]: what AI changed, for undo. Never exported.
+//   kv: aiLog:<id>         one AiChange each: what AI changed, for undo. Never exported.
 //
 // Schema 1/2 kept everything in chrome.storage.local under keepsake_items, keepsake_collections,
 // keepsake_prefs, keepsake_importHistory and keepsake_aiLog. init() copies those into IndexedDB once,
-// checks the copy, and leaves the old keys untouched so a rollback to 1.3.x still finds its data.
+// checks the copy, then removes the old keys (the store never rolls anyone back to 1.x).
 
 import { uid, nowIso, sanitizeText, sanitizeMultiline, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer, decodeEntities, hasEntities } from './util.js';
 import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
 import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, forgetCollection } from './categorizer.js';
 import { memoryRecordBackend, STORES } from './db.js';
-import { isKind, kindOf, sanitizeDetails, recipeFromText, workoutFromText, looksLikeWorkout, needsCollection, STATUSES } from './kinds.js';
+import { isKind, kindOf, sanitizeDetails, recipeOrWorkout, needsCollection, STATUSES } from './kinds.js';
 import { makeGoal, makeCheckin } from './goals.js';
 import { cleanTopics } from './topics.js';
 
@@ -39,7 +39,7 @@ export const KEYS = {
 };
 const AI_LOG_KEY = 'keepsake_aiLog';
 const AI_LOG_MAX = 3000;
-// Where a schema 1/2 library lives (read once by the migration, then left for rollback).
+// Where a schema 1/2 library lived (read once by the migration, then removed).
 const LEGACY = { collections: KEYS.collections, items: KEYS.items, prefs: KEYS.prefs, importHistory: KEYS.importHistory };
 const LEGACY_KEYS = [...Object.values(LEGACY), AI_LOG_KEY];
 export const TRASH_DAYS = 30;
@@ -244,10 +244,9 @@ export function makeItem(input = {}) {
   // Instagram caption with an ingredient list makes the save a recipe.
   // A caption that lists exercises and talks about training makes it a workout.
   const caption = !isKind(input.kind) && input.instagram && typeof input.instagram === 'object' ? input.instagram.caption : '';
-  const captionRecipe = caption ? recipeFromText(caption) : null;
-  const captionWorkout = caption && !captionRecipe && looksLikeWorkout(caption) ? workoutFromText(caption) : null;
-  const kind = isKind(input.kind) ? input.kind : captionRecipe ? 'recipe' : captionWorkout ? 'workout' : kindOf({ ...input, type });
-  const details = sanitizeDetails(kind, input.details && typeof input.details === 'object' && Object.keys(input.details).length ? input.details : captionRecipe || captionWorkout || {});
+  const fromCaption = caption ? recipeOrWorkout(caption) : null;
+  const kind = isKind(input.kind) ? input.kind : fromCaption ? fromCaption.kind : kindOf({ ...input, type });
+  const details = sanitizeDetails(kind, input.details && typeof input.details === 'object' && Object.keys(input.details).length ? input.details : fromCaption?.details || {});
   return {
     id: input.id || uid(),
     collectionId: input.collectionId || null,
@@ -410,6 +409,18 @@ export function createStore(kv, db = memoryRecordBackend()) {
     const [r] = await db.update('kv', [name], (rec) => ({ key: name, value: fn(rec ? rec.value : structuredClone(fallback)) }));
     return r.value;
   };
+  // The AI change log: one kv record per entry, oldest first by time.
+  const aiLogKey = (id) => `aiLog:${id}`;
+  const aiLogRecords = async () => (await db.all('kv')).filter((r) => r.key.startsWith('aiLog:') && r.value).sort((a, b) => (String(a.value.at) < String(b.value.at) ? -1 : 1));
+  const putAiLog = (entries) => db.put('kv', entries.filter((e) => e && e.id).map((e) => ({ key: aiLogKey(e.id), value: e })));
+  // Once: the old single-array log becomes one record per entry. Each start also keeps the newest AI_LOG_MAX.
+  async function splitAiLog() {
+    const old = await kvGet('aiLog', null);
+    if (Array.isArray(old)) await putAiLog(old.slice(-AI_LOG_MAX));
+    if (old !== null) await db.remove('kv', ['aiLog']);
+    const records = await aiLogRecords();
+    if (records.length > AI_LOG_MAX) await db.remove('kv', records.slice(0, records.length - AI_LOG_MAX).map((r) => r.key));
+  }
   const live = (i) => i && !i.deletedAt;
   const mapOf = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 
@@ -426,6 +437,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
       meta,
       collections: mapOf(collections),
       items: mapOf(items.filter(live)),
+      // The Trash, newest first, from the same read (the dashboard used to read every item a second time).
+      trash: items.filter((i) => i.deletedAt).sort((a, b) => (a.deletedAt < b.deletedAt ? 1 : -1)),
       goals: goals.filter((g) => !g.deletedAt),
       prefs: { ...emptyPrefs(), ...(prefs || {}) },
       settings,
@@ -435,18 +448,14 @@ export function createStore(kv, db = memoryRecordBackend()) {
   }
 
   // v1/v2 library in chrome.storage.local -> v3 records. Never overwrites a record that already
-  // exists in `db`, so running it again is always safe. `since` (the first migration time) limits a
-  // re-run to saves and collections an older Internet Binder created after that point: e.g. a rollback to
-  // 1.3.x, or an old background worker still running after an update. Older v2 entries are not
-  // brought back, so something deleted for good in schema 3 stays deleted.
-  async function migrateToRecords(raw, { since = null } = {}) {
+  // exists in `db`, so running it again is always safe.
+  async function migrateToRecords(raw) {
     const legacy = migrate({ ...raw });
-    const newer = (r) => !since || (typeof r.createdAt === 'string' && r.createdAt > since);
     const haveCols = mapOf(await db.all('collections'));
     const haveItems = mapOf(await db.all('items'));
-    const collections = Object.values(legacy[KEYS.collections] || {}).filter((c) => c && c.id && !haveCols[c.id] && newer(c));
+    const collections = Object.values(legacy[KEYS.collections] || {}).filter((c) => c && c.id && !haveCols[c.id]);
     const colIds = new Set([...Object.keys(haveCols), ...collections.map((c) => c.id)]);
-    const items = Object.values(legacy[KEYS.items] || {}).filter((i) => i && i.id && !haveItems[i.id] && newer(i)).map((i) => {
+    const items = Object.values(legacy[KEYS.items] || {}).filter((i) => i && i.id && !haveItems[i.id]).map((i) => {
       const known = !i.collectionId || colIds.has(i.collectionId);
       return {
         ...i,
@@ -460,11 +469,9 @@ export function createStore(kv, db = memoryRecordBackend()) {
     });
     if (collections.length) await db.put('collections', collections);
     for (let i = 0; i < items.length; i += 500) await db.put('items', items.slice(i, i + 500));
-    if (!since) {
-      if (legacy[KEYS.prefs] && !(await db.get('kv', 'prefs'))) await kvSet('prefs', { ...emptyPrefs(), ...legacy[KEYS.prefs] });
-      if (legacy[KEYS.importHistory] && !(await db.get('kv', 'importHistory'))) await kvSet('importHistory', legacy[KEYS.importHistory]);
-      if (Array.isArray(raw[AI_LOG_KEY]) && !(await db.get('kv', 'aiLog'))) await kvSet('aiLog', raw[AI_LOG_KEY]);
-    }
+    if (legacy[KEYS.prefs] && !(await db.get('kv', 'prefs'))) await kvSet('prefs', { ...emptyPrefs(), ...legacy[KEYS.prefs] });
+    if (legacy[KEYS.importHistory] && !(await db.get('kv', 'importHistory'))) await kvSet('importHistory', legacy[KEYS.importHistory]);
+    if (Array.isArray(raw[AI_LOG_KEY])) await putAiLog(raw[AI_LOG_KEY]);
     // The check: every id and title arrived.
     const got = mapOf(await db.all('items'));
     const missing = items.filter((i) => !got[i.id] || got[i.id].title !== i.title);
@@ -541,22 +548,16 @@ export function createStore(kv, db = memoryRecordBackend()) {
         const now = nowIso();
         const since = raw[KEYS.meta]?.migratedToRecordsAt || null;
         let migrated = null;
-        let caughtUp = null;
-        if (raw[LEGACY.items] || raw[LEGACY.collections]) {
-          if (!since && version < SCHEMA_VERSION) migrated = await migrateToRecords(raw);
-          else if (since) {
-            // An older Internet Binder wrote to the v2 keys after the upgrade: bring its new saves across.
-            const r = await migrateToRecords(raw, { since });
-            if (r.items || r.collections) caughtUp = r;
-          }
-        }
+        if ((raw[LEGACY.items] || raw[LEGACY.collections]) && !since && version < SCHEMA_VERSION) migrated = await migrateToRecords(raw);
+        // The AI change log was one growing array; each entry is its own record now.
+        await splitAiLog();
         if (!(await db.count('collections'))) await db.put('collections', Object.values(defaultCollections()));
         if (!(await db.get('kv', 'prefs'))) await kvSet('prefs', emptyPrefs());
         if (!(await db.get('kv', 'importHistory'))) await kvSet('importHistory', { instagram: {} });
         const textRepaired = raw[KEYS.meta]?.textRepairedAt ? null : await repairEncodedText();
         const kindCollections = raw[KEYS.meta]?.kindCollectionsRemovedAt ? null : await removeKindCollections();
         const aiBacklog = raw[KEYS.meta]?.aiBacklogAt ? null : await queueUnreadImports();
-        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(caughtUp ? { caughtUpAt: now, caughtUpCounts: caughtUp } : {}), ...(textRepaired !== null ? { textRepairedAt: now, textRepairedCount: textRepaired } : {}), ...(kindCollections !== null ? { kindCollectionsRemovedAt: now, kindCollectionsRemoved: kindCollections } : {}), ...(aiBacklog !== null ? { aiBacklogAt: now, aiBacklogQueued: aiBacklog } : {}) } };
+        const write = { [KEYS.meta]: { installedAt: now, ...(raw[KEYS.meta] || {}), schemaVersion: SCHEMA_VERSION, updatedAt: now, ...(migrated ? { migratedToRecordsAt: now, migratedCounts: migrated } : {}), ...(textRepaired !== null ? { textRepairedAt: now, textRepairedCount: textRepaired } : {}), ...(kindCollections !== null ? { kindCollectionsRemovedAt: now, kindCollectionsRemoved: kindCollections } : {}), ...(aiBacklog !== null ? { aiBacklogAt: now, aiBacklogQueued: aiBacklog } : {}) } };
         if (!raw[KEYS.settings]) write[KEYS.settings] = structuredClone(DEFAULT_SETTINGS);
         else if (raw[KEYS.settings].ai && raw[KEYS.settings].ai.on === undefined) {
           // Before the single switch, each AI feature had its own. Carry over only the
@@ -575,7 +576,10 @@ export function createStore(kv, db = memoryRecordBackend()) {
           }
         }
         await be.set(write);
-        return { fresh: !hadMeta, migrated, caughtUp };
+        // The schema 1/2 copy, once it is in IndexedDB (checked by migrateToRecords): a second copy of the
+        // whole library, pictures included, read on every start.
+        if (LEGACY_KEYS.some((k) => k in raw) && (migrated || since)) await be.remove(LEGACY_KEYS);
+        return { fresh: !hadMeta, migrated };
       });
     },
 
@@ -737,6 +741,14 @@ export function createStore(kv, db = memoryRecordBackend()) {
       return item;
     },
 
+    // Many saves at once (an Instagram import): one count and one write per 500, not one per save.
+    async addItems(inputs) {
+      const items = inputs.map((input) => makeItem(input));
+      if ((await db.count('items')) + items.length > LIMITS.maxItems) throw new Error('Item limit reached');
+      for (let i = 0; i < items.length; i += 500) await db.put('items', items.slice(i, i + 500));
+      return items;
+    },
+
     // by: 'user' records hand-edited fields in userFields, so AI and enrichment never overwrite them.
     async updateItem(id, patch, { by = 'user' } = {}) {
       const [next] = await db.update('items', [id], (existing) => {
@@ -880,19 +892,18 @@ export function createStore(kv, db = memoryRecordBackend()) {
 
     // -- AI change log --
     // Entry: { id, runId, at, itemId, itemTitle, changes: [{ field, from, to }], before, after, reason, undone }
+    // Oldest first. Each entry is its own kv record (aiLog:<id>), so adding one never rewrites the rest.
     async getAiLog() {
-      const log = await kvGet('aiLog', []);
-      return Array.isArray(log) ? log : [];
+      return (await aiLogRecords()).map((r) => r.value);
     },
     async appendAiLog(entries) {
-      return kvUpdate('aiLog', [], (log) => [...(Array.isArray(log) ? log : []), ...entries].slice(-AI_LOG_MAX));
+      await putAiLog(entries);
     },
     async markAiLogUndone(ids) {
-      const set = new Set(ids);
-      return kvUpdate('aiLog', [], (log) => (Array.isArray(log) ? log : []).map((e) => (set.has(e.id) ? { ...e, undone: true } : e)));
+      await db.update('kv', ids.map(aiLogKey), (r) => (r ? { ...r, value: { ...r.value, undone: true } } : undefined));
     },
     async clearAiLog() {
-      return db.remove('kv', ['aiLog']);
+      await db.remove('kv', ['aiLog', ...(await aiLogRecords()).map((r) => r.key)]);
     },
 
     // -- import history (Instagram) --
@@ -1210,6 +1221,8 @@ export function validateExport(payload) {
     const raw = unpackImages(entry);
     if (typeof raw.image === 'string' && raw.image.startsWith('data:') && raw.image.length > LIMITS.maxImageBytes * 1.4) raw.image = '';
     const it = makeItem({ ...raw, id: safeId(raw.id) });
+    // The file's last edit stays the last edit (makeItem stamps now, as for a new save).
+    if (typeof raw.updatedAt === 'string' && !Number.isNaN(Date.parse(raw.updatedAt))) it.updatedAt = raw.updatedAt;
     if (!it.url && !it.sourceUrl && !it.image && it.title === 'Untitled item') continue;
     items[it.id] = it;
   }

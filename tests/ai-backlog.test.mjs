@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runAiQueue, aiErrorKind, backoffMs } from '../keepsake/src/shared/aiQueue.js';
 import { createStore, memoryBackend, memoryRecordBackend, KEYS } from '../keepsake/src/shared/storage.js';
-import { fillSave, pendingToTidy, PENDING_AT_ONCE } from '../keepsake/src/shared/fill.js';
+import { fillSave, pendingToTidy, readImported, PENDING_AT_ONCE } from '../keepsake/src/shared/fill.js';
 
 // A clock the queue's waits move forward, so backoff is tested without real time passing.
 function clock() {
@@ -154,4 +154,32 @@ test('after-save work: a flagged Lifestyle save gets its Lookups but is not sent
   }
   assert.equal(asked, 0);
   assert.equal((await s.getItem(it.id)).needsAi, true);
+});
+
+test('readImported: a save your provider read loses its flag; one it failed on keeps it for the next run', async () => {
+  const store = createStore(memoryBackend(), memoryRecordBackend());
+  await store.init();
+  await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await store.setSecret('aiApiKey', 'sk');
+  const post = (title) => ({ type: 'instagram', url: `https://www.instagram.com/p/${title}/`, title, kind: 'link', needsAi: true, instagram: { caption: title } });
+  const ok = await store.addItem(post('Brownies'));
+  const bad = await store.addItem(post('Broken'));
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    if (opts.body.includes('Broken')) return { ok: false, status: 500, headers: { get: () => null }, text: async () => '{"error":{"message":"down"}}' };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ kind: 'recipe', confidence: 0.95, title: 'Brownies', details: { ingredients: ['200g chocolate', '3 eggs'], steps: ['Bake'] } }) }] }) };
+  };
+  try {
+    await readImported(store, ok.id);
+    await assert.rejects(readImported(store, bad.id), /500/);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  const read = await store.getItem(ok.id);
+  assert.equal(read.needsAi, false);
+  assert.ok(read.understoodAt, 'marked as read');
+  const failed = await store.getItem(bad.id);
+  assert.equal(failed.needsAi, true, 'still waits for Run AI');
+  assert.equal(failed.understoodAt, null);
+  assert.deepEqual((await store.getAiBacklog()).map((i) => i.id), [bad.id]);
 });

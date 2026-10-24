@@ -29,15 +29,9 @@ struct SettingsScreen: View {
     @Environment(\.scenePhase) private var phase
     @State private var fixingAll = false
 
-    /// The Claude models on offer, cheapest first (provider.js MODELS). Haiku 5.5 is the default.
-    static let claudeModels: [(id: String, name: String, note: String)] = [
-        ("claude-haiku-5-5", "Claude Haiku 5.5", "Fastest and cheapest. Plenty for tidying saves."),
-        ("claude-sonnet-5-5", "Claude Sonnet 5.5", "Sharper at reading pictures and pages."),
-        ("claude-opus-5-5", "Claude Opus 5.5", "Most careful. Costs more per save."),
-        ("claude-fable-5-1", "Claude Fable 5.1", "Most capable, and the most expensive."),
-    ]
-    /// How hard the model thinks before answering (provider.js EFFORTS). Medium is the default.
-    static let efforts: [(id: String, name: String)] = [("low", "Low"), ("medium", "Medium"), ("high", "High")]
+    /// The Claude models on offer and their effort levels (KeepsakeKit's ClaudeChoices, checked against provider.js).
+    static let claudeModels = ClaudeChoices.models
+    static let efforts = ClaudeChoices.efforts
 
     enum Consent: Identifiable { case ai, lookup(String); var id: String { switch self { case .ai: "ai"; case .lookup(let k): k } } }
 
