@@ -46,6 +46,18 @@ jobs:
             exit 1
           fi
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Nothing is published unless every test passes.
+      - name: Run tests
+        run: |
+          npm ci
+          npm test
+          npm run test:ios-core
+
       - name: Package extension
         run: |
           cd keepsake

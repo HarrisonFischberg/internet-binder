@@ -43,6 +43,8 @@ const AI_LOG_MAX = 3000;
 const LEGACY = { collections: KEYS.collections, items: KEYS.items, prefs: KEYS.prefs, importHistory: KEYS.importHistory };
 const LEGACY_KEYS = [...Object.values(LEGACY), AI_LOG_KEY];
 export const TRASH_DAYS = 30;
+// What "Import (replace all)" replaces. Settings, the AI key and the AI change log stay.
+const REPLACED_STORES = ['items', 'collections', 'goals', 'checkins'];
 // Fields a person edits by hand. Once edited, AI and enrichment leave them alone.
 // Fields you set by hand: automation (Lookups, AI) leaves them as they are. kind: you put the save in a
 // Lifestyle view (or took it out), so your AI provider fills in that kind's details and never changes it.
@@ -990,15 +992,14 @@ export function createStore(kv, db = memoryRecordBackend()) {
     async importJSON(payload, { mode = 'merge' } = {}) {
       const validated = validateExport(payload);
       return serial(async () => {
-        if (mode === 'replace') {
-          await db.clear(['items', 'collections', 'goals', 'checkins']);
-          await kvSet('prefs', emptyPrefs());
-          await kvSet('importHistory', { instagram: {} });
-        }
-        const collections = mapOf(await db.all('collections'));
-        const existingItems = await db.all('items');
-        let prefs = await api.getPrefs();
-        const importHistory = await api.getImportHistory();
+        // Replace writes the file first and only then removes what it didn't have, so an import that stops
+        // halfway (tab closed, app killed, disk full) leaves the old library plus part of the new, never less.
+        const replacing = mode === 'replace';
+        const before = replacing ? Object.fromEntries(await Promise.all(REPLACED_STORES.map(async (s) => [s, (await db.all(s)).map((r) => r.id)]))) : null;
+        const collections = replacing ? {} : mapOf(await db.all('collections'));
+        const existingItems = replacing ? [] : await db.all('items');
+        let prefs = replacing ? emptyPrefs() : await api.getPrefs();
+        const importHistory = replacing ? { instagram: {} } : await api.getImportHistory();
         const idMap = new Map();
         let addedCollections = 0;
         let addedItems = 0;
@@ -1048,18 +1049,27 @@ export function createStore(kv, db = memoryRecordBackend()) {
           if (item.urlKey && !item.deletedAt) keys.add(item.urlKey);
           addedItems++;
         }
-        if ((await db.count('items')) + newItems.length > LIMITS.maxItems) throw new Error('Item limit reached');
+        if ((replacing ? 0 : await db.count('items')) + newItems.length > LIMITS.maxItems) throw new Error('Item limit reached');
         if (newCols.length) await db.put('collections', newCols);
         for (let i = 0; i < newItems.length; i += 500) await db.put('items', newItems.slice(i, i + 500));
         // Goals follow their workout; check-ins follow their goal. Anything already here is kept as is.
-        const haveGoals = new Set((await db.all('goals')).map((g) => g.id));
+        const haveGoals = new Set(replacing ? [] : (await db.all('goals')).map((g) => g.id));
         const newGoals = validated.goals.filter((g) => !haveGoals.has(g.id) && itemIdMap.get(g.itemId)).map((g) => ({ ...g, itemId: itemIdMap.get(g.itemId) }));
         if (haveGoals.size + newGoals.length > LIMITS.maxGoals) throw new Error('Goal limit reached');
         if (newGoals.length) await db.put('goals', newGoals);
         newGoals.forEach((g) => haveGoals.add(g.id));
-        const haveCheckins = new Set((await db.all('checkins')).map((c) => c.id));
+        const haveCheckins = new Set(replacing ? [] : (await db.all('checkins')).map((c) => c.id));
         const newCheckins = validated.checkins.filter((c) => !haveCheckins.has(c.id) && haveGoals.has(c.goalId));
         for (let i = 0; i < newCheckins.length; i += 1000) await db.put('checkins', newCheckins.slice(i, i + 1000));
+        if (replacing) {
+          // Everything from the file is in: now what was here before and isn't in the file goes.
+          const kept = { items: newItems, collections: newCols, goals: newGoals, checkins: newCheckins };
+          for (const s of REPLACED_STORES) {
+            const keep = new Set(kept[s].map((r) => r.id));
+            const gone = before[s].filter((id) => !keep.has(id));
+            for (let i = 0; i < gone.length; i += 500) await db.remove(s, gone.slice(i, i + 500));
+          }
+        }
         if (validated.prefs) prefs = mergePrefs(prefs, validated.prefs, idMap);
         await kvSet('prefs', prefs);
         if (validated.importHistory?.instagram) {

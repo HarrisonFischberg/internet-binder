@@ -75,6 +75,8 @@ public final class Library: @unchecked Sendable {
         self.core = core
         ready = Task {
             try await core.call("store.init")
+            // Saves in the Trash for more than 30 days go for good (Chrome does this when the dashboard opens).
+            _ = try? await core.call("store.purgeTrash")
             try await core.call("backfillFacts")
         }
     }
