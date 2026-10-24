@@ -362,6 +362,46 @@ test('import replace wipes existing items and keeps the API key', async () => {
   assert.equal(await dst.store.getSecret('aiApiKey'), 'keep-me');
 });
 
+test('import replace that stops halfway keeps the library that was there', async () => {
+  const src = await fresh();
+  for (const n of [1, 2, 3]) await src.store.addItem({ title: `From backup ${n}`, url: `https://a.example/b${n}` });
+  const exp = await src.store.exportJSON();
+  // A store whose item writes fail from the first one on (the tab closed, the disk filled up).
+  const inner = makeDb();
+  const db = { ...inner, put: (store, records) => (store === 'items' ? Promise.reject(new Error('stopped')) : inner.put(store, records)) };
+  const dst = await fresh(undefined, db);
+  await inner.put('items', [makeItem({ title: 'Current A', url: 'https://a.example/a' }), makeItem({ title: 'Current B', url: 'https://a.example/c' })]);
+  const goal = await dst.store.createGoal({ itemId: (await dst.store.getItems())[0].id, type: 'frequency', perWeek: 3, weeks: 4 });
+  await assert.rejects(dst.store.importJSON(exp, { mode: 'replace' }), /stopped/);
+  assert.deepEqual((await dst.store.getItems()).map((i) => i.title).sort(), ['Current A', 'Current B'], 'nothing was removed');
+  assert.ok((await dst.store.getCollections()).length >= 3, 'collections are still there');
+  assert.ok(await dst.store.getGoal(goal.id), 'goals are still there');
+});
+
+test('import replace removes what the file does not have, including the Trash, goals and check-ins', async () => {
+  const src = await fresh();
+  await src.store.addItem({ title: 'From backup', url: 'https://a.example/b' });
+  await src.store.createCollection({ name: 'Ramen spots' });
+  const exp = await src.store.exportJSON();
+  const dst = await fresh();
+  const gone = await dst.store.addItem({ title: 'Trashed', url: 'https://a.example/t' });
+  await dst.store.deleteItems([gone.id]);
+  const w = await dst.store.addItem({ title: 'Workout', url: 'https://a.example/w', kind: 'workout' });
+  const goal = await dst.store.createGoal({ itemId: w.id, type: 'frequency', perWeek: 3, weeks: 4 });
+  const c = await dst.store.addCheckin(goal.id, {});
+  await dst.store.createCollection({ name: 'Only here' });
+  const r = await dst.store.importJSON(exp, { mode: 'replace' });
+  assert.equal(r.addedItems, 1);
+  assert.deepEqual((await dst.store.getItems()).map((i) => i.title), ['From backup']);
+  assert.deepEqual(await dst.store.getTrash(), []);
+  assert.equal(await dst.store.getGoal(goal.id), null);
+  assert.deepEqual(await dst.store.getCheckins(goal.id), []);
+  assert.ok(c);
+  const names = (await dst.store.getCollections()).map((x) => x.name);
+  assert.ok(names.includes('Ramen spots'));
+  assert.ok(!names.includes('Only here'));
+});
+
 test('validateExport rejects foreign or future files', () => {
   assert.throws(() => validateExport(null), /not an Internet Binder export/);
   assert.throws(() => validateExport({ format: 'other' }), /missing format marker/);
