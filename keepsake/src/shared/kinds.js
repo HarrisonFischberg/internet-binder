@@ -171,6 +171,18 @@ export function workoutSignals(text) {
 }
 export const isWorkoutPost = (text) => workoutSignals(text) >= 2;
 
+// Recipe or workout, by one rule for every path (a save, an Instagram import, an old backup). A routine
+// listed with no "Ingredients" heading ("10 Upright Rows", "10 Horn Curls"…) is a workout, not a recipe.
+// `workout` is what the caller already read (capture.js reads the title too); left out, it's read here.
+export function recipeOrWorkout(text, workout) {
+  const t = String(text || '');
+  const routine = workout !== undefined ? workout : looksLikeWorkout(t) || isWorkoutPost(t) ? workoutFromText(t, { source: 'caption' }) : null;
+  const recipe = recipeFromText(t);
+  if (recipe && !(routine && routine.exercises.length >= 3 && !hasIngredientHeading(t))) return { kind: 'recipe', details: recipe };
+  if (routine) return { kind: 'workout', details: routine };
+  return null;
+}
+
 const SECONDS = /^(\d{1,4})\s*(s|sec|secs|seconds?|m|min|mins|minutes?)$/i;
 const toSeconds = (n, unit) => (/^m/i.test(unit) ? Number(n) * 60 : Number(n));
 const X = '\\s*[x×*]\\s*';

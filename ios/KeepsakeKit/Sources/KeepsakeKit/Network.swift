@@ -30,6 +30,15 @@ public enum NetworkPolicy {
 /// How a request leaves the device. Tests swap in a fake.
 public protocol NetworkTransport: Sendable {
     func send(_ request: URLRequest) async throws -> (status: Int, body: Data)
+    /// Like `send`, but nil once the body passes `limit` bytes, without reading the rest.
+    func send(_ request: URLRequest, limit: Int) async throws -> (status: Int, body: Data)?
+}
+
+extension NetworkTransport {
+    public func send(_ request: URLRequest, limit: Int) async throws -> (status: Int, body: Data)? {
+        let r = try await send(request)
+        return r.body.count <= limit ? r : nil
+    }
 }
 
 public struct URLSessionTransport: NetworkTransport {
@@ -44,6 +53,17 @@ public struct URLSessionTransport: NetworkTransport {
     }
     public func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
         let (data, response) = try await session.data(for: request)
+        return ((response as? HTTPURLResponse)?.statusCode ?? 0, data)
+    }
+    public func send(_ request: URLRequest, limit: Int) async throws -> (status: Int, body: Data)? {
+        let (bytes, response) = try await session.bytes(for: request)
+        // A big file (a video the AI's search found) is never downloaded just to be thrown away.
+        if response.expectedContentLength > Int64(limit) { bytes.task.cancel(); return nil }
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count > limit { bytes.task.cancel(); return nil }
+        }
         return ((response as? HTTPURLResponse)?.statusCode ?? 0, data)
     }
 }

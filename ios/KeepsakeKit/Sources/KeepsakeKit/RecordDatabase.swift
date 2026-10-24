@@ -9,8 +9,6 @@ import GRDB
 /// and sync needs (id, kind, collection, timestamps); they are derived from the body on every write
 /// and never edited on their own. Content stays inside `body`, metadata in columns: the split
 /// `replica/m3/sync-bridge.md` asks for, so sync can seal the body and leave the columns readable.
-///
-/// Every write also appends to `outbox` (store, key, put/delete): the changes since the last bundle.
 public final class RecordDatabase: @unchecked Sendable {
     public let pool: DatabasePool
     let secrets: SecretStore
@@ -92,6 +90,10 @@ public final class RecordDatabase: @unchecked Sendable {
         // Derived, so it is not part of the record and never synced; rebuilt if missing.
         m.registerMigration("v2-item-fact") { db in
             try db.execute(sql: "ALTER TABLE item ADD COLUMN fact TEXT")
+        }
+        // The change log for iCloud sync: nothing read it and it only grew. Sync brings its own when it comes.
+        m.registerMigration("v3-drop-outbox") { db in
+            try db.execute(sql: "DROP TABLE IF EXISTS outbox")
         }
         return m
     }
@@ -196,9 +198,7 @@ public final class RecordDatabase: @unchecked Sendable {
         try pool.write { db in
             for store in stores {
                 let s = try spec(store)
-                let keys = try String.fetchAll(db, sql: "SELECT key FROM \"\(s.table)\"")
                 try db.execute(sql: "DELETE FROM \"\(s.table)\"")
-                for key in keys { try logChange(db, store: store, key: key, op: "delete") }
             }
         }
     }
@@ -215,17 +215,10 @@ public final class RecordDatabase: @unchecked Sendable {
         let marks = Array(repeating: "?", count: names.count + 2).joined(separator: ", ")
         try db.execute(sql: "INSERT OR REPLACE INTO \"\(s.table)\" (\(cols)) VALUES (\(marks))", arguments: StatementArguments(args))
         if store == "items" { try db.execute(sql: "UPDATE item SET fact = ? WHERE key = ?", arguments: [fact, key]) }
-        try logChange(db, store: store, key: key, op: "put")
     }
 
     private func delete(_ db: Database, _ s: StoreSpec, store: String, key: String) throws {
         try db.execute(sql: "DELETE FROM \"\(s.table)\" WHERE key = ?", arguments: [key])
-        if db.changesCount > 0 { try logChange(db, store: store, key: key, op: "delete") }
-    }
-
-    private func logChange(_ db: Database, store: String, key: String, op: String) throws {
-        try db.execute(sql: "INSERT INTO outbox (store, key, op, at) VALUES (?, ?, ?, ?)",
-                       arguments: [store, key, op, ISO8601DateFormatter.keepsake.string(from: Date())])
     }
 
     static func column(_ v: Any?) -> DatabaseValueConvertible? {
@@ -235,32 +228,6 @@ public final class RecordDatabase: @unchecked Sendable {
         case let s as String: return s
         default: return nil
         }
-    }
-
-    // MARK: - Outbox
-
-    public struct Change: Equatable, Sendable {
-        public let seq: Int64
-        public let store: String
-        public let key: String
-        public let op: String
-    }
-
-    /// Changes after `seq`, oldest first, collapsed to the latest op per record.
-    public func changes(after seq: Int64 = 0) throws -> [Change] {
-        try pool.read { db in
-            try Row.fetchAll(db, sql: """
-                SELECT o.seq, o.store, o.key, o.op FROM outbox o
-                JOIN (SELECT store, key, MAX(seq) AS seq FROM outbox WHERE seq > ? GROUP BY store, key) last
-                  ON last.seq = o.seq ORDER BY o.seq
-                """, arguments: [seq])
-            .map { Change(seq: $0["seq"], store: $0["store"], key: $0["key"], op: $0["op"]) }
-        }
-    }
-
-    /// Forgets changes up to and including `seq` (after a bundle was delivered).
-    public func trimOutbox(through seq: Int64) throws {
-        try pool.write { db in try db.execute(sql: "DELETE FROM outbox WHERE seq <= ?", arguments: [seq]) }
     }
 
     // MARK: - Settings (the shared store's `kv` backend). Secrets go to the Keychain, never SQLite.

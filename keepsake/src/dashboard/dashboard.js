@@ -91,7 +91,6 @@ async function boot() {
   // and saves still "finishing details" (worker stopped mid-way) are picked up again.
   await store.purgeTrash().catch(() => 0);
   send({ type: MSG.ENRICH_PENDING });
-  state.trash = await store.getTrash().catch(() => []);
   await reload();
   applyTheme();
   bindChrome();
@@ -103,12 +102,26 @@ async function boot() {
   });
   state.route = parseHash();
   render();
-  store.onChanged(debounce(async (changes) => {
+  // One reload at a time: a change while one runs reads again once it ends, so an older read never lands last.
+  let reloading = null;
+  let again = false;
+  let theme = false;
+  const reloadOnChange = async () => {
+    if (reloading) { again = true; return; }
+    reloading = (async () => {
+      do {
+        again = false;
+        await reload();
+        if (theme) { theme = false; applyTheme(); }
+        render({ keepScroll: true });
+      } while (again);
+    })().finally(() => { reloading = null; });
+  };
+  store.onChanged(debounce((changes) => {
     const keys = Object.keys(changes);
     if (!keys.some((k) => k.startsWith('keepsake_'))) return;
-    await reload();
-    if (changes.keepsake_settings) applyTheme();
-    render({ keepScroll: true });
+    if (changes.keepsake_settings) theme = true;
+    reloadOnChange();
   }, 150));
   try {
     state.fillJob = (await chrome.storage.session.get(SESSION_KEYS.fillJob))?.[SESSION_KEYS.fillJob] || null;
@@ -154,7 +167,7 @@ async function reload() {
   state.prefs = data.prefs;
   state.settings = data.settings;
   state.importHistory = data.importHistory;
-  state.trash = await store.getTrash().catch(() => state.trash || []);
+  state.trash = data.trash;
   for (const id of [...state.selected]) if (!data.items[id]) state.selected.delete(id);
 }
 

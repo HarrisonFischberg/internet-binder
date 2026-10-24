@@ -7,7 +7,7 @@
 import { classify, learnFromCorrection, AUTO_FILE_CONFIDENCE } from './categorizer.js';
 import { parsePrice, sanitizeText } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
-import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, hasIngredientHeading, isWorkoutPost, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
+import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
 import { guessTopics } from './topics.js';
 
 // Lifestyle kinds whose details are filled in after the save (AI or Lookups, when turned on).
@@ -120,11 +120,8 @@ export function kindOfCapture(product) {
   // An Instagram post: a recipe or workout in the caption, a place when it's tagged with a location or
   // names one with 📍; otherwise a link.
   if (product.isInstagram) {
-    const recipe = recipeFromText(product.description);
-    const workout = workoutOf(product);
-    // A routine listed with no "Ingredients" heading ("10 Upright Rows", "10 Horn Curls"…) is a workout.
-    if (recipe && !(workout && workout.exercises.length >= 3 && !hasIngredientHeading(product.description))) return 'recipe';
-    if (workout) return 'workout';
+    const found = recipeOrWorkout(product.description, workoutOf(product));
+    if (found) return found.kind;
     if (product.igLocation?.name || placeFromText(product.description) || placeFromText(product.title)) return 'place';
     // A business's profile (an address, or "Donuts · Open 24/7" in its bio).
     if (placeFromProfile(product.profile)) return 'place';

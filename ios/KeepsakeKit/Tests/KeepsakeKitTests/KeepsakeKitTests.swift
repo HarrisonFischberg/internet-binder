@@ -119,9 +119,8 @@ struct ImportExportTests {
         #expect(total == 12)
         #expect(trashed == 1)
         #expect(places == 2)
-        let changes = try db.changes()
-        #expect(changes.contains { $0.store == "items" && $0.op == "put" })
-        #expect(Set(changes.map { "\($0.store)/\($0.key)" }).count == changes.count, "outbox collapses to one change per record")
+        let outbox = try await db.pool.read { d in try d.tableExists("outbox") }
+        #expect(!outbox, "no change log grows beside the records")
     }
 
     @Test func rejectsWhatChromeRejects() async throws {
@@ -754,6 +753,46 @@ struct StepIngredientsTests {
         #expect(carbonara.highlights(in: text, step: 1).map { String(text[$0]) } == ["yolks", "egg", "pecorino", "pepper"])
         let last = "Toss the pasta in the pan off the heat, then stir in the egg mix with a splash of pasta water until glossy."
         #expect(carbonara.highlights(in: last, step: 3).map { String(last[$0]) } == ["pasta", "egg", "pasta"])
+    }
+}
+
+/// The iPhone keeps its own copies of two shared rules, for screens that draw without waiting on the core.
+/// These run the shared JavaScript next to them, so a change made on one side only fails here.
+@Suite("Swift copies match the shared code")
+struct SharedCopiesTests {
+    static let recipes: [(steps: [String], ingredients: [String])] = [
+        (["Cook the guanciale slowly until crisp; keep the fat.", "Whisk the yolks, egg and pecorino with lots of pepper.",
+          "Boil the spaghetti in salted water until just al dente.",
+          "Toss the pasta in the pan off the heat, then stir in the egg mix with a splash of pasta water until glossy."],
+         ["200 g spaghetti", "100 g guanciale", "3 egg yolks", "1 whole egg", "50 g pecorino romano, grated", "Black pepper"]),
+        (["Boil the pasta.", "Add garlic and spices.", "Toss."], ["350 g rigatoni", "3 cloves garlic", "1 tsp cumin", "12 sage leaves"]),
+        (["Whisk the cornmeal and condensed milk.", "Fold in the eggs, then bake with the herbs."],
+         ["1 cup (150 g) fine cornmeal (fubá)", "(395 g) sweetened condensed milk", "Pinch of salt", "2-3 eggs", "250g flour",
+          "½ tsp ground cinnamon", "2 portions fresh ramen noodles", "a handful of basil leaves"]),
+    ]
+
+    @Test func stepIngredients() async throws {
+        let core = try KeepsakeCore(database: try tempDatabase())
+        for r in Self.recipes {
+            let js = try await core.call("KeepsakeCore.stepIngredients.stepIngredients", [r.steps, r.ingredients]) as! [String: Any]
+            let swift = StepIngredients(steps: r.steps, ingredients: r.ingredients)
+            let items = (js["items"] as! [[String: Any]]).map { "\($0["amount"]!)|\($0["name"]!)" }
+            #expect(items == swift.items.map { "\($0.amount)|\($0.name)" })
+            let steps = (js["steps"] as! [[String: Any]]).map { step in
+                "\(step["items"] as! [Int]) " + (step["carried"] as! [[String: Any]]).map { "\($0["fromStep"] as! Int):\($0["items"] as! [Int])" }.joined(separator: " ")
+            }
+            #expect(steps == swift.steps.map { "\($0.items) " + $0.carried.map { "\($0.fromStep):\($0.items)" }.joined(separator: " ") })
+            #expect((js["unmatched"] as! [Int]) == swift.unmatched)
+        }
+    }
+
+    @Test func claudeModelsAndEfforts() async throws {
+        let core = try KeepsakeCore(database: try tempDatabase())
+        // slice() hands back the shared list itself (the bridge only calls functions).
+        let models = try await core.call("KeepsakeCore.provider.MODELS.anthropic.slice") as! [[String: String]]
+        #expect(models.map { [$0["id"]!, $0["label"]!, $0["note"]!] } == ClaudeChoices.models.map { [$0.id, $0.name, $0.note] })
+        let efforts = try await core.call("KeepsakeCore.provider.EFFORTS.slice") as! [[String: String]]
+        #expect(efforts.map { [$0["id"]!, $0["label"]!] } == ClaudeChoices.efforts.map { [$0.id, $0.name] })
     }
 }
 

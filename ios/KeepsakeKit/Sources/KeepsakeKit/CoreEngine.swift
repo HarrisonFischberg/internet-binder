@@ -125,8 +125,8 @@ public final class KeepsakeCore: @unchecked Sendable {
         request.setValue(accept, forHTTPHeaderField: "Accept")
         let transport = transport
         Task {
-            let result = try? await transport.send(request)
-            done(result.flatMap { (200..<300).contains($0.status) && $0.body.count <= limit ? $0.body : nil })
+            let result = try? await transport.send(request, limit: limit)
+            done(result.flatMap { (200..<300).contains($0.status) ? $0.body : nil })
         }
     }
 

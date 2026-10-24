@@ -8,7 +8,6 @@ Local-first, no account. Design and plan: `replica/m3/` (`PROMPT.md`, `progress.
 | `App/`, `ShareExtension/`, `Widgets/` | target sources (folder-synchronized: new files need no project edit) |
 | `KeepsakeKit/` | Swift package: SQLite store, Chrome's rules in JavaScriptCore, `Library`, `Sealer` |
 | `Config/` | entitlements (App Group) and extension Info.plists |
-| `Prototypes/` | M3.0 static design prototypes (not shipped) |
 | `tools/` | core bundler and polyfills, fixtures and sealer vectors (Node), project generator |
 
 ## Build and test

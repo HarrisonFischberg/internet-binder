@@ -46,3 +46,12 @@ test('a database from a newer Internet Binder still opens (rolled back to this b
   assert.equal((await be.get('items', 'b')).title, 'Lamp');
   await be.close();
 });
+
+test('a write that fails partway keeps none of its records', async () => {
+  const be = idbBackend(indexedDB, `upgrade-${process.pid}-3`);
+  await be.put('items', [{ id: 'old', title: 'Kept' }]);
+  // The third record has no id, so put() throws after the first two were queued.
+  await assert.rejects(be.put('items', [{ id: 'a' }, { id: 'b' }, { title: 'no id' }]));
+  assert.deepEqual((await be.all('items')).map((i) => i.id), ['old']);
+  await be.close();
+});

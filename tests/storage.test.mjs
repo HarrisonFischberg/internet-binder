@@ -506,9 +506,10 @@ test('Instagram import history: trashed posts stay remembered; deleting forever 
   assert.deepEqual((await store.getImportHistory()).instagram, {});
 });
 
-test('AI log: append, mark undone, capped at 3000', async () => {
-  const { store } = await fresh();
-  await store.appendAiLog(Array.from({ length: 3005 }, (_, i) => ({ id: `e${i}`, itemId: 'x', changes: [] })));
+test('AI log: append, mark undone, capped at 3000 on the next start', async () => {
+  const { store, be, db } = await fresh();
+  await store.appendAiLog(Array.from({ length: 3005 }, (_, i) => ({ id: `e${i}`, at: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(), itemId: 'x', changes: [] })));
+  await createStore(be, db).init();
   const log = await store.getAiLog();
   assert.equal(log.length, 3000);
   assert.equal(log[0].id, 'e5');
@@ -615,9 +616,10 @@ test('migration v2 -> v3 copies every save, collection, preference, history and 
   assert.equal(await store.getSecret('aiApiKey'), 'keep-me');
   assert.equal(await store.importedItemIdFor('https://www.instagram.com/p/AbCdE1/'), 'itm002');
   assert.equal((await store.getAiLog())[0].id, 'log1');
-  // The v2 copy is left in place for rollback.
+  // Once copied (and checked), the v2 copy is removed: it was a second copy of the whole library.
   const raw = await be.get(null);
-  assert.ok(raw[KEYS.items].itm001);
+  for (const k of [KEYS.items, KEYS.collections, KEYS.prefs, KEYS.importHistory, 'keepsake_aiLog']) assert.equal(raw[k], undefined, k);
+  assert.equal(raw[KEYS.secrets].aiApiKey, 'keep-me');
 });
 
 test('migration runs once; later edits are not overwritten by a second init', async () => {
@@ -629,29 +631,14 @@ test('migration runs once; later edits are not overwritten by a second init', as
   assert.equal((await again.getItem('itm001')).title, 'Edited after migration');
 });
 
-test('an older Internet Binder saving after the upgrade (rollback or stale worker): its saves are caught up, nothing newer is overwritten', async () => {
+test('a library migrated by an earlier version loses its leftover v2 copy on the next start', async () => {
   const { store, be, db } = await fresh(v2Library());
-  await store.updateItem('itm001', { title: 'Edited in 1.4' });
-  await store.deleteForever(['itm002']);
-  // A 1.3.1 worker writes a new save into the v2 keys and resets the schema number, as its init does.
-  const raw = await be.get(null);
-  const later = new Date(Date.now() + 1000).toISOString();
-  await be.set({
-    [KEYS.items]: { ...raw[KEYS.items], hoodie1: { id: 'hoodie1', title: 'The Shevlin Double-Layer Hoodie', url: 'https://bruntworkwear.example/hoodie', collectionId: 'gone99', createdAt: later } },
-    [KEYS.meta]: { ...raw[KEYS.meta], schemaVersion: 2 },
-  });
-  const again = createStore(be, db);
-  const r = await again.init();
-  assert.deepEqual(r.caughtUp, { items: 1, collections: 0 });
-  const hoodie = await again.getItem('hoodie1');
-  assert.equal(hoodie.title, 'The Shevlin Double-Layer Hoodie');
-  assert.equal(hoodie.collectionId, null, 'a collection that no longer exists sends it to Review');
-  assert.equal(hoodie.needsReview, true);
-  assert.equal((await again.getItem('itm001')).title, 'Edited in 1.4', 'the v2 copy did not overwrite a newer edit');
-  assert.equal(await again.getItem('itm002'), null, 'deleted for good stays deleted');
-  assert.equal((await be.get(KEYS.meta))[KEYS.meta].schemaVersion, 3);
-  const third = await createStore(be, db).init();
-  assert.equal(third.caughtUp, null, 'catching up happens once');
+  // What an earlier build left behind: the v2 keys, kept for a rollback.
+  const meta = (await be.get(KEYS.meta))[KEYS.meta];
+  await be.set({ ...v2Library(), [KEYS.meta]: meta });
+  await createStore(be, db).init();
+  assert.equal((await be.get(KEYS.items))[KEYS.items], undefined);
+  assert.equal((await store.getItem('itm001')).title, 'Dutch oven', 'the saves are where they live now');
 });
 
 test('a v1 library (rules) migrates straight to v3', async () => {
@@ -673,6 +660,7 @@ test('trash: delete hides, restore returns, collection gone sends to Review', as
   await store.deleteItems([it.id]);
   assert.equal((await store.getItems()).length, 0);
   assert.equal((await store.getAll()).items[it.id], undefined);
+  assert.deepEqual((await store.getAll()).trash.map((i) => i.id), [it.id], 'the dashboard reads the Trash from the same read');
   assert.equal(await store.findByUrl('https://a.example/lamp'), null, 'a trashed page can be saved again');
   assert.equal((await store.getTrash()).length, 1);
   await store.restoreItems([it.id]);
@@ -707,6 +695,45 @@ test('trash is exported and restored by import', async () => {
   const dst = await fresh();
   await dst.store.importJSON(exp);
   assert.equal((await dst.store.getTrash())[0].id, it.id);
+});
+
+test('a restored save keeps its last edit time; an invalid one becomes now', async () => {
+  const src = await fresh();
+  const a = await src.store.addItem({ title: 'Lamp', url: 'https://a.example/lamp' });
+  const b = await src.store.addItem({ title: 'Tent', url: 'https://a.example/tent' });
+  const exp = await src.store.exportJSON();
+  exp.items[a.id].updatedAt = '2025-03-01T10:00:00.000Z';
+  exp.items[b.id].updatedAt = 'yesterday';
+  const dst = await fresh();
+  await dst.store.importJSON(exp);
+  assert.equal((await dst.store.getItem(a.id)).updatedAt, '2025-03-01T10:00:00.000Z');
+  assert.ok(!Number.isNaN(Date.parse((await dst.store.getItem(b.id)).updatedAt)));
+});
+
+test('a caption that lists exercises with no Ingredients heading is a workout, here as in a save and an import', async () => {
+  const caption = 'Morning mobility workout\n1. Hip circles 2x10\n2. Cat cow 3x8\n3. World greatest stretch 2x5\nRest 30s';
+  const it = makeItem({ type: 'instagram', url: 'https://www.instagram.com/p/abc/', title: 'x', instagram: { caption } });
+  assert.equal(it.kind, 'workout');
+  assert.ok(it.details.exercises.length >= 3);
+  const recipe = makeItem({ type: 'instagram', url: 'https://www.instagram.com/p/def/', title: 'y', instagram: { caption: 'Ingredients:\n200g flour\n2 eggs\n100ml milk\nMethod:\nMix and bake.' } });
+  assert.equal(recipe.kind, 'recipe');
+});
+
+test('AI change log: each entry is its own record; the old single list is split once and kept to the newest 3,000', async () => {
+  const { store, be, db } = await fresh();
+  const entry = (n) => ({ id: `e${n}`, at: new Date(Date.UTC(2026, 0, 1, 0, 0, n)).toISOString(), itemId: 'x', changes: [], undone: false });
+  await db.put('kv', [{ key: 'aiLog', value: Array.from({ length: 3005 }, (_, n) => entry(n)) }]);
+  await createStore(be, db).init();
+  const log = await store.getAiLog();
+  assert.equal(log.length, 3000);
+  assert.deepEqual([log[0].id, log.at(-1).id], ['e5', 'e3004'], 'oldest first, the oldest five dropped');
+  assert.equal(await db.get('kv', 'aiLog'), undefined, 'the old list is gone');
+  await store.appendAiLog([entry(4000)]);
+  await store.markAiLogUndone(['e4000']);
+  const last = (await store.getAiLog()).at(-1);
+  assert.deepEqual([last.id, last.undone], ['e4000', true]);
+  await store.clearAiLog();
+  assert.deepEqual(await store.getAiLog(), []);
 });
 
 test('hand-edited fields are recorded; machine edits are not', async () => {

@@ -355,6 +355,9 @@ function renderHome() {
 }
 
 // One library's groups, as cover tiles: Lifestyle's views, or your collections (plus a new one).
+// Case and accents set aside, as the iPhone's search does: "cafe" finds "Café".
+const foldName = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
 function openShelf(shelf) {
   const lifestyle = shelf === 'lifestyle';
   const cls = state.classification;
@@ -367,7 +370,7 @@ function openShelf(shelf) {
   find.classList.toggle('hidden', lifestyle);
   find.value = '';
   find.oninput = () => {
-    const q = find.value.trim().toLowerCase();
+    const q = foldName(find.value.trim());
     for (const g of grid.querySelectorAll('.group:not(.group-new)')) g.classList.toggle('hidden', !!q && !g.dataset.name.includes(q));
     const title = grid.querySelector('.group-new .group-title');
     if (title) title.textContent = find.value.trim() ? `New “${find.value.trim()}”` : 'New collection';
@@ -384,7 +387,7 @@ function openShelf(shelf) {
       box.append(st);
     }
     const node = el('button', {
-      type: 'button', class: `group ${value === state.initialChoice ? 'is-guess' : ''}`.trim(), dataset: { value, name: title.toLowerCase() },
+      type: 'button', class: `group ${value === state.initialChoice ? 'is-guess' : ''}`.trim(), dataset: { value, name: foldName(title) },
       'aria-label': `${title}, ${saves(members.length)}`, onClick: () => choose(value),
     }, [box, el('span', { class: 'group-title' }, [title]), el('span', { class: 'group-sub' }, [saves(members.length)])]);
     return node;

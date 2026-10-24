@@ -1,6 +1,6 @@
 """Writes the iOS identity tokens (one file per direction × mode) and checks WCAG contrast.
 
-Source of truth for the M3.0 prototypes; mirrors ios/Prototypes/Sources/Theme.swift.
+Source of truth for the M3.0 design tokens (the prototypes that used them were removed in 2.2.4; see git history).
 Run: python3 make_tokens.py  (exits 1 if any pair fails)
 """
 import json, sys, pathlib
