@@ -1127,6 +1127,12 @@ body[data-state="state-home"] #openDashboard {
   height: 18px;
 }
 
+.group-search {
+  flex: 1;
+  min-width: 0;
+  margin-left: auto;
+}
+
 .new-name.hidden {
   display: none;
 }
@@ -1510,4 +1516,8 @@ body[data-state="state-home"] #openDashboard {
   left: 12px;
   right: auto;
   top: 12px;
+}
+
+#groupsSub:empty {
+  display: none;
 }

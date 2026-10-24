@@ -157,6 +157,26 @@ test('popup: a new collection is named right on the sheet', async () => {
   assert.equal(col.name, 'Pottery shelf');
 });
 
+test('popup: the collection search hides other collections and names a new one', async () => {
+  const lamp = { title: 'Brass desk lamp', url: 'https://shop.example/lamp-popup', price: 40, priceText: '$40.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] };
+  await openPopup(lamp);
+  page.getElementById('libCollections').click();
+  const find = page.getElementById('groupSearch');
+  assert.ok(shown('groupSearch'));
+  const tiles = () => [...page.querySelectorAll('#groupGrid .group:not(.group-new)')];
+  assert.ok(tiles().length > 1, 'collections to search');
+  const name = tiles()[0].dataset.name;
+  find.value = name.toUpperCase();
+  find.dispatchEvent(new window.Event('input'));
+  assert.ok(tiles().filter((g) => !g.classList.contains('hidden')).every((g) => g.dataset.name.includes(name)));
+  assert.ok(!tileFor('__new').classList.contains('hidden'), 'new collection stays');
+  find.value = 'Reading nook';
+  find.dispatchEvent(new window.Event('input'));
+  assert.equal(tiles().filter((g) => !g.classList.contains('hidden')).length, 0);
+  tileFor('__new').click();
+  assert.equal(page.getElementById('homeNewName').value, 'Reading nook');
+});
+
 test('popup: a page already saved goes to the editor to update it or save a copy, with its price', async () => {
   const lamp = { title: 'Lamp', url: 'https://shop.example/lamp-popup', price: 12, priceText: '$12.00', currency: 'USD', images: [], image: '', schemaTypes: ['product'] };
   await openPopup(lamp);

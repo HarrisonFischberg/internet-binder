@@ -239,6 +239,7 @@ struct ShareCard: View {
     @State private var writing = false
     @State private var naming = false
     @State private var newName = ""
+    @State private var query = ""
     @FocusState private var noteFocused: Bool
 
     // iOS presents a share extension as a full-height sheet, so the whole sheet is the table: the save
@@ -303,6 +304,7 @@ struct ShareCard: View {
         }
         .simultaneousGesture(TapGesture().onEnded { state.touched = true })
         .onAppear { withAnimation(KSMotion.or(KSMotion.lift, reduce: reduce).delay(0.05)) { appeared = true } }
+        .onChange(of: state.shelf) { query = "" }
         .alert("New collection", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) { newName = "" }
@@ -476,13 +478,29 @@ struct ShareCard: View {
         let lifestyle = shelf == .lifestyle
         return VStack(alignment: .leading, spacing: 12) {
             pageHeader(lifestyle ? "Lifestyle" : "Collections", lifestyle ? "Pick the view it belongs in" : "Pick a collection, or start one")
+            // Collections only (Lifestyle's views are few): find one by name; nothing found names a new one.
+            if !lifestyle {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(t.inkMuted)
+                    TextField("Find a collection", text: $query)
+                        .textInputAutocapitalization(.words).autocorrectionDisabled().submitLabel(.search)
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(t.inkMuted) }
+                            .accessibilityLabel("Clear")
+                    }
+                }
+                .font(.subheadline).foregroundStyle(t.ink)
+                .padding(.horizontal, 12).frame(minHeight: 44)
+                .ksSurface(radius: min(t.radius, 12), scale: 0)
+            }
+            let q = query.trimmingCharacters(in: .whitespaces)
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 14)], spacing: 16) {
                     if !lifestyle {
-                        Button { naming = true } label: { NewGroupTile("New collection") }
+                        Button { newName = q; naming = true } label: { NewGroupTile(q.isEmpty ? "New collection" : "New “\(q)”") }
                             .buttonStyle(PressStyle())
                     }
-                    ForEach(state.groups(shelf)) { d in
+                    ForEach(state.groups(shelf).filter { lifestyle || q.isEmpty || $0.label.localizedStandardContains(q) }) { d in
                         let items = state.members(d), n = state.count(d)
                         let k = d.kind.map(KindStyle.init)
                         let here = state.destination == d.value

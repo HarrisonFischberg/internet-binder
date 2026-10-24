@@ -87,6 +87,8 @@ final class LibraryModel {
     }
     /// Where Move to… can send saves (every Lifestyle view and collection), for the long-press menus.
     var destinations: [Destination] = []
+    /// Saves waiting on "New collection…" from a Move to menu: RootView asks for the name, then moves them.
+    var newCollectionFor: [String]?
     /// Counts collection changes no save count shows (deleting an empty one, Undo), so lists reload.
     var collectionsChanged = 0
     /// Imported saves your provider hasn't read yet (needsAi), newest first.

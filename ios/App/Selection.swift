@@ -153,6 +153,11 @@ struct SaveSelectionBar: View {
     var body: some View {
         SelectionBar(noun: { $0 == 1 ? "save" : "saves" }, all: all, selected: $selected) {
             Menu {
+                Button("New collection…", systemImage: "plus") {
+                    model.newCollectionFor = Array(selected)
+                    selected = []
+                    selecting = false
+                }
                 ForEach(model.destinations) { d in
                     Button(d.label) { finish { await model.put(Array(selected), in: d) } }
                 }
@@ -200,6 +205,7 @@ struct SaveMenu: View {
         }
         if !model.destinations.isEmpty {
             Menu("Move to…", systemImage: "folder") {
+                Button("New collection…", systemImage: "plus") { model.newCollectionFor = [save.id] }
                 ForEach(model.destinations.filter { $0.value != save.collectionId && $0.value != "kind:\(save.kind)" }) { d in
                     Button(d.label) { Task { await model.put([save.id], in: d) } }
                 }
@@ -349,9 +355,43 @@ extension LibraryModel {
         await trash(ids: saves.filter { kinds.contains($0.kind) }.map(\.id))
     }
 
+    /// "New collection…" named: makes it and moves the saves there. One save from Review is filed (it learns).
+    func putInNew(_ ids: [String], named name: String) async {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard let library, !ids.isEmpty, !name.isEmpty else { return }
+        guard let c = try? await library.createCollection(named: name) else { Haptic.refused(); return }
+        await loadDestinations()
+        collectionsChanged += 1
+        if ids.count == 1, let s = saves.first(where: { $0.id == ids[0] }), s.needsCollection { file(s, into: c.id, label: c.name); return }
+        if let d = destinations.first(where: { $0.value == c.id }) { await put(ids, in: d) }
+    }
+
     /// Where Move to… can send a save; read again after collections change.
     func loadDestinations() async {
         guard let library else { return }
         if let list = try? await library.destinations() { destinations = list }
+    }
+}
+
+/// The name prompt for "New collection…" in any Move to menu (`LibraryModel.newCollectionFor`).
+struct NewCollectionPrompt: ViewModifier {
+    @Environment(LibraryModel.self) private var model
+    @State private var name = ""
+
+    func body(content: Content) -> some View {
+        // Only Cancel and Create close it, and each clears the request itself.
+        content.alert("New collection", isPresented: Binding(get: { model.newCollectionFor != nil }, set: { _ in })) {
+            TextField("Name", text: $name)
+            Button("Cancel", role: .cancel) { model.newCollectionFor = nil; name = "" }
+            Button("Create") {
+                let ids = model.newCollectionFor ?? [], named = name
+                model.newCollectionFor = nil
+                name = ""
+                Task { await model.putInNew(ids, named: named) }
+            }
+        } message: {
+            let n = model.newCollectionFor?.count ?? 0
+            Text(n == 1 ? "The save goes straight in." : "\(n) saves go straight in.")
+        }
     }
 }
