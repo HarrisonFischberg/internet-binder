@@ -430,6 +430,22 @@ struct FactTests {
         try await reopened.prepare()
         #expect(try reopened.saves().first { $0.id == recipe.id }?.fact == "3 ingredients")
     }
+
+    /// The Share Extension opens the library with tidy: false, so it never reads across the whole library
+    /// (iOS shut the share sheet down for memory when it did). It still saves.
+    @Test func shareSheetLibrarySkipsTheTidyUp() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-tidy-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("library.sqlite").path
+        let lib = try Library(path: path, secrets: MemorySecrets())
+        _ = try await lib.importExport(try fixture("chrome-export"), replace: true)
+        try await lib.database.pool.write { try $0.execute(sql: "UPDATE item SET fact = NULL") }
+        let share = try Library(path: path, secrets: MemorySecrets(), tidy: false)
+        try await share.prepare()
+        #expect(try share.saves().allSatisfy { $0.fact == nil }, "no backfill in the share sheet")
+        let r = try await share.capture(product: Library.sharedProduct(url: "https://www.instagram.com/p/C0ffee123/", title: nil, text: nil))
+        #expect(r.save != nil)
+    }
 }
 
 @Suite("Where saves go")
