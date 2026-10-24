@@ -69,8 +69,9 @@ public struct NewGroupTile: View {
     public var body: some View {
         VStack(spacing: 8) {
             Image(systemName: "plus").font(.title2.weight(.medium)).foregroundStyle(t.accent)
-            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(t.ink).multilineTextAlignment(.center)
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(t.ink).multilineTextAlignment(.center).lineLimit(3)
         }
+        .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(minHeight: 120)
         .background(RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(t.ink.opacity(0.4), style: StrokeStyle(lineWidth: t.style == .pantry ? 2 : 1.25, dash: [5, 4])))

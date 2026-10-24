@@ -389,6 +389,7 @@ struct NewCollectionPrompt: ViewModifier {
                 name = ""
                 Task { await model.putInNew(ids, named: named) }
             }
+            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
         } message: {
             let n = model.newCollectionFor?.count ?? 0
             Text(n == 1 ? "The save goes straight in." : "\(n) saves go straight in.")
