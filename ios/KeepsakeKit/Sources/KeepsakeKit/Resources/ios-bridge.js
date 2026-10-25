@@ -8,6 +8,9 @@
 //   swap(store, "[[key, expectedBodyOrNull, nextBodyOrNull], …]") → ""|"conflict"|error
 //   clear("[stores]") → ""|error
 //   liveCounts(column) → "{value: count}" (items not in the Trash, counted without reading bodies)
+//   listItems() → "[...]" (items not in the Trash, newest first, without the pictures stored inside them:
+//     `image` is "data:image/stored;<length>" and the app reads the picture when it draws it)
+//   trashedBefore(isoDate) → "[keys]" (items in the Trash since before that date)
 // __native.kv: get("[keys]") → "{...}", set("{...}") → ""|error, remove("[keys]"), clear()
 
 (function () {
@@ -91,7 +94,25 @@
     };
   }
 
-  globalThis.store = S.createStore(nativeKvBackend(), nativeRecordBackend());
+  const records = nativeRecordBackend();
+  globalThis.store = S.createStore(nativeKvBackend(), records);
+
+  // Saves for lists, search and counts, read without their pictures (~35 KB each, stored twice): the
+  // whole library with pictures took seconds to parse here and hundreds of MB to hold. Read-only: never
+  // write one of these back (its picture is a marker), read the save with store.getItem first.
+  const listItems = () => JSON.parse(__native.db.listItems());
+
+  // The same answers as storage.js, asked of SQLite's columns instead of parsing every save: these run
+  // each time the app opens or comes back.
+  const live = (i) => i && !i.deletedAt;
+  store.getPendingItems = async () => (await records.byIndex('items', 'captureState', 'pending')).filter(live);
+  const purgeTrash = store.purgeTrash.bind(store);
+  store.purgeTrash = async (opts = {}) => {
+    const cutoff = new Date((opts.now ?? Date.now()) - (opts.olderThanDays ?? S.TRASH_DAYS ?? 30) * 864e5).toISOString();
+    const oldGoals = (await records.all('goals')).some((g) => g.deletedAt && g.deletedAt < cutoff);
+    if (!oldGoals && !JSON.parse(__native.db.trashedBefore(cutoff)).length) return 0;
+    return purgeTrash(opts);
+  };
 
   // A save from the Share Sheet: Chrome's capture rules (src/shared/capture.js), same as the toolbar.
   // The after-save fill-in (AI, Lookups) isn't wired on iOS yet, so its hooks do nothing.
@@ -113,24 +134,24 @@
   globalThis.views = {
     // Review: saves that need a collection and aren't bought (dashboard.js: needsCollection && isActive).
     async review() {
-      return (await store.getItems()).filter((i) => K.kinds.needsCollection(i) && !i.purchased).map(withFact);
+      return listItems().filter((i) => K.kinds.needsCollection(i) && !i.purchased).map(withFact);
     },
     async ofKind(kind) {
-      return (await store.getItems()).filter((i) => i.kind === kind).map(withFact);
+      return listItems().filter((i) => i.kind === kind).map(withFact);
     },
     async inCollection(collectionId) {
-      return (await store.getItems()).filter((i) => i.collectionId === collectionId).map(withFact);
+      return listItems().filter((i) => i.collectionId === collectionId).map(withFact);
     },
     // Search: ranked, forgives a typo (search.js), collection names count as text.
     async search(query) {
-      const [items, cols] = await Promise.all([store.getItems(), store.getCollections()]);
+      const [items, cols] = [listItems(), await store.getCollections()];
       const names = new Map(cols.map((c) => [c.id, c.name]));
       const r = K.search.searchItems(items, query, (i) => names.get(i.collectionId) || '');
       return { items: r.results.map((x) => withFact(x.item)), query: r.query, corrected: r.corrected };
     },
     // Places: ready ones by state then city (dashboard.js renderPlaceList); the rest wait in Places review.
     async places() {
-      const all = (await store.getItems()).filter((i) => i.kind === 'place');
+      const all = listItems().filter((i) => i.kind === 'place');
       const review = [];
       const states = new Map();
       for (const item of all) {
@@ -208,7 +229,7 @@
     // What the widgets show, worked out here so the widget process never runs this code: active goals
     // with their week (goalProgress), the latest save, and one to come back to.
     async widgetSnapshot() {
-      const items = await store.getItems();
+      const items = listItems();
       const byId = new Map(items.map((i) => [i.id, i]));
       const goals = [];
       for (const g of await store.getGoals()) {
@@ -229,7 +250,6 @@
       const key = await store.getSecret('aiApiKey');
       const aiOn = !!settings.ai?.on && !!key;
       const lookupsOn = Object.values(settings.lookups || {}).some(Boolean);
-      const items = await store.getItems();
       let tidied = 0;
       // With AI on, tidySave first has your provider work out what each save is (understand.js). A handful
       // at most: a pile from an import waits for Run AI on imported saves instead (fill.js pendingToTidy).
@@ -240,7 +260,7 @@
       // Read again: a save the tidy found to be a recipe or place is filled in now. A save your provider
       // hasn't read yet (you moved it into a Lifestyle view) is filled in again.
       // An imported save waiting for Run AI (needsAi) gets its Lookups only, once.
-      const todo = (await store.getItems()).filter((i) => K.capture.FILLED_KINDS.includes(K.kinds.kindOf(i)) && (!filled.has(i.id) || (aiOn && !i.understoodAt && !i.needsAi))).slice(0, 20);
+      const todo = listItems().filter((i) => K.capture.FILLED_KINDS.includes(K.kinds.kindOf(i)) && (!filled.has(i.id) || (aiOn && !i.understoodAt && !i.needsAi))).slice(0, 20);
       let last = 0;
       const waitTurn = async () => {
         const wait = 1100 - (Date.now() - last);
@@ -394,11 +414,11 @@
     // Review's three suggestions for a save (dashboard.js topSuggestions): the categorizer's best
     // matches first, padded with the collections you file into most.
     async suggestions(id) {
-      const [item, collections, prefs, settings, items] = await Promise.all([store.getItem(id), store.getCollections(), store.getPrefs(), store.getSettings(), store.getItems()]);
+      const [item, collections, prefs, settings] = await Promise.all([store.getItem(id), store.getCollections(), store.getPrefs(), store.getSettings()]);
       if (!item) return [];
       const cls = K.categorizer.classify(item, { collections, prefs, settings });
       const counts = new Map();
-      for (const i of items) if (i.collectionId) counts.set(i.collectionId, (counts.get(i.collectionId) || 0) + 1);
+      for (const [c, n] of Object.entries(JSON.parse(__native.db.liveCounts('collectionId')))) counts.set(c, n);
       const picks = [];
       const seen = new Set();
       const add = (s) => {

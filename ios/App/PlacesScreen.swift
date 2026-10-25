@@ -56,7 +56,7 @@ struct PlacesScreen: View {
         }
         .animation(KSMotion.settle, value: selecting)
         .toolbar(.hidden, for: .navigationBar)
-        .task(id: model.saves.map(\.id).joined() + model.saves.map { $0.status ?? "" }.joined()) {
+        .task(id: model.index.placesKey) {
             view = try? await model.library?.places()
         }
         .sheet(item: $editing) { save in
@@ -113,7 +113,7 @@ struct PlacesScreen: View {
     }
 
     @ViewBuilder private func row(_ place: Save) -> some View {
-        let save = model.saves.first { $0.id == place.id } ?? place
+        let save = model.index.byId[place.id] ?? place
         if selecting {
             let on = selected.contains(place.id)
             Button {
@@ -196,7 +196,7 @@ struct PlacesScreen: View {
     /// A place waiting in review. The top opens the save (its picture, caption and details); the post
     /// itself is one tap away, to see where it really is; Read again and Fix sit beside it.
     private func reviewRow(_ w: PlacesView.Waiting) -> some View {
-        let save = model.saves.first { $0.id == w.item.id } ?? w.item
+        let save = model.index.byId[w.item.id] ?? w.item
         return VStack(alignment: .leading, spacing: 12) {
             NavigationLink(value: save) {
                 // At accessibility sizes the picture sits above the words, so the name is never cut short.
@@ -409,7 +409,7 @@ struct PlacesMap: View {
         Map(initialPosition: start) {
             ForEach(pinned, id: \.0.id) { place, pin in
                 Annotation(place.title, coordinate: pin) {
-                    NavigationLink(value: model.saves.first { $0.id == place.id } ?? place) {
+                    NavigationLink(value: model.index.byId[place.id] ?? place) {
                         // A 32 pt pin with a 44 pt target; the glyph is drawn in the colour that reads on the pin.
                         Image(systemName: place.status == "done" ? "checkmark" : "mappin")
                             .font(.subheadline.weight(.bold)).foregroundStyle(t.onKind)

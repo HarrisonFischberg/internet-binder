@@ -138,7 +138,7 @@ struct Stack<Root: View>: View {
     }
 
     private func openWaitingSave() {
-        guard let open = model.opening, open.stack == name, let save = model.saves.first(where: { $0.id == open.id }) else { return }
+        guard let open = model.opening, open.stack == name, let save = model.index.byId[open.id] else { return }
         path = NavigationPath()
         path.append(save)
         model.opening = nil

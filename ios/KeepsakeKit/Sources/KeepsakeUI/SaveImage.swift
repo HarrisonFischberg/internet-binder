@@ -11,28 +11,40 @@ public struct SaveImage: View {
     var symbolSize: CGFloat = 30
     var showsSymbol = true
     @Environment(\.ks) private var t
-    @State private var kept: UIImage?
+    /// The picture this card loaded, and which one it is (a save's picture can change under the card).
+    @State private var kept: (key: String, image: UIImage)?
     public init(_ save: Save, symbolSize: CGFloat = 30, showsSymbol: Bool = true) { self.save = save; self.symbolSize = symbolSize; self.showsSymbol = showsSymbol }
 
     public var body: some View {
         let kind = KindStyle(save.kind)
-        if let local = Self.dataImage(save.image, id: save.id) {
-            filled(local)
+        if let s = save.image, s.hasPrefix("data:image/") {
+            // A picture saved on this device: decoded off the main thread (a list's save carries only a
+            // marker, so the picture is read from the library first), then kept in memory.
+            let key = ThumbnailStore.storedKey(save.id, s)
+            picture(kind: kind, key: key) {
+                await ThumbnailStore.shared.stored(save.id, key: key, picture: s)
+            }
         } else if let s = save.image, let url = URL(string: s), url.scheme == "https" || url.scheme == "http" {
             // The local copy if there is one (so the picture outlives its site), else the site's, kept as it loads.
-            // A picture already in memory shows on the first frame, so a card scrolled back into view
-            // never flashes its tile; anything else is read and decoded off the main thread.
-            let ready = kept ?? ThumbnailStore.shared.memory(save.id)
-            ZStack {
-                if let ready { filled(ready).transition(.opacity) } else { tile(kind) }
-            }
-            .task(id: save.id) {
-                guard ready == nil else { return }
-                let img = await ThumbnailStore.shared.load(save.id, from: url)
-                withAnimation(KSMotion.quiet) { kept = img }
+            picture(kind: kind, key: save.id) {
+                await ThumbnailStore.shared.load(save.id, from: url)
             }
         } else {
             tile(kind)
+        }
+    }
+
+    /// A picture already in memory shows on the first frame, so a card scrolled back into view never
+    /// flashes its tile; anything else is read and decoded off the main thread.
+    private func picture(kind: KindStyle, key: String, load: @escaping @Sendable () async -> UIImage?) -> some View {
+        let ready = kept?.key == key ? kept?.image : ThumbnailStore.shared.memory(key)
+        return ZStack {
+            if let ready { filled(ready).transition(.opacity) } else { tile(kind) }
+        }
+        .task(id: key) {
+            guard ready == nil else { return }
+            let img = await load()
+            withAnimation(KSMotion.quiet) { kept = img.map { (key, $0) } }
         }
     }
 
@@ -53,20 +65,6 @@ public struct SaveImage: View {
             if showsSymbol { Image(systemName: kind.symbol).font(.system(size: symbolSize, weight: .light)).foregroundStyle(kind.color.opacity(0.8)) }
         }
         .accessibilityHidden(true)
-    }
-
-    /// Decoded once per picture (not on every redraw while scrolling), ready to draw.
-    nonisolated(unsafe) private static let decoded = NSCache<NSString, UIImage>()
-
-    static func dataImage(_ s: String?, id: String) -> UIImage? {
-        guard let s, s.hasPrefix("data:image/") else { return nil }
-        let key = "\(id):\(s.utf8.count)" as NSString
-        if let img = decoded.object(forKey: key) { return img }
-        guard let comma = s.firstIndex(of: ","), s[..<comma].hasSuffix(";base64"),
-              let data = Data(base64Encoded: String(s[s.index(after: comma)...])), let img = UIImage(data: data) else { return nil }
-        let ready = img.preparingForDisplay() ?? img
-        decoded.setObject(ready, forKey: key)
-        return ready
     }
 }
 #endif
