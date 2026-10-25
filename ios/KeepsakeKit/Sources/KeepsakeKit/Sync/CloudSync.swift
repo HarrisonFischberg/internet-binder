@@ -12,7 +12,7 @@ import CloudKit
 ///
 /// Not used yet: PR 2 (iPhone) and PR 3 (Safari on the Mac) turn it on.
 public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
-    public static let containerID = "iCloud.com.harrisonfischberg.keepsake"
+    public static let containerID = "iCloud.com.rarecreatures.keepsake"
     public static let zoneID = CKRecordZone.ID(zoneName: "Library", ownerName: CKCurrentUserDefaultName)
     static let stateKey = "engine"
 
