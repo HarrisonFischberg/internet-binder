@@ -215,13 +215,15 @@ struct WorkScreen: View {
                     // An ending with nothing listed under it sits lower, nearer the middle of the screen.
                     art.padding(.top, typeSize.isAccessibilitySize ? 12 : phase == .finished && (model.workEnd?.lines.isEmpty ?? true) ? 120 : 48)
                     heading
-                    if phase != .finished { progress }
+                    if phase != .finished {
+                        VStack(spacing: 14) {
+                            progress
+                            Text(note).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
                     if let run = model.aiRun, !run.recent.isEmpty { recent(run.recent, heading: "Just now") }
                     if phase == .finished, let lines = model.workEnd?.lines, !lines.isEmpty { recent(lines, heading: "Last ones") }
-                    if phase != .finished {
-                        Text(note).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                    }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 24)
                 .frame(maxWidth: 560).frame(maxWidth: .infinity)
