@@ -277,16 +277,19 @@ struct WorkScreen: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// The saves being read, fanned like cards on a table, with sparkles; a cloud for iCloud; a tick when done.
+    /// The saves being read as a deck flipping through, with sparkles; a spinning cloud for iCloud; how it ended when done.
     @ViewBuilder private var art: some View {
         switch phase {
         case .ai:
-            let saves = (model.aiRun?.current ?? []).compactMap { id in model.saves.first { $0.id == id } }
+            // The deck: what it's reading now, then what it just read, so it has something to flip through.
+            let ids = (model.aiRun?.current ?? []) + (model.aiRun?.recent.map(\.saveId) ?? [])
+            let unique = ids.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+            let saves = unique.compactMap { id in model.saves.first { $0.id == id } }
             CardFan(saves: saves).accessibilityHidden(true)
         case .sync:
-            Badge(symbol: "icloud.and.arrow.up", busy: true).accessibilityHidden(true)
+            CloudSpin().accessibilityHidden(true)
         case .finished:
-            Badge(symbol: model.workEnd?.title == "Paused" ? "pause" : model.workEnd?.title == "Stopped" ? "stop" : "checkmark", busy: false)
+            Badge(symbol: model.workEnd?.title == "Paused" ? "pause" : model.workEnd?.title == "Stopped" ? "stop" : "checkmark")
                 .accessibilityHidden(true)
         }
     }
@@ -422,30 +425,30 @@ private struct WorkBar: View {
     }
 }
 
-/// Up to three saves' pictures fanned out, the front one rising and settling while AI reads it.
+/// A deck of the saves being read, flipping through: every beat the top card turns over and flies off,
+/// and the next one comes forward. Reduce Motion keeps the deck still.
 private struct CardFan: View {
     let saves: [Save]
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
-    @State private var lift = false
+    /// Counts flips; card `tick + d` sits `d` deep in the deck.
+    @State private var tick = 0
 
     var body: some View {
-        let shown = Array(saves.prefix(3))
         ZStack {
-            if shown.isEmpty {
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(t.well).frame(width: 120, height: 150)
-            }
-            ForEach(Array(shown.enumerated().reversed()), id: \.element.id) { i, save in
-                let offset = Double(i) - Double(shown.count - 1) / 2
-                SaveImage(save, symbolSize: 34)
-                    .frame(width: 120, height: 150)
-                    .background(t.paper)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.paper, lineWidth: 4) }
-                    .shadow(color: t.shadow.opacity(0.35), radius: 12, y: 6)
-                    .rotationEffect(.degrees(offset * 9))
-                    .offset(x: offset * 46, y: abs(offset) * 10 - (i == 0 && lift ? 10 : 0))
-                    .transition(reduce ? .opacity : .scale(scale: 0.8).combined(with: .opacity))
+            if saves.isEmpty {
+                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(t.well).frame(width: 128, height: 160)
+            } else {
+                ForEach((0..<3).reversed(), id: \.self) { d in
+                    let slot = tick + d
+                    card(saves[slot % saves.count])
+                        .scaleEffect(1 - Double(d) * 0.07)
+                        .rotationEffect(.degrees(d == 0 ? 0 : (slot % 2 == 0 ? 5 : -5) * Double(d)))
+                        .offset(y: -Double(d) * 16)
+                        .zIndex(Double(3 - d))
+                        .id(slot)
+                        .transition(.asymmetric(insertion: .opacity, removal: .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0))))
+                }
             }
             Image(systemName: "sparkles")
                 .font(.system(size: 30, weight: .bold))
@@ -453,36 +456,99 @@ private struct CardFan: View {
                 .frame(width: 60, height: 60)
                 .background(t.accent, in: Circle())
                 .overlay { Circle().strokeBorder(t.paper, lineWidth: 3) }
-                .symbolEffect(.pulse, options: .repeating, isActive: !reduce)
-                .offset(x: 86, y: 80)
+                .symbolEffect(.bounce, options: .repeating.speed(0.6), isActive: !reduce)
+                .offset(x: 78, y: 78)
+                .zIndex(10)
         }
-        .frame(height: 200)
-        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: shown.map(\.id))
-        .onAppear {
+        .frame(height: 210)
+        .task(id: reduce) {
             guard !reduce else { return }
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { lift = true }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(1100))
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { tick += 1 }
+            }
         }
+    }
+
+    private func card(_ save: Save) -> some View {
+        SaveImage(save, symbolSize: 36)
+            .frame(width: 128, height: 160)
+            .background(t.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.paper, lineWidth: 4) }
+            .shadow(color: t.shadow.opacity(0.3), radius: 10, y: 6)
     }
 }
 
-/// A big symbol on the accent: the cloud breathing while it sends, a tick when done.
-private struct Badge: View {
-    let symbol: String
-    let busy: Bool
+/// The top card turning over on its edge as it leaves to the left.
+private struct FlipAway: ViewModifier, Animatable {
+    var progress: Double
+    var animatableData: Double { get { progress } set { progress = newValue } }
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(.degrees(-progress * 170), axis: (x: 0.15, y: 1, z: 0), anchor: .leading, perspective: 0.6)
+            .offset(x: -progress * 150, y: -progress * 24)
+            .opacity(progress < 0.6 ? 1 : max(0, (1 - progress) / 0.4))
+    }
+}
+
+/// iCloud while it sends: the cloud spins round on its axis every few seconds, two arcs circle it, and
+/// little pages rise into it. Reduce Motion keeps it still.
+private struct CloudSpin: View {
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
+
+    var body: some View {
+        TimelineView(.animation(paused: reduce)) { context in
+            let time = reduce ? 0 : context.date.timeIntervalSinceReferenceDate
+            // One turn in the first second of every three, eased, then a rest.
+            let beat = time.truncatingRemainder(dividingBy: 3)
+            let turn = beat < 1 ? (1 - cos(beat * .pi)) / 2 : 0
+            ZStack {
+                ForEach(0..<3, id: \.self) { i in
+                    let p = (time / 1.8 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(t.paper)
+                        .overlay { RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(t.line, lineWidth: 1.5) }
+                        .frame(width: 18, height: 22)
+                        .rotationEffect(.degrees(Double(i - 1) * 14))
+                        .offset(x: Double(i - 1) * 34, y: 110 - p * 90)
+                        .opacity(reduce ? 0 : sin(p * .pi))
+                }
+                Circle().fill(t.accent).frame(width: 150, height: 150)
+                    .overlay { Circle().strokeBorder(t.line, lineWidth: t.outline) }
+                Circle().trim(from: 0, to: 0.22)
+                    .stroke(t.accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .frame(width: 178, height: 178)
+                    .rotationEffect(.degrees(time * 140))
+                Circle().trim(from: 0, to: 0.12)
+                    .stroke(t.accent.opacity(0.55), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .frame(width: 198, height: 198)
+                    .rotationEffect(.degrees(-time * 90 + 180))
+                Image(systemName: "icloud.and.arrow.up")
+                    .font(.system(size: 56, weight: .semibold))
+                    .foregroundStyle(t.onAccent)
+                    .rotation3DEffect(.degrees(turn * 360), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+            }
+        }
+        .frame(height: 210)
+    }
+}
+
+/// A big symbol on the accent: how a run ended (a tick, stop or pause).
+private struct Badge: View {
+    let symbol: String
+    @Environment(\.ks) private var t
 
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: 56, weight: .semibold))
             .foregroundStyle(t.onAccent)
             .contentTransition(.symbolEffect(.replace))
-            // Moves rather than dims, so the glyph stays legible on every accent.
-            .symbolEffect(.bounce.up, options: .repeating.speed(0.4), isActive: busy && !reduce)
             .frame(width: 150, height: 150)
             .background(t.accent, in: Circle())
             .overlay { Circle().strokeBorder(t.line, lineWidth: t.outline) }
-            .frame(height: 200)
+            .frame(height: 210)
     }
 }
 
