@@ -2,7 +2,7 @@
 
 _Last updated: October 2026 · applies to Internet Binder 2.2.4_
 
-Internet Binder is a browser extension that saves products and inspiration into collections **stored only in your browser**. It has no server, no account, no analytics and no advertising. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
+Internet Binder is a browser extension that saves products and inspiration into collections **stored only in your browser**. It has no server, no account, no analytics and no advertising. In Safari on the Mac you can turn on **iCloud sync**, which keeps a copy in your own iCloud (see below); Chrome has no sync. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
 
 ## What Internet Binder stores (locally)
 
@@ -34,7 +34,7 @@ Displayed images are loaded from their original sites (the retailer's CDN, Insta
 - **Instagram Saved-collection import:** only when you click *Import this collection* on one of your own Saved-collection pages, a reader runs in **that tab**, scrolls the collection, and collects post links, thumbnails and alt-text captions from the grid. It never reads cookies, tokens, messages, your feed or anything about your account, and stops at the end, on idle, at the safety limit or when you press Stop. Thumbnails are copied locally because Instagram image links expire (you can turn this off).
 - **Import all collections (optional):** only when you click *Import all collections* on your own Saved page (`instagram.com/<you>/saved/`), Internet Binder reads the collection names and links listed there, then opens each of those collections in **that same tab**, one after another, and runs the same reader on each, followed by *All posts*. It moves at a browsing pace (a pause between collections), stops when you press Stop or close the tab, and reads nothing beyond those Saved pages. Each post found keeps the names of the collections it was in, so they can become groups. Because the tab moves between pages, this needs the optional `https://www.instagram.com/*` permission, asked for when you click the button.
 - **"Read post details" (optional):** after a scan, Internet Binder can request each imported post's own page from `www.instagram.com` — the same request your browser makes when you open the post, carrying your existing session cookie so the page renders — and parse out the caption, creator, date, location, hashtags, caption links and any products the creator tagged. It reads only the post pages for posts in that scan, one at a time with a pause between them; it does not read your feed, profile, messages, followers or any other page, and it never sends this data anywhere. If Instagram answers with a login page, Internet Binder opens the post in a short-lived background tab instead, reads the same fields, and closes it. This needs the optional `https://www.instagram.com/*` permission, requested from the review screen and revocable under Settings → Instagram.
-- **Background worker:** has no timers. It wakes only for messages from Internet Binder's own pages/scripts, the context menu and permission or settings changes. Its only network access is the call to your AI provider when Optional AI is on, and the Lookups you turned on (see below).
+- **Background worker:** has no timers (except in Safari with iCloud sync on: a check for changes every few minutes). It wakes only for messages from Internet Binder's own pages/scripts, the context menu and permission or settings changes. Its only network access is the call to your AI provider when Optional AI is on, and the Lookups you turned on (see below).
 
 ## Network access
 
@@ -65,6 +65,17 @@ Internet Binder makes **no network requests of its own**, with these exceptions,
 
 **Live product pages ("Fix with AI" only)** — if you tick *Read each item's live product page* when starting a run, Internet Binder fetches the saved page URL of each item in that run, from your browser, **without cookies** (`credentials: 'omit'`), and reads only its structured product data (JSON-LD and product meta tags) with a parser that never runs the page's scripts. Nothing from those pages is stored except the fixes that are applied. This needs the optional all-sites permission.
 
+## iCloud sync (Safari on the Mac and the iPhone app only)
+
+Safari on the Mac and the Internet Binder app for iPhone can keep one library in **your own iCloud**. Chrome can't; use Export and Import there.
+
+- **On or off:** a new install starts with it on; a library that already has saves asks once (*Sync this library with iCloud?*). Turn it off any time under Settings → iCloud. Turning it off stops syncing and forgets what this device knew about iCloud; nothing in iCloud is deleted.
+- **What goes to iCloud:** your saves (everything listed for IndexedDB `items`, including those in the Trash), collections, goals and check-ins, learned sorting (`prefs`), Instagram import history, and your AI settings (on or off, provider, model, effort, web search). **Never:** your AI key, the AI change log, or this device's other settings.
+- **Where and how:** in your iCloud account's private CloudKit database for Internet Binder (container `iCloud.com.rarecreatures.keepsake`). Each record's text is stored with CloudKit's end-to-end encryption, so Apple stores it but can't read it. Pictures stored with your saves go as a separate file sealed on your device (AES-GCM) with a key kept in your iCloud Keychain, shared only by your own devices. Internet Binder's developer has no access to any of it. Apple's iCloud terms and storage quota apply.
+- **How in Safari:** the extension gives your library to the Internet Binder app on your Mac (`nativeMessaging`), which keeps a copy in its own container and syncs that copy with iCloud. Safari checks for changes when you open the dashboard or popup, after you save, and every few minutes (`alarms`).
+- **When two libraries meet:** the first sync merges them: collections with the same name become one, and two saves of the same link become one save (the newer details win; your own edits are kept).
+- **To remove it from iCloud:** turn sync off on every device, then delete Internet Binder's data in System Settings → Apple Account → iCloud → Manage (or Settings → your name → iCloud → Manage Storage on iPhone).
+
 ## Permissions
 
 | Permission | Purpose |
@@ -80,7 +91,7 @@ Internet Binder makes **no network requests of its own**, with these exceptions,
 | Optional `https://www.wikidata.org/*` | Requested **only** when you turn on Films & shows lookups. |
 | Optional `https://openlibrary.org/*` | Requested **only** when you turn on Books lookups. |
 
-Internet Binder does not request `tabs`, `history`, `cookies`, `webRequest`, `identity`, `alarms` or any other permission.
+In Safari on the Mac it also asks for `nativeMessaging` and `alarms`, for iCloud sync (above). Internet Binder does not request `tabs`, `history`, `cookies`, `webRequest`, `identity` or any other permission, and Chrome's version doesn't request `nativeMessaging` or `alarms`.
 
 ## Your controls
 
