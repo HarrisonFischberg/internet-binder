@@ -35,7 +35,7 @@ final class WorkScreenTests: XCTestCase {
         XCTAssertTrue(app.buttons["workDone"].waitForExistence(timeout: 10), "a stopped run ends on Done")
         try shoot("work-ai-done")
         app.buttons["workDone"].tap()
-        XCTAssertFalse(app.buttons["workDone"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["workDone"].waitForNonExistence(timeout: 3), "Done closes the screen")
     }
 
     func testICloudCopyScreen() throws {
