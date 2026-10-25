@@ -95,6 +95,19 @@ public final class RecordDatabase: @unchecked Sendable {
         m.registerMigration("v3-drop-outbox") { db in
             try db.execute(sql: "DROP TABLE IF EXISTS outbox")
         }
+        // iCloud sync (SyncStore.swift). sync_pending: records changed here and not yet in iCloud, with a
+        // revision so a change made while a send is in flight stays pending. sync_base: the last version
+        // this device and iCloud agreed on (pictures replaced by their hash), for three-way merges, plus
+        // CloudKit's system fields (its change tag). sync_sealed: pictures that arrived sealed with a key
+        // this device doesn't have yet. sync_state: the sync engine's own saved state.
+        m.registerMigration("v4-sync") { db in
+            try db.execute(sql: """
+                CREATE TABLE sync_pending ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "rev" INTEGER NOT NULL, PRIMARY KEY ("store", "key"));
+                CREATE TABLE sync_base ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "body" TEXT, "system" BLOB, PRIMARY KEY ("store", "key"));
+                CREATE TABLE sync_sealed ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "data" BLOB NOT NULL, PRIMARY KEY ("store", "key"));
+                CREATE TABLE sync_state ("key" TEXT PRIMARY KEY NOT NULL, "value" BLOB NOT NULL);
+                """)
+        }
         return m
     }
 
@@ -213,12 +226,13 @@ public final class RecordDatabase: @unchecked Sendable {
         try pool.write { db in
             for store in stores {
                 let s = try spec(store)
+                for key in try String.fetchAll(db, sql: "SELECT key FROM \"\(s.table)\"") { try Self.markPending(db, store: store, key: key) }
                 try db.execute(sql: "DELETE FROM \"\(s.table)\"")
             }
         }
     }
 
-    private func upsert(_ db: Database, _ s: StoreSpec, store: String, body: String, fact: String? = nil) throws {
+    func upsert(_ db: Database, _ s: StoreSpec, store: String, body: String, fact: String? = nil, track: Bool = true) throws {
         guard let obj = try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any],
               let key = obj[s.keyField] as? String, !key.isEmpty
         else { throw DatabaseError(message: "A \(store) record has no \(s.keyField)") }
@@ -230,10 +244,12 @@ public final class RecordDatabase: @unchecked Sendable {
         let marks = Array(repeating: "?", count: names.count + 2).joined(separator: ", ")
         try db.execute(sql: "INSERT OR REPLACE INTO \"\(s.table)\" (\(cols)) VALUES (\(marks))", arguments: StatementArguments(args))
         if store == "items" { try db.execute(sql: "UPDATE item SET fact = ? WHERE key = ?", arguments: [fact, key]) }
+        if track { try Self.markPending(db, store: store, key: key) }
     }
 
-    private func delete(_ db: Database, _ s: StoreSpec, store: String, key: String) throws {
+    func delete(_ db: Database, _ s: StoreSpec, store: String, key: String, track: Bool = true) throws {
         try db.execute(sql: "DELETE FROM \"\(s.table)\" WHERE key = ?", arguments: [key])
+        if track { try Self.markPending(db, store: store, key: key) }
     }
 
     static func column(_ v: Any?) -> DatabaseValueConvertible? {
