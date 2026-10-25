@@ -92,13 +92,18 @@ async function syncOnOpen() {
   const st = (await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {};
   if (st.on === undefined || st.on === null) {
     if (!state.items.length) return;
-    const yes = await UI.confirmDialog({
+    const choice = await UI.openModal({
       title: 'Sync this library with iCloud?',
-      message: 'Your saves, collections and AI settings stay the same on this Mac and your iPhone. They go to your own iCloud, encrypted, and nothing here is deleted. You can change this in Settings.',
-      confirmLabel: 'Turn On',
-      cancelLabel: 'Not Now',
+      body: [el('p', { class: 'modal-text' }, ['Your saves, collections and AI settings stay the same on this Mac and your iPhone. They go to your own iCloud, encrypted, and nothing here is deleted. You can change this in Settings.'])],
+      actions: [
+        { label: 'Not Now', quiet: true, value: false },
+        { label: 'Turn On', primary: true, value: true, autofocus: true },
+      ],
+      closeOnScrim: false,
     });
-    send({ type: MSG.SYNC_SET, on: yes });
+    // Closed with Esc or the X: no answer yet, so it asks again next time.
+    if (choice === undefined) return;
+    send({ type: MSG.SYNC_SET, on: choice });
     return;
   }
   if (st.on) send({ type: MSG.SYNC_NOW });

@@ -49,7 +49,7 @@ async function removeOrigin(pattern) {
 
 export function renderSettings(ctx, view) {
   const page = el('div', { class: 'page' });
-  page.append(el('p', { class: 'page-intro' }, ['Everything here is stored in this browser only. Nothing is sent to a server unless you turn on the optional AI feature with your own key.']));
+  page.append(el('p', { class: 'page-intro' }, [`Everything here is stored in this browser only. Nothing is sent to a server unless you turn on ${syncCapable() ? 'iCloud sync or ' : ''}the optional AI feature with your own key.`]));
   page.append(syncSection(ctx));
   page.append(appearanceSection(ctx));
   page.append(floatingSection(ctx));
@@ -82,13 +82,16 @@ function syncSection(ctx) {
   const show = (st) => {
     st = st || {};
     input.checked = st.on === true;
-    retry.hidden = st.on !== true || st.status === 'syncing';
+    // .btn sets display, which beats the hidden attribute; the .hidden class wins.
+    retry.classList.toggle('hidden', st.on !== true || st.status === 'syncing');
     retry.textContent = st.status === 'failed' ? 'Try again' : 'Sync now';
     status.textContent = syncStatusText(st);
+    status.classList.toggle('help-error', st.on === true && (st.status === 'failed' || st.status === 'signedOut'));
   };
   const runNow = async () => {
     status.textContent = 'Syncing…';
-    retry.hidden = true;
+    status.classList.remove('help-error');
+    retry.classList.add('hidden');
     const res = await chrome.runtime.sendMessage({ type: MSG.SYNC_NOW }).catch(() => null);
     show(res && res.sync);
   };
