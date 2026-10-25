@@ -2,7 +2,7 @@
 
 _Last updated: October 2026 · applies to Internet Binder 2.2.4_
 
-Internet Binder is a browser extension that saves products and inspiration into collections **stored only in your browser**. It has no server, no account, no analytics and no advertising. In Safari on the Mac you can turn on **iCloud sync**, which keeps a copy in your own iCloud (see below); Chrome has no sync. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
+Internet Binder is a browser extension that saves products and inspiration into collections **stored in your browser**. It has no server, no account, no analytics and no advertising. In Safari on the Mac you can turn on **iCloud sync**, which keeps a copy in your own iCloud (see below); Chrome has no sync. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
 
 ## What Internet Binder stores (locally)
 

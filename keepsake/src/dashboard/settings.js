@@ -490,7 +490,7 @@ function dataSection(ctx) {
       usage.querySelector('.stat-value').textContent = kvBytes === null && dbBytes === null ? '—' : formatBytes(total);
     })
     .catch(() => { usage.querySelector('.stat-value').textContent = '—'; });
-  return UI.section('Your data', 'Stored in this browser profile only (IndexedDB for your saves, chrome.storage.local for settings). Export a JSON backup any time; it includes the Trash and never includes your AI key.', [
+  return UI.section('Your data', `Stored in this browser profile (IndexedDB for your saves, chrome.storage.local for settings)${syncCapable() ? ', and in your own iCloud while iCloud sync is on' : ' only'}. Export a JSON backup any time; it includes the Trash and never includes your AI key.`, [
     stats,
     el('div', { class: 'actions-row' }, [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: async () => {
@@ -778,7 +778,7 @@ export function openPrivacy(ctx) {
 }
 
 function privacySection(ctx) {
-  return UI.section('Privacy', 'Everything stays in this browser. No account, no tracking; the only network calls are the ones you turn on.', [
+  return UI.section('Privacy', `Everything stays in this browser${syncCapable() ? ' and, with iCloud sync on, your own iCloud' : ''}. No account, no tracking; the only network calls are the ones you turn on.`, [
     el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn', onClick: () => openPrivacy(ctx) }, ['See what Internet Binder stores and sends'])]),
   ]);
 }

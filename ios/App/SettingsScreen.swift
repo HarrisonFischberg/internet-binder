@@ -481,6 +481,7 @@ struct PrivacyScreen: View {
         List {
             Section("On this iPhone") {
                 Text("Your saves, collections, goals and settings live in Internet Binder's storage on this device. No account, no Internet Binder server, no analytics.")
+                Text("With iCloud sync on (Settings → iCloud), a copy also goes to your own iCloud, end-to-end encrypted: Apple stores it but can't read it, and neither can Internet Binder's developer. Your AI key never goes.")
                 Text("Your AI key is kept in the Keychain on this device and never exported.")
             }
             Section("When Internet Binder uses the network") {

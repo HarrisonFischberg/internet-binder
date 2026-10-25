@@ -7,9 +7,9 @@
 
 # Internet Binder
 
-**Save products, places, recipes, workouts, videos, articles, films and books from anywhere. Sorted for you, kept on your device, no account.**
+**Save products, places, recipes, workouts, videos, articles, films and books from anywhere. Sorted for you. No account, no tracking, and nobody but you can read it.**
 
-Internet Binder runs in Chrome (and other Chromium browsers), in Safari on the Mac, and as an app for iPhone and iPad. Save from any site with one click. Shopping sorts itself into collections; everything else goes to its own Lifestyle view. Everything stays on your own device.
+Internet Binder runs in Chrome (and other Chromium browsers), in Safari on the Mac, and as an app for iPhone and iPad. Save from any site with one click. Shopping sorts itself into collections; everything else goes to its own Lifestyle view. Your library lives on your own devices. On iPhone, iPad and in Safari on the Mac, iCloud sync keeps one library across them in your own iCloud, end-to-end encrypted so Apple stores it but can't read it. Chrome keeps its library in the browser.
 
 Made by [Rare Creatures LLC](https://rarecreatures.app). Questions or feedback: [hello@rarecreatures.app](mailto:hello@rarecreatures.app).
 
@@ -81,7 +81,7 @@ Every screenshot uses the built-in sample data. They follow your GitHub theme: s
 - Optional on-page save buttons for product grids, off until you turn them on, and only on sites you grant.
 - Import your own **Instagram Saved collections**, then **read each post's page** for the real caption, creator, links and creator-tagged products (name, price, shop URL). No login, no credentials, just your existing session.
 - Calm dashboard: a Home page with search, your latest saves and your top collections; a masonry grid with search, sort, filters, favorites, purchased, bulk actions; collection tiles that scale to hundreds of collections; five styles, each in light and dark.
-- **No account. No server. No telemetry.** Everything lives on your device: in the browser profile (IndexedDB for your saves, `chrome.storage.local` for settings), or in the app on iPhone and iPad. Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
+- **No account. No server. No telemetry.** Everything lives on your device: in the browser profile (IndexedDB for your saves, `chrome.storage.local` for settings), or in the app on iPhone and iPad. With **iCloud sync** (iPhone, iPad and Safari on the Mac) a copy also goes to your own iCloud through Apple's CloudKit, end-to-end encrypted; your AI key never does, and Internet Binder's developer can't see any of it. Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
 - Optional, opt-in, bring-your-own-key AI to help identify products in Instagram saves, with a preview of exactly what leaves the browser.
 - On iPhone and iPad: save from any app's Share sheet, cook a recipe step by step with optional music, add Home Screen widgets, and pick from four styles with matching app icons.
 
@@ -265,6 +265,7 @@ Local vs cloud in one sentence: everything in Internet Binder (saving, extractio
 
 See [keepsake/PRIVACY.md](keepsake/PRIVACY.md) (browser extension), [ios/PRIVACY-iOS.md](ios/PRIVACY-iOS.md) (iPhone and iPad), the in-extension **Privacy** page, and the privacy policy at [rarecreatures.app/apps/internet-binder/privacy](https://rarecreatures.app/apps/internet-binder/privacy/). In short:
 
+- **iCloud sync** (iPhone, iPad and Safari on the Mac; Settings → iCloud): one library in your own iCloud, end-to-end encrypted by CloudKit, pictures sealed on your device. Never your AI key. Turn it off any time; to remove the copy, delete Internet Binder's data under Apple Account → iCloud → Manage Storage.
 - **Export** (Settings → Data): downloads `keepsake-export-<date>.json` with collections, items, learned preferences, settings and import history. Never the API key.
 - **Import**: pick a JSON export. Internet Binder validates it (format, schema version, every field sanitized, URLs must be http(s)) and either **merges** (collections dedupe by name, items by URL; duplicates are reported) or **replaces** everything after a typed confirmation.
 - **Delete all local data**: typed confirmation, then everything is wiped (including any AI key) and the defaults are recreated. Learned preferences (word and retailer habits, corrections) can be cleared separately; your collections' keywords are kept.
@@ -283,7 +284,7 @@ See [keepsake/PRIVACY.md](keepsake/PRIVACY.md) (browser extension), [ios/PRIVACY
 | Provider origin (e.g. `https://api.openai.com/*`) | **only if you turn AI on** | Let the dashboard and background worker call the API you configured. Given back when you turn AI off. |
 | `https://nominatim.openstreetmap.org/*` + `https://tiles.openfreemap.org/*`, `https://www.wikidata.org/*`, `https://openlibrary.org/*` | **only if you turn on that Lookup** (Settings → Lookups) | Find a place's address and pin and draw the Places map; a film's or a book's details. Given back when you turn the lookup off. |
 
-No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on, and the Lookups you turned on.
+No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity` in Chrome. The Safari copy for the Mac adds `nativeMessaging` and `alarms`, used only for iCloud sync (handing the library to the Internet Binder app on the Mac, and a sync every few minutes). In Chrome the background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on, and the Lookups you turned on.
 
 ## Limitations
 

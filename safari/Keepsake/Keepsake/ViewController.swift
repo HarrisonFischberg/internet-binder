@@ -105,7 +105,7 @@ struct ContainerView: View {
     private var message: String {
         switch status.state {
         case .checking: "Checking Safari…"
-        case .on: "Internet Binder is ready. Click its button in Safari's toolbar, or press ⌥⇧K, to save the page you're on. Everything stays on this Mac."
+        case .on: "Internet Binder is ready. Click its button in Safari's toolbar, or press ⌥⇧K, to save the page you're on. Your library stays on this Mac and, with iCloud sync on, in your own iCloud."
         case .off: "Internet Binder is installed but turned off in Safari."
         case .unknown: "Internet Binder couldn't tell whether Safari has it turned on. Open Safari Settings and look under Extensions."
         }
