@@ -8,6 +8,10 @@ Everything here matches the Chrome extension's promises; the differences are the
   device (an App Group shared by the app, its Share Extension and its widgets). The same fields as
   Chrome's (`PRIVACY.md`, "What Internet Binder stores").
 - Your AI key: in this device's Keychain, available after first unlock, never synced, never exported.
+- With iCloud sync on (Settings → iCloud; on for a new install, asked once for a library with saves): a
+  copy of your library in your own iCloud, as in `PRIVACY.md`, "iCloud sync": record text end-to-end
+  encrypted by CloudKit, pictures sealed on the device with a key in your iCloud Keychain, never the AI
+  key or the AI change log. The Share Extension sends the save you just made; the app sends the rest.
 - The AI change log: on this device, excluded from exports (as in Chrome).
 - A snapshot for widgets (active goals, your latest save's title): in the App Group.
 - Small copies (≤ 640 px) of your saves' pictures, made when a picture is first shown, so it stays if
@@ -15,6 +19,7 @@ Everything here matches the Chrome extension's promises; the differences are the
 
 ## When Internet Binder uses the network
 Internet Binder has no server, no account, no analytics and no advertising. It contacts:
+- **Your iCloud** (Apple's CloudKit), only while iCloud sync is on, for your own library.
 - **The sites your saves came from**, to show their pictures, as a web page would.
 - **Apple Maps** to draw maps of your places; **Directions** opens Apple Maps with the place's name and
   address (built from what's saved; nothing is looked up).
@@ -43,7 +48,7 @@ When you share a page from Safari, Internet Binder reads that page in Safari to 
 details (the same reader as Chrome's toolbar button). Nothing is sent anywhere.
 
 ## App Store privacy label (proposed)
-**Data Not Collected.** Internet Binder's developer receives nothing. AI and Lookups requests go from your
+**Data Not Collected.** Internet Binder's developer receives nothing; iCloud sync goes to the person's own iCloud, which the developer can't read. AI and Lookups requests go from your
 device to services you turn on, under their policies; to confirm against Apple's definitions before
 submission.
 

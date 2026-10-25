@@ -788,7 +788,9 @@ export function renderPrivacy(ctx, view) {
   page.append(UI.section('The short version', '', [
     el('div', { class: 'prose' }, [
       el('ul', {}, [
-        el('li', {}, [el('strong', {}, ['Local only. ']), 'Everything you save lives in this browser profile (IndexedDB and chrome.storage.local). There is no Internet Binder server, account or sync. Deleted saves wait in the Trash for 30 days.']),
+        syncCapable()
+          ? el('li', {}, [el('strong', {}, ['Yours only. ']), 'Everything you save lives in this browser profile, and nowhere else unless you turn on iCloud sync: then a copy goes to your own iCloud, end-to-end encrypted, and to your iPhone. There is no Internet Binder server or account. Deleted saves wait in the Trash for 30 days.'])
+          : el('li', {}, [el('strong', {}, ['Local only. ']), 'Everything you save lives in this browser profile (IndexedDB and chrome.storage.local). There is no Internet Binder server, account or sync. Deleted saves wait in the Trash for 30 days.']),
         el('li', {}, [el('strong', {}, ['No tracking. ']), 'No analytics, no telemetry, no crash reports, no ads, no third-party scripts.']),
         el('li', {}, [el('strong', {}, ['Nothing runs on pages until you ask. ']), 'The toolbar popup reads a page only when you click it. On-page buttons are off until you enable them and grant a site.']),
         el('li', {}, [el('strong', {}, ['Instagram: ']), 'the importer only reads the Saved collection you have open. It never reads cookies, tokens, messages, or anything about your account.']),
@@ -805,6 +807,10 @@ export function renderPrivacy(ctx, view) {
         permRow('unlimitedStorage', 'Let your library grow past Chrome’s 10 MB default. It still stays in this browser.'),
         permRow('activeTab + scripting', 'Read the page you clicked the icon on (title, price, images) at that moment only, and show the save toast.'),
         permRow('contextMenus', 'The “Save to Internet Binder” right-click item.'),
+        ...(syncCapable() ? [
+          permRow('nativeMessaging', 'Hand your library to the Internet Binder app on this Mac, which keeps it in step with your iCloud when sync is on.'),
+          permRow('alarms', 'Check iCloud for changes from your iPhone every few minutes while sync is on.'),
+        ] : []),
         permRow('Site access (optional)', 'Only requested if you enable on-page buttons for a site or all sites, use Import from tabs (all sites, to read the tabs you import), connect an AI provider (its address only), or let “Fix with AI” read your saved items’ product pages (all sites). Revoke any time here or at chrome://extensions.'),
       ]),
     ])]),
