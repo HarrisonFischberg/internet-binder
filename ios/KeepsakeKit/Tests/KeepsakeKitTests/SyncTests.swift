@@ -52,9 +52,12 @@ final class Device {
         cursor = max(cursor, cloud.log.count) // what this device just sent, it already has
     }
 
-    func put(_ store: String = "items", _ obj: [String: Any]) throws {
+    func put(_ store: String, _ obj: [String: Any]) throws {
         try db.put(store, bodies: [try SyncJSON.text(obj)])
     }
+
+    // Swift can't default a leading unlabeled parameter before a required one, so items get their own overload.
+    func put(_ obj: [String: Any]) throws { try put("items", obj) }
 
     func item(_ id: String) throws -> [String: Any]? {
         try db.get("items", id).map { try SyncJSON.object($0) }
