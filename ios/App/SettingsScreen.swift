@@ -38,8 +38,19 @@ struct SettingsScreen: View {
             Toggle("Sync with iCloud", isOn: Binding(get: { model.syncOn }, set: { model.setSync($0) }))
                 .accessibilityIdentifier("syncToggle")
             if model.syncOn {
-                LabeledContent("Status") {
-                    Text(syncStatusText).accessibilityIdentifier("syncStatus")
+                if let run = model.syncRun {
+                    Button {
+                        model.workShowing = true
+                    } label: {
+                        LabeledContent("Status") {
+                            Text("Sending \(run.done) of \(run.total)…").monospacedDigit().accessibilityIdentifier("syncStatus")
+                        }
+                    }
+                    .accessibilityHint("Shows the progress screen.")
+                } else {
+                    LabeledContent("Status") {
+                        Text(syncStatusText).accessibilityIdentifier("syncStatus")
+                    }
                 }
                 if case .failed? = model.syncStatus {
                     Button("Try Again") { model.syncNow() }.accessibilityIdentifier("syncRetry")
@@ -105,8 +116,12 @@ struct SettingsScreen: View {
                           defaultFilename: "internet-binder-export-\(Date.now.formatted(.iso8601.year().month().day()))") { _ in exportDoc = nil }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { r in if case .success(let url) = r { Task { await model.importFile(url) } } }
             .sheet(isPresented: $erasing) { EraseSheet() }
+            // The progress screen opens over Settings while it's up (Fix everything, turning sync on).
+            .modifier(WorkCover(host: .settings))
+            .onAppear { model.workHost = .settings }
+            .onDisappear { model.workHost = .root }
             .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
-                Button("Fix everything") { dismiss(); Task { await model.fixWithAI(model.saves) } }
+                Button("Fix everything") { Task { await model.fixWithAI(model.saves, screen: true) } }
             } message: {
                 Text("Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone.")
             }

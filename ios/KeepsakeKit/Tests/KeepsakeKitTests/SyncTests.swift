@@ -148,6 +148,14 @@ struct SyncTests {
         #expect(try phone.db.pendingChanges().map(\.id.key) == ["s1"])
     }
 
+    @Test func pendingCountFallsAsRecordsGoUp() throws {
+        try phone.put(["id": "s1", "title": "One", "updatedAt": "2026-10-25T10:00:00.000Z"])
+        try phone.put(["id": "s2", "title": "Two", "updatedAt": "2026-10-25T10:00:00.000Z"])
+        #expect(try phone.db.pendingCount() == 2)
+        try syncAll(cloud, phone, mac)
+        #expect(try phone.db.pendingCount() == 0)
+    }
+
     @Test func learnedWordsMergeAndForgetTravels() throws {
         let prefs: [String: Any] = ["learnedKeywords": ["tent": ["camping": 2]], "retailerPrefs": [:], "corrections": []]
         try phone.put("kv", ["key": "prefs", "value": prefs])
