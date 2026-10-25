@@ -41,6 +41,9 @@ struct SettingsScreen: View {
                 LabeledContent("Status") {
                     Text(syncStatusText).accessibilityIdentifier("syncStatus")
                 }
+                if case .failed? = model.syncStatus {
+                    Button("Try Again") { model.syncNow() }.accessibilityIdentifier("syncRetry")
+                }
             }
         } header: {
             Text("iCloud")
@@ -487,7 +490,7 @@ struct EraseSheet: View {
             Form {
                 Section {
                     Text(model.syncOn
-                         ? "This deletes every save, collection, goal and setting on this iPhone. iCloud Sync turns off first, so your iCloud copy and your other devices keep theirs. It can't be undone."
+                         ? "This deletes every save, collection, goal and setting on this iPhone. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here."
                          : "This deletes every save, collection, goal and setting on this iPhone. It can't be undone. Export first if you might want them back.")
                     TextField("Type ERASE to confirm", text: $typed).textInputAutocapitalization(.characters)
                 }
