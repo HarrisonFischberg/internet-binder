@@ -154,6 +154,8 @@ extension Library {
     public func restoreLearned(_ undo: String) async throws { _ = try await core.callJSON("views.restoreLearned", argsJSON: "[\(undo)]") }
 
     public func goals(for itemId: String) async throws -> [GoalView] { try await prepare(); return try await core.call("views.goals", [itemId], as: [GoalView].self) }
+    /// Every workout goal: active ones first, then finished (Workouts' Goals view).
+    public func allGoals() async throws -> [GoalView] { try await prepare(); return try await core.call("views.allGoals", as: [GoalView].self) }
 
     // MARK: writes
 

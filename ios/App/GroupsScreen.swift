@@ -66,6 +66,7 @@ let groupColumns = [GridItem(.adaptive(minimum: 150), spacing: 16)]
 
 /// Each Lifestyle view with saves, as a stack linking to its view: most saves first (a tie A–Z), until
 /// you drag them into your own order (kept on this iPhone). "Sort by most saves" goes back.
+/// Once there is a workout goal, Workout goals comes first: Workouts, open on its Goals view.
 struct LifestyleTiles: View {
     /// Select mode: a tap ticks a view instead of opening it.
     var selection: Binding<Set<String>>?
@@ -76,6 +77,7 @@ struct LifestyleTiles: View {
     @State private var order: [String] = []
     @State private var dragging: String?
     @State private var manual = !SavedOrder.get(Self.key).isEmpty
+    @State private var goals: [GoalView] = []
     static let key = "lifestyleOrder"
 
     private var counts: [String: Int] { model.index.byKind.mapValues(\.count) }
@@ -87,6 +89,7 @@ struct LifestyleTiles: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: groupColumns, spacing: 20) {
+                if selection == nil && !goals.isEmpty { goalsTile }
                 ForEach(order, id: \.self) { kind in
                     let items = model.index.kind(kind)
                     let k = KindStyle(kind)
@@ -122,6 +125,22 @@ struct LifestyleTiles: View {
             }
         }
         .onChange(of: present, initial: true) { _, kinds in order = manual ? kinds.arranged(by: SavedOrder.get(Self.key)) { $0 } : kinds }
+        .task(id: "\(model.goalsChanged)|\(model.index.kind("workout").count)") {
+            goals = (try? await model.library?.allGoals()) ?? goals
+        }
+    }
+
+    private var goalsTile: some View {
+        let going = goals.filter { $0.progress.status == "active" }
+        let finished = goals.count - going.count
+        let workouts = (going + goals).compactMap { model.index.byId[$0.goal.itemId] }
+        let cover = workouts.first(where: \.hasImage) ?? workouts.first
+        let subtitle = going.isEmpty ? "\(finished) finished" : "\(going.count) going"
+        return NavigationLink(value: Route.workoutGoals) {
+            GroupTile("Workout goals", subtitle: subtitle, cover: cover, symbol: "target", tint: KindStyle("workout").color, kind: "workout")
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityIdentifier("workoutGoalsTile")
     }
 }
 

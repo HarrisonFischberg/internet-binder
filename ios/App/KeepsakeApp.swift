@@ -362,8 +362,11 @@ final class LibraryModel {
     /// Rewrites the widgets' snapshot and asks WidgetKit to redraw them, once things settle: a run of
     /// changes (an import, Fix with AI on a collection) writes it once, not once per save.
     private var widgetWrite: Task<Void, Never>?
+    /// Bumped on every goal or check-in change, so Workouts' Goals view and its Lifestyle tile read them again.
+    private(set) var goalsChanged = 0
     func widgetsChanged() {
         guard let library else { return }
+        goalsChanged += 1
         widgetWrite?.cancel()
         widgetWrite = Task {
             try? await Task.sleep(for: .seconds(2))

@@ -4,9 +4,12 @@ import KeepsakeUI
 
 /// One Lifestyle view (Recipes, Workouts, Films & shows…). Films, shows and books are lists to work
 /// through: what's still to watch or read comes first, then what you've done (Chrome's rule).
+/// Workouts also has a Goals view, like Places' List and Map: every goal with its week, Done today on each.
 struct KindScreen: View {
     let kind: String
     let zoom: Namespace.ID
+    @State private var showGoals: Bool
+    @State private var goals: [GoalView] = []
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     /// Places only: the Map button next to the title swaps the cards for a map (kept on this iPhone).
@@ -20,6 +23,13 @@ struct KindScreen: View {
     private var onMap: Bool { kind == "place" && showMap && !saves.isEmpty }
     private var todo: [Save] { saves.filter { $0.status != "done" } }
     private var done: [Save] { saves.filter { $0.status == "done" } }
+    private var onGoals: Bool { kind == "workout" && showGoals }
+
+    init(kind: String, zoom: Namespace.ID, goals: Bool = false) {
+        self.kind = kind
+        self.zoom = zoom
+        _showGoals = State(initialValue: goals)
+    }
 
     var body: some View {
         let k = KindStyle(kind)
@@ -35,7 +45,10 @@ struct KindScreen: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         header(k)
-                        if saves.isEmpty {
+                        if kind == "workout" && !saves.isEmpty { goalsPicker }
+                        if onGoals {
+                            WorkoutGoalsList(goals: goals, zoom: zoom)
+                        } else if saves.isEmpty {
                             EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Internet Binder and it lands here.")
                         } else {
                             SaveGrid(saves: todo, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
@@ -59,13 +72,35 @@ struct KindScreen: View {
             if model.aiReady && !saves.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) \(k.plural.lowercased())") }
             }
-            // Select ticks cards, so it steps aside while the map is showing.
-            if !saves.isEmpty && !onMap {
+            // Select ticks cards, so it steps aside while the map or the goals are showing.
+            if !saves.isEmpty && !onMap && !onGoals {
                 ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
             }
         }
         .onChange(of: saves.isEmpty) { _, empty in if empty { selecting = false } }
         .onChange(of: onMap) { _, map in if map { selecting = false; selected = [] } }
+        .onChange(of: onGoals) { _, on in if on { selecting = false; selected = [] } }
+        .task(id: "\(kind)|\(model.goalsChanged)|\(saves.count)") {
+            guard kind == "workout" else { return }
+            goals = (try? await model.library?.allGoals()) ?? goals
+        }
+    }
+
+    private var activeGoals: Int { goals.filter { $0.progress.status == "active" }.count }
+    private var goalsSubtitle: String {
+        let finished = goals.count - activeGoals
+        return finished > 0 ? "\(activeGoals) going · \(finished) finished" : "\(activeGoals) going"
+    }
+
+    /// Workouts: the workouts themselves, or their goals (Places' List / Map / Review picker).
+    private var goalsPicker: some View {
+        Picker("Show", selection: $showGoals) {
+            Text("Workouts").tag(false)
+            Text(activeGoals > 0 ? "Goals \(activeGoals)" : "Goals").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .onChange(of: showGoals) { Haptic.detent() }
+        .accessibilityIdentifier("workoutsGoalsPicker")
     }
 
     private func startSelecting(_ id: String) {
@@ -77,7 +112,7 @@ struct KindScreen: View {
     /// The title, and for Places a Map button beside it that switches between the cards and the map.
     private func header(_ k: KindStyle) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            ScreenHeader(title: k.plural, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
+            ScreenHeader(title: k.plural, subtitle: onGoals ? goalsSubtitle : saves.count == 1 ? "1 save" : "\(saves.count) saves")
             if kind == "place" && !saves.isEmpty {
                 Button {
                     Haptic.detent()

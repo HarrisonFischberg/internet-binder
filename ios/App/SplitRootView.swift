@@ -12,8 +12,9 @@ struct SplitRootView: View {
     @State private var settings = false
     @State private var appearance = false
     @State private var dropTarget: String?
+    @State private var hasGoals = false
 
-    enum Section: Hashable { case home, library, search, review, places, kind(String), collections, collection(String, String) }
+    enum Section: Hashable { case home, library, search, review, places, kind(String), workoutGoals, collections, collection(String, String) }
 
     var body: some View {
         NavigationSplitView {
@@ -35,6 +36,7 @@ struct SplitRootView: View {
                             .listRowBackground(dropTarget == "kind:\(k)" ? t.accent.opacity(0.15) : nil)
                             .dropDestination(for: String.self) { ids, _ in put(ids, "kind:\(k)", s.plural) } isTargeted: { dropTarget = $0 ? "kind:\(k)" : nil }
                     }
+                    if hasGoals { Label("Workout goals", systemImage: "target").tag(Section.workoutGoals) }
                 }
                 SwiftUI.Section("Collections") {
                     ForEach(collections) { c in
@@ -60,6 +62,7 @@ struct SplitRootView: View {
                 case .review: ReviewScreen(zoom: zoom)
                 case .places: PlacesScreen(zoom: zoom)
                 case .kind(let k): KindScreen(kind: k, zoom: zoom)
+                case .workoutGoals: KindScreen(kind: "workout", zoom: zoom, goals: true)
                 case .collections: CollectionsScreen(zoom: zoom)
                 case .collection(let id, let name): CollectionScreen(id: id, name: name, zoom: zoom)
                 }
@@ -75,6 +78,7 @@ struct SplitRootView: View {
                 .keyboardShortcut("f", modifiers: .command).hidden()
         }
         .task(id: "\(model.saves.count)|\(model.collectionsChanged)") { collections = (try? model.library?.collections()) ?? [] }
+        .task(id: "\(model.goalsChanged)|\(model.saves.count)") { hasGoals = !((try? await model.library?.allGoals()) ?? []).isEmpty }
     }
 
     private func put(_ ids: [String], _ target: String, _ name: String) -> Bool {
