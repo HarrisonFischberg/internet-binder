@@ -4,6 +4,7 @@
 //   classify(product, context)              -> Classification
 //   learnFromCorrection(product, fromId, toId, prefs, options) -> prefs
 //   learnFromConfirmation(product, toId, prefs) -> prefs
+//   learnFromSaves(saves, prefs) -> prefs
 //   findSimilarCollection(name, collections) -> collection | null
 //   salientTerms(product)                   -> string[]
 //   nameSimilarity(a, b)                    -> 0..1
@@ -477,6 +478,11 @@ export function classify(product, context = {}) {
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || (a.cand.virtual === b.cand.virtual ? 0 : a.cand.virtual ? 1 : -1));
 
+  // A collection you gave a keyword to beats one you don't have yet ("stagg" on Coffee setup
+  // wins over a new Kitchen for a "Stagg gooseneck kettle").
+  const keyedReal = ranked.findIndex((r) => r.userScore > 0 && !r.cand.virtual);
+  if (keyedReal > 0 && ranked[0].cand.virtual) ranked.unshift(...ranked.splice(keyedReal, 1));
+
   const alternatives = ranked.slice(0, 4).map((r) => ({
     collectionId: r.cand.id, collectionName: r.cand.name, taxonomyKey: r.cand.taxonomyKey, score: Math.round(r.score * 10) / 10, isNew: r.cand.virtual,
   }));
@@ -583,11 +589,21 @@ export function emptyPrefs() {
 // options.strong => the user explicitly asked to use this choice for similar items.
 // options.confirm => the user saw where it went and kept it (learnFromConfirmation).
 export function learnFromCorrection(product, fromId, toId, prefs, options = {}) {
+  const next = copyForLearning(prefs);
+  if (toId) teach(next, product, fromId, toId, options);
+  return next;
+}
+
+function copyForLearning(prefs) {
   const next = { ...emptyPrefs(), ...(prefs || {}) };
   next.learnedKeywords = { ...(next.learnedKeywords || {}) };
   next.retailerPrefs = { ...(next.retailerPrefs || {}) };
   next.corrections = [...(next.corrections || [])];
-  if (!toId) return next;
+  return next;
+}
+
+// One lesson, written into `next` (a copy learnFromCorrection or learnFromSaves made).
+function teach(next, product, fromId, toId, options) {
   const terms = salientTerms(product);
   const inc = LESSON[options.confirm ? 'confirm' : options.strong ? 'strong' : 'light'];
   for (const term of terms) {
@@ -608,9 +624,16 @@ export function learnFromCorrection(product, fromId, toId, prefs, options = {}) 
     next.retailerPrefs[host] = hp;
   }
   // The log is of changes you made; keeping a suggestion isn't one.
-  if (options.confirm) return next;
+  if (options.confirm) return;
   next.corrections.push({ at: new Date().toISOString(), itemId: product?.id || null, title: String(product?.title || '').slice(0, 120), from: fromId || null, to: toId, terms, strong: !!options.strong });
   if (next.corrections.length > 200) next.corrections = next.corrections.slice(-200);
+}
+
+// Saves already sitting in collections, each a kept suggestion: how the sorter catches up on a
+// library filed before it learned this way. One copy for the lot, so a big library stays quick.
+export function learnFromSaves(saves, prefs) {
+  const next = copyForLearning(prefs);
+  for (const s of saves || []) if (s?.collectionId && s.title) teach(next, s, null, s.collectionId, { confirm: true });
   return next;
 }
 

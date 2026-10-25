@@ -2,7 +2,7 @@
 // kept (quiet ones). These tests replay a person filing saves and check the sorter gets better at it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classify, emptyPrefs, learnFromCorrection, learnFromConfirmation } from '../keepsake/src/shared/categorizer.js';
+import { classify, emptyPrefs, learnFromCorrection, learnFromConfirmation, learnFromSaves } from '../keepsake/src/shared/categorizer.js';
 import { createStore, memoryBackend, memoryRecordBackend, makeCollection } from '../keepsake/src/shared/storage.js';
 import { saveCapture } from '../keepsake/src/shared/capture.js';
 
@@ -139,4 +139,43 @@ test('saving where the toolbar suggested teaches the sorter; an instant save nob
   const before = JSON.stringify((await store.getPrefs()).learnedKeywords);
   await saveCapture(store, { title: 'Stagg pour over set', url: 'https://shop.example/electric' }, { instant: true });
   assert.equal(JSON.stringify((await store.getPrefs()).learnedKeywords), before);
+});
+
+test('learnFromSaves is the same as keeping each save where it is, one by one', () => {
+  const saves = TRAIN.map(([title, col], i) => ({ id: `s${i}`, title, host: 'shop.example', collectionId: col.id }));
+  const oneByOne = saves.reduce((p, s) => learnFromConfirmation(s, s.collectionId, p), emptyPrefs());
+  const together = learnFromSaves(saves, emptyPrefs());
+  assert.deepEqual(together.learnedKeywords, oneByOne.learnedKeywords);
+  assert.deepEqual(together.retailerPrefs, oneByOne.retailerPrefs);
+  assert.ok(right(together, HELD_OUT) > right(emptyPrefs(), HELD_OUT), 'a filed library teaches it before any new choice');
+});
+
+test('store.learnFromLibrary teaches from what you already filed, once, skipping moves, Review and samples', async () => {
+  const store = await freshStore();
+  const { collection: trip } = await store.createCollection({ name: 'Trip prep' });
+  const add = (title, extra = {}) => store.addItem({ title, url: `https://shop.example/${encodeURIComponent(title)}`, collectionId: trip.id, ...extra });
+  await add('Titanium camp stove');
+  await add('Folding camp stove');
+  await add('Camp stove windscreen');
+  await add('Moved lantern', { categorizationSource: 'manual' });
+  await add('Sample tarp', { categorizationSource: 'sample' });
+  await store.addItem({ title: 'Mystery stove thing', url: 'https://shop.example/m', collectionId: null, needsReview: true });
+  assert.equal(await store.learnFromLibrary(), 3);
+  const learned = (await store.getPrefs()).learnedKeywords;
+  assert.equal(learned['camp stove'][trip.id], 1.5);
+  assert.equal(learned.lantern, undefined, 'a moved save taught it when it was moved');
+  assert.equal(learned.tarp, undefined, 'samples are not yours');
+  assert.equal(await store.learnFromLibrary(), 0, 'only once');
+  assert.deepEqual((await store.getPrefs()).learnedKeywords, learned);
+  const next = await saveCapture(store, { title: 'Camp stove pot set', url: 'https://shop.example/pot' }, { instant: true });
+  assert.equal(next.item.collectionId || next.classification.suggested?.collectionId, trip.id, 'the next stove goes with the others (or is suggested there)');
+});
+
+test('your keyword beats a collection you do not have yet', async () => {
+  const kept = makeCollection({ name: 'Coffee setup', keywords: ['stagg'] });
+  const r = classify({ title: 'Stagg gooseneck kettle' }, { collections: [kept], prefs: emptyPrefs() });
+  assert.equal(r.collectionId, kept.id);
+  assert.ok(r.confidence >= 0.85);
+  // With no keyword of yours in play, a new Kitchen is still suggested.
+  assert.equal(classify({ title: 'Gooseneck kettle' }, { collections: [kept], prefs: emptyPrefs() }).collectionName, 'Kitchen');
 });
