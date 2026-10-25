@@ -449,7 +449,7 @@ private struct CardFan: View {
                     .offset(y: -Double(d) * 16)
                     .zIndex(Double(3 - d))
                     // Only the top card flips away; one pushed out of sight behind it by a new save just fades.
-                    .transition(.asymmetric(insertion: .opacity, removal: d == 0 ? .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0)) : .opacity))
+                    .transition(.asymmetric(insertion: .opacity, removal: d == 0 ? AnyTransition.modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0)) : .opacity))
             }
             Image(systemName: "sparkles")
                 .font(.system(size: 30, weight: .bold))
