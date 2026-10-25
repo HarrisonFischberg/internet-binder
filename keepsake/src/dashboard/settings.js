@@ -11,6 +11,7 @@ import * as UI from './ui.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { hasInstagramAccess, requestInstagramAccess, revokeInstagramAccess, instagramAccessHelp } from '../instagram/enrich.js';
 import { clearScanStore } from '../instagram/scanStore.js';
+import { syncCapable, SYNC_KEY } from '../shared/syncBridge.js';
 
 const ALL_SITES = '*://*/*';
 
@@ -49,6 +50,7 @@ async function removeOrigin(pattern) {
 export function renderSettings(ctx, view) {
   const page = el('div', { class: 'page' });
   page.append(el('p', { class: 'page-intro' }, ['Everything here is stored in this browser only. Nothing is sent to a server unless you turn on the optional AI feature with your own key.']));
+  page.append(syncSection(ctx));
   page.append(appearanceSection(ctx));
   page.append(floatingSection(ctx));
   page.append(categorizationSection(ctx));
@@ -60,6 +62,55 @@ export function renderSettings(ctx, view) {
   page.append(privacySection(ctx));
   page.append(aboutSection(ctx));
   view.append(page);
+}
+
+// iCloud sync: Safari on the Mac only (the Mac app talks to iCloud). Chrome says where it lives instead.
+function syncSection(ctx) {
+  if (!syncCapable()) {
+    return UI.section('iCloud sync', 'Sync with iCloud is in Internet Binder for iPhone and in Safari on a Mac. Chrome keeps its library in this browser: use Export and Import under Your data to move it.', []);
+  }
+  const status = el('span', { class: 'help', role: 'status' }, ['…']);
+  const retry = el('button', { type: 'button', class: 'btn btn-quiet', onClick: () => runNow() }, ['Sync now']);
+  const toggle = UI.switchInput({ checked: false, label: 'Sync with iCloud', onChange: async (on, input) => {
+    input.disabled = true;
+    status.textContent = on ? 'Syncing…' : 'Off';
+    const res = await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on }).catch((e) => ({ ok: false, error: e.message }));
+    input.disabled = false;
+    show(res && res.sync);
+  } });
+  const input = toggle.querySelector('input');
+  const show = (st) => {
+    st = st || {};
+    input.checked = st.on === true;
+    retry.hidden = st.on !== true || st.status === 'syncing';
+    retry.textContent = st.status === 'failed' ? 'Try again' : 'Sync now';
+    status.textContent = syncStatusText(st);
+  };
+  const runNow = async () => {
+    status.textContent = 'Syncing…';
+    retry.hidden = true;
+    const res = await chrome.runtime.sendMessage({ type: MSG.SYNC_NOW }).catch(() => null);
+    show(res && res.sync);
+  };
+  chrome.storage.local.get(SYNC_KEY).then((r) => show(r[SYNC_KEY]));
+  return UI.section('iCloud', 'Keeps your saves, collections, what it learned and your AI settings the same on this Mac and your iPhone. They go to your own iCloud, encrypted: Apple stores them but can’t read them. Your AI key stays on each device.', [
+    UI.settingRow('Sync with iCloud', toggle),
+    UI.settingRow('Status', [status, retry]),
+  ]);
+}
+
+export function syncStatusText(st) {
+  if (st.on !== true) return 'Off';
+  switch (st.status) {
+    case 'syncing': return 'Syncing…';
+    case 'signedOut': return 'Sign in to iCloud in System Settings to sync';
+    case 'failed': return st.message || 'Couldn’t reach iCloud';
+    case 'upToDate': {
+      const mins = st.at ? Math.round((Date.now() - Date.parse(st.at)) / 60000) : 0;
+      return mins < 1 ? 'Up to date' : `Up to date, ${mins < 60 ? `${mins} min` : `${Math.round(mins / 60)} h`} ago`;
+    }
+    default: return 'Starting…';
+  }
 }
 
 function appearanceSection(ctx) {
@@ -450,8 +501,13 @@ function dataSection(ctx) {
     el('div', { class: 'divider' }),
     el('div', { class: 'actions-row' }, [
       el('button', { type: 'button', class: 'btn btn-danger', onClick: async () => {
-        const ok = await UI.typedConfirm({ title: 'Delete all local data?', message: 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Export first if you want a backup.', word: 'DELETE', confirmLabel: 'Delete everything' });
+        const syncing = syncCapable() && ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on === true;
+        const ok = await UI.typedConfirm({ title: 'Delete all local data?', message: syncing
+          ? 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here.'
+          : 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Export first if you want a backup.', word: 'DELETE', confirmLabel: 'Delete everything' });
         if (!ok) return;
+        // Erasing here never erases iCloud: sync stops first.
+        if (syncing) await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on: false }).catch(() => null);
         await ctx.store.clearAll();
         try { await chrome.storage.session.clear(); } catch { /* fine */ }
         try { await clearScanStore(); } catch { /* fine */ }

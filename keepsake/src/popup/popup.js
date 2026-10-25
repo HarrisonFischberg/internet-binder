@@ -5,6 +5,7 @@
 // Nothing here touches the network.
 
 import { createStore, chromeBackend, idbBackend, applyLook } from '../shared/storage.js';
+import { syncCapable } from '../shared/syncBridge.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, parsePrice, sanitizeText, pluralize, formatPrice, mostFirst } from '../shared/util.js';
 import { isRestrictedUrl } from '../shared/url.js';
@@ -14,7 +15,7 @@ import { followColorScheme, setActionIcon } from '../toolbar/icon.js';
 import { kindIcon } from '../shared/kindIcon.js';
 import { hasInstagramAccess, requestInstagramAccess, instagramAccessHelp } from '../instagram/enrich.js';
 
-const store = createStore(chromeBackend(), idbBackend());
+const store = createStore(chromeBackend(), idbBackend(undefined, undefined, { journal: syncCapable() }));
 followColorScheme();
 const $ = (id) => document.getElementById(id);
 const send = (msg) => new Promise((resolve) => {
@@ -27,6 +28,8 @@ const send = (msg) => new Promise((resolve) => {
     resolve({ ok: false, error: String(e && e.message) });
   }
 });
+// Safari on the Mac: opening the popup pulls what changed on the iPhone (iCloud sync, syncBridge.js).
+if (syncCapable()) send({ type: MSG.SYNC_NOW });
 
 const state = {
   tab: null,

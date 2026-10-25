@@ -1,8 +1,9 @@
 // Internet Binder background service worker (MV3, ES module).
 // It only wakes up for: install/startup, context-menu clicks, messages from
 // the popup/dashboard/content scripts, permission changes and settings changes.
-// It has no timers and no alarms. Its only network access is the optional AI
-// provider call after a save (never before it), when the user has turned Optional AI on.
+// It has no timers and no alarms, except in Safari on the Mac with iCloud sync on: an alarm every
+// five minutes runs a sync round through the Mac app (syncBridge.js). Its only network access is the
+// optional AI provider call after a save (never before it), when the user has turned Optional AI on.
 
 import { createStore, chromeBackend, idbBackend } from './src/shared/storage.js';
 import { classify, learnFromCorrection, AUTO_FILE_CONFIDENCE } from './src/shared/categorizer.js';
@@ -22,8 +23,15 @@ import { understandItem } from './src/shared/understand.js';
 import { fetchPage, loadImage } from './src/ai/pages.js';
 import { placeNamed, placeReviewReasons, stateCode } from './src/shared/places.js';
 import { restoreActionIcon } from './src/toolbar/icon.js';
+import { createSyncBridge, syncCapable, nativeSender } from './src/shared/syncBridge.js';
 
-const store = createStore(chromeBackend(), idbBackend());
+const SYNC = syncCapable();
+const recordDb = idbBackend(undefined, undefined, { journal: SYNC });
+const store = createStore(chromeBackend(), recordDb);
+const sync = SYNC && recordDb
+  ? createSyncBridge({ db: recordDb, store, local: { get: async (k) => (await chrome.storage.local.get(k))[k], set: (o) => chrome.storage.local.set(o) }, send: nativeSender() })
+  : null;
+const SYNC_ALARM = 'keepsake-sync';
 const CONTENT_SCRIPT_ID = 'keepsake-floating';
 const CONTEXT_MENU_ID = 'keepsake-save';
 
@@ -37,6 +45,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install' && fresh) {
     chrome.tabs.create({ url: chrome.runtime.getURL('src/dashboard/dashboard.html#welcome') });
   }
+  startSync();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -45,7 +54,34 @@ chrome.runtime.onStartup.addListener(async () => {
   await syncContentScripts();
   await restoreActionIcon();
   enrichPending();
+  startSync();
 });
+
+// --- iCloud sync (Safari on the Mac) -----------------------------------------------------------------
+
+async function startSync() {
+  if (!sync) return;
+  chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 5 });
+  const st = await sync.decide();
+  if (st.on === true) sync.run();
+}
+
+if (sync) {
+  chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === SYNC_ALARM) sync.run(); });
+  // A write here (from any Internet Binder page) goes up a few seconds after things settle.
+  let soon = null;
+  const later = () => {
+    clearTimeout(soon);
+    soon = setTimeout(async () => {
+      const st = await sync.state();
+      if (st.on === true && (st.aiRev || (await recordDb.syncPending()).length)) sync.run();
+    }, 3000);
+  };
+  recordDb.onChanged(later);
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.keepsake_settings) sync.settingsChanged(changes.keepsake_settings.oldValue, changes.keepsake_settings.newValue).then(later);
+  });
+}
 
 async function createContextMenu() {
   await new Promise((resolve) => chrome.contextMenus.removeAll(() => resolve()));
@@ -816,6 +852,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 async function handleMessage(msg, sender) {
   const fromExtensionPage = !!sender.url && sender.url.startsWith(chrome.runtime.getURL(''));
   switch (msg.type) {
+    case MSG.SYNC_NOW: {
+      if (!sync) return { ok: true, sync: null };
+      return { ok: true, sync: await sync.run() };
+    }
+    case MSG.SYNC_SET: {
+      if (!sync || !fromExtensionPage) throw new Error('iCloud sync is only in Safari on a Mac.');
+      return { ok: true, sync: await sync.setOn(!!msg.on) };
+    }
     case MSG.EXTRACT_TAB: {
       const tabId = msg.tabId || (sender.tab && sender.tab.id);
       if (!tabId) throw new Error('No tab to read.');

@@ -1,7 +1,7 @@
 // Builds the Safari copy of the extension: keepsake/ → safari/dist/.
 // Safari does not run module service workers, so background.js and everything it imports
 // become one classic script (same transform as the iOS core bundle). The manifest drops the
-// Chrome-only keys. The Xcode project in safari/Keepsake references dist/ and runs this before
+// Chrome-only keys and adds the two iCloud sync permissions. The Xcode project in safari/Keepsake references dist/ and runs this before
 // every build; tests/safari.test.mjs checks the copy matches keepsake/.
 //
 //   node safari/build.mjs [out]   (default: safari/dist)
@@ -52,6 +52,8 @@ export function safariManifest(manifest) {
   const m = structuredClone(manifest);
   delete m.minimum_chrome_version;
   delete m.background.type;
+  // iCloud sync goes through the Mac app (nativeMessaging) and runs a round every five minutes (alarms).
+  m.permissions = [...new Set([...(m.permissions || []), 'nativeMessaging', 'alarms'])];
   return m;
 }
 

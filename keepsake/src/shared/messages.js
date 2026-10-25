@@ -1,6 +1,8 @@
 // Message types exchanged between the popup, dashboard, content scripts and the
 // background service worker. Kept in one place so the contract is visible.
 export const MSG = {
+  SYNC_NOW: 'keepsake:sync-now', // {} -> { ok, sync }: one iCloud round (Safari on the Mac only)
+  SYNC_SET: 'keepsake:sync-set', // { on } -> { ok, sync }: turn iCloud sync on or off
   EXTRACT_TAB: 'keepsake:extract-tab', // { tabId } -> { ok, product }
   CLASSIFY: 'keepsake:classify', // { product } -> { ok, classification }
   SAVE_ITEM: 'keepsake:save-item', // { product, collectionId?, force?, source } -> { ok, item, collection, duplicate?, existing? }
