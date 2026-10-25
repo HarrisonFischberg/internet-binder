@@ -4822,3 +4822,32 @@ button.library-tab.on {
 @media (prefers-reduced-motion: reduce) {
   .map-note-dot { animation: none; }
 }
+
+/* Workouts > Goals: every goal as a card, the ones still going first. */
+.goal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 720px;
+}
+
+.goal-list-head {
+  margin-top: 10px;
+  font: var(--t-title3);
+  color: var(--c-text);
+}
+
+.goal-open {
+  all: unset;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.goal-open:hover {
+  text-decoration: underline;
+}
+
+.goal-open:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}

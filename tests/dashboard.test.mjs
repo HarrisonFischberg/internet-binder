@@ -228,6 +228,41 @@ test('workouts open into the workout view: exercises, a goal, check-in with undo
   await afterChange();
 });
 
+test('Workouts has a Goals tab: every goal with Done today, the workout a click away', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'Core circuit', url: 'https://fit.example/core', kind: 'workout', details: { exercises: [{ name: 'Plank', sets: 3, durationSeconds: 45 }], source: 'page' } });
+  const goal = await store.createGoal({ itemId: it.id, kind: 'frequency', spec: { perWeek: 2, weeks: 3 } });
+  await afterChange();
+  await go('#kind/workout');
+  const tab = (label) => [...view().querySelectorAll('.library-tab')].find((b) => b.textContent.startsWith(label));
+  assert.ok(tab('Workouts').classList.contains('on'), 'the workouts show first');
+  await afterChange();
+  assert.match(tab('Goals').textContent, /Goals · \d/, 'the tab counts the goals going');
+  tab('Goals').click();
+  await afterChange();
+  const cards = () => [...view().querySelectorAll('.goal-list .goal-card')];
+  const core = () => cards().find((c) => c.textContent.includes('Core circuit'));
+  assert.ok(core(), 'the goal shows with its workout');
+  assert.match(core().textContent, /0 of 2 this week · week 1 of 3/);
+  assert.equal(window.document.getElementById('selectToggle').classList.contains('hidden'), true, 'nothing to select on Goals');
+  [...core().querySelectorAll('button')].find((b) => b.textContent === 'Done today').click();
+  await afterChange();
+  assert.match(core().textContent, /1 of 2 this week/);
+  assert.equal((await store.getCheckins(goal.id)).length, 1);
+  [...window.document.querySelectorAll('.toast-action')].find((b) => b.textContent === 'Undo').click();
+  await afterChange();
+  assert.equal((await store.getCheckins(goal.id)).length, 0);
+  core().querySelector('.goal-open').click();
+  await afterChange();
+  assert.ok(window.document.querySelector('.modal-workout .workout-view'), 'the name opens the workout');
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+  tab('Workouts').click();
+  await afterChange();
+  assert.ok([...view().querySelectorAll('.card')].some((c) => c.textContent.includes('Core circuit')));
+});
+
 test('switching an Instagram save to Workout fills in the exercises its caption lists', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());

@@ -505,6 +505,21 @@
           today: checkins.filter((c) => K.goals.localDay(new Date(c.at)) === today).map((c) => c.id) };
       }));
     },
+    // Every workout goal, for Workouts' Goals view: the ones still going first (newest first), then the
+    // finished ones. A goal on a save in the Trash stays out.
+    async allGoals() {
+      const live = new Set(listItems().map((i) => i.id));
+      const today = K.goals.localDay();
+      const out = [];
+      for (const g of await store.getGoals()) {
+        if (!live.has(g.itemId)) continue;
+        const checkins = await store.getCheckins(g.id);
+        out.push({ goal: g, progress: K.goals.goalProgress(g, checkins),
+          today: checkins.filter((c) => K.goals.localDay(new Date(c.at)) === today).map((c) => c.id) });
+      }
+      const rank = (v) => (v.progress.status === 'active' ? 0 : 1);
+      return out.sort((a, b) => rank(a) - rank(b) || (a.goal.createdAt < b.goal.createdAt ? 1 : -1));
+    },
   };
 
   // Calls `path` (e.g. "store.importJSON" or "KeepsakeCore.kinds.kindOf") with JSON arguments and

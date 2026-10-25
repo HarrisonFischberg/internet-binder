@@ -662,7 +662,8 @@ function renderToolbar() {
     $('bulkAi').classList.toggle('hidden', !state.settings?.ai?.on);
   }
   // Select, beside Check with AI on every page that lists saves, and on Collections.
-  const canSelect = selectableRoute() && r.name !== 'item' && (r.name === 'collections' ? state.collections.length > 0 : baseItems().length > 0);
+  const onGoals = r.name === 'kind' && r.id === 'workout' && workoutsView() === 'goals';
+  const canSelect = selectableRoute() && r.name !== 'item' && !onGoals && (r.name === 'collections' ? state.collections.length > 0 : baseItems().length > 0);
   $('selectToggle').classList.toggle('hidden', !canSelect && !state.selecting);
   $('selectToggle').setAttribute('aria-pressed', state.selecting ? 'true' : 'false');
   $('selectToggle').textContent = state.selecting ? 'Done' : 'Select';
@@ -936,6 +937,13 @@ function renderGrid(view) {
   }
   // The places list sorts itself (by city, then name), so the sort and retailer filters don't apply.
   if (r.name === 'all') view.append(libraryTabs('saves'));
+  // Workouts: the workouts, or their goals (like Places' List and Map).
+  const workouts = r.name === 'kind' && r.id === 'workout' && baseItems().length > 0;
+  if (workouts) view.append(workoutsTabs());
+  if (workouts && workoutsView() === 'goals') {
+    renderWorkoutGoals(view);
+    return;
+  }
   const listView = r.name === 'kind' && ['place', 'media', 'book'].includes(r.id);
   if (baseItems().length && !listView) view.append(filterBar());
   const chips = topicChips();
@@ -2102,6 +2110,124 @@ function renderPlaceList(view, items, waiting = 0) {
   view.append(box);
 }
 
+// A goal's ring: this week (or the whole goal, for a target) filling in, with the count inside.
+function goalRing(p) {
+  const g = p.goal;
+  const label = g.kind === 'frequency' ? (p.thisWeek ? `${p.thisWeek.count}/${p.thisWeek.target}` : `${p.weeksMet}/${g.spec.weeks}`) : p.status === 'finished' ? '✓' : `${Math.round(p.ring * 100)}%`;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 44 44');
+  svg.setAttribute('class', 'goal-ring');
+  svg.setAttribute('aria-hidden', 'true');
+  const c = (cls, dash) => {
+    const n = document.createElementNS(NS, 'circle');
+    n.setAttribute('cx', '22'); n.setAttribute('cy', '22'); n.setAttribute('r', '18'); n.setAttribute('class', cls);
+    if (dash !== undefined) { n.setAttribute('stroke-dasharray', `${dash} 200`); n.setAttribute('transform', 'rotate(-90 22 22)'); }
+    return n;
+  };
+  svg.append(c('goal-ring-track'), c('goal-ring-fill', (Math.max(0, Math.min(1, p.ring)) * 2 * Math.PI * 18).toFixed(1)));
+  return el('div', { class: 'goal-ring-wrap' }, [svg, el('span', { class: 'goal-ring-label' }, [label])]);
+}
+
+// A frequency goal's weeks, one dot each: met, this week, or still to come.
+function goalStrip(p) {
+  return el('ol', { class: 'goal-strip', 'aria-label': 'Weeks' }, p.strip.map((w) => el('li', {
+    class: `goal-week ${w.met ? 'is-met' : ''} ${w.current ? 'is-current' : ''} ${!w.past && !w.current ? 'is-future' : ''}`,
+    title: `Week ${w.week}: ${w.count} of ${w.target}`,
+  }, [el('span', { class: 'sr-only' }, [`Week ${w.week}: ${w.count} of ${w.target}${w.met ? ', done' : ''}`]), el('span', { 'aria-hidden': 'true' }, [w.met ? '✓' : String(w.count)])])));
+}
+
+// Workouts: the workouts themselves, or Goals (every goal with its week and Done today), like Places'
+// List and Map. The choice is kept on this computer.
+const WORKOUTS_VIEW_KEY = 'keepsake.workouts.view';
+let workoutsViewChoice = null;
+function workoutsView() {
+  if (workoutsViewChoice) return workoutsViewChoice;
+  try { return localStorage.getItem(WORKOUTS_VIEW_KEY) === 'goals' ? 'goals' : 'list'; } catch { return 'list'; }
+}
+
+function setWorkoutsView(value) {
+  workoutsViewChoice = value;
+  // Goals have nothing to tick.
+  if (state.selecting) exitSelection(false);
+  try { localStorage.setItem(WORKOUTS_VIEW_KEY, value); } catch { /* this page only */ }
+  renderView({ keepScroll: true });
+  renderToolbar();
+}
+
+// Every goal on a workout in this view, with its progress: the ones still going first, newest first.
+async function workoutGoals() {
+  const workouts = new Map(baseItems().map((i) => [i.id, i]));
+  const out = [];
+  for (const g of await store.getGoals()) {
+    const item = workouts.get(g.itemId);
+    if (item) out.push({ ...goalProgress(g, await store.getCheckins(g.id)), item });
+  }
+  const rank = (p) => (p.status === 'active' ? 0 : 1);
+  return out.sort((a, b) => rank(a) - rank(b) || (a.goal.createdAt < b.goal.createdAt ? 1 : -1));
+}
+
+function workoutsTabs() {
+  const current = workoutsView();
+  const seg = (value, label) => el('button', { type: 'button', class: `library-tab ${current === value ? 'on' : ''}`, role: 'tab', 'aria-selected': current === value ? 'true' : 'false', onClick: () => setWorkoutsView(value) }, [label]);
+  const goalsTab = seg('goals', 'Goals');
+  // How many are going fills in once the goals are read.
+  workoutGoals().then((list) => {
+    const n = list.filter((p) => p.status === 'active').length;
+    if (n) goalsTab.textContent = `Goals · ${n}`;
+  }).catch(() => {});
+  return el('div', { class: 'library-tabs', role: 'tablist', 'aria-label': 'Workouts view' }, [seg('list', 'Workouts'), goalsTab]);
+}
+
+// Goals: each goal's ring, week strip and Done today, so checking in doesn't mean finding the workout.
+// The workout's name opens it, with the rest (sets and reps, a suggested progression, Remove goal).
+function renderWorkoutGoals(view) {
+  const box = el('div', { class: 'goal-list' });
+  view.append(box);
+  const fill = async () => {
+    const list = await workoutGoals();
+    clear(box);
+    if (!list.length) {
+      box.append(UI.emptyState({ title: 'No goals yet', message: 'Open a workout and choose Make it a goal, then check in here each time you do it.', icon: kindIcon('workout') }));
+      return;
+    }
+    const going = list.filter((p) => p.status === 'active');
+    const finished = list.filter((p) => p.status !== 'active');
+    for (const p of going) box.append(row(p));
+    if (finished.length) box.append(el('h3', { class: 'goal-list-head' }, ['Finished']), ...finished.map(row));
+  };
+  const row = (p) => {
+    const g = p.goal;
+    const finished = p.status === 'finished';
+    const card = el('article', { class: `goal-card ${finished ? 'is-finished' : ''}`, 'aria-label': `Goal for ${p.item.title}` });
+    card.append(el('div', { class: 'goal-top' }, [
+      goalRing(p),
+      el('div', { class: 'goal-top-text' }, [
+        el('h4', { class: 'goal-title' }, [el('button', { type: 'button', class: 'goal-open', onClick: () => openSave(p.item.id) }, [p.item.title])]),
+        el('p', { class: 'goal-summary' }, [`${goalTitle(g)} · ${p.summary}`]),
+        p.lastWeekNote ? el('p', { class: 'goal-note' }, [p.lastWeekNote]) : null,
+      ]),
+      finished ? el('span', { class: 'badge badge-success' }, [g.kind === 'target' ? 'Reached' : 'Finished']) : null,
+    ]));
+    if (g.kind === 'frequency') card.append(goalStrip(p));
+    if (!finished) {
+      const today = localDay();
+      const doneToday = p.checkins.some((c) => localDay(new Date(c.at)) === today);
+      // A target goal is measured by what you did, so its check-in (with the numbers) is on the workout.
+      const checkIn = g.kind === 'target'
+        ? el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: () => openSave(p.item.id) }, ['Check in'])
+        : el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: async () => {
+          const c = await store.addCheckin(g.id, {});
+          await fill();
+          UI.toast('Checked in.', { action: { label: 'Undo', onClick: async () => { await store.removeCheckin(c.id); await fill(); } } });
+        } }, [doneToday ? 'Check in again' : 'Done today']);
+      card.append(el('div', { class: 'review-actions goal-actions' }, [checkIn, el('button', { type: 'button', class: 'btn btn-sm', onClick: () => openSave(p.item.id) }, ['Open workout'])]));
+    }
+    return card;
+  };
+  fill();
+}
+
 // The workout view: what to do (exercises with sets, reps or time, and rest) and its goal. Goals and
 // check-ins save as you go; ending a goal or a check-in can be undone from the toast.
 async function openWorkout(id) {
@@ -2212,29 +2338,12 @@ async function openWorkout(id) {
     return box;
   }
 
-  function ring(fraction, label) {
-    const NS = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 44 44');
-    svg.setAttribute('class', 'goal-ring');
-    svg.setAttribute('aria-hidden', 'true');
-    const c = (cls, dash) => {
-      const n = document.createElementNS(NS, 'circle');
-      n.setAttribute('cx', '22'); n.setAttribute('cy', '22'); n.setAttribute('r', '18'); n.setAttribute('class', cls);
-      if (dash !== undefined) { n.setAttribute('stroke-dasharray', `${dash} 200`); n.setAttribute('transform', 'rotate(-90 22 22)'); }
-      return n;
-    };
-    svg.append(c('goal-ring-track'), c('goal-ring-fill', (Math.max(0, Math.min(1, fraction)) * 2 * Math.PI * 18).toFixed(1)));
-    return el('div', { class: 'goal-ring-wrap' }, [svg, el('span', { class: 'goal-ring-label' }, [label])]);
-  }
-
   function goalCard(p) {
     const g = p.goal;
     const finished = p.status === 'finished';
     const card = el('article', { class: `goal-card ${finished ? 'is-finished' : ''}`, 'aria-label': `Goal: ${goalTitle(g)}` });
-    const ringLabel = g.kind === 'frequency' ? (p.thisWeek ? `${p.thisWeek.count}/${p.thisWeek.target}` : `${p.weeksMet}/${g.spec.weeks}`) : finished ? '✓' : `${Math.round(p.ring * 100)}%`;
     card.append(el('div', { class: 'goal-top' }, [
-      ring(p.ring, ringLabel),
+      goalRing(p),
       el('div', { class: 'goal-top-text' }, [
         el('h4', { class: 'goal-title' }, [goalTitle(g)]),
         el('p', { class: 'goal-summary' }, [p.summary]),
@@ -2242,12 +2351,7 @@ async function openWorkout(id) {
       ]),
       finished ? el('span', { class: 'badge badge-success' }, [g.kind === 'target' ? 'Reached' : 'Finished']) : null,
     ]));
-    if (g.kind === 'frequency') {
-      card.append(el('ol', { class: 'goal-strip', 'aria-label': 'Weeks' }, p.strip.map((w) => el('li', {
-        class: `goal-week ${w.met ? 'is-met' : ''} ${w.current ? 'is-current' : ''} ${!w.past && !w.current ? 'is-future' : ''}`,
-        title: `Week ${w.week}: ${w.count} of ${w.target}`,
-      }, [el('span', { class: 'sr-only' }, [`Week ${w.week}: ${w.count} of ${w.target}${w.met ? ', done' : ''}`]), el('span', { 'aria-hidden': 'true' }, [w.met ? '✓' : String(w.count)])]))));
-    }
+    if (g.kind === 'frequency') card.append(goalStrip(p));
     if (p.next) {
       const n = p.next;
       const what = [n.perWeek ? `${n.perWeek}× this week` : '', n.sets || n.reps || n.durationSeconds ? resultText(n) : '', n.note].filter(Boolean).join(' · ');

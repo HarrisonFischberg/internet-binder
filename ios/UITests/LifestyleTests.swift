@@ -111,6 +111,34 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.buttons["Done today"].exists)
     }
 
+    // Workout goals: a tile on Lifestyle opens Workouts on its Goals view, where Done today checks in.
+    func testWorkoutGoalsView() {
+        let app = launch()
+        open(app, kind: "Workouts", save: "Push-up ladder")
+        app.buttons["Make it a goal"].tap()
+        app.buttons["Start the goal"].tap()
+        XCTAssertTrue(app.staticTexts["0 of 3 this week · week 1 of 4"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["Home"].tap()
+        app.buttons["Lifestyle"].tap()
+        let tile = app.buttons["workoutGoalsTile"]
+        XCTAssertTrue(tile.waitForExistence(timeout: 5))
+        tile.tap()
+        let card = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Push-up ladder'")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertTrue(card.label.contains("0 of 3 this week"))
+        app.buttons["Done today"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Done today, done"].waitForExistence(timeout: 5))
+        XCTAssertTrue(card.label.contains("1 of 3 this week"))
+        app.buttons["Done today, done"].tap()
+        XCTAssertTrue(app.buttons["Done today"].firstMatch.waitForExistence(timeout: 5))
+        // The picker goes back to the workouts themselves; the card opens the workout.
+        app.segmentedControls.buttons["Workouts"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Push-up ladder'")).firstMatch.waitForExistence(timeout: 3))
+        app.segmentedControls.buttons.element(boundBy: 1).tap()
+        card.tap()
+        XCTAssertTrue(app.staticTexts["Push-ups 3×12 rest 60s"].waitForExistence(timeout: 5))
+    }
+
     func testHomeShowsReviewAndLifestyle() {
         let app = launch()
         XCTAssertTrue(app.staticTexts["1 save needs a collection"].waitForExistence(timeout: 5))

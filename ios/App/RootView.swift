@@ -9,6 +9,8 @@ enum Route: Hashable {
     case collections
     case lifestyle
     case collection(String, String)
+    /// Workouts, open on its Goals view.
+    case workoutGoals
 }
 
 /// The app's frame: Home, Library, Places and Search tabs, each with its own stack, and the Undo
@@ -135,6 +137,7 @@ struct Stack<Root: View>: View {
                         case .collections: CollectionsScreen(zoom: zoom)
                         case .lifestyle: LifestyleScreen(zoom: zoom)
                         case .collection(let id, let name): CollectionScreen(id: id, name: name, zoom: zoom)
+                        case .workoutGoals: KindScreen(kind: "workout", zoom: zoom, goals: true)
                         }
                     }
                     .modifier(PageBar(t: t))

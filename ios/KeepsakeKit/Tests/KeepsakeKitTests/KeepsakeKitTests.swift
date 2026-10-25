@@ -394,6 +394,20 @@ struct ViewsTests {
         #expect(mine.progress.summary == "0 of 2 this week · week 1 of 3")
     }
 
+    // Workouts' Goals view: every goal on a live save, the newest active one first; a trashed workout's goal stays out.
+    @Test func allGoalsListsLiveGoalsActiveFirst() async throws {
+        let lib = try await imported()
+        let workout = try #require(try await lib.saves(ofKind: "recipe").first { $0.title == "Morning mobility" })
+        let before = try await lib.allGoals()
+        let goalId = try await lib.createGoal(itemId: workout.id, perWeek: 2, weeks: 3)
+        let all = try await lib.allGoals()
+        #expect(all.count == before.count + 1)
+        #expect(all.first?.goal.id == goalId)
+        #expect(all.filter { $0.progress.status == "active" }.map(\.goal.id) == Array(all.prefix { $0.progress.status == "active" }.map(\.goal.id)))
+        try await lib.trash([workout.id])
+        #expect(try await lib.allGoals().contains { $0.goal.itemId == workout.id } == false)
+    }
+
     @Test func editsAreProtectedAndMovesLearn() async throws {
         let lib = try await imported()
         let save = try #require(try await lib.review().first)
