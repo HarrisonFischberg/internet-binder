@@ -431,9 +431,12 @@ private struct CardFan: View {
     let saves: [Save]
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
-    /// The deck, top card first. A flip moves the top card to the back as a new entry (so it flies off
-    /// rather than sliding back); saves that arrive go in right behind the top, so the top never jumps.
+    /// The deck, top card first (up to eight; past the third they wait unseen). A flip hands the top card
+    /// to `flying`, drawn in front of everything while it turns away, and puts a fresh copy at the back.
+    /// Saves that arrive go in right behind the top, so the top never jumps.
     @State private var deck: [Entry] = []
+    @State private var flying: Entry?
+    @State private var flight = 0.0
     @State private var next = 0
     private struct Entry: Identifiable { let id: Int; let save: Save }
 
@@ -442,16 +445,20 @@ private struct CardFan: View {
             if deck.isEmpty {
                 RoundedRectangle(cornerRadius: 18, style: .continuous).fill(t.well).frame(width: 128, height: 160)
             }
-            ForEach(Array(deck.prefix(4).enumerated()).reversed(), id: \.element.id) { d, entry in
+            ForEach(Array(deck.enumerated()).reversed(), id: \.element.id) { d, entry in
                 card(entry.save)
-                    .scaleEffect(1 - Double(d) * 0.07)
-                    .rotationEffect(.degrees(d == 0 ? 0 : (entry.id % 2 == 0 ? 5 : -5) * Double(d)))
-                    .offset(y: -Double(d) * 16)
-                    .zIndex(Double(4 - d))
-                    // A fourth card waits unseen, so one pushed back by a new save fades out here
-                    // and is already invisible when it leaves (only the top card flips away).
-                    .opacity(d == 3 ? 0 : 1)
-                    .transition(.asymmetric(insertion: .opacity, removal: .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0))))
+                    .scaleEffect(1 - Double(min(d, 3)) * 0.07)
+                    .rotationEffect(.degrees(d == 0 ? 0 : (entry.id % 2 == 0 ? 5 : -5) * Double(min(d, 3))))
+                    .offset(y: -Double(min(d, 3)) * 16)
+                    .opacity(d >= 3 ? 0 : 1)
+                    .zIndex(Double(10 - d))
+                    // The flying copy covers the top card as it leaves, so it can just go.
+                    .transition(.asymmetric(insertion: .opacity, removal: .identity))
+            }
+            if let flying {
+                card(flying.save)
+                    .modifier(FlipAway(progress: flight))
+                    .zIndex(20)
             }
             Image(systemName: "sparkles")
                 .font(.system(size: 30, weight: .bold))
@@ -461,7 +468,7 @@ private struct CardFan: View {
                 .overlay { Circle().strokeBorder(t.paper, lineWidth: 3) }
                 .symbolEffect(.bounce, options: .repeating.speed(0.6), isActive: !reduce)
                 .offset(x: 78, y: 78)
-                .zIndex(10)
+                .zIndex(30)
         }
         .frame(height: 210)
         .onChange(of: saves.map(\.id), initial: true) { _, _ in withAnimation(KSMotion.quiet) { take(saves) } }
@@ -470,12 +477,28 @@ private struct CardFan: View {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(1100))
                 guard deck.count > 1 else { continue }
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
-                    let top = deck.removeFirst()
-                    deck.append(Entry(id: next, save: top.save))
-                    next += 1
-                }
+                flip()
             }
+        }
+    }
+
+    private func flip() {
+        let top = deck[0]
+        var still = Transaction()
+        still.disablesAnimations = true
+        withTransaction(still) {
+            flying = Entry(id: -1, save: top.save)
+            flight = 0
+        }
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+            deck.removeFirst()
+            deck.append(Entry(id: next, save: top.save))
+            next += 1
+        }
+        withAnimation(.easeIn(duration: 0.45)) {
+            flight = 1
+        } completion: {
+            flying = nil
         }
     }
 
