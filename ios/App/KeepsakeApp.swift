@@ -239,9 +239,9 @@ final class LibraryModel {
     private func startSync() {
         guard let library, sync == nil else { return }
         let s = CloudSync(database: library.database, keys: LibraryKeys(store: KeychainLibraryKeys(accessGroup: CloudSync.keychainGroup)))
-        s.onChange = { Task { @MainActor [weak self] in self?.syncChanged() } }
-        s.onStatus = { status in Task { @MainActor [weak self] in self?.syncStatus = status } }
-        s.onError = { error in Task { @MainActor [weak self] in self?.syncStatus = .failed(error.localizedDescription) } }
+        s.onChange = { [weak self] in Task { @MainActor in self?.syncChanged() } }
+        s.onStatus = { [weak self] status in Task { @MainActor in self?.statusChanged(status) } }
+        s.onError = { [weak self] error in Task { @MainActor in self?.syncStatus = .failed(error.localizedDescription) } }
         sync = s
         s.start()
         Task { await checkAccount() }
@@ -252,11 +252,38 @@ final class LibraryModel {
         guard let sync else { return }
         sync.noteLocalChanges()
         Task.detached { try? await sync.syncNow() }
+        // Back from the Settings app, maybe signed in now.
+        Task { await checkAccount() }
     }
 
+    /// Whether this device has an iCloud account sync can use (checkAccount).
+    private var iCloudReady = false
+
     private func checkAccount() async {
-        let status = try? await CKContainer(identifier: CloudSync.containerID).accountStatus()
-        if status == .noAccount || status == .restricted { syncStatus = .signedOut }
+        // It throws when there's no account to ask about (a Simulator with no Apple Account does).
+        let status = (try? await CKContainer(identifier: CloudSync.containerID).accountStatus()) ?? .couldNotDetermine
+        iCloudReady = status == .available
+        if !iCloudReady { syncStatus = .signedOut }
+        else if syncStatus == nil || syncStatus == .signedOut, let sync {
+            // Up-to-date reports dropped before the account was known: sync once more to show one.
+            syncStatus = nil
+            Task.detached { try? await sync.syncNow() }
+        }
+    }
+
+    private func statusChanged(_ status: CloudSync.Status) {
+        // CKSyncEngine reports fetches and sends even when it can't reach iCloud, and a finished send
+        // after one that failed: none of those is syncing or up to date.
+        switch status {
+        case .syncing:
+            if syncStatus == .signedOut { return }
+        case .upToDate:
+            guard iCloudReady else { return }
+            if case .failed? = syncStatus { return }
+        default:
+            break
+        }
+        syncStatus = status
     }
 
     /// Records from another device landed: lists, collections, AI settings and widgets catch up.
