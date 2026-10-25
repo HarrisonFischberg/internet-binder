@@ -431,24 +431,24 @@ private struct CardFan: View {
     let saves: [Save]
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
-    /// Counts flips; card `tick + d` sits `d` deep in the deck.
-    @State private var tick = 0
+    /// The deck, top card first. A flip moves the top card to the back as a new entry (so it flies off
+    /// rather than sliding back); saves that arrive go in right behind the top, so the top never jumps.
+    @State private var deck: [Entry] = []
+    @State private var next = 0
+    private struct Entry: Identifiable { let id: Int; let save: Save }
 
     var body: some View {
         ZStack {
-            if saves.isEmpty {
+            if deck.isEmpty {
                 RoundedRectangle(cornerRadius: 18, style: .continuous).fill(t.well).frame(width: 128, height: 160)
-            } else {
-                ForEach((0..<3).reversed(), id: \.self) { d in
-                    let slot = tick + d
-                    card(saves[slot % saves.count])
-                        .scaleEffect(1 - Double(d) * 0.07)
-                        .rotationEffect(.degrees(d == 0 ? 0 : (slot % 2 == 0 ? 5 : -5) * Double(d)))
-                        .offset(y: -Double(d) * 16)
-                        .zIndex(Double(3 - d))
-                        .id(slot)
-                        .transition(.asymmetric(insertion: .opacity, removal: .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0))))
-                }
+            }
+            ForEach(Array(deck.prefix(3).enumerated()).reversed(), id: \.element.id) { d, entry in
+                card(entry.save)
+                    .scaleEffect(1 - Double(d) * 0.07)
+                    .rotationEffect(.degrees(d == 0 ? 0 : (entry.id % 2 == 0 ? 5 : -5) * Double(d)))
+                    .offset(y: -Double(d) * 16)
+                    .zIndex(Double(3 - d))
+                    .transition(.asymmetric(insertion: .opacity, removal: .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0))))
             }
             Image(systemName: "sparkles")
                 .font(.system(size: 30, weight: .bold))
@@ -461,13 +461,28 @@ private struct CardFan: View {
                 .zIndex(10)
         }
         .frame(height: 210)
+        .onChange(of: saves.map(\.id), initial: true) { _, _ in withAnimation(KSMotion.quiet) { take(saves) } }
         .task(id: reduce) {
             guard !reduce else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(1100))
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) { tick += 1 }
+                guard deck.count > 1 else { continue }
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                    let top = deck.removeFirst()
+                    deck.append(Entry(id: next, save: top.save))
+                    next += 1
+                }
             }
         }
+    }
+
+    private func take(_ saves: [Save]) {
+        let have = Set(deck.map(\.save.id))
+        for save in saves.reversed() where !have.contains(save.id) {
+            deck.insert(Entry(id: next, save: save), at: min(1, deck.count))
+            next += 1
+        }
+        if deck.count > 8 { deck.removeLast(deck.count - 8) }
     }
 
     private func card(_ save: Save) -> some View {
@@ -505,18 +520,14 @@ private struct CloudSpin: View {
             let beat = time.truncatingRemainder(dividingBy: 3)
             let turn = beat < 1 ? (1 - cos(beat * .pi)) / 2 : 0
             ZStack {
-                ForEach(0..<3, id: \.self) { i in
-                    let p = (time / 1.8 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(t.paper)
-                        .overlay { RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(t.line, lineWidth: 1.5) }
-                        .frame(width: 18, height: 22)
-                        .rotationEffect(.degrees(Double(i - 1) * 14))
-                        .offset(x: Double(i - 1) * 34, y: 110 - p * 90)
-                        .opacity(reduce ? 0 : sin(p * .pi))
+                ZStack {
+                    Circle().fill(t.accent).frame(width: 150, height: 150)
+                        .overlay { Circle().strokeBorder(t.line, lineWidth: t.outline) }
+                    Image(systemName: "icloud.and.arrow.up")
+                        .font(.system(size: 56, weight: .semibold))
+                        .foregroundStyle(t.onAccent)
                 }
-                Circle().fill(t.accent).frame(width: 150, height: 150)
-                    .overlay { Circle().strokeBorder(t.line, lineWidth: t.outline) }
+                .rotation3DEffect(.degrees(turn * 360), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
                 Circle().trim(from: 0, to: 0.22)
                     .stroke(t.accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .frame(width: 178, height: 178)
@@ -525,10 +536,24 @@ private struct CloudSpin: View {
                     .stroke(t.accent.opacity(0.55), style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .frame(width: 198, height: 198)
                     .rotationEffect(.degrees(-time * 90 + 180))
-                Image(systemName: "icloud.and.arrow.up")
-                    .font(.system(size: 56, weight: .semibold))
-                    .foregroundStyle(t.onAccent)
-                    .rotation3DEffect(.degrees(turn * 360), axis: (x: 0, y: 1, z: 0), perspective: 0.4)
+                // Pages lifting off below and shrinking into the cloud.
+                ForEach(0..<3, id: \.self) { i in
+                    let p = (time / 2.1 + Double(i) / 3).truncatingRemainder(dividingBy: 1)
+                    let x = Double(i - 1) * 46 * (1 - p)
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(t.paper)
+                        .overlay { RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(t.line, lineWidth: 2) }
+                        .overlay(alignment: .top) {
+                            VStack(spacing: 3) { ForEach(0..<3, id: \.self) { _ in Capsule().fill(t.inkMuted.opacity(0.5)).frame(height: 2) } }
+                                .padding(.horizontal, 5).padding(.top, 6)
+                        }
+                        .frame(width: 26, height: 32)
+                        .shadow(color: t.shadow.opacity(0.25), radius: 3, y: 2)
+                        .rotationEffect(.degrees(Double(i - 1) * 16 * (1 - p)))
+                        .scaleEffect(1 - p * 0.6)
+                        .offset(x: x, y: 150 - p * 150)
+                        .opacity(reduce ? 0 : p < 0.15 ? p / 0.15 : p > 0.75 ? (1 - p) / 0.25 : 1)
+                }
             }
         }
         .frame(height: 210)
