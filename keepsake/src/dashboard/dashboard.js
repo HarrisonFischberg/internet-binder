@@ -3,6 +3,7 @@
 // helpers (opening tabs, refreshing floating buttons). No network access.
 
 import { createStore, chromeBackend, idbBackend, TRASH_DAYS, applyLook } from '../shared/storage.js';
+import { syncCapable, SYNC_KEY } from '../shared/syncBridge.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer, mostFirst } from '../shared/util.js';
 import { classify, nearMatchCollection, collectionWords, keywordLabel } from '../shared/categorizer.js';
@@ -23,7 +24,7 @@ import { renderImport } from './importer.js';
 import { renderTabsImport } from './tabsImport.js';
 import { runAiCleanup, renderAiLog, undoEntries, confirmAiRun, aiBacklogOf } from './aiCleanup.js';
 
-const store = createStore(chromeBackend(), idbBackend());
+const store = createStore(chromeBackend(), idbBackend(undefined, undefined, { journal: syncCapable() }));
 followColorScheme();
 const $ = (id) => document.getElementById(id);
 
@@ -85,6 +86,29 @@ const ctx = {
 
 // --- boot ------------------------------------------------------------------------
 
+// Safari on the Mac: a sync round whenever the dashboard opens. The first time on a Mac that already has
+// a library, it asks before syncing (a new install just turns it on, see syncBridge.js decide()).
+async function syncOnOpen() {
+  const st = (await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {};
+  if (st.on === undefined || st.on === null) {
+    if (!state.items.length) return;
+    const choice = await UI.openModal({
+      title: 'Sync this library with iCloud?',
+      body: [el('p', { class: 'modal-text' }, ['Your saves, collections and AI settings stay the same on this Mac and your iPhone. They go to your own iCloud, encrypted, and nothing here is deleted. You can change this in Settings.'])],
+      actions: [
+        { label: 'Not Now', quiet: true, value: false },
+        { label: 'Turn On', primary: true, value: true, autofocus: true },
+      ],
+      closeOnScrim: false,
+    });
+    // Closed with Esc or the X: no answer yet, so it asks again next time.
+    if (choice === undefined) return;
+    send({ type: MSG.SYNC_SET, on: choice });
+    return;
+  }
+  if (st.on) send({ type: MSG.SYNC_NOW });
+}
+
 async function boot() {
   await store.init();
   // No alarms: the Trash is emptied of anything older than 30 days whenever the dashboard opens,
@@ -104,6 +128,7 @@ async function boot() {
   });
   state.route = parseHash();
   render();
+  if (syncCapable()) syncOnOpen();
   // One reload at a time: a change while one runs reads again once it ends, so an older read never lands last.
   let reloading = null;
   let again = false;

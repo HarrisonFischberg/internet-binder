@@ -17,14 +17,22 @@
 // Stores: items (keyPath id, index urlKey), collections (keyPath id), kv (keyPath key: prefs, importHistory, aiLog),
 // goals (keyPath id, index itemId) and checkins (keyPath id, index goalId): workout goals, see goals.js.
 //
-// Versions: 1 = items, collections, kv (M1). 2 = adds goals and checkins (M2). Upgrades only ever add
+// Versions: 1 = items, collections, kv (M1). 2 = adds goals and checkins (M2). 3 = adds syncPending, the
+// change log for iCloud sync (Safari on the Mac only, see syncBridge.js). Upgrades only ever add
 // stores, so an older build can still read a newer database: if it asks for a lower version than the
 // one on disk, it opens the database as it is instead of failing (see open()).
 
 export const DB_NAME = 'keepsake';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const STORES = ['items', 'collections', 'kv', 'goals', 'checkins'];
 const CHANNEL = 'keepsake-records';
+const PENDING = 'syncPending';
+
+// What iCloud sync carries (SyncID in ios/KeepsakeKit): every record of these stores, and of kv only
+// the library-wide records. The AI undo log stays on the device that made the change.
+const SYNCED_VALUES = new Set(['prefs', 'importHistory']);
+export const syncs = (store, key) => typeof key === 'string' && key !== '' && ['items', 'collections', 'goals', 'checkins', 'kv'].includes(store) && (store !== 'kv' || SYNCED_VALUES.has(key));
+const keyOf = (store, r) => (store === 'kv' ? r.key : r.id);
 
 export class StorageFullError extends Error {
   constructor() {
@@ -76,7 +84,9 @@ const done = (tx) => new Promise((resolve, reject) => {
   tx.onabort = () => reject(tx.error || new Error('Storage transaction aborted'));
 });
 
-export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
+// `journal`: every write to a synced record also marks it in syncPending, in the same transaction, with a
+// revision so a change made while a sync is in flight stays pending (syncBridge.js). Off in Chrome.
+export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME, { journal = false } = {}) {
   if (!factory) return null;
   const events = notifier(true);
   let dbp = null;
@@ -91,6 +101,7 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
             if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv', { keyPath: 'key' });
             if (!db.objectStoreNames.contains('goals')) db.createObjectStore('goals', { keyPath: 'id' }).createIndex('itemId', 'itemId', { unique: false });
             if (!db.objectStoreNames.contains('checkins')) db.createObjectStore('checkins', { keyPath: 'id' }).createIndex('goalId', 'goalId', { unique: false });
+            if (!db.objectStoreNames.contains(PENDING)) db.createObjectStore(PENDING, { keyPath: 'id' });
           };
           r.onsuccess = () => {
             const db = r.result;
@@ -116,12 +127,21 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
     }
     return dbp;
   };
-  const write = async (stores, fn) => {
+  const mark = (tx, store, key) => {
+    if (!syncs(store, key)) return;
+    const os = tx.objectStore(PENDING);
+    const id = `${store}\u0000${key}`;
+    const r = os.get(id);
+    r.onsuccess = () => os.put({ id, store, key, rev: ((r.result && r.result.rev) || 0) + 1 });
+  };
+  const write = async (stores, fn, { track = journal } = {}) => {
     const db = await open();
-    const tx = db.transaction(stores, 'readwrite');
+    const logs = track && db.objectStoreNames.contains(PENDING);
+    const tx = db.transaction(logs ? [...stores, PENDING] : stores, 'readwrite');
+    const note = logs ? (store, key) => mark(tx, store, key) : () => {};
     let out;
     try {
-      out = fn(tx);
+      out = fn(tx, note);
       await done(tx);
     } catch (e) {
       // fn threw partway (a put loop on its third record): undo the writes it already made.
@@ -151,28 +171,71 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME) {
       return req(db.transaction(store).objectStore(store).count());
     },
     put(store, records) {
-      return write([store], (tx) => { const os = tx.objectStore(store); for (const r of records) os.put(r); });
+      return write([store], (tx, note) => { const os = tx.objectStore(store); for (const r of records) { os.put(r); note(store, keyOf(store, r)); } });
     },
     remove(store, keys) {
-      return write([store], (tx) => { const os = tx.objectStore(store); for (const k of keys) os.delete(k); });
+      return write([store], (tx, note) => { const os = tx.objectStore(store); for (const k of keys) { os.delete(k); note(store, k); } });
     },
     // Reads and writes happen in one transaction; fn must be synchronous.
     update(store, keys, fn) {
       const results = [];
-      return write([store], (tx) => {
+      return write([store], (tx, note) => {
         const os = tx.objectStore(store);
         for (const key of keys) {
           const r = os.get(key);
           r.onsuccess = () => {
             const next = fn(r.result);
-            if (next === null) { if (r.result) os.delete(key); }
-            else if (next !== undefined) { os.put(next); results.push(next); }
+            if (next === null) { if (r.result) { os.delete(key); note(store, key); } }
+            else if (next !== undefined) { os.put(next); results.push(next); note(store, key); }
           };
         }
       }).then(() => results);
     },
     clear(stores) {
-      return write(stores, (tx) => { for (const s of stores) tx.objectStore(s).clear(); });
+      return write(stores, (tx, note) => {
+        for (const s of stores) {
+          const os = tx.objectStore(s);
+          const keys = os.getAllKeys();
+          keys.onsuccess = () => { for (const k of keys.result) note(s, k); os.clear(); };
+        }
+      });
+    },
+    // iCloud sync (syncBridge.js): what's pending, clearing it once the Mac app has it, and writing what
+    // came from iCloud without marking it pending again.
+    async syncPending() {
+      const db = await open();
+      return db.objectStoreNames.contains(PENDING) ? req(db.transaction(PENDING).objectStore(PENDING).getAll()) : [];
+    },
+    syncAck(entries) {
+      return write([PENDING], (tx) => {
+        const os = tx.objectStore(PENDING);
+        for (const e of entries) {
+          const id = `${e.store}\u0000${e.key}`;
+          const r = os.get(id);
+          r.onsuccess = () => { if (r.result && r.result.rev === e.rev) os.delete(id); };
+        }
+      }, { track: false });
+    },
+    syncApply(changes) {
+      const stores = [...new Set(changes.map((c) => c.store))];
+      if (!stores.length) return Promise.resolve();
+      return write(stores, (tx) => {
+        for (const c of changes) {
+          const os = tx.objectStore(c.store);
+          if (c.body === null) os.delete(c.key); else os.put(c.body);
+        }
+      }, { track: false });
+    },
+    // Forgets what's pending, then (markAll) marks every synced record: turning sync on.
+    syncReset({ markAll = false } = {}) {
+      return write(['items', 'collections', 'goals', 'checkins', 'kv', PENDING], (tx, note) => {
+        tx.objectStore(PENDING).clear();
+        if (!markAll) return;
+        for (const s of ['items', 'collections', 'goals', 'checkins', 'kv']) {
+          const keys = tx.objectStore(s).getAllKeys();
+          keys.onsuccess = () => { for (const k of keys.result) mark(tx, s, k); };
+        }
+      }, { track: false });
     },
     onChanged: (fn) => events.on(fn),
     async close() {

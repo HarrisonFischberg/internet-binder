@@ -209,6 +209,7 @@ extension RecordDatabase {
             var settings = try text.map { try SyncJSON.object($0) } ?? [:]
             settings["ai"] = (try SyncJSON.object(body))["value"] ?? [:]
             try db.execute(sql: "INSERT OR REPLACE INTO setting (key, value) VALUES (?, ?)", arguments: [Self.settingsKey, try SyncJSON.text(settings)])
+            try noteOutbound(db, store: id.store, key: id.key)
             return
         }
         try upsert(db, try spec(id.store), store: id.store, body: body, track: false)

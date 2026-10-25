@@ -23,6 +23,10 @@ public final class RecordDatabase: @unchecked Sendable {
 
     func wroteLocally() { onLocalWrite?() }
 
+    /// The Mac app's copy of the Safari extension's library: logs every record written from iCloud in
+    /// `sync_outbound` for the extension to pull (`ExtensionMirror`). Set once, before syncing starts.
+    public var recordsOutbound = false
+
     /// The stores of the shared schema (keepsake/src/shared/db.js) and the columns copied out of each body.
     struct StoreSpec {
         let table: String
@@ -117,6 +121,13 @@ public final class RecordDatabase: @unchecked Sendable {
                 CREATE TABLE sync_base ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "body" TEXT, "system" BLOB, PRIMARY KEY ("store", "key"));
                 CREATE TABLE sync_sealed ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "data" BLOB NOT NULL, PRIMARY KEY ("store", "key"));
                 CREATE TABLE sync_state ("key" TEXT PRIMARY KEY NOT NULL, "value" BLOB NOT NULL);
+                """)
+        }
+        // Safari on the Mac (ExtensionMirror.swift): records that came from iCloud, in order, for the
+        // extension to take back into its own storage. Only written when `recordsOutbound` is on.
+        m.registerMigration("v5-sync-outbound") { db in
+            try db.execute(sql: """
+                CREATE TABLE sync_outbound ("seq" INTEGER PRIMARY KEY AUTOINCREMENT, "store" TEXT NOT NULL, "key" TEXT NOT NULL);
                 """)
         }
         return m
@@ -259,12 +270,12 @@ public final class RecordDatabase: @unchecked Sendable {
         let marks = Array(repeating: "?", count: names.count + 2).joined(separator: ", ")
         try db.execute(sql: "INSERT OR REPLACE INTO \"\(s.table)\" (\(cols)) VALUES (\(marks))", arguments: StatementArguments(args))
         if store == "items" { try db.execute(sql: "UPDATE item SET fact = ? WHERE key = ?", arguments: [fact, key]) }
-        if track { try Self.markPending(db, store: store, key: key) }
+        if track { try Self.markPending(db, store: store, key: key) } else { try noteOutbound(db, store: store, key: key) }
     }
 
     func delete(_ db: Database, _ s: StoreSpec, store: String, key: String, track: Bool = true) throws {
         try db.execute(sql: "DELETE FROM \"\(s.table)\" WHERE key = ?", arguments: [key])
-        if track { try Self.markPending(db, store: store, key: key) }
+        if track { try Self.markPending(db, store: store, key: key) } else { try noteOutbound(db, store: store, key: key) }
     }
 
     static func column(_ v: Any?) -> DatabaseValueConvertible? {
