@@ -6,6 +6,7 @@
 //   push   every change marked in syncPending (db.js `journal`), in batches; the native side keeps them
 //   sync   the native side fetches from iCloud and sends what it has
 //   pull   what came from iCloud since our cursor, written without being marked pending again
+//   hold   records skipped in a pull because they were edited here meanwhile (see pull)
 // A save edited here while a round is running stays pending and goes in the next one.
 //
 // State in chrome.storage.local `keepsake_sync`: { on (null until decided), cursor, aiRev, status, at, message }.
@@ -80,7 +81,7 @@ export function createSyncBridge({ db, store, local, send }) {
       changes.push({ store: 'kv', key: 'aiSettings', rev: st.aiRev, body: { key: 'aiSettings', value: ai } });
     }
     for (const batch of batches(changes)) {
-      const res = await ask({ type: 'push', changes: batch });
+      const res = await ask({ type: 'push', cursor: st.cursor || 0, changes: batch });
       const acked = res.acked || [];
       const ai = acked.find((a) => a.store === 'kv' && a.key === 'aiSettings');
       await db.syncAck(acked.filter((a) => a !== ai));
@@ -95,7 +96,12 @@ export function createSyncBridge({ db, store, local, send }) {
     for (;;) {
       const res = await ask({ type: 'pull', cursor });
       const pendingNow = new Set((await db.syncPending()).map((p) => `${p.store}\u0000${p.key}`));
-      const changes = (res.changes || []).filter((c) => !pendingNow.has(`${c.store}\u0000${c.key}`));
+      const all = res.changes || [];
+      const changes = all.filter((c) => !pendingNow.has(`${c.store}\u0000${c.key}`));
+      // Edited here meanwhile: the Mac app keeps the iCloud version as unseen, so this edit is merged
+      // with it when it's pushed (not written over it), and the merge comes back on the next pull.
+      const held = all.filter((c) => !changes.includes(c)).map(({ store: s, key }) => ({ store: s, key }));
+      if (held.length) await ask({ type: 'hold', changes: held });
       const ai = changes.find((c) => c.store === 'kv' && c.key === 'aiSettings');
       await db.syncApply(changes.filter((c) => c !== ai));
       if (ai && ai.body && (await state()).aiRev === 0) {

@@ -21,6 +21,7 @@
 		846E4DD13082138200BA0257 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DCA3082138200BA0257 /* manifest.json */; };
 		846E4DD23082138200BA0257 /* vendor in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DCB3082138200BA0257 /* vendor */; };
 		846E4DD33082138200BA0257 /* src in Resources */ = {isa = PBXBuildFile; fileRef = 846E4DCC3082138200BA0257 /* src */; };
+		846E4E013082138200BA0257 /* KeepsakeKit in Frameworks */ = {isa = PBXBuildFile; productRef = 846E4E033082138200BA0257 /* KeepsakeKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +55,7 @@
 		846E4DAF3082138200BA0257 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		846E4DB43082138200BA0257 /* Internet Binder Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Internet Binder Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		846E4DB93082138200BA0257 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		846E4E043082138200BA0257 /* Extension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Extension.entitlements; sourceTree = "<group>"; };
 		846E4DBB3082138200BA0257 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		846E4DC63082138200BA0257 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = ../../dist/LICENSE; sourceTree = "<group>"; };
 		846E4DC73082138200BA0257 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = ../../dist/background.js; sourceTree = "<group>"; };
@@ -74,6 +76,7 @@
 		846E4DB13082138200BA0257 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				846E4E013082138200BA0257 /* KeepsakeKit in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -123,6 +126,7 @@
 				846E4DC53082138200BA0257 /* Resources */,
 				846E4DB93082138200BA0257 /* SafariWebExtensionHandler.swift */,
 				846E4DBB3082138200BA0257 /* Info.plist */,
+				846E4E043082138200BA0257 /* Extension.entitlements */,
 			);
 			path = "Keepsake Extension";
 			sourceTree = "<group>";
@@ -177,6 +181,9 @@
 			buildRules = (
 			);
 			name = "Keepsake Extension";
+			packageProductDependencies = (
+				846E4E033082138200BA0257 /* KeepsakeKit */,
+			);
 			productName = "Keepsake Extension";
 			productReference = 846E4DB43082138200BA0257 /* Internet Binder Extension.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -208,6 +215,9 @@
 			);
 			mainGroup = 846E4D903082138100BA0257;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				846E4E023082138200BA0257 /* XCLocalSwiftPackageReference "../../ios/KeepsakeKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 846E4D9A3082138100BA0257 /* Products */;
 			projectDirPath = "";
@@ -420,9 +430,11 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = KTV2G3Z883;
+				CODE_SIGN_ENTITLEMENTS = "Keepsake Extension/Extension.entitlements";
 				CURRENT_PROJECT_VERSION = 10;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Keepsake Extension/Info.plist";
@@ -455,9 +467,11 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = KTV2G3Z883;
+				CODE_SIGN_ENTITLEMENTS = "Keepsake Extension/Extension.entitlements";
 				CURRENT_PROJECT_VERSION = 10;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Keepsake Extension/Info.plist";
@@ -574,6 +588,20 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		846E4E023082138200BA0257 /* XCLocalSwiftPackageReference "../../ios/KeepsakeKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../ios/KeepsakeKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		846E4E033082138200BA0257 /* KeepsakeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeepsakeKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		846E4D943082138100BA0257 /* Build configuration list for PBXProject "Keepsake" */ = {

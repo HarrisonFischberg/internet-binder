@@ -16,7 +16,7 @@ function setup({ onPush } = {}) {
     updateSettings: async (patch) => { settings = { ...settings, ...patch }; },
   };
   // The Mac app's side: keeps what was pushed, hands back what "iCloud" sent since a cursor.
-  const native = { got: [], outbound: [], synced: 0, offs: 0 };
+  const native = { got: [], outbound: [], held: [], synced: 0, offs: 0 };
   const send = async (msg) => {
     if (msg.type === 'push') {
       native.got.push(...msg.changes);
@@ -28,6 +28,7 @@ function setup({ onPush } = {}) {
       const changes = native.outbound.filter((c) => c.seq > msg.cursor);
       return { ok: true, changes, cursor: native.outbound.length ? native.outbound.at(-1).seq : msg.cursor, more: false };
     }
+    if (msg.type === 'hold') { native.held.push(...msg.changes); return { ok: true }; }
     if (msg.type === 'off') { native.offs++; return { ok: true }; }
     return { ok: false };
   };
@@ -86,6 +87,7 @@ test('an edit made while a round is running stays pending, and isn\'t overwritte
   await s.bridge.run();
   assert.equal((await db.get('items', 'a')).title, 'Edited meanwhile');
   assert.deepEqual((await db.syncPending()).map((p) => p.key), ['a']);
+  assert.deepEqual(s.native.held, [{ store: 'items', key: 'a' }], 'the Mac app merges the two when this edit is pushed');
 });
 
 test('AI settings go up when changed here and come down when changed on the iPhone', async () => {

@@ -5,7 +5,8 @@ import PackageDescription
 
 let package = Package(
     name: "KeepsakeKit",
-    platforms: [.iOS("27.0"), .macOS("27.0")],
+    // macOS: the Safari extension's iCloud sync on the Mac (CKSyncEngine needs 14).
+    platforms: [.iOS("27.0"), .macOS("14.0")],
     products: [
         .library(name: "KeepsakeKit", targets: ["KeepsakeKit"]),
         .library(name: "KeepsakeUI", targets: ["KeepsakeUI"]),
