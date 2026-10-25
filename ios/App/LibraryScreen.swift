@@ -41,11 +41,11 @@ struct LibraryScreen: View {
         var list: [Save]
         switch filter {
         case .all: list = model.saves
-        case .collections: list = model.saves.filter { !($0.collectionId ?? "").isEmpty }
-        case .lifestyle: list = model.saves.filter(\.hasOwnView)
-        case .review: list = model.saves.filter { $0.needsCollection && $0.purchased != true }
-        case .kind(let k): list = model.saves.filter { $0.kind == k }
-        case .collection(let id): list = model.saves.filter { $0.collectionId == id }
+        case .collections: list = model.index.collected
+        case .lifestyle: list = model.index.lifestyle
+        case .review: list = model.index.review
+        case .kind(let k): list = model.index.kind(k)
+        case .collection(let id): list = model.index.collection(id)
         }
         switch status {
         case "todo": list = list.filter { $0.status != "done" && $0.purchased != true }
@@ -59,16 +59,14 @@ struct LibraryScreen: View {
 
     /// The sites you save from most, for the Source filter.
     private var topSources: [String] {
-        var counts: [String: Int] = [:]
-        for s in model.saves { if let h = s.host, !h.isEmpty { counts[h, default: 0] += 1 } }
-        return counts.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }.prefix(12).map(\.key)
+        model.index.hostCounts.sorted { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) }.prefix(12).map(\.key)
     }
 
     private let statusNames = ["todo": "To do", "done": "Done", "purchased": "Purchased"]
 
     /// Kinds the library has, in Chrome's menu order.
     private var kinds: [String] {
-        let present = Set(model.saves.map(\.kind))
+        let present = Set(model.index.byKind.keys)
         return ["place", "recipe", "product", "media", "book", "workout", "video", "article", "link"].filter(present.contains)
     }
 
@@ -264,13 +262,13 @@ struct LibraryScreen: View {
             // In Home's order: drag the sections there, and the stacks within them here.
             ForEach(HomeSections.order(sectionOrder), id: \.self) { section in
                 if section == "collections", filter != .lifestyle {
-                    let filed = model.saves.filter { !($0.collectionId ?? "").isEmpty }.count
+                    let filed = model.index.collected.count
                     GroupSection(title: "Collections", detail: "\(count(collections.count, "collection")) · \(count(filed, "save"))") {
                         CollectionTiles(collections: collections) { naming = true }
                     }
                 }
                 if section == "lifestyle", filter != .collections {
-                    let lifestyle = model.saves.filter(\.hasOwnView)
+                    let lifestyle = model.index.lifestyle
                     GroupSection(title: "Lifestyle", detail: "\(count(Set(lifestyle.map(\.kind)).count, "kind")) · \(count(lifestyle.count, "save"))") {
                         if lifestyle.isEmpty {
                             Text("Recipes, places, workouts, films and books land here.").font(KSFont.note).foregroundStyle(t.inkMuted)

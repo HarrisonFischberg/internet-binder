@@ -58,6 +58,7 @@ final class ShareState {
         let shared = await SharedContent.read(from: items)
         do {
             let library = try Library(tidy: false)
+            ThumbnailStore.shared.use(library)
             self.library = library
             var product: [String: Any]
             if let page = shared.page { product = page } else { product = await library.sharedProduct(url: shared.url, title: shared.title, text: shared.text) }

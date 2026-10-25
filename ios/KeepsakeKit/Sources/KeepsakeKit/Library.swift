@@ -41,6 +41,11 @@ public struct Save: Identifiable, Hashable, Sendable, Decodable {
 
     public var isFinishing: Bool { captureState == "pending" }
 
+    /// Lists read saves without the pictures stored inside them (`Library.listBody`): `image` is then this
+    /// prefix and the picture's length, and `Library.picture(_:)` reads the picture itself.
+    public static let storedPicturePrefix = "data:image/stored;"
+    public var hasStoredPicture: Bool { image?.hasPrefix(Self.storedPicturePrefix) == true }
+
     /// Chrome stores "no image" as an empty string.
     public var hasImage: Bool { !(image ?? "").isEmpty }
 
@@ -94,14 +99,28 @@ public final class Library: @unchecked Sendable {
         try database.pool.read { try Self.fetchSaves($0, trash: trash) }
     }
 
-    static func fetchSaves(_ db: Database, trash: Bool, limit: Int? = nil) throws -> [Save] {
-        let sql = "SELECT body, fact FROM item WHERE deletedAt IS \(trash ? "NOT " : "")NULL ORDER BY createdAt DESC" + (limit.map { " LIMIT \($0)" } ?? "")
+    /// A save's body for lists, without the pictures stored inside it. A picture saved on this device is a
+    /// `data:` URL of ~35 KB, kept twice (`image` and `images`), so it was most of every body: reading the
+    /// library for a list decoded every picture and held them all in memory. Lists get a marker
+    /// (`storedPicturePrefix` + the picture's length) and `SaveImage` reads the one it draws (`picture(_:)`).
+    static let listBody = """
+        CASE WHEN json_extract(body, '$.image') LIKE 'data:image/%'
+             THEN json_set(json_remove(body, '$.images'), '$.image', '\(Save.storedPicturePrefix)' || length(json_extract(body, '$.image')))
+             ELSE json_remove(body, '$.images') END
+        """
+
+    static func decodeRows(_ rows: [Row]) -> [Save] {
         let decoder = JSONDecoder()
-        return try Row.fetchAll(db, sql: sql).compactMap { row in
+        return rows.compactMap { row in
             guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
             save.fact = row["fact"]
             return save
         }
+    }
+
+    static func fetchSaves(_ db: Database, trash: Bool, limit: Int? = nil) throws -> [Save] {
+        let sql = "SELECT \(listBody) AS body, fact FROM item WHERE deletedAt IS \(trash ? "NOT " : "")NULL ORDER BY createdAt DESC" + (limit.map { " LIMIT \($0)" } ?? "")
+        return decodeRows(try Row.fetchAll(db, sql: sql))
     }
 
     /// A few saves from each kind and each collection (pictures first, then newest) and how many each
@@ -129,14 +148,9 @@ public final class Library: @unchecked Sendable {
                               ELSE ROW_NUMBER() OVER (PARTITION BY collectionId ORDER BY pictured DESC, createdAt DESC) END AS byCollection
                   FROM live
                 )
-                SELECT body, fact FROM ranked WHERE byKind <= ? OR byCollection <= ? ORDER BY createdAt DESC
+                SELECT \(Self.listBody) AS body, fact FROM ranked WHERE byKind <= ? OR byCollection <= ? ORDER BY createdAt DESC
                 """, arguments: [id, perGroup, perGroup])
-            let decoder = JSONDecoder()
-            return rows.compactMap { row in
-                guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
-                save.fact = row["fact"]
-                return save
-            }
+            return Self.decodeRows(rows)
         }
         for (kind, n) in try database.liveItemCounts(by: "kind", excluding: id) { shelf.counts["kind:\(kind)"] = n }
         for (collection, n) in try database.liveItemCounts(by: "collectionId", excluding: id) { shelf.counts[collection] = n }
@@ -160,15 +174,10 @@ public final class Library: @unchecked Sendable {
             var out = Waiting()
             out.count = try Int.fetchOne(db, sql: "SELECT COUNT(*) \(filter)", arguments: [id]) ?? 0
             let rows = try Row.fetchAll(db, sql: """
-                SELECT body, fact \(filter)
+                SELECT \(Self.listBody) AS body, fact \(filter)
                 ORDER BY COALESCE(json_extract(body, '$.image'), '') != '' DESC, createdAt DESC LIMIT ?
                 """, arguments: [id, limit])
-            let decoder = JSONDecoder()
-            out.saves = rows.compactMap { row in
-                guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
-                save.fact = row["fact"]
-                return save
-            }
+            out.saves = Self.decodeRows(rows)
             return out
         }
     }
@@ -191,14 +200,8 @@ public final class Library: @unchecked Sendable {
     public func glance(recent: Int = 8, perShelf: Int = 12) throws -> Glance {
         var g = Glance()
         try database.pool.read { db in
-            let decoder = JSONDecoder()
             func saves(_ filter: String, _ limit: Int) throws -> [Save] {
-                try Row.fetchAll(db, sql: "SELECT body, fact FROM item WHERE deletedAt IS NULL \(filter) ORDER BY createdAt DESC LIMIT ?", arguments: [limit])
-                    .compactMap { row in
-                        guard var save = try? decoder.decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
-                        save.fact = row["fact"]
-                        return save
-                    }
+                Self.decodeRows(try Row.fetchAll(db, sql: "SELECT \(Self.listBody) AS body, fact FROM item WHERE deletedAt IS NULL \(filter) ORDER BY createdAt DESC LIMIT ?", arguments: [limit]))
             }
             g.recent = try saves("", recent)
             g.collected = try saves("AND COALESCE(collectionId, '') != ''", perShelf)
@@ -229,6 +232,13 @@ public final class Library: @unchecked Sendable {
                   var save = try? JSONDecoder().decode(Save.self, from: Data((row["body"] as String).utf8)) else { return nil }
             save.fact = row["fact"]
             return save
+        }
+    }
+
+    /// The picture stored inside a save (a `data:` URL), for a list that read it without (`listBody`).
+    public func picture(_ id: String) throws -> String? {
+        try database.pool.read { db in
+            try String.fetchOne(db, sql: "SELECT json_extract(body, '$.image') FROM item WHERE key = ?", arguments: [id])
         }
     }
 

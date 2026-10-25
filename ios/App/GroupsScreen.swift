@@ -9,7 +9,7 @@ struct LifestyleScreen: View {
     @Environment(LibraryModel.self) private var model
     @State private var selecting = false
     @State private var selected: Set<String> = []
-    private var lifestyle: [Save] { model.saves.filter(\.hasOwnView) }
+    private var lifestyle: [Save] { model.index.lifestyle }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -17,7 +17,7 @@ struct LifestyleScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ScreenHeader(title: "Lifestyle", subtitle: "Places, recipes, workouts and more")
-                    if model.saves.contains(where: \.hasOwnView) {
+                    if !model.index.lifestyle.isEmpty {
                         LifestyleTiles(selection: selecting ? $selected : nil) { kind in
                             selected = [kind]
                             selecting = true
@@ -78,7 +78,7 @@ struct LifestyleTiles: View {
     @State private var manual = !SavedOrder.get(Self.key).isEmpty
     static let key = "lifestyleOrder"
 
-    private var counts: [String: Int] { Dictionary(model.saves.map { ($0.kind, 1) }, uniquingKeysWith: +) }
+    private var counts: [String: Int] { model.index.byKind.mapValues(\.count) }
     private var present: [String] {
         let counts = counts
         return KindStyle.lifestyle.filter { counts[$0] != nil }.mostFirst(count: { counts[$0] ?? 0 }, name: { KindStyle($0).plural })
@@ -88,7 +88,7 @@ struct LifestyleTiles: View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: groupColumns, spacing: 20) {
                 ForEach(order, id: \.self) { kind in
-                    let items = model.saves.filter { $0.kind == kind }
+                    let items = model.index.kind(kind)
                     let k = KindStyle(kind)
                     let tile = GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
                                          cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind)
@@ -143,7 +143,7 @@ struct CollectionTiles: View {
     /// Set once you drag a collection: Internet Binder stops sorting them by size on this iPhone.
     static let key = "collectionOrderManual"
 
-    private var counts: [String: Int] { Dictionary(model.saves.compactMap { $0.collectionId.map { ($0, 1) } }, uniquingKeysWith: +) }
+    private var counts: [String: Int] { model.index.byCollection.mapValues(\.count) }
 
     /// Pinned first, then by size; once you've dragged, the stored order as it is.
     private func arranged(manual: Bool) -> [String] {
@@ -164,7 +164,7 @@ struct CollectionTiles: View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: groupColumns, spacing: 20) {
                 ForEach(order.compactMap { id in collections.first { $0.id == id } }) { c in
-                    let items = model.saves.filter { $0.collectionId == c.id }
+                    let items = model.index.collection(c.id)
                     let tile = GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
                                          cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
                     if let selection {

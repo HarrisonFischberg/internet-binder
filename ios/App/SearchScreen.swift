@@ -15,7 +15,7 @@ struct SearchScreen: View {
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespaces) }
     private var kinds: [String] {
-        let present = Set(model.saves.map(\.kind))
+        let present = Set(model.index.byKind.keys)
         return ["place", "recipe", "product", "media", "book", "workout", "video", "article", "link"].filter(present.contains)
     }
 

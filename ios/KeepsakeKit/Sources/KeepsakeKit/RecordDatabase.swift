@@ -159,6 +159,21 @@ public final class RecordDatabase: @unchecked Sendable {
         }
     }
 
+    /// Saves not in the Trash, newest first, each without the pictures stored inside it (`Library.listBody`),
+    /// for the shared code's lists, search and counts: the whole library with its pictures was ~75 KB a
+    /// save, parsed in JavaScript on every search keystroke and every change.
+    public func liveItemsForLists() throws -> String {
+        let bodies = try pool.read { db in
+            try String.fetchAll(db, sql: "SELECT \(Library.listBody) FROM item WHERE deletedAt IS NULL ORDER BY createdAt DESC")
+        }
+        return "[" + bodies.joined(separator: ",") + "]"
+    }
+
+    /// Keys of saves in the Trash since before `cutoff` (an ISO date), read from the column.
+    public func trashedItemKeys(before cutoff: String) throws -> [String] {
+        try pool.read { db in try String.fetchAll(db, sql: "SELECT key FROM item WHERE deletedAt IS NOT NULL AND deletedAt < ?", arguments: [cutoff]) }
+    }
+
     /// Item bodies that have no key fact yet (written before v2, or by a store without the bridge).
     public func itemsMissingFacts() throws -> String {
         let bodies = try pool.read { db in try String.fetchAll(db, sql: "SELECT body FROM item WHERE fact IS NULL") }

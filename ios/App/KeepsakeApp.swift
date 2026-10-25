@@ -52,7 +52,14 @@ final class NoticeDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
 /// Holds the library for the app's screens.
 @MainActor @Observable
 final class LibraryModel {
-    private(set) var saves: [Save] = []
+    private(set) var saves: [Save] = [] {
+        didSet {
+            index = SaveIndex(saves)
+            reviewCount = index.review.count
+        }
+    }
+    /// The groupings screens draw from, worked out once per library change rather than on every redraw.
+    private(set) var index = SaveIndex([])
     private(set) var reviewCount = 0
     private(set) var problem: String?
     private(set) var loaded = false
@@ -92,7 +99,7 @@ final class LibraryModel {
     /// Counts collection changes no save count shows (deleting an empty one, Undo), so lists reload.
     var collectionsChanged = 0
     /// Imported saves your provider hasn't read yet (needsAi), newest first.
-    var aiBacklog: [Save] { saves.filter { $0.needsAi == true } }
+    var aiBacklog: [Save] { index.aiBacklog }
     let library: Library?
 
     struct Toast: Identifiable, Equatable {
@@ -120,6 +127,7 @@ final class LibraryModel {
             let name = ProcessInfo.processInfo.environment["KEEPSAKE_DB"]
             let library = try Library(path: name.map { NSTemporaryDirectory() + $0 + ".sqlite" })
             self.library = library
+            ThumbnailStore.shared.use(library)
             // A few indexed reads, so Home opens filled in rather than waiting on the whole library.
             glance = try? library.glance()
             reviewCount = glance?.reviewCount ?? 0
@@ -157,7 +165,6 @@ final class LibraryModel {
         do {
             for try await list in library.observeSaves() {
                 saves = list
-                reviewCount = list.filter { $0.needsCollection && $0.purchased != true }.count
                 loaded = true
                 glance = nil
                 widgetsChanged()
@@ -182,12 +189,20 @@ final class LibraryModel {
     }
     #endif
 
-    /// Picks up saves made in the Share Extension while the app was in the background.
-    func refresh() {
-        guard let library, let list = try? library.saves() else { return }
+    /// Picks up saves made in the Share Extension while the app was in the background. Read off the main
+    /// thread, so a tap that calls it never waits on the whole library.
+    func refresh() { Task { await reload() } }
+
+    private var reloads = 0
+    func reload() async {
+        guard let library else { return }
+        reloads += 1
+        let mine = reloads
+        let list = try? await Task.detached(priority: .userInitiated) { try library.saves() }.value
+        // A newer reload started meanwhile: its read is the fresher one.
+        guard let list, mine == reloads else { return }
         saves = list
-        reviewCount = list.filter { $0.needsCollection && $0.purchased != true }.count
-        Task { await loadDestinations() }
+        await loadDestinations()
     }
 
     /// The after-save work that's turned on (AI tidy, Lifestyle fill-in), for saves made in the Share
@@ -205,10 +220,15 @@ final class LibraryModel {
         aiReady = await library?.aiReady() ?? false
     }
 
-    /// Rewrites the widgets' snapshot and asks WidgetKit to redraw them.
+    /// Rewrites the widgets' snapshot and asks WidgetKit to redraw them, once things settle: a run of
+    /// changes (an import, Fix with AI on a collection) writes it once, not once per save.
+    private var widgetWrite: Task<Void, Never>?
     func widgetsChanged() {
         guard let library else { return }
-        Task {
+        widgetWrite?.cancel()
+        widgetWrite = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
             _ = try? await library.writeWidgetSnapshot()
             WidgetCenter.shared.reloadAllTimelines()
         }
@@ -230,7 +250,7 @@ final class LibraryModel {
         do {
             let before = saves.count
             _ = try await library.importExport(try Data(contentsOf: url), replace: false)
-            refresh()
+            await reload()
             let added = max(0, saves.count - before)
             // Imported saves don't go to your AI provider by themselves: Home offers Run AI on them.
             show(added == 0 ? "Nothing new to import: those saves are already here" : "Imported \(added) \(added == 1 ? "save" : "saves")\(aiReady ? ". Run AI on them from Home when you like" : "")")
@@ -279,6 +299,52 @@ final class LibraryModel {
         try? await library?.update(save.id, ["status": done ? "done" : "saved"])
         refresh()
     }
+}
+
+/// A library's saves grouped the ways the screens show them. Built once per change (a few milliseconds for
+/// thousands of saves) so a redraw reads a dictionary instead of filtering every save.
+struct SaveIndex {
+    var byId: [String: Save] = [:]
+    var byKind: [String: [Save]] = [:]
+    var byCollection: [String: [Save]] = [:]
+    var hostCounts: [String: Int] = [:]
+    var collected: [Save] = []
+    var lifestyle: [Save] = []
+    var review: [Save] = []
+    var aiBacklog: [Save] = []
+    /// Saved over six weeks ago and not opened since (Home's "Come back to" in Chrome).
+    var comeBackTo: Save?
+    /// Changes when a save comes or goes or its status changes (what the map's places depend on).
+    var placesKey = 0
+
+    nonisolated(unsafe) private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    init(_ saves: [Save], now: Date = Date()) {
+        let cutoff = now.addingTimeInterval(-42 * 86_400)
+        func old(_ s: String?) -> Bool { s.flatMap { Self.iso.date(from: $0) }.map { $0 < cutoff } ?? true }
+        var places = Hasher()
+        byId.reserveCapacity(saves.count)
+        for s in saves {
+            byId[s.id] = s
+            byKind[s.kind, default: []].append(s)
+            if let c = s.collectionId, !c.isEmpty { byCollection[c, default: []].append(s); collected.append(s) }
+            if let h = s.host, !h.isEmpty { hostCounts[h, default: 0] += 1 }
+            if s.hasOwnView { lifestyle.append(s) }
+            if s.needsCollection && s.purchased != true { review.append(s) }
+            if s.needsAi == true { aiBacklog.append(s) }
+            if comeBackTo == nil, s.status != "done", s.purchased != true, old(s.createdAt), old(s.openedAt) { comeBackTo = s }
+            places.combine(s.id)
+            places.combine(s.status)
+        }
+        placesKey = places.finalize()
+    }
+
+    func kind(_ k: String) -> [Save] { byKind[k] ?? [] }
+    func collection(_ id: String) -> [Save] { byCollection[id] ?? [] }
 }
 
 extension String {

@@ -654,8 +654,58 @@ struct PerformanceTests {
         print("PERF store start (JavaScriptCore + init) \(prepareTime)")
         let searchTime = try await clock.measure { _ = try await reopened.search("dutch oven") }
         print("PERF import \(importTime) · open \(openTime) · first read of \(count) saves \(readTime) · search \(searchTime)")
-        #expect(count == 5000)
+        if ProcessInfo.processInfo.environment["KEEPSAKE_PERF_FILE"] == nil { #expect(count == 5000) }
         #expect(openTime + readTime < .milliseconds(400), "usable Library under 400 ms")
+    }
+}
+
+@Suite("Pictures stay out of lists")
+struct ListPictureTests {
+    func library() async throws -> Library {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-pics-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
+        _ = try await lib.importExport(try fixture("chrome-export"), replace: true)
+        return lib
+    }
+
+    /// A save's own picture (a `data:` URL, stored twice in the body) is left out of every list read and
+    /// read on its own when drawn; the save itself still has it.
+    @Test func listsCarryAMarkerAndThePictureIsReadOnItsOwn() async throws {
+        let lib = try await library()
+        let save = try #require(try lib.saves().first)
+        let picture = "data:image/jpeg;base64," + String(repeating: "QUJD", count: 5000)
+        try await lib.database.pool.write {
+            try $0.execute(sql: "UPDATE item SET body = json_set(body, '$.image', ?, '$.images', json_array(?)) WHERE key = ?", arguments: [picture, picture, save.id])
+        }
+        let listed = try #require(try lib.saves().first { $0.id == save.id })
+        #expect(listed.image == Save.storedPicturePrefix + "\(picture.utf8.count)")
+        #expect(listed.hasImage && listed.hasStoredPicture)
+        #expect(try lib.picture(save.id) == picture)
+        #expect(try lib.save(save.id)?.image == picture)
+        #expect(try lib.glance().recent.first { $0.id == save.id }?.hasStoredPicture == true)
+        // The shared code's lists get the marker too; its own reads of the save keep the picture.
+        let found = try await lib.search(save.title)
+        #expect(found.items.first { $0.id == save.id }?.hasStoredPicture == true)
+        let stored = try #require(try await lib.core.call("store.getItem", [save.id]) as? [String: Any])
+        #expect(stored["image"] as? String == picture)
+        #expect((stored["images"] as? [String])?.first == picture)
+    }
+
+    /// Opening the library only empties the Trash of saves trashed over 30 days ago, and finds them from the
+    /// column rather than reading every save.
+    @Test func purgeTrashStillRemovesOldSaves() async throws {
+        let lib = try await library()
+        let saves = try lib.saves()
+        try await lib.trash([saves[0].id, saves[1].id])
+        try await lib.database.pool.write {
+            try $0.execute(sql: "UPDATE item SET deletedAt = '2020-01-01T00:00:00.000Z', body = json_set(body, '$.deletedAt', '2020-01-01T00:00:00.000Z') WHERE key = ?", arguments: [saves[0].id])
+        }
+        #expect(try await lib.core.call("store.purgeTrash") as? Int == 1)
+        #expect(try lib.save(saves[0].id) == nil)
+        let trash = try lib.saves(trash: true).map(\.id)
+        #expect(trash.contains(saves[1].id) && !trash.contains(saves[0].id), "a save trashed today stays")
+        #expect(try await lib.core.call("store.purgeTrash") as? Int == 0)
     }
 }
 

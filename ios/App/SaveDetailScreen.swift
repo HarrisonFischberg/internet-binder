@@ -19,7 +19,7 @@ struct SaveDetailScreen: View {
     @State private var destinations: [Destination] = []
 
     /// The latest copy (a stamp or an edit updates it in place).
-    private var current: Save { model.saves.first { $0.id == save.id } ?? save }
+    private var current: Save { model.index.byId[save.id] ?? save }
     private var d: JSONValue? { current.details }
     private var isDone: Bool { current.status == "done" }
     private var isPurchased: Bool { current.purchased == true }

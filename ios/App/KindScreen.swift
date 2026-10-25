@@ -16,7 +16,7 @@ struct KindScreen: View {
     @State private var selecting = false
     @State private var selected: Set<String> = []
 
-    private var saves: [Save] { model.saves.filter { $0.kind == kind } }
+    private var saves: [Save] { model.index.kind(kind) }
     private var onMap: Bool { kind == "place" && showMap && !saves.isEmpty }
     private var todo: [Save] { saves.filter { $0.status != "done" } }
     private var done: [Save] { saves.filter { $0.status == "done" } }
@@ -108,7 +108,7 @@ struct ReviewScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var suggestions: [String: ReviewSuggestions] = [:]
     @State private var destinations: [Destination] = []
-    private var saves: [Save] { model.saves.filter { $0.needsCollection && $0.purchased != true } }
+    private var saves: [Save] { model.index.review }
 
     var body: some View {
         ZStack {

@@ -22,8 +22,8 @@ struct HomeScreen: View {
     @Environment(\.horizontalSizeClass) private var size
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private var lifestyleSaves: [Save] { model.glance?.lifestyle ?? model.saves.filter(\.hasOwnView) }
-    private var collectedSaves: [Save] { model.glance?.collected ?? model.saves.filter { !($0.collectionId ?? "").isEmpty } }
+    private var lifestyleSaves: [Save] { model.glance?.lifestyle ?? model.index.lifestyle }
+    private var collectedSaves: [Save] { model.glance?.collected ?? model.index.collected }
     /// Until the whole library is read, Home draws from the launch glance (newest saves, counts).
     private var newest: [Save] { model.glance?.recent ?? Array(model.saves.prefix(8)) }
     private var collectionCount: Int { model.glance?.collections ?? collections.count }
@@ -32,13 +32,7 @@ struct HomeScreen: View {
     private var lifestyleViews: Int { model.glance?.lifestyleKinds ?? Set(lifestyleSaves.map(\.kind)).count }
 
     /// Saved over six weeks ago and not opened since (Home's "Come back to" in Chrome).
-    private var comeBackTo: Save? {
-        let cutoff = Date().addingTimeInterval(-42 * 86_400)
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        func old(_ s: String?) -> Bool { s.flatMap { iso.date(from: $0) }.map { $0 < cutoff } ?? true }
-        return model.saves.first { $0.status != "done" && $0.purchased != true && old($0.createdAt) && old($0.openedAt) }
-    }
+    private var comeBackTo: Save? { model.index.comeBackTo }
 
     var body: some View {
         ZStack {

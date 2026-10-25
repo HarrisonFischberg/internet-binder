@@ -13,7 +13,7 @@ struct CollectionsScreen: View {
     @State private var newName = ""
     @State private var selecting = false
     @State private var selected: Set<String> = []
-    private var collected: [Save] { model.saves.filter { !($0.collectionId ?? "").isEmpty } }
+    private var collected: [Save] { model.index.collected }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -54,7 +54,7 @@ struct CollectionsScreen: View {
     /// Delete the ticked collections. With saves inside, it asks whether they wait in Review or go too.
     private var selectionBar: some View {
         let chosen = collections.filter { selected.contains($0.id) }
-        let inside = model.saves.filter { selected.contains($0.collectionId ?? "") }.count
+        let inside = selected.reduce(0) { $0 + model.index.collection($1).count }
         return SelectionBar(noun: { $0 == 1 ? "collection" : "collections" }, all: collections.map(\.id), selected: $selected) {
             if inside == 0 {
                 Button { delete(chosen, saves: false) } label: { BarTrashLabel(title: "Delete") }
@@ -95,7 +95,7 @@ struct CollectionScreen: View {
     @State private var editing = false
     @State private var selecting = false
     @State private var selected: Set<String> = []
-    private var saves: [Save] { model.saves.filter { $0.collectionId == id } }
+    private var saves: [Save] { model.index.collection(id) }
 
     var body: some View {
         let toBuy = saves.filter { $0.purchased != true }

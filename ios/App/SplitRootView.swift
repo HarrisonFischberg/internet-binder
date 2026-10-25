@@ -29,7 +29,7 @@ struct SplitRootView: View {
                         .dropDestination(for: String.self) { ids, _ in put(ids, "kind:place", "Places") } isTargeted: { dropTarget = $0 ? "kind:place" : nil }
                 }
                 SwiftUI.Section("Lifestyle") {
-                    ForEach(KindStyle.lifestyle.filter { k in k != "place" && model.saves.contains { $0.kind == k } }, id: \.self) { k in
+                    ForEach(KindStyle.lifestyle.filter { k in k != "place" && model.index.byKind[k] != nil }, id: \.self) { k in
                         let s = KindStyle(k)
                         Label(s.plural, systemImage: s.symbol).tag(Section.kind(k))
                             .listRowBackground(dropTarget == "kind:\(k)" ? t.accent.opacity(0.15) : nil)
