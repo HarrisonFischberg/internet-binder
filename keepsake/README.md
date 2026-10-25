@@ -11,7 +11,7 @@ Save from any site with one click. Shopping sorts itself into collections; every
 - Optional on-page save buttons for product grids — off until you turn them on, and only on sites you grant.
 - Import your own **Instagram Saved collections**, then **read each post's page** for the real caption, creator, links and creator-tagged products (name, price, shop URL) — no login, no credentials, just your existing session.
 - Calm dashboard: a Home page with search, your latest saves and your top collections; a masonry grid with search, sort, filters, favorites, purchased, bulk actions; collection tiles that scale to hundreds of collections; light/dark.
-- **No account. No server. No telemetry.** Everything lives in this browser profile (IndexedDB for your saves, `chrome.storage.local` for settings). Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
+- **No account. No server. No telemetry.** Everything lives in this browser profile (IndexedDB for your saves, `chrome.storage.local` for settings). In Safari on the Mac, optional iCloud sync also keeps a copy in your own iCloud, end-to-end encrypted (see `PRIVACY.md`); Chrome has no sync. Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
 - Optional, opt-in, bring-your-own-key AI to help identify products in Instagram saves — with a preview of exactly what leaves the browser.
 
 Manifest V3, plain HTML/CSS/JS, no build step, no dependencies at runtime.

@@ -87,6 +87,7 @@ async function boot() {
   });
   $('restrictedDashboard').addEventListener('click', () => openDashboard('#home'));
   $('floatingLink').addEventListener('click', () => openDashboard('#settings'));
+  if (syncCapable()) $('storedWhere').textContent = 'In this browser, plus iCloud if sync is on';
   await applyTheme();
 
   let tab = null;
@@ -830,7 +831,7 @@ function showSaved(item, collection, classification = null) {
   if (item.image) thumb.append(el('img', { src: item.image, alt: '', onError: () => clear(thumb) }));
   $('savedInboxHint').textContent = [
     item.captureState === 'pending' ? 'Finishing details: your AI provider is tidying the title. You can close this.' : '',
-    already ? `Saved ${new Date(item.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}, on this device.` : 'Saved on this device.',
+    already ? `Saved ${new Date(item.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}.` : 'Saved.',
   ].filter(Boolean).join(' ');
   renderSuggestions(item, isInbox && !updated ? classification : null);
   $('savedUndo').classList.toggle('hidden', updated || already);

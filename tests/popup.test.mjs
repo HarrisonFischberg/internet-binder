@@ -109,7 +109,7 @@ test('popup: opening it again on a saved video shows that save, not the duplicat
   assert.equal(page.getElementById('savedTitle').textContent, 'Already in');
   assert.equal(page.getElementById('savedMove').value, 'kind:video');
   assert.ok(!visible('savedUndo'), 'nothing new was saved, so nothing to undo');
-  assert.match(page.getElementById('savedInboxHint').textContent, /^Saved .*on this device\.$/);
+  assert.match(page.getElementById('savedInboxHint').textContent, /^Saved .+\d{4}\.$/);
   assert.ok(!page.querySelector('#state-product:not(.hidden)'), 'no preview');
   F.calls.tabsCreated.length = 0;
   page.getElementById('savedOpen').click();

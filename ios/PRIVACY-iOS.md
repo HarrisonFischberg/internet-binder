@@ -1,7 +1,8 @@
 # Internet Binder for iPhone and iPad: privacy (draft for review)
 
 Status: **draft**, to be merged into `keepsake/PRIVACY.md` (or published beside it) when the app ships.
-Everything here matches the Chrome extension's promises; the differences are the platform's.
+Everything here matches the Chrome extension's promises; the differences are the platform's, chiefly that iCloud sync
+(on for a new install, Settings → iCloud) stores a copy of the library in the user's own iCloud.
 
 ## What Internet Binder stores, and where
 - Your saves, collections, goals, check-ins, learned sorting and settings: in Internet Binder's storage on this

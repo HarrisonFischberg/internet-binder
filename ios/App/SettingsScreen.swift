@@ -515,9 +515,14 @@ struct PrivacyScreen: View {
     var body: some View {
         List {
             Section("On this iPhone") {
-                Text("Your saves, collections, goals and settings live in Internet Binder's storage on this device. No account, no Internet Binder server, no analytics.")
+                Text("Your saves, collections, goals and settings live in Internet Binder's storage on this device. No Internet Binder account, no Internet Binder server, no analytics.")
                 Text("Apple Intelligence reads your saves on this device. What it reads never leaves it.")
-                Text("Your AI key is kept in the Keychain on this device and never exported.")
+                Text("Your AI key is kept in the Keychain on this device and never exported or synced.")
+            }
+            Section("In your iCloud") {
+                Text("With iCloud sync on (Settings → iCloud), a copy of your library is stored in your own iCloud account through Apple's CloudKit, so this iPhone and Safari on your Mac stay in step.")
+                Text("Its text is end-to-end encrypted, and pictures are sealed on your device first. Apple stores it but can't read it, and Internet Binder's developer has no access. Your AI key and the AI change log never go to iCloud.")
+                Text("Turning sync off stops syncing; nothing in iCloud is deleted. To remove it, delete Internet Binder's data in Settings → your name → iCloud → Manage Storage.")
             }
             Section("When Internet Binder uses the network") {
                 Text("Pictures of your saves load from the sites they came from, as a web page loads them. A small copy is kept on this iPhone so the picture stays if the site removes it.")

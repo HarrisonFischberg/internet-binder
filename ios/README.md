@@ -1,6 +1,6 @@
 # Internet Binder for iPhone and iPad
 
-Local-first, no account. Design and plan: `replica/m3/` (`PROMPT.md`, `progress.md`, `decisions.md`).
+Local-first, no account. Optional iCloud sync (CloudKit, the user's own private database) with Safari on the Mac. Design and plan: `replica/m3/` (`PROMPT.md`, `progress.md`, `decisions.md`).
 
 | folder | what |
 | --- | --- |

@@ -7,7 +7,7 @@
 
 # Internet Binder
 
-**Save products, places, recipes, workouts, videos, articles, films and books from anywhere. Sorted for you, kept on your device, no account.**
+**Save products, places, recipes, workouts, videos, articles, films and books from anywhere. Sorted for you, kept on your devices and in your own iCloud, no account.**
 
 Internet Binder runs in Chrome (and other Chromium browsers), in Safari on the Mac, and as an app for iPhone and iPad. Save from any site with one click. Shopping sorts itself into collections; everything else goes to its own Lifestyle view. Everything stays on your own device.
 
@@ -81,7 +81,7 @@ Every screenshot uses the built-in sample data. They follow your GitHub theme: s
 - Optional on-page save buttons for product grids, off until you turn them on, and only on sites you grant.
 - Import your own **Instagram Saved collections**, then **read each post's page** for the real caption, creator, links and creator-tagged products (name, price, shop URL). No login, no credentials, just your existing session.
 - Calm dashboard: a Home page with search, your latest saves and your top collections; a masonry grid with search, sort, filters, favorites, purchased, bulk actions; collection tiles that scale to hundreds of collections; five styles, each in light and dark.
-- **No account. No server. No telemetry.** Everything lives on your device: in the browser profile (IndexedDB for your saves, `chrome.storage.local` for settings), or in the app on iPhone and iPad. Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
+- **No Internet Binder account. No Internet Binder server. No telemetry.** Your library lives on your device: in the browser profile (IndexedDB for your saves, `chrome.storage.local` for settings), or in the app on iPhone and iPad. With **iCloud sync** on (Safari on the Mac and the iPhone app), a copy is also stored in your own iCloud account (Apple's CloudKit, private database, end-to-end encrypted), so both stay in step; the developer can't see it. Chrome has no sync. Deleted saves wait 30 days in the Trash. Export/import as JSON. Delete everything in one click.
 - Optional, opt-in, bring-your-own-key AI to help identify products in Instagram saves, with a preview of exactly what leaves the browser.
 - On iPhone and iPad: save from any app's Share sheet, cook a recipe step by step with optional music, add Home Screen widgets, and pick from four styles with matching app icons.
 
@@ -275,7 +275,8 @@ See [keepsake/PRIVACY.md](keepsake/PRIVACY.md) (browser extension), [ios/PRIVACY
 | Permission | When | Why |
 | --- | --- | --- |
 | `storage` | install | Keep settings and the optional AI key in `chrome.storage.local`. |
-| `unlimitedStorage` | install | Store your library in IndexedDB without Chrome's 10 MB default cap. Stays on your device. |
+| `unlimitedStorage` | install | Store your library in IndexedDB without Chrome's 10 MB default cap. Stays on your device (and, in Safari with iCloud sync on, your own iCloud). |
+| `nativeMessaging` + `alarms` | install, **Safari only** | iCloud sync: hand your library to the Internet Binder app on the Mac, which syncs it with your iCloud, and check for changes every few minutes. Chrome's build doesn't ask for these. |
 | `activeTab` + `scripting` | install | When you click the icon, press the shortcut or use the context menu, read *that* page's title/price/images at that moment and show the confirmation toast. Nothing runs on pages otherwise. |
 | `contextMenus` | install | The "Save to Internet Binder" right-click item. |
 | Site access (`optional_host_permissions`: `*://*/*`) | **only if you enable on-page buttons, use *Import from tabs*, or start a *Fix with AI* run with live-page reading** | Run the hover-button script on the sites you granted (per site or all); read saved items' product pages during *Fix with AI*. Revocable in Settings or at `chrome://extensions`. |
@@ -283,7 +284,7 @@ See [keepsake/PRIVACY.md](keepsake/PRIVACY.md) (browser extension), [ios/PRIVACY
 | Provider origin (e.g. `https://api.openai.com/*`) | **only if you turn AI on** | Let the dashboard and background worker call the API you configured. Given back when you turn AI off. |
 | `https://nominatim.openstreetmap.org/*` + `https://tiles.openfreemap.org/*`, `https://www.wikidata.org/*`, `https://openlibrary.org/*` | **only if you turn on that Lookup** (Settings → Lookups) | Find a place's address and pin and draw the Places map; a film's or a book's details. Given back when you turn the lookup off. |
 
-No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The background worker has no timers; its only network access is the call to your AI provider after a save, when Optional AI is on, and the Lookups you turned on.
+No `tabs`, `history`, `cookies`, `webRequest` or `identity` (and no `alarms` in Chrome). The background worker has no timers (except Safari's iCloud check while sync is on); its only network access is the call to your AI provider after a save, when Optional AI is on, and the Lookups you turned on.
 
 ## Limitations
 
@@ -292,7 +293,7 @@ No `tabs`, `history`, `cookies`, `webRequest`, `alarms` or `identity`. The backg
 - **On-page buttons can be wrong** on unusual layouts (very large "cards", galleries). The detector errs on the side of silence; use the toolbar or right-click on those pages.
 - **Instagram** markup changes often; the importer and post reader may need adapter updates. "Read post details" opens one post page at a time with a pause between them to stay polite; it is roughly 2–3 seconds per post (about four minutes for 90 posts) and Instagram can still rate-limit or show a login page, in which case Internet Binder falls back to reading the post in a short-lived background tab and reports the ones it couldn't get. Posts where the creator tagged nothing and linked nothing simply have no product data to find.
 - **AI suggestions are guesses.** They are labelled as such, and cost money on your own account.
-- **No sync.** Data lives in one browser profile. Use export/import to move it.
+- **No sync in Chrome.** There, data lives in one browser profile; use export/import to move it. Safari on the Mac and the iPhone app sync through your own iCloud.
 - Tested with Node + jsdom (`npm test` at the repository root) and reviewed by hand; the automated suite does not drive a real Chrome, so pixel-level behaviour on real sites should be spot-checked after install.
 
 ## Development and tests
