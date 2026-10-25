@@ -208,18 +208,30 @@ extension LibraryModel {
     /// Fix with AI for any saves (one, a collection, a Lifestyle view, everything): your provider reads each
     /// again, a product from its picture and its shop page, and a save in Review is filed when it's sure.
     /// A few at a time, so the bar at the bottom can count and Stop works. One Undo takes back the whole run.
-    func fixWithAI(_ saves: [Save]) async {
+    /// `screen` opens the progress screen (Fix everything). More than one save keeps going when you leave
+    /// the app (BackgroundWork); what iOS cuts off waits under "Finish fixing" on Home.
+    func fixWithAI(_ saves: [Save], screen: Bool = false) async {
         guard let lib = library, !saves.isEmpty, aiRun == nil else { return }
         aiRun = AIRun(done: 0, total: saves.count)
+        if screen { workShowing = true }
+        let titles = Dictionary(saves.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
+        if saves.count > 1 {
+            BackgroundWork.shared.begin("fix", title: "Fixing saves with AI", subtitle: "0 of \(saves.count)", total: saves.count) { [weak self] in
+                self?.aiRun?.cutOff = true
+                self?.aiRun?.stopping = true
+            }
+        }
         defer { aiRun = nil }
         var changed = 0, products = 0
         var filed: [AIFixReport.Filed] = []
         var logIds: [String] = []
         var error = ""
         let ids = saves.map(\.id)
+        if saves.count > 1 { aiFixLeft = ids }
         for start in stride(from: 0, to: ids.count, by: 3) {
             if aiRun?.stopping == true { break }
             let chunk = Array(ids[start..<min(start + 3, ids.count)])
+            aiRun?.current = chunk
             do {
                 let r = try await lib.fixWithAI(chunk)
                 changed += r.changed
@@ -227,14 +239,29 @@ extension LibraryModel {
                 filed += r.filed
                 logIds += r.logIds ?? []
                 if !r.error.isEmpty { error = r.error }
+                for id in chunk {
+                    let title = titles[id] ?? "A save"
+                    if let f = r.filed.first(where: { $0.id == id }) {
+                        aiRun?.note(WorkLine(id: id, text: "\(title) → \(f.collection)", symbol: "tray.and.arrow.down"))
+                    } else {
+                        aiRun?.note(WorkLine(id: id, text: title, symbol: "checkmark"))
+                    }
+                }
             } catch let e {
                 error = e.localizedDescription
             }
             aiRun?.done = min(ids.count, start + chunk.count)
+            if saves.count > 1 {
+                aiFixLeft = Array(ids[min(ids.count, start + chunk.count)...])
+                BackgroundWork.shared.update("fix", done: aiRun?.done ?? 0, total: ids.count, subtitle: "\(aiRun?.done ?? 0) of \(ids.count)")
+            }
             refresh()
             // A bad key or no credit: every other save would fail the same way.
             if error.range(of: #"\((401|403|429)\)|API key|base URL"#, options: .regularExpression) != nil { break }
         }
+        // Cut off by iOS: the rest waits for "Finish fixing". Finished, stopped or failed: nothing waits.
+        if aiRun?.cutOff != true { aiFixLeft = [] }
+        BackgroundWork.shared.end("fix", success: aiRun?.stopping != true)
         refresh()
         var undo: (@MainActor () async -> Void)?
         if !logIds.isEmpty {
@@ -262,19 +289,30 @@ extension LibraryModel {
     /// themselves; this reads them when you ask, one at a time. When your provider says to slow down (429,
     /// overloaded, a timeout) it waits, doubling each time, and tries again; a bad key or no credit stops it.
     /// Pause stops after the save it's on; what's left stays waiting, so running it again resumes.
-    func runAIOnImported(_ saves: [Save]) async {
+    func runAIOnImported(_ saves: [Save], screen: Bool = true) async {
         guard let lib = library, !saves.isEmpty, aiRun == nil else { return }
         aiRun = AIRun(done: 0, total: saves.count, imported: true)
-        defer { aiRun = nil }
+        if screen { workShowing = true }
+        if saves.count > 1 {
+            // What iOS cuts off stays waiting (needsAi), so running it again carries on.
+            BackgroundWork.shared.begin("imported", title: "Reading imported saves", subtitle: "0 of \(saves.count)", total: saves.count) { [weak self] in
+                self?.aiRun?.cutOff = true
+                self?.aiRun?.stopping = true
+            }
+        }
+        defer { aiRun = nil; BackgroundWork.shared.end("imported", success: true) }
         var changed = 0, failed = 0, busy = 0, readCount = 0
         var error = ""
         for save in saves {
             if aiRun?.stopping == true { break }
             var tries = 0
             var read = false
+            aiRun?.current = [save.id]
             while !read {
                 do {
-                    if try await lib.readImported(save.id) { changed += 1 }
+                    let updated = try await lib.readImported(save.id)
+                    if updated { changed += 1 }
+                    aiRun?.note(WorkLine(id: save.id, text: save.title, symbol: updated ? "sparkles" : "checkmark"))
                     readCount += 1
                     busy = 0
                     read = true
@@ -296,6 +334,7 @@ extension LibraryModel {
             }
             if !read { break }
             aiRun?.done += 1
+            BackgroundWork.shared.update("imported", done: aiRun?.done ?? 0, total: saves.count, subtitle: "\(aiRun?.done ?? 0) of \(saves.count)")
             if (aiRun?.done ?? 0) % 5 == 0 { refresh() }
         }
         refresh()
@@ -331,6 +370,31 @@ struct RunAIOnImportedButton: View {
     }
 }
 
+/// "Finish fixing N saves": Home, after iOS ended a Fix with AI run in the background (or the app was
+/// closed) before it got through them. Picks up where it stopped, with the progress screen.
+struct FinishFixingButton: View {
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+
+    var body: some View {
+        let left = model.aiRun == nil && model.aiReady ? Set(model.aiFixLeft) : []
+        let saves = left.isEmpty ? [] : model.saves.filter { left.contains($0.id) }
+        if !saves.isEmpty {
+            HStack(spacing: 4) {
+                Button("Finish fixing \(saves.count) \(saves.count == 1 ? "save" : "saves") with AI", systemImage: "sparkles") {
+                    Task { await model.fixWithAI(saves, screen: true) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Not now", systemImage: "xmark") { model.aiFixLeft = [] }
+                    .labelStyle(.iconOnly).foregroundStyle(t.inkMuted).frame(width: 44, height: 44)
+            }
+            .frame(minHeight: 48).padding(.leading, 16).padding(.trailing, 4)
+            .ksSurface(radius: 14)
+            .accessibilityElement(children: .contain)
+        }
+    }
+}
+
 /// "Fix with AI" for a set of saves, in a screen's toolbar: shows while Optional AI is on. More than one
 /// save asks first, since each one is a request to your provider.
 struct FixWithAIButton: View {
@@ -355,7 +419,8 @@ struct FixWithAIButton: View {
     }
 }
 
-/// The bar at the bottom while Fix with AI works through saves: how far it got, and Stop.
+/// The bar at the bottom while Fix with AI works through saves (or iCloud takes its first copy): how far
+/// it got, and Stop. A run of more than one opens the progress screen when tapped.
 struct AIRunBar: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
@@ -365,11 +430,20 @@ struct AIRunBar: View {
         ZStack {
             if let run = model.aiRun {
                 HStack(spacing: 12) {
-                    ProgressView(value: Double(run.done), total: Double(max(run.total, 1)))
-                        .progressViewStyle(.circular).controlSize(.small).tint(t.ink)
-                    Text(run.stopping ? "Stopping…" : run.waitingUntil != nil ? "Your AI asked to slow down. Waiting…" : run.total == 1 ? "Asking your AI…"
-                         : "\(run.imported ? "Reading" : "Fixing") \(min(run.done + 1, run.total)) of \(run.total) with AI")
-                        .font(.subheadline.weight(.medium)).foregroundStyle(t.ink).monospacedDigit()
+                    Button { if run.total > 1 { model.workShowing = true } } label: {
+                        HStack(spacing: 12) {
+                            ProgressView(value: Double(run.done), total: Double(max(run.total, 1)))
+                                .progressViewStyle(.circular).controlSize(.small).tint(t.ink)
+                            Text(run.stopping ? "Stopping…" : run.waitingUntil != nil ? "Your AI asked to slow down. Waiting…" : run.total == 1 ? "Asking your AI…"
+                                 : "\(run.imported ? "Reading" : "Fixing") \(min(run.done + 1, run.total)) of \(run.total) with AI")
+                                .font(.subheadline.weight(.medium)).foregroundStyle(t.ink).monospacedDigit()
+                        }
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(run.total == 1)
+                    .accessibilityHint(run.total > 1 ? "Shows the progress screen." : "")
+                    .accessibilityIdentifier("aiRunBar")
                     if run.total > 1 && !run.stopping {
                         Button(run.imported ? "Pause" : "Stop") { model.aiRun?.stopping = true }
                             .font(.subheadline.weight(.semibold)).frame(minHeight: 44)
@@ -379,8 +453,23 @@ struct AIRunBar: View {
                 .ksSurface(radius: 24)
                 .transition(reduce ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .accessibilityElement(children: .contain)
+            } else if let run = model.syncRun {
+                Button { model.workShowing = true } label: {
+                    HStack(spacing: 12) {
+                        ProgressView(value: Double(run.done), total: Double(max(run.total, 1)))
+                            .progressViewStyle(.circular).controlSize(.small).tint(t.ink)
+                        Text("Copying to iCloud: \(run.done) of \(run.total)")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(t.ink).monospacedDigit()
+                    }
+                    .padding(.horizontal, 18).frame(minHeight: 48)
+                    .ksSurface(radius: 24)
+                }
+                .buttonStyle(PressStyle())
+                .accessibilityHint("Shows the progress screen.")
+                .transition(reduce ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: model.syncRun == nil)
         .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: model.aiRun == nil)
     }
 }

@@ -37,6 +37,11 @@ extension RecordDatabase {
         }
     }
 
+    /// How many records still wait to go to iCloud (the progress screen's count).
+    public func pendingCount() throws -> Int {
+        try pool.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM sync_pending") ?? 0 }
+    }
+
     /// What to send for one record: its current body, or its deletion. Nil when it isn't pending.
     public func outgoing(_ id: SyncID) throws -> OutgoingChange? {
         try pool.read { db in

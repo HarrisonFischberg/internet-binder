@@ -55,6 +55,8 @@ struct HomeScreen: View {
                         }
                     }
                     if model.reviewCount > 0 { reviewBanner }
+                    FinishFixingButton()
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
                     if model.aiReady && !model.aiBacklog.isEmpty {
                         RunAIOnImportedButton()
                             .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
@@ -88,7 +90,7 @@ struct HomeScreen: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $settings) { SettingsScreen() }
         .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
-            Button("Fix everything") { Task { await model.fixWithAI(model.saves) } }
+            Button("Fix everything") { Task { await model.fixWithAI(model.saves, screen: true) } }
         } message: {
             Text("Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone. Fix one collection or Lifestyle view from its own page.")
         }

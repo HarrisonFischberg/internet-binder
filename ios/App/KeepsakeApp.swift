@@ -94,7 +94,29 @@ final class LibraryModel {
         var imported = false
         /// Your provider asked to slow down: the bar says so until then.
         var waitingUntil: Date?
+        let startedAt = Date()
+        /// The saves your provider is reading right now (the progress screen shows them).
+        var current: [String] = []
+        /// What it just did, newest first, a few lines for the progress screen.
+        var recent: [WorkLine] = []
+        /// iOS ended the time it gave the run in the background: what's left waits for "Finish fixing".
+        var cutOff = false
     }
+    /// Saves a Fix with AI run didn't get to before iOS stopped it: Home offers "Finish fixing".
+    var aiFixLeft = AIFixLeft.ids { didSet { AIFixLeft.ids = aiFixLeft } }
+    /// iCloud's first copy of a library (turning sync on): records sent so far, for the progress screen.
+    var syncRun: SyncRun?
+    struct SyncRun: Equatable {
+        var total: Int
+        var left: Int
+        let startedAt = Date()
+        var done: Int { max(0, total - left) }
+    }
+    /// The progress screen for a long run (Fix everything, imports, iCloud's first copy) is up.
+    var workShowing = false
+    /// Which screen presents it: Settings while its sheet is open (a cover can't go over a sheet from below).
+    var workHost = WorkHost.root
+    enum WorkHost { case root, settings }
     /// Where Move to… can send saves (every Lifestyle view and collection), for the long-press menus.
     var destinations: [Destination] = []
     /// Saves waiting on "New collection…" from a Move to menu: RootView asks for the name, then moves them.
@@ -228,7 +250,9 @@ final class LibraryModel {
             try? library.database.resetSync()
             try? library.database.markAllPending()
             startSync()
+            beginSyncRun()
         } else {
+            endSyncRun()
             sync?.stop()
             sync = nil
             syncStatus = nil

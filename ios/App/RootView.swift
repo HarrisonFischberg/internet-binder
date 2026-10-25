@@ -34,9 +34,13 @@ struct RootView: View {
             .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.bottom, 128)
         }
         .overlay { CelebrationView() }
+        .modifier(WorkCover(host: .root))
         .modifier(NewCollectionPrompt())
         .task { await model.start() }
         .task { IconPicker.retireOldIcons() }
+        #if DEBUG
+        .task { if let kind = UserDefaults.standard.string(forKey: "demoWork") { await model.demoWork(kind) } }
+        #endif
         // Asks once whether "Saved to …" notifications may show (not in UI tests, where the prompt would
         // cover the screen).
         .task {
