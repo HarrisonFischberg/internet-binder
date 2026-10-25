@@ -96,6 +96,12 @@ function syncSection(ctx) {
     show(res && res.sync);
   };
   chrome.storage.local.get(SYNC_KEY).then((r) => show(r[SYNC_KEY]));
+  // A round started elsewhere (the dialog on Home, the five-minute alarm) updates the status here too.
+  const follow = (changes, area) => {
+    if (!status.isConnected) return chrome.storage.onChanged.removeListener(follow);
+    if (area === 'local' && changes[SYNC_KEY] && !input.disabled) show(changes[SYNC_KEY].newValue);
+  };
+  chrome.storage.onChanged.addListener(follow);
   return UI.section('iCloud', 'Keeps your saves, collections, what it learned and your AI settings the same on this Mac and your iPhone. They go to your own iCloud, encrypted: Apple stores them but can’t read them. Your AI key stays on each device.', [
     UI.settingRow('Sync with iCloud', toggle),
     UI.settingRow('Status', [status, retry]),
