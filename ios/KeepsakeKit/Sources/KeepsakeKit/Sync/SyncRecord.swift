@@ -6,7 +6,8 @@ import CryptoKit
 /// Every record of the shared schema's stores becomes one CloudKit record named `<Type>.<key>`, in one
 /// zone of the private database. Of the `kv` store only the two library-wide records travel (learned
 /// words and Instagram import history); the AI undo log stays on the device that made the change.
-/// Settings and the AI key live outside the record stores and never sync.
+/// Settings outside the record stores stay per device, except the AI settings (`aiSettings`); the AI key
+/// never syncs.
 public struct SyncID: Hashable, Sendable, CustomStringConvertible {
     public let store: String
     public let key: String
@@ -18,7 +19,11 @@ public struct SyncID: Hashable, Sendable, CustomStringConvertible {
     }
 
     static let types: [String: String] = ["items": "Item", "collections": "Collection", "goals": "Goal", "checkins": "Checkin", "kv": "Value"]
-    static let syncedValues: Set<String> = ["prefs", "importHistory"]
+    static let syncedValues: Set<String> = ["prefs", "importHistory", "aiSettings"]
+
+    /// AI on or off, provider, model, effort and web search (`keepsake_settings.ai`), kept in the settings
+    /// rather than a record store but synced like one. The key is never part of it.
+    public static let aiSettings = SyncID(store: "kv", key: "aiSettings")!
 
     public static func syncs(store: String, key: String) -> Bool {
         guard types[store] != nil, !key.isEmpty else { return false }

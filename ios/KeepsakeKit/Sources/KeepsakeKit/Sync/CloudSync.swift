@@ -10,11 +10,21 @@ import CloudKit
 /// and the engine picks them up. Changes from iCloud are merged into the store, then `onChange` runs so
 /// the app can reload.
 ///
-/// Not used yet: PR 2 (iPhone) and PR 3 (Safari on the Mac) turn it on.
+/// On the iPhone the app runs it (`SyncPreference`); the Share Extension only sends its own save
+/// straight away (`push`), so two engines never share one saved state.
 public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     public static let containerID = "iCloud.com.rarecreatures.keepsake"
     public static let zoneID = CKRecordZone.ID(zoneName: "Library", ownerName: CKCurrentUserDefaultName)
     static let stateKey = "engine"
+    /// The keychain group the app, its extensions and the Mac app share, for the library key.
+    public static let keychainGroup = "KTV2G3Z883.com.harrisonfischberg.keepsake.shared"
+
+    public enum Status: Equatable, Sendable {
+        case syncing
+        case upToDate(Date)
+        case signedOut
+        case failed(String)
+    }
 
     let db: RecordDatabase
     let keys: LibraryKeys
@@ -28,6 +38,9 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     public var onChange: (@Sendable () -> Void)?
     /// Runs with any error the engine reports that isn't retried on its own.
     public var onError: (@Sendable (Error) -> Void)?
+    /// Runs when the sync status changes, for Settings.
+    public var onStatus: (@Sendable (Status) -> Void)?
+    private var queued: Task<Void, Never>?
 
     public init(database: RecordDatabase, keys: LibraryKeys, container: CKContainer = CKContainer(identifier: CloudSync.containerID)) {
         db = database
@@ -42,8 +55,30 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         let engine = CKSyncEngine(config)
         lock.withLock { self.engine = engine }
         if saved == nil { engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: Self.zoneID))]) }
+        // A burst of writes (an import, Fix with AI on a collection) is queued once it settles.
+        db.onLocalWrite = { [weak self] in self?.noteLocalChangesSoon() }
         retrySealedPictures()
         noteLocalChanges()
+    }
+
+    /// Stops syncing; the library and what's pending stay, so turning it on again carries on.
+    public func stop() {
+        db.onLocalWrite = nil
+        lock.withLock {
+            queued?.cancel()
+            engine = nil
+        }
+    }
+
+    private func noteLocalChangesSoon() {
+        lock.withLock {
+            queued?.cancel()
+            queued = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                self?.noteLocalChanges()
+            }
+        }
     }
 
     /// Hands every pending local change to the engine. Cheap: call it after each write.
@@ -64,6 +99,41 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         try await engine.sendChanges()
     }
 
+    /// Sends a few records now, without the engine (the Share Extension's save, before the sheet closes).
+    /// Whatever doesn't make it stays pending for the app.
+    public static func push(_ ids: [SyncID], database db: RecordDatabase, keys: LibraryKeys,
+                            container: CKContainer = CKContainer(identifier: CloudSync.containerID)) async {
+        var saves: [CKRecord] = [], deletes: [CKRecord.ID] = [], files: [URL] = []
+        var sending: [SyncID: (rev: Int64, record: SyncRecord?)] = [:]
+        for id in ids {
+            switch (try? db.outgoing(id)) ?? nil {
+            case .save(let rec, let rev):
+                guard let made = try? makeRecord(rec, system: (try? db.systemFields(id)) ?? nil, keys: keys) else { continue }
+                saves.append(made.0)
+                if let file = made.1 { files.append(file) }
+                sending[id] = (rev, rec)
+            case .delete(_, let rev):
+                // Never reached iCloud (saved and undone in the same sheet): nothing to delete there.
+                if ((try? db.systemFields(id)) ?? nil) == nil { try? db.markSent(id, rev: rev, record: nil, system: nil); continue }
+                deletes.append(recordID(id))
+                sending[id] = (rev, nil)
+            case nil:
+                continue
+            }
+        }
+        defer { for f in files { try? FileManager.default.removeItem(at: f) } }
+        guard !saves.isEmpty || !deletes.isEmpty else { return }
+        guard let results = try? await container.privateCloudDatabase.modifyRecords(saving: saves, deleting: deletes, savePolicy: .ifServerRecordUnchanged, atomically: false) else { return }
+        for (rid, result) in results.saveResults {
+            guard case .success(let record) = result, let id = SyncID(recordName: rid.recordName), let s = sending[id] else { continue }
+            try? db.markSent(id, rev: s.rev, record: s.record, system: systemFields(record))
+        }
+        for (rid, result) in results.deleteResults {
+            guard case .success = result, let id = SyncID(recordName: rid.recordName), let s = sending[id] else { continue }
+            try? db.markSent(id, rev: s.rev, record: nil, system: nil)
+        }
+    }
+
     static func recordID(_ id: SyncID) -> CKRecord.ID { CKRecord.ID(recordName: id.recordName, zoneID: zoneID) }
 
     // MARK: CKSyncEngineDelegate
@@ -82,6 +152,7 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
                 // The library stays on the device; what iCloud had is forgotten.
                 try? db.resetSyncBase()
                 try? db.setSyncState(Self.stateKey, nil)
+                onStatus?(.signedOut)
             @unknown default:
                 break
             }
@@ -135,6 +206,12 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
             }
             syncEngine.state.add(pendingRecordZoneChanges: retry)
             noteLocalChanges()
+
+        case .willFetchChanges, .willSendChanges:
+            onStatus?(.syncing)
+
+        case .didFetchChanges, .didSendChanges:
+            onStatus?(.upToDate(Date()))
 
         default:
             break

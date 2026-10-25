@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UserNotifications
+import CloudKit
 import WidgetKit
 import KeepsakeKit
 import KeepsakeUI
@@ -28,6 +29,8 @@ final class NoticeDelegate: NSObject, UIApplicationDelegate, UNUserNotificationC
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // Silent pushes from iCloud when another device changes the library (CloudSync's engine listens).
+        application.registerForRemoteNotifications()
         return true
     }
 
@@ -101,6 +104,12 @@ final class LibraryModel {
     /// Imported saves your provider hasn't read yet (needsAi), newest first.
     var aiBacklog: [Save] { index.aiBacklog }
     let library: Library?
+    /// iCloud sync (Settings → iCloud), running while it's on.
+    private(set) var sync: CloudSync?
+    private(set) var syncOn = SyncPreference.isOn
+    private(set) var syncStatus: CloudSync.Status?
+    /// The one-time question for a device that already has a library when sync arrives.
+    var askToSync = false
 
     struct Toast: Identifiable, Equatable {
         let id = UUID()
@@ -158,6 +167,7 @@ final class LibraryModel {
                 finishSaves()
                 await refreshAIReady()
                 await loadDestinations()
+                await decideSync()
             } catch {
                 problem = error.localizedDescription
             }
@@ -188,6 +198,74 @@ final class LibraryModel {
         return (try? JSONSerialization.data(withJSONObject: ["format": "keepsake-export", "schemaVersion": 3, "collections": [:], "items": items])) ?? Data()
     }
     #endif
+
+    // MARK: iCloud sync
+
+    /// Starts sync if it's on. The first time: on by itself for a new library, asked once for one
+    /// that already has saves. UI tests (a library of their own) never sync.
+    func decideSync() async {
+        guard let library, ProcessInfo.processInfo.environment["KEEPSAKE_DB"] == nil else { return }
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "noSync") { return }
+        #endif
+        switch SyncPreference.choice {
+        case nil:
+            if (try? library.saves().isEmpty) ?? true { setSync(true) } else { askToSync = true }
+        case true?:
+            startSync()
+        case false?:
+            break
+        }
+    }
+
+    func setSync(_ on: Bool) {
+        guard let library else { return }
+        SyncPreference.choice = on
+        syncOn = on
+        if on {
+            // Everything goes up (or merges with what iCloud already has) on the first sync. Changes made
+            // while sync was off are dropped first, so a library erased then would not erase iCloud.
+            try? library.database.resetSync()
+            try? library.database.markAllPending()
+            startSync()
+        } else {
+            sync?.stop()
+            sync = nil
+            syncStatus = nil
+            try? library.database.resetSync()
+        }
+    }
+
+    private func startSync() {
+        guard let library, sync == nil else { return }
+        let s = CloudSync(database: library.database, keys: LibraryKeys(store: KeychainLibraryKeys(accessGroup: CloudSync.keychainGroup)))
+        s.onChange = { Task { @MainActor [weak self] in self?.syncChanged() } }
+        s.onStatus = { status in Task { @MainActor [weak self] in self?.syncStatus = status } }
+        s.onError = { error in Task { @MainActor [weak self] in self?.syncStatus = .failed(error.localizedDescription) } }
+        sync = s
+        s.start()
+        Task { await checkAccount() }
+    }
+
+    /// Fetches and sends now (the app coming to the front).
+    func syncNow() {
+        guard let sync else { return }
+        sync.noteLocalChanges()
+        Task.detached { try? await sync.syncNow() }
+    }
+
+    private func checkAccount() async {
+        let status = try? await CKContainer(identifier: CloudSync.containerID).accountStatus()
+        if status == .noAccount || status == .restricted { syncStatus = .signedOut }
+    }
+
+    /// Records from another device landed: lists, collections, AI settings and widgets catch up.
+    private func syncChanged() {
+        refresh()
+        collectionsChanged += 1
+        widgetsChanged()
+        Task { await refreshAIReady() }
+    }
 
     /// Picks up saves made in the Share Extension while the app was in the background. Read off the main
     /// thread, so a tap that calls it never waits on the whole library.

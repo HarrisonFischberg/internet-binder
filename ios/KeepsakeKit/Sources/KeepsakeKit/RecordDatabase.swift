@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 /// Internet Binder's local store on Apple devices: SQLite (GRDB, WAL) in the App Group container, shared by
 /// the app, the Share Extension and the widgets.
@@ -12,6 +13,15 @@ import GRDB
 public final class RecordDatabase: @unchecked Sendable {
     public let pool: DatabasePool
     let secrets: SecretStore
+    private let writeHook = OSAllocatedUnfairLock<(@Sendable () -> Void)?>(initialState: nil)
+
+    /// Runs after each write the shared code makes that iCloud sync carries (CloudSync queues a send).
+    public var onLocalWrite: (@Sendable () -> Void)? {
+        get { writeHook.withLock { $0 } }
+        set { writeHook.withLock { $0 = newValue } }
+    }
+
+    func wroteLocally() { onLocalWrite?() }
 
     /// The stores of the shared schema (keepsake/src/shared/db.js) and the columns copied out of each body.
     struct StoreSpec {
@@ -39,6 +49,7 @@ public final class RecordDatabase: @unchecked Sendable {
 
     /// Per-device settings keys that are not library content (storage.js `KEYS.meta`, `KEYS.settings`).
     static let secretsKey = "keepsake_secrets"
+    static let settingsKey = "keepsake_settings"
 
     public init(path: String, secrets: SecretStore = KeychainSecrets()) throws {
         var config = Configuration()
@@ -170,6 +181,7 @@ public final class RecordDatabase: @unchecked Sendable {
         try pool.write { db in
             for (i, body) in bodies.enumerated() { try upsert(db, s, store: store, body: body, fact: facts?[i]) }
         }
+        wroteLocally()
     }
 
     /// Saves not in the Trash, newest first, each without the pictures stored inside it (`Library.listBody`),
@@ -204,12 +216,14 @@ public final class RecordDatabase: @unchecked Sendable {
         try pool.write { db in
             for key in keys { try delete(db, s, store: store, key: key) }
         }
+        wroteLocally()
     }
 
     /// Compare-and-swap for read-modify-write: each op is (key, expected body or nil, next body or nil).
     /// Returns false (and writes nothing) if any record no longer matches what was read.
     public func swap(_ store: String, ops: [(key: String, expected: String?, next: String?, fact: String?)]) throws -> Bool {
         let s = try spec(store)
+        defer { wroteLocally() }
         return try pool.write { db in
             for op in ops {
                 let current = try String.fetchOne(db, sql: "SELECT body FROM \"\(s.table)\" WHERE key = ?", arguments: [op.key])
@@ -230,6 +244,7 @@ public final class RecordDatabase: @unchecked Sendable {
                 try db.execute(sql: "DELETE FROM \"\(s.table)\"")
             }
         }
+        wroteLocally()
     }
 
     func upsert(_ db: Database, _ s: StoreSpec, store: String, body: String, fact: String? = nil, track: Bool = true) throws {
@@ -278,13 +293,20 @@ public final class RecordDatabase: @unchecked Sendable {
     }
 
     public func setSettings(_ values: [String: Any]) throws {
-        try pool.write { db in
+        let aiChanged = try pool.write { db in
+            var aiChanged = false
             for (k, v) in values {
                 let json = String(decoding: try JSONSerialization.data(withJSONObject: v, options: .fragmentsAllowed), as: UTF8.self)
                 if k == Self.secretsKey { secrets.write(json); continue }
+                if k == Self.settingsKey, try Self.aiSettingsChanged(db, to: v) {
+                    try Self.markPending(db, store: SyncID.aiSettings.store, key: SyncID.aiSettings.key)
+                    aiChanged = true
+                }
                 try db.execute(sql: "INSERT OR REPLACE INTO setting (key, value) VALUES (?, ?)", arguments: [k, json])
             }
+            return aiChanged
         }
+        if aiChanged { wroteLocally() }
     }
 
     public func removeSettings(_ keys: [String]) throws {

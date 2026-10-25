@@ -166,7 +166,23 @@ final class ShareState {
         Haptic.undo()
         Task {
             try? await library.undoSave(save.id)
+            await sendToICloud(save.id)
             finish()
+        }
+    }
+
+    /// With iCloud sync on, the save (and what the sorter learned from it) goes up before the sheet
+    /// closes, so it's on the Mac in seconds. Capped at a few seconds; what doesn't make it, the app sends.
+    private func sendToICloud(_ id: String) async {
+        guard SyncPreference.isOn, let library, let item = SyncID(store: "items", key: id) else { return }
+        let ids = [item, SyncID(store: "kv", key: "prefs"), SyncID(store: "kv", key: "importHistory")].compactMap { $0 }
+        let db = library.database
+        let keys = LibraryKeys(store: KeychainLibraryKeys(accessGroup: CloudSync.keychainGroup))
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await CloudSync.push(ids, database: db, keys: keys) }
+            group.addTask { try? await Task.sleep(for: .seconds(4)) }
+            await group.next()
+            group.cancelAll()
         }
     }
 
@@ -178,6 +194,7 @@ final class ShareState {
             // Kept where it went: that's a choice the sorter learns from (a save you moved already taught it).
             if let library, case .saved = phase { try? await library.confirmFiling(save.id) }
             if case .saved = phase { await SaveNotice.post(id: save.id, title: save.title, destination: destinationLabel) }
+            await sendToICloud(save.id)
             finish()
         }
     }
