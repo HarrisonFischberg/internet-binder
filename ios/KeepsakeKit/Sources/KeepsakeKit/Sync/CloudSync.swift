@@ -170,6 +170,8 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
                 try? db.applyRemoteDeletion(id)
                 changed = true
             }
+            // Two libraries meeting for the first time: one Roadtrips, one save per link.
+            if changed { do { try db.mergeDuplicates() } catch { onError?(error) } }
             noteLocalChanges()
             if changed { onChange?() }
 
