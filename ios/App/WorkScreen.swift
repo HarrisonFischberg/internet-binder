@@ -16,7 +16,7 @@ struct WorkLine: Equatable, Identifiable {
 extension LibraryModel.AIRun {
     mutating func note(_ line: WorkLine) {
         recent.insert(line, at: 0)
-        if recent.count > 4 { recent.removeLast(recent.count - 4) }
+        if recent.count > 3 { recent.removeLast(recent.count - 3) }
     }
 }
 
@@ -113,6 +113,17 @@ final class BackgroundWork {
     }
 }
 
+extension LibraryModel {
+    /// The progress screen's last page for an AI run: All done, Stopped (you, or a bad key), or Paused (iOS).
+    func endWork(_ run: AIRun, summary: String, rest: String) {
+        let title = run.cutOff ? "Paused" : run.stopping ? "Stopped" : "All done"
+        var text = summary
+        if run.stopping || run.cutOff { text += " " + rest }
+        if let shown = toast?.text, shown.hasPrefix("AI couldn't") || shown.contains("busy right now") { text = shown }
+        workEnd = WorkEnd(title: title, text: text, undo: toast?.undo)
+    }
+}
+
 // MARK: iCloud's first copy
 
 extension LibraryModel {
@@ -121,6 +132,7 @@ extension LibraryModel {
     func beginSyncRun() {
         guard let library, syncRun == nil, let n = try? library.database.pendingCount(), n > 0 else { return }
         syncRun = SyncRun(total: n, left: n)
+        workEnd = nil
         // A small library is in iCloud before the screen would finish opening.
         if n >= 20 { workShowing = true }
         BackgroundWork.shared.begin("sync", title: "Copying your library to iCloud", subtitle: "0 of \(n)", total: n) { [weak self] in
@@ -147,6 +159,7 @@ extension LibraryModel {
                 endSyncRun()
                 Haptic.settled()
                 show("Your library is in iCloud")
+                workEnd = WorkEnd(title: "All done", text: "Your library is in iCloud. Changes from now on go up by themselves.")
                 return
             }
             switch syncStatus {
@@ -154,10 +167,12 @@ extension LibraryModel {
                 endSyncRun()
                 Haptic.refused()
                 show("iCloud stopped: \(message)")
+                workEnd = WorkEnd(title: "Stopped", text: "iCloud stopped: \(message). What's left goes up when it can.")
                 return
             case .signedOut?:
                 endSyncRun()
                 show("Sign in to iCloud in the Settings app to sync")
+                workEnd = WorkEnd(title: "Stopped", text: "Sign in to iCloud in the Settings app, and the rest goes up then.")
                 return
             default:
                 break
@@ -193,7 +208,7 @@ struct WorkScreen: View {
 
     var body: some View {
         ZStack {
-            TableBackground()
+            TableBackground().ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 28) {
                     art.padding(.top, typeSize.isAccessibilitySize ? 12 : 48)
@@ -209,7 +224,7 @@ struct WorkScreen: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
         .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: phase)
         .onChange(of: phase) { _, now in
-            if now == .finished { UIAccessibility.post(notification: .announcement, argument: model.toast?.text ?? "Done") }
+            if now == .finished { UIAccessibility.post(notification: .announcement, argument: "\(title). \(subtitle)") }
         }
     }
 
@@ -219,7 +234,7 @@ struct WorkScreen: View {
         switch phase {
         case .ai: model.aiRun?.imported == true ? "Reading your imports" : model.aiRun?.total == model.saves.count ? "Fixing your library" : "Fixing with AI"
         case .sync: "Copying to iCloud"
-        case .finished: "All done"
+        case .finished: model.workEnd?.title ?? "All done"
         }
     }
 
@@ -234,7 +249,7 @@ struct WorkScreen: View {
         case .sync:
             return "Encrypted on this iPhone first, so Apple stores it but can't read it."
         case .finished:
-            return model.toast?.text ?? "Everything it was doing is finished."
+            return model.workEnd?.text ?? "Everything it was doing is finished."
         }
     }
 
@@ -260,7 +275,8 @@ struct WorkScreen: View {
         case .sync:
             Badge(symbol: "icloud.and.arrow.up", busy: true).accessibilityHidden(true)
         case .finished:
-            Badge(symbol: "checkmark", busy: false).accessibilityHidden(true)
+            Badge(symbol: model.workEnd?.title == "Paused" ? "pause" : model.workEnd?.title == "Stopped" ? "stop" : "checkmark", busy: false)
+                .accessibilityHidden(true)
         }
     }
 
@@ -286,7 +302,7 @@ struct WorkScreen: View {
     /// "About 12 min left", once there's enough to go on.
     static func timeLeft(done: Int, total: Int, since: Date) -> String {
         let elapsed = Date.now.timeIntervalSince(since)
-        guard done >= 2, elapsed > 8, total > done else { return total > done ? "Working out time left…" : "" }
+        guard done >= 2, elapsed > 8, total > done else { return "" }
         let left = elapsed / Double(done) * Double(total - done)
         if left < 60 { return "Less than a minute left" }
         let minutes = Int((left / 60).rounded())
@@ -305,7 +321,7 @@ struct WorkScreen: View {
                     Spacer(minLength: 0)
                 }
                 .frame(minHeight: 36)
-                .opacity(1 - Double(i) * 0.2)
+                .opacity(max(0.65, 1 - Double(i) * 0.175))
                 .transition(reduce ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
         }
@@ -320,16 +336,21 @@ struct WorkScreen: View {
         VStack(spacing: 6) {
             switch phase {
             case .finished:
-                if let undo = model.toast?.undo {
-                    Button("Undo") {
+                if let undo = model.workEnd?.undo {
+                    Button("Undo all") {
                         Haptic.undo()
                         model.toast = nil
+                        model.workEnd = nil
                         model.workShowing = false
                         Task { await undo() }
                     }
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 44)
                 }
-                PrimarySlab("Done", symbol: "checkmark") { model.workShowing = false }
+                PrimarySlab("Done", symbol: "checkmark") {
+                    // The same ending was also the toast underneath: it's been read here.
+                    model.toast = nil
+                    model.workShowing = false
+                }
                     .accessibilityIdentifier("workDone")
             case .ai, .sync:
                 Text(note).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.center)
@@ -346,7 +367,13 @@ struct WorkScreen: View {
         }
         .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
         .frame(maxWidth: 560).frame(maxWidth: .infinity)
-        .background { TablePatch().ignoresSafeArea() }
+        .background {
+            // Fades in over the last few points, so a list scrolling under it isn't cut along a hard edge.
+            TablePatch()
+                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.2)], startPoint: .top, endPoint: .bottom))
+                .padding(.top, -28)
+                .ignoresSafeArea()
+        }
     }
 
     private var note: String {
@@ -368,7 +395,7 @@ private struct WorkBar: View {
 
     var body: some View {
         GeometryReader { g in
-            let w = max(14, g.size.width * min(max(fraction, 0), 1))
+            let w = g.size.width * min(max(fraction, 0), 1)
             ZStack(alignment: .leading) {
                 Capsule().fill(t.well)
                 Capsule().fill(t.accent).frame(width: w)
@@ -410,6 +437,7 @@ private struct CardFan: View {
                 let offset = Double(i) - Double(shown.count - 1) / 2
                 SaveImage(save, symbolSize: 34)
                     .frame(width: 120, height: 150)
+                    .background(t.paper)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(t.paper, lineWidth: 4) }
                     .shadow(color: t.shadow.opacity(0.35), radius: 12, y: 6)
@@ -424,7 +452,7 @@ private struct CardFan: View {
                 .background(t.accent, in: Circle())
                 .overlay { Circle().strokeBorder(t.paper, lineWidth: 3) }
                 .symbolEffect(.pulse, options: .repeating, isActive: !reduce)
-                .offset(x: 70, y: 70)
+                .offset(x: 86, y: 80)
         }
         .frame(height: 200)
         .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: shown.map(\.id))

@@ -213,6 +213,7 @@ extension LibraryModel {
     func fixWithAI(_ saves: [Save], screen: Bool = false) async {
         guard let lib = library, !saves.isEmpty, aiRun == nil else { return }
         aiRun = AIRun(done: 0, total: saves.count)
+        workEnd = nil
         if screen { workShowing = true }
         let titles = Dictionary(saves.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
         if saves.count > 1 {
@@ -224,6 +225,13 @@ extension LibraryModel {
         defer { aiRun = nil }
         var changed = 0, products = 0
         var filed: [AIFixReport.Filed] = []
+        // Runs before aiRun is cleared: the progress screen's ending, from the toast below.
+        defer {
+            if let run = aiRun, run.total > 1 {
+                let did = "Checked \(run.done) of \(run.total)" + (changed > 0 ? ", updated \(changed)" : "") + (filed.isEmpty ? "." : ", filed \(filed.count) into collections.")
+                endWork(run, summary: did, rest: run.cutOff ? "Home offers to finish the rest." : "The rest are as they were.")
+            }
+        }
         var logIds: [String] = []
         var error = ""
         let ids = saves.map(\.id)
@@ -257,7 +265,7 @@ extension LibraryModel {
             }
             refresh()
             // A bad key or no credit: every other save would fail the same way.
-            if error.range(of: #"\((401|403|429)\)|API key|base URL"#, options: .regularExpression) != nil { break }
+            if error.range(of: #"\((401|403|429)\)|API key|base URL"#, options: .regularExpression) != nil { aiRun?.stopping = true; break }
         }
         // Cut off by iOS: the rest waits for "Finish fixing". Finished, stopped or failed: nothing waits.
         if aiRun?.cutOff != true { aiFixLeft = [] }
@@ -292,6 +300,7 @@ extension LibraryModel {
     func runAIOnImported(_ saves: [Save], screen: Bool = true) async {
         guard let lib = library, !saves.isEmpty, aiRun == nil else { return }
         aiRun = AIRun(done: 0, total: saves.count, imported: true)
+        workEnd = nil
         if screen { workShowing = true }
         if saves.count > 1 {
             // What iOS cuts off stays waiting (needsAi), so running it again carries on.
@@ -302,6 +311,11 @@ extension LibraryModel {
         }
         defer { aiRun = nil; BackgroundWork.shared.end("imported", success: true) }
         var changed = 0, failed = 0, busy = 0, readCount = 0
+        defer {
+            if let run = aiRun, run.total > 1 {
+                endWork(run, summary: "Read \(readCount) of \(run.total)" + (changed > 0 ? ", updated \(changed)." : "."), rest: "The rest stay waiting: run it again to carry on.")
+            }
+        }
         var error = ""
         for save in saves {
             if aiRun?.stopping == true { break }

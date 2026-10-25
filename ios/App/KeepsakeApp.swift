@@ -112,6 +112,14 @@ final class LibraryModel {
         let startedAt = Date()
         var done: Int { max(0, total - left) }
     }
+    /// How the last long run ended, for the progress screen's last page (Done).
+    var workEnd: WorkEnd?
+    struct WorkEnd: Equatable {
+        let title: String
+        let text: String
+        var undo: (@MainActor () async -> Void)?
+        static func == (a: WorkEnd, b: WorkEnd) -> Bool { a.title == b.title && a.text == b.text }
+    }
     /// The progress screen for a long run (Fix everything, imports, iCloud's first copy) is up.
     var workShowing = false
     /// Which screen presents it: Settings while its sheet is open (a cover can't go over a sheet from below).
