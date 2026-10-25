@@ -114,6 +114,9 @@
     return purgeTrash(opts);
   };
 
+  const learnFromLibrary = store.learnFromLibrary.bind(store);
+  store.learnFromLibrary = () => learnFromLibrary(listItems());
+
   // A save from the Share Sheet: Chrome's capture rules (src/shared/capture.js), same as the toolbar.
   // The after-save fill-in (AI, Lookups) isn't wired on iOS yet, so its hooks do nothing.
   globalThis.capture = (product, options) => KeepsakeCore.capture.saveCapture(store, product, options || {});

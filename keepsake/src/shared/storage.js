@@ -18,7 +18,7 @@
 import { uid, nowIso, sanitizeText, sanitizeMultiline, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer, decodeEntities, hasEntities } from './util.js';
 import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
-import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, learnFromConfirmation, forgetCollection } from './categorizer.js';
+import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, learnFromConfirmation, learnFromSaves, forgetCollection } from './categorizer.js';
 import { memoryRecordBackend, STORES } from './db.js';
 import { isKind, kindOf, sanitizeDetails, recipeOrWorkout, needsCollection, STATUSES } from './kinds.js';
 import { makeGoal, makeCheckin } from './goals.js';
@@ -864,6 +864,18 @@ export function createStore(kv, db = memoryRecordBackend()) {
       await db.update('items', [id], (i) => (i ? { ...i, filingConfirmed: true } : undefined));
       await kvUpdate('prefs', emptyPrefs(), (prefs) => learnFromConfirmation(item, item.collectionId, { ...emptyPrefs(), ...prefs }));
       return true;
+    },
+
+    // Once per library: every save already in a collection teaches the sorter a little (as a kept
+    // suggestion), so it knows your collections from the start rather than only from new choices.
+    // Saves you moved taught it when you moved them; samples aren't yours. `items` lets iOS pass its
+    // picture-free list (reading every save whole is more memory than it has to spare).
+    async learnFromLibrary(items = null) {
+      const prefs = { ...emptyPrefs(), ...((await kvGet('prefs', null)) || {}) };
+      if (prefs.libraryLearnedAt) return 0;
+      const saves = (items || (await db.all('items'))).filter((i) => live(i) && i.collectionId && i.title && !i.needsReview && !i.filingConfirmed && !['manual', 'sample'].includes(i.categorizationSource));
+      await kvUpdate('prefs', emptyPrefs(), (p) => ({ ...learnFromSaves(saves, { ...emptyPrefs(), ...p }), libraryLearnedAt: nowIso() }));
+      return saves.length;
     },
 
     // -- prefs & settings --

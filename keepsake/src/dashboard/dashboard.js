@@ -90,6 +90,8 @@ async function boot() {
   // No alarms: the Trash is emptied of anything older than 30 days whenever the dashboard opens,
   // and saves still "finishing details" (worker stopped mid-way) are picked up again.
   await store.purgeTrash().catch(() => 0);
+  // Once: what you'd already filed teaches the sorter.
+  await store.learnFromLibrary().catch(() => 0);
   send({ type: MSG.ENRICH_PENDING });
   await reload();
   applyTheme();

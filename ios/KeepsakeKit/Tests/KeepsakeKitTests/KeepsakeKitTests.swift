@@ -409,6 +409,16 @@ struct ViewsTests {
         #expect(!(prefs["learnedKeywords"] as? [String: Any] ?? [:]).isEmpty, "moving out of Review teaches the categorizer")
     }
 
+    // Once per library, the saves already filed teach the sorter; read through the picture-free list.
+    @Test func filedLibraryTeachesTheSorterOnce() async throws {
+        let lib = try await imported()
+        let taught = try await lib.core.call("store.learnFromLibrary") as? Int ?? -1
+        #expect(taught >= 0)
+        #expect(try await lib.core.call("store.learnFromLibrary") as? Int == 0, "only once")
+        let prefs = try await lib.core.call("store.getPrefs") as! [String: Any]
+        #expect(prefs["libraryLearnedAt"] is String)
+    }
+
     // The share sheet's path: one move teaches it, the next similar save lands there, and Done on
     // the card (kept where it went) teaches it a little more, once.
     @Test func shareSheetChoicesTeachTheSorter() async throws {
