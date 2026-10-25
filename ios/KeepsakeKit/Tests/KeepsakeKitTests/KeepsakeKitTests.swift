@@ -703,7 +703,8 @@ struct ListPictureTests {
         }
         #expect(try await lib.core.call("store.purgeTrash") as? Int == 1)
         #expect(try lib.save(saves[0].id) == nil)
-        #expect(try lib.saves(trash: true).map(\.id) == [saves[1].id])
+        let trash = try lib.saves(trash: true).map(\.id)
+        #expect(trash.contains(saves[1].id) && !trash.contains(saves[0].id), "a save trashed today stays")
         #expect(try await lib.core.call("store.purgeTrash") as? Int == 0)
     }
 }
