@@ -117,8 +117,10 @@ final class LibraryModel {
     struct WorkEnd: Equatable {
         let title: String
         let text: String
+        /// The last few things it did, shown under the ending.
+        var lines: [WorkLine] = []
         var undo: (@MainActor () async -> Void)?
-        static func == (a: WorkEnd, b: WorkEnd) -> Bool { a.title == b.title && a.text == b.text }
+        static func == (a: WorkEnd, b: WorkEnd) -> Bool { a.title == b.title && a.text == b.text && a.lines == b.lines }
     }
     /// The progress screen for a long run (Fix everything, imports, iCloud's first copy) is up.
     var workShowing = false

@@ -6,10 +6,10 @@ import XCTest
 final class WorkScreenTests: XCTestCase {
     let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
 
-    private func launch(_ kind: String, theme: String = "pantry") -> XCUIApplication {
+    private func launch(_ kind: String, theme: String = "pantry", mode: String = "light") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["KEEPSAKE_DB"] = "work-\(UUID().uuidString)"
-        app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-demoWork", kind]
+        app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-ksMode", mode, "-demoWork", kind]
         app.launch()
         return app
     }
@@ -33,6 +33,8 @@ final class WorkScreenTests: XCTestCase {
         XCTAssertTrue(app.buttons["workStop"].waitForExistence(timeout: 5), "tapping the bar opens the screen again")
         app.buttons["workStop"].tap()
         XCTAssertTrue(app.buttons["workDone"].waitForExistence(timeout: 10), "a stopped run ends on Done")
+        XCTAssertTrue(app.staticTexts["Stopped"].waitForExistence(timeout: 3), "a stopped run says so, not All done")
+        sleep(1)
         try shoot("work-ai-done")
         app.buttons["workDone"].tap()
         XCTAssertTrue(app.buttons["workDone"].waitForNonExistence(timeout: 3), "Done closes the screen")
@@ -45,6 +47,8 @@ final class WorkScreenTests: XCTestCase {
         try shoot("work-sync-pantry")
         XCTAssertFalse(app.buttons["workStop"].exists, "iCloud's copy has no Stop: Settings turns sync off")
         XCTAssertTrue(app.buttons["workDone"].waitForExistence(timeout: 90), "ends on Done when everything is sent")
+        XCTAssertTrue(app.staticTexts["All done"].waitForExistence(timeout: 3))
+        sleep(1)
         try shoot("work-sync-done")
     }
 
@@ -52,15 +56,13 @@ final class WorkScreenTests: XCTestCase {
     func testThemes() throws {
         guard ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] != nil else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
         for theme in ["pantry", "notebook", "atlas", "swiss"] {
-            for mode in [XCUIDevice.Appearance.light, .dark] {
-                XCUIDevice.shared.appearance = mode
-                let app = launch("ai", theme: theme)
+            for mode in ["light", "dark"] {
+                let app = launch("ai", theme: theme, mode: mode)
                 XCTAssertTrue(app.buttons["workInBackground"].waitForExistence(timeout: 15))
                 sleep(5)
-                try shoot("work-ai-\(theme)-\(mode == .dark ? "dark" : "light")")
+                try shoot("work-ai-\(theme)-\(mode)")
                 app.terminate()
             }
         }
-        XCUIDevice.shared.appearance = .light
     }
 }

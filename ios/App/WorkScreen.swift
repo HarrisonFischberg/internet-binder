@@ -120,7 +120,7 @@ extension LibraryModel {
         var text = summary
         if run.stopping || run.cutOff { text += " " + rest }
         if let shown = toast?.text, shown.hasPrefix("AI couldn't") || shown.contains("busy right now") { text = shown }
-        workEnd = WorkEnd(title: title, text: text, undo: toast?.undo)
+        workEnd = WorkEnd(title: title, text: text, lines: run.recent, undo: toast?.undo)
     }
 }
 
@@ -214,14 +214,17 @@ struct WorkScreen: View {
                     art.padding(.top, typeSize.isAccessibilitySize ? 12 : 48)
                     heading
                     if phase != .finished { progress }
-                    if let run = model.aiRun, !run.recent.isEmpty { recent(run.recent) }
+                    if let run = model.aiRun, !run.recent.isEmpty { recent(run.recent, heading: "Just now") }
+                    if phase == .finished, let lines = model.workEnd?.lines, !lines.isEmpty { recent(lines, heading: "Last ones") }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 24)
                 .frame(maxWidth: 560).frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { actions }
+        // A bar, so the list scrolling under the buttons softens into the page (the scroll edge effect).
+        .safeAreaBar(edge: .bottom, spacing: 0) { actions }
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: phase)
         .onChange(of: phase) { _, now in
             if now == .finished { UIAccessibility.post(notification: .announcement, argument: "\(title). \(subtitle)") }
@@ -311,9 +314,9 @@ struct WorkScreen: View {
         return "About \(hours.formatted(.number.precision(.fractionLength(0...1)))) hr left"
     }
 
-    private func recent(_ lines: [WorkLine]) -> some View {
+    private func recent(_ lines: [WorkLine], heading: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Just now").font(KSFont.label).foregroundStyle(t.inkMuted).padding(.bottom, 8)
+            Text(heading).font(KSFont.label).foregroundStyle(t.inkMuted).padding(.bottom, 8)
             ForEach(Array(lines.enumerated()), id: \.element.id) { i, line in
                 HStack(spacing: 10) {
                     Image(systemName: line.symbol).font(.footnote.weight(.bold)).foregroundStyle(t.accent).frame(width: 20)
@@ -367,13 +370,6 @@ struct WorkScreen: View {
         }
         .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
         .frame(maxWidth: 560).frame(maxWidth: .infinity)
-        .background {
-            // Fades in over the last few points, so a list scrolling under it isn't cut along a hard edge.
-            TablePatch()
-                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.2)], startPoint: .top, endPoint: .bottom))
-                .padding(.top, -28)
-                .ignoresSafeArea()
-        }
     }
 
     private var note: String {
@@ -475,7 +471,8 @@ private struct Badge: View {
             .font(.system(size: 56, weight: .semibold))
             .foregroundStyle(t.onAccent)
             .contentTransition(.symbolEffect(.replace))
-            .symbolEffect(.breathe, options: .repeating, isActive: busy && !reduce)
+            // Moves rather than dims, so the glyph stays legible on every accent.
+            .symbolEffect(.bounce.up, options: .repeating.speed(0.4), isActive: busy && !reduce)
             .frame(width: 150, height: 150)
             .background(t.accent, in: Circle())
             .overlay { Circle().strokeBorder(t.line, lineWidth: t.outline) }
@@ -500,6 +497,7 @@ extension LibraryModel {
             }
             syncRun = nil
             show("Your library is in iCloud")
+            workEnd = WorkEnd(title: "All done", text: "Your library is in iCloud. Changes from now on go up by themselves.")
             return
         }
         aiRun = AIRun(done: 0, total: 240)
@@ -513,8 +511,9 @@ extension LibraryModel {
             }
             aiRun?.done += chunk.count
         }
-        aiRun = nil
         show("AI updated 18 of 240")
+        if let run = aiRun { endWork(run, summary: "Checked \(run.done) of \(run.total), updated 4, filed 2 into collections.", rest: "The rest are as they were.") }
+        aiRun = nil
     }
 }
 #endif
