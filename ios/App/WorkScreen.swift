@@ -189,7 +189,8 @@ struct WorkCover: ViewModifier {
     @Environment(LibraryModel.self) private var model
     func body(content: Content) -> some View {
         content.fullScreenCover(isPresented: Binding(get: { model.workShowing && model.workHost == host }, set: { model.workShowing = $0 })) {
-            WorkScreen()
+            // A page of its own size: the app window's frame stops short of the cover's bottom edge.
+            WorkScreen().environment(\.ksTableFrame, nil)
         }
     }
 }
@@ -211,11 +212,16 @@ struct WorkScreen: View {
             TableBackground().ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 28) {
-                    art.padding(.top, typeSize.isAccessibilitySize ? 12 : 48)
+                    // An ending with nothing listed under it sits lower, nearer the middle of the screen.
+                    art.padding(.top, typeSize.isAccessibilitySize ? 12 : phase == .finished && (model.workEnd?.lines.isEmpty ?? true) ? 120 : 48)
                     heading
                     if phase != .finished { progress }
                     if let run = model.aiRun, !run.recent.isEmpty { recent(run.recent, heading: "Just now") }
                     if phase == .finished, let lines = model.workEnd?.lines, !lines.isEmpty { recent(lines, heading: "Last ones") }
+                    if phase != .finished {
+                        Text(note).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 24)
                 .frame(maxWidth: 560).frame(maxWidth: .infinity)
@@ -356,8 +362,6 @@ struct WorkScreen: View {
                 }
                     .accessibilityIdentifier("workDone")
             case .ai, .sync:
-                Text(note).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity).padding(.bottom, 6)
                 PrimarySlab("Work in background", symbol: "arrow.down.right.and.arrow.up.left") { model.workShowing = false }
                     .accessibilityIdentifier("workInBackground")
                     .accessibilityHint("Closes this screen. It keeps going, even if you leave the app.")
