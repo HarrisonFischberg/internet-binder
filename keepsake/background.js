@@ -831,7 +831,7 @@ async function handleMessage(msg, sender) {
     }
     case MSG.SAVE_ITEM: {
       if (!msg.product || typeof msg.product !== 'object') throw new Error('Nothing to save.');
-      return saveProduct(msg.product, { collectionId: msg.collectionId || null, force: !!msg.force, source: msg.source || (sender.tab ? 'floating' : 'toolbar'), classification: msg.classification || null, note: msg.note || '', learn: msg.learn === 'strong' ? 'strong' : 'light', instant: !!msg.instant, deferAi: !!msg.deferAi });
+      return saveProduct(msg.product, { collectionId: msg.collectionId || null, force: !!msg.force, source: msg.source || (sender.tab ? 'floating' : 'toolbar'), classification: msg.classification || null, note: msg.note || '', learn: msg.learn === 'strong' ? 'strong' : 'light', instant: !!msg.instant, deferAi: !!msg.deferAi, confirmed: !!msg.confirmed });
     }
     case MSG.UPDATE_ITEM: {
       const item = await store.getItem(msg.itemId);

@@ -206,7 +206,8 @@ export function classifyCapture(product, kind, details, ctx) {
 // AUTO_FILE_CONFIDENCE goes to Review with that pick as the suggestion, like the toolbar.
 // deferAi: part of a bulk import (open tabs). Nothing goes to your AI provider now; the save is flagged
 // (needsAi) for Run AI on imported saves, which you start yourself.
-export async function saveCapture(store, rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false, deferAi = false } = {}, { enrich = () => {}, fill = () => {} } = {}) {
+// confirmed: you were shown where it goes (the toolbar's "Where does it live?") and saved it there.
+export async function saveCapture(store, rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false, deferAi = false, confirmed = false } = {}, { enrich = () => {}, fill = () => {} } = {}) {
   const product = normalizeProduct(rawProduct);
   if (!force) {
     const existing = await store.findByUrl(product.canonicalUrl || product.url);
@@ -264,6 +265,9 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
     // Overriding the suggestion is a correction worth learning from.
     const prefs2 = await store.getPrefs();
     await store.setPrefs(learnFromCorrection(item, classification.isInbox ? null : classification.collectionId, targetId, prefs2, { strong: learn === 'strong' }));
+  } else if (confirmed && learn && targetId && !userChose) {
+    // You were shown where it would go and saved it there.
+    await store.confirmFiling(item.id);
   }
   if (collection && !collection.coverImage && item.image) {
     await store.updateCollection(collection.id, { coverImage: item.image });

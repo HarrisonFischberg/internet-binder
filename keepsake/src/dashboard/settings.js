@@ -5,7 +5,7 @@ import { iconPath } from '../toolbar/icon.js';
 import { MSG } from '../shared/messages.js';
 import { el, clear, pluralize } from '../shared/util.js';
 import { originPattern, hostFromPattern } from '../shared/url.js';
-import { emptyPrefs } from '../shared/categorizer.js';
+import { emptyPrefs, learnedSummary } from '../shared/categorizer.js';
 import { PROVIDERS, MODELS, EFFORTS, providerConfig, originFor, describePayload, analyzePost, testConnection, findProductOnline, supportsWebLookup } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
@@ -266,20 +266,12 @@ function categorizationSection(ctx) {
     box.append(UI.settingRow('Create default collections on demand', UI.switchInput({ checked: prefs.autoCreateCollections !== false, onChange: (v) => ctx.store.updatePrefs({ autoCreateCollections: v }), label: 'Create default collections on demand' }), 'If you deleted a default collection and a matching item shows up later, Internet Binder can recreate it instead of leaving the item uncategorized.'));
 
     // Learned preferences
-    const learned = Object.entries(prefs.learnedKeywords || {});
-    const top = learned.map(([term, entry]) => {
-      const [cid, w] = Object.entries(entry).sort((a, b) => b[1] - a[1])[0] || [];
-      return { term, cid, w: Number(w) || 0 };
-    }).filter((x) => x.cid).sort((a, b) => b.w - a.w).slice(0, 25);
-    const retailers = Object.entries(prefs.retailerPrefs || {}).map(([host, entry]) => {
-      const [cid, n] = Object.entries(entry).sort((a, b) => b[1] - a[1])[0] || [];
-      return { host, cid, n: Number(n) || 0 };
-    }).filter((x) => x.cid).sort((a, b) => b.n - a.n).slice(0, 15);
+    const { terms: top, retailers, termCount, moveCount } = learnedSummary(prefs, ctx.state.collections);
     const learnedBox = el('div', { class: 'field' }, [
-      el('label', { class: 'label' }, [`Learned from your corrections (${learned.length} ${learned.length === 1 ? 'term' : 'terms'}, ${(prefs.corrections || []).length} moves)`]),
-      top.length ? el('div', { class: 'chips' }, top.map((x) => el('span', { class: 'chip', title: `weight ${x.w}` }, [`${x.term} → ${ctx.collectionById(x.cid)?.name || '?'}`]))) : el('p', { class: 'help' }, ['Nothing learned yet. Move an item between collections and Internet Binder will pick up the pattern.']),
-      retailers.length ? el('p', { class: 'help' }, ['Retailer habits: ' + retailers.map((x) => `${x.host} → ${ctx.collectionById(x.cid)?.name || '?'}`).join(' · ')]) : null,
-      el('div', { class: 'actions-row' }, [el('button', { type: 'button', class: 'btn btn-sm', disabled: !learned.length && !retailers.length, onClick: async () => {
+      el('label', { class: 'label' }, [`Learned from your corrections (${termCount} ${termCount === 1 ? 'term' : 'terms'}, ${moveCount} moves)`]),
+      top.length ? el('div', { class: 'chips' }, top.map((x) => el('span', { class: 'chip', title: `weight ${x.weight}` }, [`${x.term} → ${x.collectionName}`]))) : el('p', { class: 'help' }, ['Nothing learned yet. Move an item between collections and Internet Binder will pick up the pattern.']),
+      retailers.length ? el('p', { class: 'help' }, ['Retailer habits: ' + retailers.map((x) => `${x.host} → ${x.collectionName}`).join(' · ')]) : null,
+      el('div', { class: 'actions-row' }, [el('button', { type: 'button', class: 'btn btn-sm', disabled: !termCount && !retailers.length, onClick: async () => {
         const ok = await UI.confirmDialog({ title: 'Clear learned preferences?', message: 'Internet Binder forgets every word and retailer habit it picked up from your moves. Your collections and their keywords are kept.', confirmLabel: 'Clear', danger: true });
         if (ok) await ctx.store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
       } }, ['Clear learned preferences'])]),

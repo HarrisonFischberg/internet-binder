@@ -757,6 +757,8 @@ async function save({ force }) {
       collectionId: state.userOverride && !review ? chosen : null,
       classification: review ? { ...state.classification, collectionId: null, collectionName: 'Review', taxonomyKey: null, isNew: false, isInbox: true, shelf: null } : state.userOverride ? null : state.classification,
       learn: 'light',
+      // Saving where it suggested is a choice too: the sorter learns a little from it.
+      confirmed: !review && !state.userOverride,
     });
     if (!res.ok) throw new Error(res.error || 'Could not save.');
     if (res.duplicate) {

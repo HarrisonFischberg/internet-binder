@@ -61,6 +61,25 @@ public struct Destination: Decodable, Sendable, Hashable, Identifiable {
     public var id: String { value }
 }
 
+/// What Internet Binder learned from your moves (categorizer.js learnedSummary), strongest first.
+public struct LearnedView: Decodable, Sendable {
+    public struct Term: Decodable, Sendable, Hashable { public let term: String; public let collectionId: String; public let collectionName: String; public let weight: Double }
+    public struct Retailer: Decodable, Sendable, Hashable { public let host: String; public let collectionId: String; public let collectionName: String; public let count: Double }
+    public let terms: [Term]
+    public let retailers: [Retailer]
+    public let termCount: Int
+    public let moveCount: Int
+}
+
+/// Words that already file saves into a collection besides the ones you typed (categorizer.js collectionWords).
+public struct CollectionWords: Decodable, Sendable {
+    public struct BuiltIn: Decodable, Sendable, Hashable { public let word: String; public let label: String }
+    public let learned: [String]
+    public let builtIn: [BuiltIn]
+    /// The built-in collection whose words these are ("Kitchen"), or nil.
+    public let builtInName: String?
+}
+
 /// A save's own screen: the save plus what Chrome's code formats for it.
 public struct SaveDetail: Decodable, Sendable {
     public struct Maps: Decodable, Sendable { public let google: String?; public let apple: String? }
@@ -115,6 +134,25 @@ extension Library {
         return try await core.call("views.detail", [id], as: SaveDetail?.self)
     }
 
+    public func learned() async throws -> LearnedView { try await prepare(); return try await core.call("views.learned", as: LearnedView.self) }
+
+    public func words(forCollection id: String) async throws -> CollectionWords { try await prepare(); return try await core.call("views.collectionWords", [id], as: CollectionWords.self) }
+
+    /// Forgets every learned word and shop habit; collections and their keywords stay. Returns what
+    /// `restoreLearned` needs to undo it.
+    public func clearLearned() async throws -> String { try await prepare(); return try await core.callJSON("views.clearLearned") }
+
+    /// Forgets one learned word (or, with `shop`, a shop's habit). Returns what `restoreLearned` needs to undo it.
+    public func forgetLearned(_ key: String, shop: Bool = false) async throws -> String? {
+        try await prepare()
+        let args = String(decoding: try JSONSerialization.data(withJSONObject: [shop ? "shop" : "term", key]), as: UTF8.self)
+        let undo = try await core.callJSON("views.forgetLearned", argsJSON: args)
+        return undo == "null" || undo.isEmpty ? nil : undo
+    }
+
+    /// Undo for `forgetLearned` and `clearLearned`.
+    public func restoreLearned(_ undo: String) async throws { _ = try await core.callJSON("views.restoreLearned", argsJSON: "[\(undo)]") }
+
     public func goals(for itemId: String) async throws -> [GoalView] { try await prepare(); return try await core.call("views.goals", [itemId], as: [GoalView].self) }
 
     // MARK: writes
@@ -133,6 +171,9 @@ extension Library {
 
     /// Undo right after a save: it's removed outright, never reaching the Trash.
     public func undoSave(_ id: String) async throws { try await core.call("views.undoSave", [id]) }
+
+    /// You kept a save where it was filed (Done on the share card): a quiet lesson for the sorter, once per save.
+    public func confirmFiling(_ id: String) async throws { try await core.call("views.confirmFiling", [id]) }
 
     /// Edits fields by hand; the shared store records them in `userFields` so AI and lookups leave them alone.
     public func update(_ id: String, _ patch: [String: Any]) async throws { try await core.call("store.updateItem", [id, patch]) }

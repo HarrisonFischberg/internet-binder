@@ -408,6 +408,30 @@ struct ViewsTests {
         let prefs = try await lib.core.call("store.getPrefs") as! [String: Any]
         #expect(!(prefs["learnedKeywords"] as? [String: Any] ?? [:]).isEmpty, "moving out of Review teaches the categorizer")
     }
+
+    // The share sheet's path: one move teaches it, the next similar save lands there, and Done on
+    // the card (kept where it went) teaches it a little more, once.
+    @Test func shareSheetChoicesTeachTheSorter() async throws {
+        let lib = try await imported()
+        let col = try await lib.createCollection(named: "Trip prep")
+        let first = try #require(try await lib.capture(product: ["title": "Titanium camp stove", "url": "https://shop.example/stove"]).save)
+        #expect(first.collectionId != col.id, "it knows nothing about Trip prep yet")
+        _ = try await lib.put([first.id], in: col.id)
+        let next = try await lib.capture(product: ["title": "Camp stove windscreen", "url": "https://shop.example/screen"])
+        let second = try #require(next.save)
+        #expect(second.collectionId == col.id, "learned from the move")
+        #expect(next.destination == "Trip prep")
+        func weight() async throws -> Double {
+            let prefs = try await lib.core.call("store.getPrefs") as! [String: Any]
+            let entry = (prefs["learnedKeywords"] as? [String: Any])?["stove"] as? [String: Any]
+            return (entry?[col.id] as? NSNumber)?.doubleValue ?? 0
+        }
+        let before = try await weight()
+        try await lib.confirmFiling(second.id)
+        #expect(try await weight() == before + 0.5, "kept where it went: a quiet lesson")
+        try await lib.confirmFiling(second.id)
+        #expect(try await weight() == before + 0.5, "only once per save")
+    }
 }
 
 @Suite("Card facts")
