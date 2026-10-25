@@ -448,7 +448,8 @@ private struct CardFan: View {
                     .rotationEffect(.degrees(d == 0 ? 0 : (entry.id % 2 == 0 ? 5 : -5) * Double(d)))
                     .offset(y: -Double(d) * 16)
                     .zIndex(Double(3 - d))
-                    .transition(.asymmetric(insertion: .opacity, removal: .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0))))
+                    // Only the top card flips away; one pushed out of sight behind it by a new save just fades.
+                    .transition(.asymmetric(insertion: .opacity, removal: d == 0 ? .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0)) : .opacity))
             }
             Image(systemName: "sparkles")
                 .font(.system(size: 30, weight: .bold))
@@ -551,7 +552,7 @@ private struct CloudSpin: View {
                         .shadow(color: t.shadow.opacity(0.25), radius: 3, y: 2)
                         .rotationEffect(.degrees(Double(i - 1) * 16 * (1 - p)))
                         .scaleEffect(1 - p * 0.6)
-                        .offset(x: x, y: 150 - p * 150)
+                        .offset(x: x, y: 118 - p * 118)
                         .opacity(reduce ? 0 : p < 0.15 ? p / 0.15 : p > 0.75 ? (1 - p) / 0.25 : 1)
                 }
             }
