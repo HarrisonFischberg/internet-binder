@@ -39,10 +39,9 @@ extension RecordDatabase {
 
     /// What to send for one record: its current body, or its deletion. Nil when it isn't pending.
     public func outgoing(_ id: SyncID) throws -> OutgoingChange? {
-        let s = try spec(id.store)
-        return try pool.read { db in
+        try pool.read { db in
             guard let rev = try Int64.fetchOne(db, sql: "SELECT rev FROM sync_pending WHERE store = ? AND key = ?", arguments: [id.store, id.key]) else { return nil }
-            guard let body = try String.fetchOne(db, sql: "SELECT body FROM \"\(s.table)\" WHERE key = ?", arguments: [id.key]) else { return .delete(id, rev: rev) }
+            guard let body = try localBody(db, id) else { return .delete(id, rev: rev) }
             return .save(try SyncRecord(id: id, stored: body), rev: rev)
         }
     }
@@ -70,6 +69,7 @@ extension RecordDatabase {
             for (store, s) in Self.specs {
                 for key in try String.fetchAll(db, sql: "SELECT key FROM \"\(s.table)\"") { try Self.markPending(db, store: store, key: key) }
             }
+            if try localBody(db, SyncID.aiSettings) != nil { try Self.markPending(db, store: SyncID.aiSettings.store, key: SyncID.aiSettings.key) }
         }
     }
 
@@ -86,11 +86,10 @@ extension RecordDatabase {
     @discardableResult
     public func applyRemote(_ remote: SyncRecord, system: Data?) throws -> Applied {
         let id = remote.id
-        let s = try spec(id.store)
         let remoteStored = try remote.stored()
         let remoteObj = try SyncJSON.object(remoteStored)
         return try pool.write { db in
-            let localBody = try String.fetchOne(db, sql: "SELECT body FROM \"\(s.table)\" WHERE key = ?", arguments: [id.key])
+            let localBody = try localBody(db, id)
             let pending = try Bool.fetchOne(db, sql: "SELECT 1 FROM sync_pending WHERE store = ? AND key = ?", arguments: [id.store, id.key]) ?? false
             let baseBody = try String.fetchOne(db, sql: "SELECT body FROM sync_base WHERE store = ? AND key = ?", arguments: [id.store, id.key])
             try setBase(db, id, body: try SyncJSON.hashedPictures(remoteStored, store: id.store), system: system)
@@ -98,7 +97,7 @@ extension RecordDatabase {
             guard let localBody else {
                 // Deleted here but not yet sent: the deletion stands and goes out next.
                 if pending { return .merged }
-                try upsert(db, s, store: id.store, body: remoteStored, track: false)
+                try writeLocal(db, id, body: remoteStored)
                 return .updated
             }
             let localObj = try SyncJSON.object(localBody)
@@ -107,12 +106,12 @@ extension RecordDatabase {
                 return .unchanged
             }
             guard pending else {
-                try upsert(db, s, store: id.store, body: remoteStored, track: false)
+                try writeLocal(db, id, body: remoteStored)
                 return .updated
             }
             let base = try baseBody.map { try SyncJSON.object($0) }
             let merged = SyncMerge.merge(id, base: base, local: localObj, remote: remoteObj)
-            try upsert(db, s, store: id.store, body: try SyncJSON.text(merged), track: false)
+            try writeLocal(db, id, body: try SyncJSON.text(merged))
             if SyncJSON.same(merged, remoteObj) {
                 try db.execute(sql: "DELETE FROM sync_pending WHERE store = ? AND key = ?", arguments: [id.store, id.key])
                 return .updated
@@ -127,7 +126,7 @@ extension RecordDatabase {
     public func applyRemoteDeletion(_ id: SyncID) throws {
         let s = try spec(id.store)
         try pool.write { db in
-            try delete(db, s, store: id.store, key: id.key, track: false)
+            if id != SyncID.aiSettings { try delete(db, s, store: id.store, key: id.key, track: false) }
             for table in ["sync_pending", "sync_base", "sync_sealed"] {
                 try db.execute(sql: "DELETE FROM \(table) WHERE store = ? AND key = ?", arguments: [id.store, id.key])
             }
@@ -189,6 +188,43 @@ extension RecordDatabase {
         try pool.write { db in
             if let value { try db.execute(sql: "INSERT OR REPLACE INTO sync_state (key, value) VALUES (?, ?)", arguments: [key, value]) }
             else { try db.execute(sql: "DELETE FROM sync_state WHERE key = ?", arguments: [key]) }
+        }
+    }
+
+    /// The record as stored here; the AI settings come out of the settings as `{key, value}`.
+    func localBody(_ db: Database, _ id: SyncID) throws -> String? {
+        if id == SyncID.aiSettings {
+            guard let text = try String.fetchOne(db, sql: "SELECT value FROM setting WHERE key = ?", arguments: [Self.settingsKey]),
+                  let ai = (try SyncJSON.object(text))["ai"] as? [String: Any] else { return nil }
+            return try SyncJSON.text(["key": id.key, "value": ai])
+        }
+        let s = try spec(id.store)
+        return try String.fetchOne(db, sql: "SELECT body FROM \"\(s.table)\" WHERE key = ?", arguments: [id.key])
+    }
+
+    /// Writes a record from iCloud without marking it pending.
+    func writeLocal(_ db: Database, _ id: SyncID, body: String) throws {
+        if id == SyncID.aiSettings {
+            let text = try String.fetchOne(db, sql: "SELECT value FROM setting WHERE key = ?", arguments: [Self.settingsKey])
+            var settings = try text.map { try SyncJSON.object($0) } ?? [:]
+            settings["ai"] = (try SyncJSON.object(body))["value"] ?? [:]
+            try db.execute(sql: "INSERT OR REPLACE INTO setting (key, value) VALUES (?, ?)", arguments: [Self.settingsKey, try SyncJSON.text(settings)])
+            return
+        }
+        try upsert(db, try spec(id.store), store: id.store, body: body, track: false)
+    }
+
+    /// Whether writing `value` as the settings changes the synced AI settings.
+    static func aiSettingsChanged(_ db: Database, to value: Any) throws -> Bool {
+        let old = try String.fetchOne(db, sql: "SELECT value FROM setting WHERE key = ?", arguments: [settingsKey]).map { try SyncJSON.object($0)["ai"] }
+        return !SyncJSON.same(old ?? nil, (value as? [String: Any])?["ai"])
+    }
+
+    /// Forgets everything about iCloud on this device (sync turned off, or the library erased): nothing
+    /// pending, no base, no engine state. The library itself stays.
+    public func resetSync() throws {
+        try pool.write { db in
+            try db.execute(sql: "DELETE FROM sync_pending; DELETE FROM sync_base; DELETE FROM sync_sealed; DELETE FROM sync_state")
         }
     }
 

@@ -217,4 +217,40 @@ struct SyncTests {
         #expect(keys.current().id == "0000000000000000")
         #expect(first != "0000000000000000")
     }
+
+    @Test func aiSettingsSyncButTheKeyNeverDoes() throws {
+        try phone.db.setSettings(["keepsake_settings": ["style": "swiss", "ai": ["on": true, "provider": "anthropic", "model": "claude-sonnet-5-5", "effort": "medium"]],
+                                  "keepsake_secrets": ["aiApiKey": "sk-test"]])
+        try syncAll(cloud, phone, mac)
+        var macSettings = try mac.db.settings(nil)
+        let ai = (macSettings["keepsake_settings"] as? [String: Any])?["ai"] as? [String: Any]
+        #expect(ai?["model"] as? String == "claude-sonnet-5-5")
+        #expect((macSettings["keepsake_settings"] as? [String: Any])?["style"] == nil, "the look stays per device")
+        #expect(macSettings["keepsake_secrets"] == nil, "the key never leaves the phone")
+
+        // Changing the effort on the Mac reaches the phone, and the phone keeps its own look.
+        var next = macSettings["keepsake_settings"] as! [String: Any]
+        next["ai"] = ["on": true, "provider": "anthropic", "model": "claude-sonnet-5-5", "effort": "high"]
+        try mac.db.setSettings(["keepsake_settings": next])
+        try syncAll(cloud, mac, phone)
+        let phoneSettings = try phone.db.settings(["keepsake_settings"])["keepsake_settings"] as? [String: Any]
+        #expect((phoneSettings?["ai"] as? [String: Any])?["effort"] as? String == "high")
+        #expect(phoneSettings?["style"] as? String == "swiss")
+        macSettings = try mac.db.settings(nil)
+        #expect(try mac.db.pendingChanges().isEmpty)
+    }
+
+    @Test func turningSyncBackOnAfterAnEraseKeepsICloud() throws {
+        try phone.put(["id": "s1", "title": "Lamp", "updatedAt": "2026-10-25T10:00:00.000Z"])
+        try syncAll(cloud, phone)
+        // Sync off, library erased, sync on again (LibraryModel.setSync).
+        try phone.db.resetSync()
+        try phone.db.clear(["items"])
+        try phone.db.resetSync()
+        try phone.db.markAllPending()
+        phone.cursor = 0
+        try syncAll(cloud, phone)
+        #expect(cloud.records[try #require(SyncID(store: "items", key: "s1"))] != nil)
+        #expect(try phone.item("s1")?["title"] as? String == "Lamp", "it comes back from iCloud")
+    }
 }

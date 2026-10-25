@@ -33,11 +33,41 @@ struct SettingsScreen: View {
     static let claudeModels = ClaudeChoices.models
     static let efforts = ClaudeChoices.efforts
 
+    private var syncSection: some View {
+        Section {
+            Toggle("Sync with iCloud", isOn: Binding(get: { model.syncOn }, set: { model.setSync($0) }))
+                .accessibilityIdentifier("syncToggle")
+            if model.syncOn {
+                LabeledContent("Status") {
+                    Text(syncStatusText).accessibilityIdentifier("syncStatus")
+                }
+                if case .failed? = model.syncStatus {
+                    Button("Try Again") { model.syncNow() }.accessibilityIdentifier("syncRetry")
+                }
+            }
+        } header: {
+            Text("iCloud")
+        } footer: {
+            Text("Keeps your saves, collections, what it learned and your AI settings the same on your iPhone and Mac. They go to your own iCloud, encrypted: Apple stores them but can't read them. Your AI key stays on each device.")
+        }
+    }
+
+    private var syncStatusText: String {
+        switch model.syncStatus {
+        case nil: "Starting…"
+        case .syncing?: "Syncing…"
+        case .upToDate(let at)?: "Up to date, \(at.formatted(.relative(presentation: .named)))"
+        case .signedOut?: "Sign in to iCloud in the Settings app"
+        case .failed(let message)?: message
+        }
+    }
+
     enum Consent: Identifiable { case ai, lookup(String); var id: String { switch self { case .ai: "ai"; case .lookup(let k): k } } }
 
     var body: some View {
         NavigationStack {
             Form {
+                syncSection
                 aiSection
                 lookupsSection
                 instagramSection
@@ -59,7 +89,7 @@ struct SettingsScreen: View {
                 Section {
                     NavigationLink("Privacy") { PrivacyScreen() }
                     Button("Erase everything", role: .destructive) { erasing = true }
-                } footer: { Text("Internet Binder has no account and no server. Your library stays on this iPhone.") }
+                } footer: { Text(model.syncOn ? "Internet Binder has no account and no server. Your library stays on this iPhone and in your own iCloud." : "Internet Binder has no account and no server. Your library stays on this iPhone.") }
                 Section {} footer: {
                     Text("Internet Binder \(Self.version)")
                         .frame(maxWidth: .infinity)
@@ -459,11 +489,15 @@ struct EraseSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("This deletes every save, collection, goal and setting on this iPhone. It can't be undone. Export first if you might want them back.")
+                    Text(model.syncOn
+                         ? "This deletes every save, collection, goal and setting on this iPhone. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here."
+                         : "This deletes every save, collection, goal and setting on this iPhone. It can't be undone. Export first if you might want them back.")
                     TextField("Type ERASE to confirm", text: $typed).textInputAutocapitalization(.characters)
                 }
                 Button("Erase everything", role: .destructive) {
                     Task {
+                        // Erasing here never erases iCloud: sync stops first.
+                        if model.syncOn { model.setSync(false) }
                         try? await model.library?.eraseEverything()
                         ThumbnailStore.shared.removeAll()
                         model.refresh()
