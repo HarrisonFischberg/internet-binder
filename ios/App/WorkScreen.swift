@@ -442,14 +442,16 @@ private struct CardFan: View {
             if deck.isEmpty {
                 RoundedRectangle(cornerRadius: 18, style: .continuous).fill(t.well).frame(width: 128, height: 160)
             }
-            ForEach(Array(deck.prefix(3).enumerated()).reversed(), id: \.element.id) { d, entry in
+            ForEach(Array(deck.prefix(4).enumerated()).reversed(), id: \.element.id) { d, entry in
                 card(entry.save)
                     .scaleEffect(1 - Double(d) * 0.07)
                     .rotationEffect(.degrees(d == 0 ? 0 : (entry.id % 2 == 0 ? 5 : -5) * Double(d)))
                     .offset(y: -Double(d) * 16)
-                    .zIndex(Double(3 - d))
-                    // Only the top card flips away; one pushed out of sight behind it by a new save just fades.
-                    .transition(.asymmetric(insertion: .opacity, removal: d == 0 ? AnyTransition.modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0)) : .opacity))
+                    .zIndex(Double(4 - d))
+                    // A fourth card waits unseen, so one pushed back by a new save fades out here
+                    // and is already invisible when it leaves (only the top card flips away).
+                    .opacity(d == 3 ? 0 : 1)
+                    .transition(.asymmetric(insertion: .opacity, removal: .modifier(active: FlipAway(progress: 1), identity: FlipAway(progress: 0))))
             }
             Image(systemName: "sparkles")
                 .font(.system(size: 30, weight: .bold))
