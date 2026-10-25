@@ -50,7 +50,7 @@ struct SyncDedupeTests {
             #expect(s["title"] as? String == "Shakshuka with feta", "newer wins")
             #expect(s["note"] as? String == "Sunday", "the hand edit survives")
             #expect(s["createdAt"] as? String == "2026-10-01T10:00:00.000Z", "saved since the first time")
-            #expect((try d.db.get("goals", "g1")).map { try SyncJSON.object($0)["itemId"] as? String } == "a1")
+            #expect(try d.db.get("goals", "g1").map { try SyncJSON.object($0)["itemId"] as? String } == "a1")
         }
     }
 
