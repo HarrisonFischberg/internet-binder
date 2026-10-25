@@ -3,6 +3,7 @@
 // Public interface (stable — other modules only depend on these):
 //   classify(product, context)              -> Classification
 //   learnFromCorrection(product, fromId, toId, prefs, options) -> prefs
+//   learnFromConfirmation(product, toId, prefs) -> prefs
 //   findSimilarCollection(name, collections) -> collection | null
 //   salientTerms(product)                   -> string[]
 //   nameSimilarity(a, b)                    -> 0..1
@@ -49,6 +50,7 @@ const NAME_FIELDS = new Set(['title', 'productType', 'schemaCategory', 'breadcru
 const ROOT_CRUMBS = /^(home|homepage|home page|shop|shop all|store|all|all products|products|catalog|catalogue|collections|new|sale|en|us|en-us)$/i;
 const KW_WEIGHT = { strong: 3, regular: 1, user: 5, name: 3 };
 const MAX_LEARNED_WEIGHT = 6;
+const BUILT_IN_KINDS = new Set(['strong', 'regular', 'name']);
 
 // --- text helpers ------------------------------------------------------------
 
@@ -318,9 +320,28 @@ function buildCandidates(collections, prefs, settings) {
   return candidates;
 }
 
+// Whether your choices have taught it that these words belong to another collection: once you've
+// filed a "kettle" in Coffee setup, the built-in idea that kettles are Kitchen stops competing.
+function taughtElsewhere(matched, candidateId, learned) {
+  const stems = tokenize(matched).map(stem);
+  const claimed = (key) => {
+    const e = learned[key];
+    if (!e) return false;
+    const mine = (candidateId && e[candidateId]) || 0;
+    return Object.entries(e).some(([id, w]) => id !== candidateId && w >= LESSON.light && w > mine);
+  };
+  return claimed(stems.join(' ')) || (stems.length > 1 && stems.every(claimed));
+}
+
 function collectMatches(candidate, candidateIndex, fields, prefs) {
   const matches = [];
-  const add = (field, keyword, matched, weight, kind) => matches.push({ candidateIndex, field, keyword, matched, weight, kind });
+  const learnedWords = prefs?.learnedKeywords || {};
+  const hasLearned = Object.keys(learnedWords).length > 0;
+  const add = (field, keyword, matched, weight, kind) => {
+    // Built-in words give way to what you've taught it; your own keywords never do.
+    if (hasLearned && BUILT_IN_KINDS.has(kind) && taughtElsewhere(matched, candidate.id, learnedWords)) return;
+    matches.push({ candidateIndex, field, keyword, matched, weight, kind });
+  };
   for (const [field, text] of Object.entries(fields)) {
     if (!text) continue;
     if (field === 'retailer') continue; // handled by retailer preferences
@@ -354,8 +375,8 @@ function collectMatches(candidate, candidateIndex, fields, prefs) {
       for (let i = 0; i < stems.length - 1; i++) grams.add(`${stems[i]} ${stems[i + 1]}`);
       for (const g of grams) {
         const entry = learned[g];
-        const w = entry && entry[candidate.id];
-        if (w > 0) add(field, g, g, Math.min(MAX_LEARNED_WEIGHT, w), 'learned');
+        const w = learnedWeight(entry, candidate.id);
+        if (w > 0) add(field, g, g, w, 'learned');
       }
     }
   }
@@ -438,10 +459,13 @@ export function classify(product, context = {}) {
   const host = product?.host || product?.retailerHost || '';
   const retailerPrefs = (prefs.retailerPrefs || {})[host] || null;
   if (retailerPrefs) {
+    const total = Object.values(retailerPrefs).reduce((sum, n) => sum + (n > 0 ? n : 0), 0);
     candidates.forEach((cand, i) => {
       const count = cand.id ? retailerPrefs[cand.id] : 0;
-      if (count >= 2) {
-        scores[i] += Math.min(8, count * 2);
+      // A shop you file everywhere (a big department store) says little; one where most of what you
+      // file goes to one collection says a lot.
+      if (count >= 2 && count / total >= 0.5) {
+        scores[i] += Math.min(8, count * 2) * (count / total);
         identified[i] = true;
         explain[i].push({ field: 'retailer', keyword: host, matched: host, weight: count, kind: 'retailer' });
       }
@@ -529,6 +553,22 @@ function describeWhy(why) {
 
 // --- learning -------------------------------------------------------------------
 
+// How hard a learned word pulls toward a collection: its weight there, scaled by the share of the
+// word's weight that collection holds. A word you file in one place ("espresso" → Coffee) pulls at
+// full strength; one that turns up everywhere ("set", "pack", "black") pulls each place only a little,
+// so lots of everyday choices don't drown out the words that mean something.
+function learnedWeight(entry, collectionId) {
+  const w = entry && entry[collectionId];
+  if (!(w > 0)) return 0;
+  const total = Object.values(entry).reduce((sum, v) => sum + (v > 0 ? v : 0), 0);
+  return Math.min(MAX_LEARNED_WEIGHT, w) * (w / total);
+}
+
+// How much one choice teaches. A move or a pick at save time is a clear lesson; keeping the suggestion
+// you were shown is a quiet one (half a move, so moving the save later takes it back exactly); "use this
+// for similar items" and filing from Review count three times.
+const LESSON = { confirm: 0.5, light: 1, strong: 3 };
+
 export function emptyPrefs() {
   return {
     learnedKeywords: {},
@@ -541,6 +581,7 @@ export function emptyPrefs() {
 
 // Record a manual move so future similar items land in `toId`.
 // options.strong => the user explicitly asked to use this choice for similar items.
+// options.confirm => the user saw where it went and kept it (learnFromConfirmation).
 export function learnFromCorrection(product, fromId, toId, prefs, options = {}) {
   const next = { ...emptyPrefs(), ...(prefs || {}) };
   next.learnedKeywords = { ...(next.learnedKeywords || {}) };
@@ -548,7 +589,7 @@ export function learnFromCorrection(product, fromId, toId, prefs, options = {}) 
   next.corrections = [...(next.corrections || [])];
   if (!toId) return next;
   const terms = salientTerms(product);
-  const inc = options.strong ? 3 : 1;
+  const inc = LESSON[options.confirm ? 'confirm' : options.strong ? 'strong' : 'light'];
   for (const term of terms) {
     const entry = { ...(next.learnedKeywords[term] || {}) };
     entry[toId] = Math.min(MAX_LEARNED_WEIGHT, (entry[toId] || 0) + inc);
@@ -559,12 +600,23 @@ export function learnFromCorrection(product, fromId, toId, prefs, options = {}) 
   const host = product?.host || '';
   if (host) {
     const hp = { ...(next.retailerPrefs[host] || {}) };
-    hp[toId] = (hp[toId] || 0) + 1;
+    // One save from a shop is one save from it, however sure you were about its words.
+    const shop = options.confirm ? LESSON.confirm : LESSON.light;
+    hp[toId] = (hp[toId] || 0) + shop;
+    if (fromId && fromId !== toId && hp[fromId]) hp[fromId] = Math.max(0, hp[fromId] - 0.5 * shop);
+    for (const k of Object.keys(hp)) if (!hp[k]) delete hp[k];
     next.retailerPrefs[host] = hp;
   }
+  // The log is of changes you made; keeping a suggestion isn't one.
+  if (options.confirm) return next;
   next.corrections.push({ at: new Date().toISOString(), itemId: product?.id || null, title: String(product?.title || '').slice(0, 120), from: fromId || null, to: toId, terms, strong: !!options.strong });
   if (next.corrections.length > 200) next.corrections = next.corrections.slice(-200);
   return next;
+}
+
+// You saw the collection a save was going to and kept it: a quiet lesson toward that collection.
+export function learnFromConfirmation(product, toId, prefs) {
+  return learnFromCorrection(product, null, toId, prefs, { confirm: true });
 }
 
 // Drop every learned reference to a collection that no longer exists (or was merged).

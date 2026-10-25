@@ -489,6 +489,8 @@
     },
     // Undoing a save that just happened removes it outright (background.js UNDO_SAVE).
     async undoSave(id) { await store.deleteForever([id]); },
+    // Done on the share card with the save still where Internet Binder put it: the sorter learns a little.
+    async confirmFiling(id) { return store.confirmFiling(id); },
     // A workout's goals with their progress (goals.js goalProgress), and today's check-ins so a second
     // tap on Done today can take today back off the goal.
     async goals(itemId) {

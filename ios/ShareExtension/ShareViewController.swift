@@ -175,6 +175,8 @@ final class ShareState {
         guard let save else { finish(); return }
         Task {
             if let library, !note.trimmingCharacters(in: .whitespaces).isEmpty { try? await library.update(save.id, ["note": note]) }
+            // Kept where it went: that's a choice the sorter learns from (a save you moved already taught it).
+            if let library, case .saved = phase { try? await library.confirmFiling(save.id) }
             if case .saved = phase { await SaveNotice.post(id: save.id, title: save.title, destination: destinationLabel) }
             finish()
         }

@@ -18,7 +18,7 @@
 import { uid, nowIso, sanitizeText, sanitizeMultiline, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer, decodeEntities, hasEntities } from './util.js';
 import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
-import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, forgetCollection } from './categorizer.js';
+import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, learnFromConfirmation, forgetCollection } from './categorizer.js';
 import { memoryRecordBackend, STORES } from './db.js';
 import { isKind, kindOf, sanitizeDetails, recipeOrWorkout, needsCollection, STATUSES } from './kinds.js';
 import { makeGoal, makeCheckin } from './goals.js';
@@ -854,6 +854,16 @@ export function createStore(kv, db = memoryRecordBackend()) {
       if (learn && learned.length) {
         await kvUpdate('prefs', emptyPrefs(), (prefs) => learned.reduce((p, { item, from }) => learnFromCorrection(item, from, collectionId, p, { strong: learn === 'strong' }), { ...emptyPrefs(), ...prefs }));
       }
+    },
+
+    // You saw where a save went and kept it there (pressed Save on the suggestion, Done on the share
+    // card): a quiet lesson for the sorter, once per save. A save you moved already taught it (moveItems).
+    async confirmFiling(id) {
+      const item = await db.get('items', id);
+      if (!item || !item.collectionId || item.filingConfirmed || item.categorizationSource === 'manual' || !item.title) return false;
+      await db.update('items', [id], (i) => (i ? { ...i, filingConfirmed: true } : undefined));
+      await kvUpdate('prefs', emptyPrefs(), (prefs) => learnFromConfirmation(item, item.collectionId, { ...emptyPrefs(), ...prefs }));
+      return true;
     },
 
     // -- prefs & settings --

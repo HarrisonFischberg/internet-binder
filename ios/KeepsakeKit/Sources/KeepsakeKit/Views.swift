@@ -172,6 +172,9 @@ extension Library {
     /// Undo right after a save: it's removed outright, never reaching the Trash.
     public func undoSave(_ id: String) async throws { try await core.call("views.undoSave", [id]) }
 
+    /// You kept a save where it was filed (Done on the share card): a quiet lesson for the sorter, once per save.
+    public func confirmFiling(_ id: String) async throws { try await core.call("views.confirmFiling", [id]) }
+
     /// Edits fields by hand; the shared store records them in `userFields` so AI and lookups leave them alone.
     public func update(_ id: String, _ patch: [String: Any]) async throws { try await core.call("store.updateItem", [id, patch]) }
 
