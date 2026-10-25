@@ -6,6 +6,8 @@
 //   findSimilarCollection(name, collections) -> collection | null
 //   salientTerms(product)                   -> string[]
 //   nameSimilarity(a, b)                    -> 0..1
+//   learnedSummary(prefs, collections)      -> { terms, retailers, termCount, moveCount }
+//   collectionWords(collection, collections, prefs) -> { learned, builtIn, builtInName }
 //
 // Classification = {
 //   collectionId: string | null,     // null when a new collection is recommended
@@ -596,4 +598,52 @@ export function forgetCollection(prefs, collectionId, replacementId = null) {
     })
     .filter(Boolean);
   return next;
+}
+
+// --- what it learned, shown to the user ---------------------------------------------
+
+// A keyword as people read it: a trailing * (any ending) shows as "…", so "hik*" reads "hik…".
+export function keywordLabel(keyword) {
+  const k = String(keyword || '');
+  return k.endsWith('*') ? `${k.slice(0, -1)}…` : k;
+}
+
+// Each learned word and shop, with the collection it pulls hardest toward, strongest first
+// (Settings → What it learned).
+export function learnedSummary(prefs, collections, { maxTerms = 25, maxRetailers = 15 } = {}) {
+  const names = new Map((collections || []).map((c) => [c.id, c.name]));
+  const top = (entry) => Object.entries(entry || {}).filter(([id, w]) => names.has(id) && Number(w) > 0).sort((a, b) => b[1] - a[1])[0];
+  const lk = Object.entries(prefs?.learnedKeywords || {});
+  const terms = lk.map(([term, entry]) => {
+    const [collectionId, w] = top(entry) || [];
+    return collectionId ? { term, collectionId, collectionName: names.get(collectionId), weight: Number(w) } : null;
+  }).filter(Boolean)
+    // Strongest first; on a tie the longer phrase, which says more ("side table" before "side").
+    .sort((a, b) => b.weight - a.weight || b.term.split(' ').length - a.term.split(' ').length || a.term.localeCompare(b.term));
+  const retailers = Object.entries(prefs?.retailerPrefs || {}).map(([host, entry]) => {
+    const [collectionId, n] = top(entry) || [];
+    return collectionId ? { host, collectionId, collectionName: names.get(collectionId), count: Number(n) } : null;
+  }).filter(Boolean).sort((a, b) => b.count - a.count || a.host.localeCompare(b.host));
+  return {
+    terms: terms.slice(0, maxTerms),
+    retailers: retailers.slice(0, maxRetailers),
+    termCount: terms.length,
+    moveCount: (prefs?.corrections || []).length,
+  };
+}
+
+// The words that file saves into a collection besides the ones you typed: what it learned
+// from your moves (words whose strongest pull is this collection) and, for a built-in kind
+// of collection (Kitchen, Outdoors…), its built-in words. Your own keywords are left out.
+export function collectionWords(collection, collections, prefs, { maxLearned = 24 } = {}) {
+  if (!collection) return { learned: [], builtIn: [], builtInName: null };
+  const mine = new Set((collection.keywords || []).map((k) => String(k).toLowerCase()));
+  const learned = learnedSummary(prefs, collections, { maxTerms: Infinity }).terms
+    .filter((t) => t.collectionId === collection.id && t.weight >= 1 && !mine.has(t.term))
+    .slice(0, maxLearned)
+    .map(({ term, weight }) => ({ term, weight }));
+  const tax = taxonomyFor(collection, collections || []);
+  const shown = new Set(learned.map((t) => t.term));
+  const builtIn = tax ? [...new Set([...(tax.strong || []), ...tax.keywords])].filter((k) => !mine.has(k) && !shown.has(k)) : [];
+  return { learned, builtIn, builtInName: tax ? tax.name : null };
 }

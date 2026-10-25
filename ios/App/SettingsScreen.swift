@@ -46,6 +46,9 @@ struct SettingsScreen: View {
                 } footer: { Text("Ten quiet, original tunes play while you follow a recipe step by step. They stay silent when your iPhone is on silent and never stop a podcast or song you're already playing.") }
                 noticesSection
                 Section {
+                    NavigationLink("What it learned") { LearnedScreen() }
+                } header: { Text("Sorting") } footer: { Text("When you move a save or file one from Review, Internet Binder remembers which words and shops go where.") }
+                Section {
                     NavigationLink("Change log") { ChangeLogScreen() }
                 } footer: { Text("Every change AI made, with Undo.") }
                 Section("Your library") {
@@ -327,6 +330,104 @@ struct ChangeLogScreen: View {
         .task { await load() }
     }
     private func load() async { log = (try? await model.library?.aiLog()) ?? [] }
+}
+
+/// What sorting picked up from your moves (Chrome's Settings → Categorization): its words grouped
+/// under the collection they file into, then shops. Swipe one away to forget it; Clear forgets all,
+/// both with Undo. Learning stays on this iPhone; Chrome and Safari learn on their own.
+struct LearnedScreen: View {
+    @Environment(LibraryModel.self) private var model
+    @State private var learned: LearnedView?
+
+    /// The words under each collection, collections in the order of their strongest word.
+    private var groups: [(name: String, terms: [LearnedView.Term])] {
+        var order: [String] = [], by: [String: [LearnedView.Term]] = [:]
+        for t in learned?.terms ?? [] {
+            if by[t.collectionId] == nil { order.append(t.collectionId) }
+            by[t.collectionId, default: []].append(t)
+        }
+        return order.compactMap { id in by[id].map { ($0[0].collectionName, $0) } }
+    }
+
+    var body: some View {
+        List {
+            if let l = learned {
+                if l.terms.isEmpty && l.retailers.isEmpty {
+                    Section {
+                        Text("Nothing learned yet.").font(.headline)
+                        Text("Move a save to another collection, or file one from Review, and Internet Binder picks up the pattern for next time.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        Text(summary(l)).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    ForEach(groups, id: \.name) { g in
+                        Section(g.name) {
+                            ForEach(g.terms, id: \.self) { t in
+                                Text(t.term)
+                                    .accessibilityLabel("\(t.term) goes to \(g.name)")
+                                    .forgettable { forget(t.term, shop: false) }
+                            }
+                        }
+                    }
+                    if !l.retailers.isEmpty {
+                        Section("Shops") {
+                            ForEach(l.retailers, id: \.self) { r in
+                                LabeledContent(r.host, value: r.collectionName)
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel("\(r.host) goes to \(r.collectionName)")
+                                    .forgettable { forget(r.host, shop: true) }
+                            }
+                        }
+                    }
+                    Section {
+                        Button("Clear what it learned", role: .destructive) { clear() }
+                    } footer: { Text("Your collections and their keywords are kept.") }
+                }
+            } else {
+                Section { ForEach(0..<6, id: \.self) { _ in Text("placeholder word") } }.redacted(reason: .placeholder)
+            }
+        }
+        .navigationTitle("What it learned")
+        // Settings is a sheet, which covers the app's own toast: show Forget's Undo here.
+        .overlay(alignment: .bottom) { ToastView().padding(.horizontal, 16).padding(.bottom, 24) }
+        .task { await load() }
+    }
+
+    private func summary(_ l: LearnedView) -> String {
+        let moves = "\(l.moveCount) \(l.moveCount == 1 ? "move" : "moves")"
+        let words = l.termCount > l.terms.count ? "The \(l.terms.count) strongest of \(l.termCount) words" : "\(l.termCount) \(l.termCount == 1 ? "word" : "words")"
+        return "\(words) and \(l.retailers.count) \(l.retailers.count == 1 ? "shop" : "shops"), from \(moves). Swipe one away if it files saves in the wrong place."
+    }
+
+    private func forget(_ key: String, shop: Bool) {
+        Task {
+            guard let library = model.library, let undo = try? await library.forgetLearned(key, shop: shop) else { return }
+            Haptic.settled()
+            await load()
+            model.show("Forgot \(key)") { try? await library.restoreLearned(undo); await load() }
+        }
+    }
+
+    private func clear() {
+        Task {
+            guard let library = model.library, let undo = try? await library.clearLearned() else { return }
+            Haptic.settled()
+            await load()
+            model.show("Cleared what it learned") { try? await library.restoreLearned(undo); await load() }
+        }
+    }
+
+    private func load() async { learned = try? await model.library?.learned() }
+}
+
+private extension View {
+    /// Swipe to forget, with the same action on long-press (the non-gesture way in).
+    func forgettable(_ forget: @escaping () -> Void) -> some View {
+        swipeActions { Button("Forget", systemImage: "minus.circle", role: .destructive, action: forget) }
+            .contextMenu { Button("Forget", systemImage: "minus.circle", role: .destructive, action: forget) }
+    }
 }
 
 /// Every network path in plain words (mirrors PRIVACY.md for iOS).

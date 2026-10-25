@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeUrl, cleanUrl, isRestrictedUrl, openableUrl } from '../keepsake/src/shared/url.js';
 import { parsePrice, sanitizeUrl, sanitizeText, deepMerge, prettyRetailer } from '../keepsake/src/shared/util.js';
-import { classify, emptyPrefs, learnFromCorrection, forgetCollection, normalizeName, findSimilarCollection, salientTerms } from '../keepsake/src/shared/categorizer.js';
+import { classify, emptyPrefs, learnFromCorrection, forgetCollection, normalizeName, findSimilarCollection, salientTerms, learnedSummary, collectionWords, keywordLabel } from '../keepsake/src/shared/categorizer.js';
 import { defaultCollections, makeCollection } from '../keepsake/src/shared/storage.js';
 
 test('normalizeUrl: tracking parameters are ignored, product parameters kept', () => {
@@ -147,6 +147,31 @@ test('learnFromCorrection teaches terms and retailer; strong weighs more; forget
   const moved = forgetCollection(light, home.id, clothing.id);
   assert.equal(moved.learnedKeywords[term][home.id], undefined);
   assert.ok(moved.learnedKeywords[term][clothing.id] > 0);
+});
+
+test('learnedSummary and collectionWords show what files saves where, minus your own keywords', () => {
+  const cols = starter();
+  const [home, clothing] = cols;
+  let p = learnFromCorrection({ title: 'Linen throw blanket', host: 'fenwick.example' }, clothing.id, home.id, emptyPrefs(), { strong: true });
+  p = learnFromCorrection({ title: 'Wool sweater' }, home.id, clothing.id, p);
+  const sum = learnedSummary(p, cols);
+  assert.equal(sum.moveCount, 2);
+  assert.equal(sum.terms[0].collectionId, home.id); // strong first
+  assert.ok(sum.terms.some((t) => t.term === 'sweater' && t.collectionName === clothing.name));
+  assert.deepEqual(sum.retailers, [{ host: 'fenwick.example', collectionId: home.id, collectionName: home.name, count: 1 }]);
+  // A deleted collection's words aren't shown.
+  assert.ok(learnedSummary(p, [home]).terms.every((t) => t.collectionId === home.id));
+
+  const mine = { ...home, keywords: ['blanket'] };
+  const w = collectionWords(mine, [mine, clothing], p);
+  assert.ok(w.learned.some((x) => x.term === 'linen throw'));
+  assert.ok(!w.learned.some((x) => x.term === 'blanket'));
+  assert.ok(!w.learned.some((x) => x.term === 'sweater'));
+  assert.ok(w.builtInName && w.builtIn.length > 5);
+  assert.ok(!w.builtIn.includes('blanket'));
+  assert.deepEqual(collectionWords(null, cols, p), { learned: [], builtIn: [], builtInName: null });
+  assert.equal(keywordLabel('hik*'), 'hik…');
+  assert.equal(keywordLabel('lamp'), 'lamp');
 });
 
 test('corrections history is capped at 200', () => {

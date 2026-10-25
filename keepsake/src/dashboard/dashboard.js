@@ -5,7 +5,7 @@
 import { createStore, chromeBackend, idbBackend, TRASH_DAYS, applyLook } from '../shared/storage.js';
 import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer, mostFirst } from '../shared/util.js';
-import { classify, nearMatchCollection } from '../shared/categorizer.js';
+import { classify, nearMatchCollection, collectionWords, keywordLabel } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
 import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection, hasOwnView, LIFESTYLE, kindChangePatch, shoppingKindFor, detailsForKind } from '../shared/kinds.js';
 import { cleanTopics, guessTopics } from '../shared/topics.js';
@@ -3189,9 +3189,50 @@ function collectionHero(col) {
     el('div', { class: 'collection-hero-text' }, [
       collectionNameField(col),
       el('p', {}, [col.description || 'No description yet.', ` · ${pluralize(count, 'item', 'items')}`]),
-      keywords.length ? el('div', { class: 'chips' }, keywords.slice(0, 12).map((k) => el('span', { class: 'pill' }, [k]))) : null,
+      keywords.length ? el('div', { class: 'chips' }, keywords.slice(0, 12).map((k) => el('span', { class: 'pill' }, [keywordLabel(k)]))) : null,
+      learnedLine(col),
       el('div', { class: 'collection-hero-actions' }, actions),
     ]),
+  ]);
+}
+
+// What it learned files saves here, so the page shows more than the words you typed.
+function learnedLine(col) {
+  const { learned } = collectionWords(col, state.collections, state.prefs, { maxLearned: 8 });
+  if (!learned.length) return null;
+  return el('p', { class: 'help collection-learned' }, [`Learned from your moves: ${learned.map((w) => w.term).join(', ')}. `,
+    el('button', { type: 'button', class: 'link-btn', onClick: () => editCollection(col) }, ['Keep some as keywords'])]);
+}
+
+// Tappable words that already file saves here (learned, then built-in). Tapping one adds it
+// to the keywords box; it's kept when you press Save.
+function wordSuggestions(col, textarea) {
+  const { learned, builtIn, builtInName } = collectionWords(col, state.collections, state.prefs);
+  if (!learned.length && !builtIn.length) return null;
+  const typed = () => new Set(textarea.value.split(/\n|,/).map((x) => x.trim().toLowerCase()).filter(Boolean));
+  const add = (word, btn) => {
+    if (!typed().has(word)) textarea.value = `${textarea.value.replace(/\s+$/, '')}${textarea.value.trim() ? '\n' : ''}${word}`;
+    btn.remove();
+  };
+  const chip = (word, label = word) => {
+    const btn = el('button', { type: 'button', class: 'chip chip-add', 'aria-label': `Add “${label}” to keywords` }, [UI.plusIcon(), label]);
+    btn.addEventListener('click', () => add(word, btn));
+    return btn;
+  };
+  const SHOWN = 16;
+  const builtInBox = el('div', { class: 'chips' }, builtIn.slice(0, SHOWN).map((k) => chip(k, keywordLabel(k))));
+  if (builtIn.length > SHOWN) {
+    const more = el('button', { type: 'button', class: 'link-btn' }, [`Show all ${builtIn.length}`]);
+    more.addEventListener('click', () => { builtInBox.replaceChildren(...builtIn.map((k) => chip(k, keywordLabel(k)))); more.remove(); });
+    builtInBox.append(more);
+  }
+  return el('div', { class: 'field word-suggestions' }, [
+    el('label', { class: 'label' }, ['Already files saves here']),
+    el('p', { class: 'help' }, ['These work without you typing them. Add one to make it yours: your keywords count most.']),
+    learned.length ? el('p', { class: 'word-group' }, ['Learned from your moves']) : null,
+    learned.length ? el('div', { class: 'chips' }, learned.map((w) => chip(w.term))) : null,
+    builtIn.length ? el('p', { class: 'word-group' }, [`Built in for ${builtInName}`]) : null,
+    builtIn.length ? builtInBox : null,
   ]);
 }
 
@@ -3301,6 +3342,7 @@ async function editCollection(col) {
         kw,
         el('p', { class: 'help' }, ['Items whose title or page text contains one of these are filed here. The more specific phrase wins: “coffee cup” here beats “coffee” in another collection.']),
       ]),
+      wordSuggestions(col, kw),
       el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Description']), desc]),
       el('div', { class: 'field' }, [el('label', { class: 'label' }, ['Cover image']), coverInput]),
     ],
