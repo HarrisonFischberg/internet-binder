@@ -86,10 +86,11 @@ public struct KSTheme: Sendable {
                                      radius: 0, controlRadius: 2, outline: 0, depth: .flat)
 
     /// Night Atlas: a deep ink room lit by your own photos, coordinates in mono, one amber action per
-    /// screen. "Dawn" is its light mode.
+    /// screen. Cards are soft panels without outlines, so the glass controls carry the only edges.
+    /// "Dawn" is its light mode.
     public static let atlas = make(.atlas, "Night Atlas", primary: same(0xFFB547), onPrimary: same(0x1A1204), highlight: same(0xFFB547), onHighlight: same(0x1A1204),
                                    stamp: tok(.atlas, "highlight"), line: tok(.atlas, "border"), shadow: dynA(0x28220F, 0.14, 0x000000, 0.45),
-                                   radius: 14, controlRadius: 12, outline: 1, depth: .lifted)
+                                   radius: 16, controlRadius: 12, outline: 0, depth: .lifted)
 
     /// Swiss Index: a strict grid, flush-left type, hairlines and one signal red for what needs you.
     public static let swiss = make(.swiss, "Swiss Index", highlight: tok(.swiss, "accent"), onHighlight: tok(.swiss, "on-accent"),

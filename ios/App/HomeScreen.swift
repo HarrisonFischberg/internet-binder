@@ -116,9 +116,9 @@ struct HomeScreen: View {
 
     /// A folded section: a fan of its pictures, its name and what it holds. One tap opens its page.
     private func shelfRow(_ title: String, route: Route, saves: [Save], symbol: String, tint: Color, fill: String, detail: String) -> some View {
-        // Pantry Pop tints the two shelves softly in kind colours (teal and pink) with the name in the
-        // kind's colour, a hairline and no shadow, so the Review banner is the one loud thing on Home.
-        let calm = t.style == .pantry
+        // Pantry Pop and Night Atlas tint the two shelves softly in kind colours (teal and pink) with the
+        // name in the kind's colour, a hairline and no shadow, so the Review banner is the one loud thing.
+        let calm = t.style == .pantry || t.style == .atlas
         return NavigationLink(value: route) {
             HStack(spacing: 14) {
                 CoverFan(saves, symbol: symbol, tint: tint)
