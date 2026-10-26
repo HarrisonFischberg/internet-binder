@@ -43,13 +43,16 @@ struct HomeScreen: View {
                     (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 4)) : AnyLayout(HStackLayout(alignment: .top))) {
                         ScreenHeader(title: "Internet Binder", subtitle: nil)
                         if size != .regular {
-                            HStack(spacing: 10) {
-                                if model.aiReady && !model.saves.isEmpty {
-                                    headerButton("sparkles", "Fix everything with AI") { fixingAll = true }
-                                        .disabled(model.aiRun != nil)
+                            // One piece of glass for the header's controls.
+                            GlassEffectContainer(spacing: 10) {
+                                HStack(spacing: 10) {
+                                    if model.aiReady && !model.saves.isEmpty {
+                                        headerButton("sparkles", "Fix everything with AI") { fixingAll = true }
+                                            .disabled(model.aiRun != nil)
+                                    }
+                                    headerButton("paintpalette", "Appearance") { appearance = true }
+                                    headerButton("gearshape", "Settings") { settings = true }
                                 }
-                                headerButton("paintpalette", "Appearance") { appearance = true }
-                                headerButton("gearshape", "Settings") { settings = true }
                             }
                             .padding(.top, 8)
                         }
@@ -104,13 +107,9 @@ struct HomeScreen: View {
     }
 
     private func headerButton(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.body.weight(.bold)).foregroundStyle(t.ink)
-                .frame(width: 44, height: 44)
-                .ksSurface(radius: 22, scale: 0.75)
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityLabel(label)
+        Button(action: action) { GlassIcon(symbol) }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
     }
 
     private func count(_ n: Int, _ noun: String) -> String { n == 1 ? "1 \(noun)" : "\(n) \(noun)s" }

@@ -567,11 +567,9 @@ struct ShareCard: View {
 
     private func pageHeader(_ title: String, _ subtitle: String) -> some View {
         HStack(spacing: 6) {
-            Button { state.open(nil) } label: {
-                Image(systemName: "chevron.left").font(.headline).foregroundStyle(t.ink)
-                    .frame(width: 44, height: 44).ksSurface(radius: 22, scale: 0.5)
-            }
-            .accessibilityLabel("Back")
+            Button { state.open(nil) } label: { GlassIcon("chevron.left", font: .headline) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
             VStack(alignment: .leading, spacing: 0) {
                 Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
                 Text(subtitle).font(.footnote).foregroundStyle(t.inkMuted)

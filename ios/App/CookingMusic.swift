@@ -163,7 +163,7 @@ struct CookingMusicBar: View {
                 .accessibilityLabel("Turn music on")
             }
         }
-        .ksSurface(radius: 22, scale: 0.6)
+        .ksGlass(Capsule())
         .opacity(on && music.current == nil ? 0 : 1)
     }
 

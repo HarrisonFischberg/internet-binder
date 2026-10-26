@@ -540,7 +540,7 @@ struct SaveDetailScreen: View {
         }
     }
 
-    /// The one primary action, docked at the bottom edge with nothing over the page.
+    /// The one primary action, floating on glass at the bottom edge; the page scrolls under it.
     @ViewBuilder private var dock: some View {
         if let primary = primaryAction {
             primary
@@ -550,8 +550,6 @@ struct SaveDetailScreen: View {
                 .accessibilityShowsLargeContentViewer()
                 .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
                 .frame(maxWidth: .infinity)
-                .background(TablePatch().ignoresSafeArea(edges: .bottom))
-                .overlay(alignment: .top) { Rectangle().fill(t.style == .pantry ? t.line : t.rule).frame(height: t.style == .pantry ? 2 : 1) }
         }
     }
 

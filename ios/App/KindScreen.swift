@@ -84,12 +84,10 @@ struct KindScreen: View {
                     withAnimation(.easeOut(duration: 0.2)) { showMap.toggle() }
                 } label: {
                     // Always the map glyph; filled in while the map is showing (Chrome's pressed look).
-                    Image(systemName: "map")
-                        .font(.title3.weight(.semibold)).foregroundStyle(showMap ? t.onAccent : t.ink)
-                        .frame(width: mapButton, height: mapButton)
-                        .ksSurface(showMap ? t.accent : nil, radius: mapButton / 2, scale: 0.5)
+                    GlassIcon("map", tint: showMap ? t.accent : nil, ink: showMap ? t.onAccent : t.ink, size: mapButton,
+                              font: .title3.weight(.semibold))
                 }
-                .buttonStyle(PressStyle())
+                .buttonStyle(.plain)
                 .padding(.top, 8)
                 .accessibilityLabel("Map")
                 .accessibilityAddTraits(showMap ? .isSelected : [])

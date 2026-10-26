@@ -124,15 +124,15 @@ struct LibraryScreen: View {
                     .font(KSFont.note).foregroundStyle(t.inkMuted)
             }
             Spacer()
-            if !model.saves.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
-            Menu {
-                Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
-            } label: {
-                Image(systemName: "ellipsis").font(.body.weight(.bold)).foregroundStyle(t.ink)
-                    .frame(width: 44, height: 44)
-                    .ksSurface(radius: 22, scale: 0.75)
+            GlassEffectContainer(spacing: 10) {
+                HStack(spacing: 10) {
+                    if !model.saves.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
+                    Menu {
+                        Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
+                    } label: { GlassIcon("ellipsis") }
+                    .accessibilityLabel("More")
+                }
             }
-            .accessibilityLabel("More")
         }
         .padding(.top, 8)
     }

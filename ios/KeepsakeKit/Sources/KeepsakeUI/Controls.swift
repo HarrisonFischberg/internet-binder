@@ -28,8 +28,9 @@ struct ControlShape: InsettableShape {
     func inset(by amount: CGFloat) -> ControlShape { var s = self; s.inset += amount; return s }
 }
 
-/// The screen's one primary action: full width, docked at the bottom, under the thumb. In Pantry Pop
-/// a kind's action wears the kind's colour (a tomato Start cooking).
+/// The screen's one primary action: full width, docked at the bottom, under the thumb, on tinted
+/// Liquid Glass so the page shows through as it scrolls under. In Pantry Pop a kind's action wears the
+/// kind's colour (a tomato Start cooking).
 public struct PrimarySlab: View {
     let title: String
     let symbol: String
@@ -44,18 +45,46 @@ public struct PrimarySlab: View {
         let useKind = t.style == .pantry && kind != nil
         let fill = useKind ? t.kindFill(kind!) : t.primary
         let ink = useKind ? t.onKind : t.onPrimary
-        let shape = ControlShape(radius: t.style == .pantry ? 22 : t.controlRadius.isInfinite ? 16 : t.controlRadius)
         Button(action: action) {
             Label(title, systemImage: symbol)
                 .font(t.style == .pantry ? KSFont.name(.headline) : .headline)
                 .foregroundStyle(ink)
-                .frame(maxWidth: .infinity, minHeight: 56)
-                .background(fill, in: shape)
-                .overlay { if t.outline > 0 && t.style == .pantry { shape.strokeBorder(t.line, lineWidth: t.outline) } }
-                .resting(1.25)
-                .opacity(enabled ? 1 : 0.45)
+                .frame(maxWidth: .infinity, minHeight: 36)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(.glassProminent)
+        .buttonBorderShape(.capsule)
+        .controlSize(.large)
+        .tint(fill)
+        .opacity(enabled ? 1 : 0.45)
+    }
+}
+
+extension View {
+    /// Liquid Glass for a control that floats over the page (header buttons, Select, back, the map
+    /// toggle). The style stays on the content; controls float on glass. A tint marks a control
+    /// that's on.
+    public func ksGlass<S: Shape>(_ shape: S, tint: Color? = nil) -> some View {
+        glassEffect(tint.map { Glass.regular.tint($0).interactive() } ?? Glass.regular.interactive(), in: shape)
+    }
+}
+
+/// A round control on glass: a symbol in the style's ink (or `ink` on a tinted, switched-on control).
+/// Put neighbours in one `GlassEffectContainer` so they read as one piece of glass.
+public struct GlassIcon: View {
+    let symbol: String
+    let tint: Color?
+    let ink: Color?
+    let size: CGFloat
+    let font: Font
+    @Environment(\.ks) private var t
+    public init(_ symbol: String, tint: Color? = nil, ink: Color? = nil, size: CGFloat = 44, font: Font = .body.weight(.bold)) {
+        self.symbol = symbol; self.tint = tint; self.ink = ink; self.size = size; self.font = font
+    }
+    public var body: some View {
+        Image(systemName: symbol).font(font).foregroundStyle(ink ?? t.ink)
+            .frame(width: size, height: size)
+            .contentShape(Circle())
+            .ksGlass(Circle(), tint: tint)
     }
 }
 
