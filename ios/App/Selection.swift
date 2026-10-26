@@ -22,7 +22,7 @@ struct SelectButton: View {
     }
 }
 
-/// The same button for a screen that draws its own header (Places), in the style's capsule.
+/// The same button for a screen that draws its own header (Places, Library), on glass.
 struct HeaderSelectButton: View {
     @Binding var selecting: Bool
     @Binding var selected: Set<String>
@@ -37,10 +37,10 @@ struct HeaderSelectButton: View {
             Text(selecting ? "Done" : "Select").font(.subheadline.weight(.semibold))
                 .foregroundStyle(selecting ? t.onPrimary : t.ink)
                 .padding(.horizontal, 16).frame(minHeight: 44)
-                .background(selecting ? t.primary : t.paper, in: Capsule())
-                .overlay(Capsule().strokeBorder(t.style == .pantry ? t.line : t.rule, lineWidth: t.style == .pantry ? 2 : 1))
+                .contentShape(Capsule())
+                .ksGlass(Capsule(), tint: selecting ? t.primary : nil)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(.plain)
         .accessibilityHint(selecting ? "Leaves Select mode." : "Tick several to move or delete them at once.")
     }
 }

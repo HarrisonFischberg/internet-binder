@@ -36,8 +36,9 @@ struct CookingView: View {
             TableBackground()
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Button("Close", systemImage: "xmark") { dismiss() }
-                        .labelStyle(.iconOnly).font(.title3).frame(width: 44, height: 44)
+                    Button { dismiss() } label: { GlassIcon("xmark") }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Close")
                     Spacer()
                     CookingProgress(step: step, count: steps.count) { showOverview = true }
                     Spacer()
@@ -61,11 +62,9 @@ struct CookingView: View {
                 .onChange(of: step) { Haptic.pageTurned() }
                 HStack(spacing: 12) {
                     if step > 0 {
-                        Button { go(to: step - 1) } label: {
-                            Image(systemName: "chevron.left").font(.headline).foregroundStyle(t.ink).frame(width: 56, height: 56)
-                                .ksSurface(radius: t.style == .swiss ? 0 : 28, scale: 0.75)
-                        }
-                        .accessibilityLabel("Previous step")
+                        Button { go(to: step - 1) } label: { GlassIcon("chevron.left", size: 52, font: .headline) }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Previous step")
                     }
                     if step < steps.count - 1 {
                         PrimarySlab("Next step", symbol: "arrow.right") { go(to: step + 1) }
