@@ -52,6 +52,8 @@ final class ShareState {
     var touched = false
     var note = ""
     var finish: () -> Void = {}
+    /// Done or Undo was tapped: the sheet is on its way out, so a second tap does nothing.
+    private(set) var closing = false
     private var library: Library?
 
     func save(items: [NSExtensionItem]) async {
@@ -162,12 +164,14 @@ final class ShareState {
     }
 
     func undo() {
-        guard let save, let library else { finish(); return }
+        guard !closing else { return }
+        closing = true
         Haptic.undo()
+        guard let save, let library else { finish(); return }
+        // The save is gone before the sheet is; telling iCloud can wait for the moment after.
         Task {
             try? await library.undoSave(save.id)
-            await sendToICloud(save.id)
-            finish()
+            closeThen { [self] in await sendToICloud(save.id) }
         }
     }
 
@@ -187,17 +191,45 @@ final class ShareState {
     }
 
     /// Done: the save stays where it is now, and a notification says so (tap it to open the save).
+    /// The tap answers at once (a tap you feel, the sheet goes); the note, the sorter's lesson, the
+    /// notification and iCloud finish in the moment after, while iOS keeps the extension alive for them.
     func done() {
-        guard let save else { finish(); return }
-        Task {
-            if let library, !note.trimmingCharacters(in: .whitespaces).isEmpty { try? await library.update(save.id, ["note": note]) }
+        guard !closing else { return }
+        closing = true
+        Haptic.saved()
+        guard let save, let library else { finish(); return }
+        let note = note.trimmingCharacters(in: .whitespaces)
+        var kept = false
+        if case .saved = phase { kept = true }
+        let id = save.id, title = save.title, label = destinationLabel
+        closeThen { [self] in
+            if !note.isEmpty { try? await library.update(id, ["note": note]) }
             // Kept where it went: that's a choice the sorter learns from (a save you moved already taught it).
-            if let library, case .saved = phase { try? await library.confirmFiling(save.id) }
-            if case .saved = phase { await SaveNotice.post(id: save.id, title: save.title, destination: destinationLabel) }
-            await sendToICloud(save.id)
-            finish()
+            if kept { try? await library.confirmFiling(id) }
+            if kept { await SaveNotice.post(id: id, title: title, destination: label) }
+            await sendToICloud(id)
         }
     }
+
+    /// Closes the sheet now and lets `work` carry on after it. The time is asked for before the sheet
+    /// goes, so iOS keeps the extension running a few seconds more instead of stopping it with the sheet.
+    /// If iOS says no, it does the work first and closes after, as before.
+    private func closeThen(_ work: @escaping @MainActor () async -> Void) {
+        let close = finish, began = Began()
+        ProcessInfo.processInfo.performExpiringActivity(withReason: "Finishing a save") { expired in
+            if expired {
+                // Refused outright: finish here, then close. (Out of time later: nothing to do.)
+                if !began.value { began.value = true; Task { @MainActor in await work(); close() } }
+                return
+            }
+            began.value = true
+            let finished = DispatchSemaphore(value: 0)
+            Task { @MainActor in await work(); finished.signal() }
+            DispatchQueue.main.async { close() }
+            _ = finished.wait(timeout: .now() + 8)
+        }
+    }
+    private final class Began: @unchecked Sendable { var value = false }
 }
 
 /// What the host app shared: Safari's page reading (ShareExtract.js, Chrome's extract.js), or a URL,
