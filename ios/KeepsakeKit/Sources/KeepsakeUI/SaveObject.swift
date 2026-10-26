@@ -29,12 +29,14 @@ public struct ShelfCard: View {
     let width: CGFloat
     /// Grows with Dynamic Type, so the name and fact keep their room.
     @ScaledMetric(relativeTo: .headline) private var textHeight: CGFloat = 78
-    public init(_ save: Save, width: CGFloat) { self.save = save; self.width = width }
+    /// Pantry Pop on Home: a save without a picture is a soft-tinted jar, so only Review is loud.
+    let calm: Bool
+    public init(_ save: Save, width: CGFloat, calm: Bool = false) { self.save = save; self.width = width; self.calm = calm }
 
     private var done: Bool { save.status == "done" || save.purchased == true }
 
     public var body: some View {
-        SaveCard(save: save, compact: false, pictureHeight: width * 0.72, fixedHeight: width * 0.72 + textHeight + 6)
+        SaveCard(save: save, compact: false, pictureHeight: width * 0.72, fixedHeight: width * 0.72 + textHeight + 6, calm: calm)
             .frame(width: width)
             .saturation(done ? 0.4 : 1)
             .accessibilityElement(children: .ignore)
@@ -47,6 +49,7 @@ struct SaveCard: View {
     var compact = false
     var pictureHeight: CGFloat?
     var fixedHeight: CGFloat?
+    var calm = false
     @Environment(\.ks) private var t
     /// Room kept under the name for the state badge, so the badge never sits on the words.
     @ScaledMetric(relativeTo: .caption2) private var badgeHeight: CGFloat = 20
@@ -131,20 +134,22 @@ struct SaveCard: View {
         }
     }
 
-    /// Pantry Pop: a solid jar label in the kind's colour, with a lid and the name set big.
+    /// Pantry Pop: a solid jar label in the kind's colour, with a lid and the name set big. Calm (Home):
+    /// the kind's soft tint with its name in the kind's colour, a hairline and no shadow.
     private func jar(_ minH: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(kind.label.uppercased(), systemImage: kind.symbol)
                 .font(.caption.weight(.black)).tracking(1.2).labelStyle(.titleAndIcon)
+                .foregroundStyle(calm ? t.kind(save.kind) : t.onKind)
             Spacer(minLength: 12)
             Text(save.title).font(KSFont.name(compact ? .headline : .title2, t)).lineLimit(4).minimumScaleFactor(0.8)
-            if !fact.isEmpty { Text(fact).font(.footnote.weight(.bold)).lineLimit(2) }
+            if !fact.isEmpty { Text(fact).font(.footnote.weight(.bold)).lineLimit(2).foregroundStyle(calm ? t.inkMuted : t.onKind) }
         }
-        .foregroundStyle(t.onKind)
+        .foregroundStyle(calm ? t.ink : t.onKind)
         .padding(.horizontal, 14).padding(.top, 22).padding(.bottom, 14 + badgeRoom)
         .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
-        .background(alignment: .top) { Lid().fill(t.onKind.opacity(0.18)).frame(height: 12) }
-        .ksSurface(t.kindFill(save.kind))
+        .background(alignment: .top) { Lid().fill((calm ? t.kind(save.kind) : t.onKind).opacity(calm ? 0.12 : 0.18)).frame(height: 12) }
+        .ksSurface(calm ? t.kindSoft(save.kind) : t.kindFill(save.kind), stroke: calm ? t.rule : nil, lifted: !calm)
     }
 
     /// Field Notebook: a ruled index card with the name written on it.

@@ -116,21 +116,22 @@ struct HomeScreen: View {
 
     /// A folded section: a fan of its pictures, its name and what it holds. One tap opens its page.
     private func shelfRow(_ title: String, route: Route, saves: [Save], symbol: String, tint: Color, fill: String, detail: String) -> some View {
-        // Pantry Pop paints the two shelves in kind colours (teal and pink), with ink text.
-        let bold = t.style == .pantry
+        // Pantry Pop tints the two shelves softly in kind colours (teal and pink) with the name in the
+        // kind's colour, a hairline and no shadow, so the Review banner is the one loud thing on Home.
+        let calm = t.style == .pantry
         return NavigationLink(value: route) {
             HStack(spacing: 14) {
                 CoverFan(saves, symbol: symbol, tint: tint)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(KSFont.name(.title2)).foregroundStyle(bold ? t.onKind : t.ink)
-                    Text(detail).font(.subheadline.weight(bold ? .bold : .regular)).foregroundStyle(bold ? t.onKind : t.inkMuted).lineLimit(2)
+                    Text(title).font(KSFont.name(.title2)).foregroundStyle(calm ? t.kind(fill) : t.ink)
+                    Text(detail).font(.subheadline.weight(calm ? .semibold : .regular)).foregroundStyle(t.inkMuted).lineLimit(2)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).foregroundStyle(bold ? t.onKind : t.inkMuted)
+                Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).foregroundStyle(calm ? t.kind(fill) : t.inkMuted)
             }
             .padding(.horizontal, 14).padding(.vertical, 14)
             .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
-            .ksSurface(bold ? t.kindFill(fill) : nil)
+            .ksSurface(calm ? t.kindSoft(fill) : nil, stroke: calm ? t.rule : nil, lifted: !calm)
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
@@ -168,7 +169,7 @@ struct HomeScreen: View {
                 HStack(alignment: .top, spacing: 16) {
                     ForEach(recentOrder.compactMap { id in newest.first { $0.id == id } }) { save in
                         NavigationLink(value: save) {
-                            ShelfCard(save, width: min(shelfWidth, 320)).matchedTransitionSource(id: save.id, in: zoom)
+                            ShelfCard(save, width: min(shelfWidth, 320), calm: true).matchedTransitionSource(id: save.id, in: zoom)
                         }
                         .buttonStyle(PressStyle())
                         // Hold and slide to put Recent in your own order.

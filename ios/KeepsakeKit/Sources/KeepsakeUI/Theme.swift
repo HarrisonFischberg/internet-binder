@@ -35,6 +35,7 @@ public struct KSTheme: Sendable {
     public let depth: Depth
     let kindText: [String: Color]
     let kindFills: [String: Color]
+    let kindSofts: [String: Color]
     public let onKind: Color
 
     static func dyn(_ l: UInt32, _ d: UInt32) -> Color {
@@ -62,14 +63,15 @@ public struct KSTheme: Sendable {
             accent: c("accent"), onAccent: c("on-accent"), stamp: stamp, rule: c("border"), line: line ?? c("line"), shadow: shadow,
             primary: primary ?? c("accent"), onPrimary: onPrimary ?? c("on-accent"), highlight: highlight, onHighlight: onHighlight,
             radius: radius, controlRadius: controlRadius, outline: outline, depth: depth,
-            kindText: kindKeys.mapValues { c("kind-\($0)") }, kindFills: kindKeys.mapValues { c("kind-\($0)-fill") }, onKind: c("on-kind-fill"))
+            kindText: kindKeys.mapValues { c("kind-\($0)") }, kindFills: kindKeys.mapValues { c("kind-\($0)-fill") },
+            kindSofts: kindKeys.mapValues { c("kind-\($0)-soft") }, onKind: c("on-kind-fill"))
     }
 
-    /// Pantry Pop: labelled jars on a cream shelf. Thick ink outlines, hard shadows that squash when
-    /// pressed, one saturated colour per kind, always carrying ink text.
+    /// Pantry Pop: labelled jars on a cream shelf. Thick ink outlines, short hard shadows (2 pt, so the
+    /// glass controls stay the lightest thing on screen) that squash when pressed, one saturated colour per kind, always carrying ink text.
     public static let pantry = make(.pantry, "Pantry Pop", highlight: tok(.pantry, "kind-product-fill"), onHighlight: tok(.pantry, "on-kind-fill"),
                                     stamp: tok(.pantry, "danger"), shadow: dyn(0x16130F, 0x000000),
-                                    radius: 18, controlRadius: .infinity, outline: 2.5, depth: .hard(4))
+                                    radius: 18, controlRadius: .infinity, outline: 2.5, depth: .hard(2))
 
     /// Field Notebook: graph paper, graphite ink, serif names, mono labels, one highlighter swipe for
     /// what matters, red pencil for stamps.
@@ -109,6 +111,8 @@ public struct KSTheme: Sendable {
     public func kind(_ k: String) -> Color { kindText[k] ?? inkMuted }
     /// A kind's colour as a filled block (a jar label, a sticker, a map pin); `onKind` reads on it.
     public func kindFill(_ k: String) -> Color { kindFills[k] ?? kindFills["link"] ?? ink }
+    /// A kind's colour as a quiet tint behind kind-coloured text (a calm shelf, a calm jar).
+    public func kindSoft(_ k: String) -> Color { kindSofts[k] ?? kindSofts["link"] ?? well }
 
     /// Labels in small uppercase mono ("RECIPE · 6 INGREDIENTS"): Field Notebook and Night Atlas.
     public var monoLabels: Bool { style == .notebook || style == .atlas }
