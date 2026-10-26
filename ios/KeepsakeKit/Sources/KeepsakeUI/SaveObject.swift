@@ -95,6 +95,8 @@ struct SaveCard: View {
                 caption.padding(.horizontal, 2)
             }
             .frame(height: fixedHeight, alignment: .top)
+        case .pantry, .atlas:
+            glassPictured(h)
         default:
             VStack(alignment: .leading, spacing: 0) {
                 SaveImage(save).frame(height: h).frame(maxWidth: .infinity).clipped()
@@ -106,6 +108,40 @@ struct SaveCard: View {
             .clipped()
             .ksSurface()
         }
+    }
+
+    /// Pantry Pop and Night Atlas: the picture fills the card and the name sits on a clear glass label
+    /// inside it, over a dimmed band so white text keeps its contrast on any picture.
+    private func glassPictured(_ h: CGFloat) -> some View {
+        let total = fixedHeight ?? (h + (compact ? 48 : 76))
+        return SaveImage(save).frame(maxWidth: .infinity).frame(height: total).clipped()
+            .overlay(alignment: .bottom) {
+                LinearGradient(colors: [.black.opacity(0), .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: total * 0.6).allowsHitTesting(false)
+            }
+            .overlay(alignment: .topLeading) {
+                if t.style == .pantry {
+                    Sticker(kind: save.kind).padding(10)
+                } else {
+                    Label(kind.label, systemImage: kind.symbol).font(.caption.weight(.semibold)).labelStyle(.titleAndIcon)
+                        .foregroundStyle(.white).padding(.horizontal, 9).padding(.vertical, 5)
+                        .glassEffect(.clear, in: .capsule).padding(10)
+                }
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(.white)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    if !fact.isEmpty && !compact {
+                        Text(fact).font(KSFont.fact(t)).foregroundStyle(.white.opacity(0.9)).lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.clear, in: .rect(cornerRadius: max(t.radius - 6, 10)))
+                .padding(8).padding(.bottom, badgeRoom)
+            }
+            .ksSurface()
     }
 
     private var caption: some View {
