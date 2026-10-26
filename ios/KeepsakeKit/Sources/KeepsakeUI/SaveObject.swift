@@ -116,8 +116,8 @@ struct SaveCard: View {
         let total = fixedHeight ?? (h + (compact ? 48 : 76))
         return SaveImage(save).frame(maxWidth: .infinity).frame(height: total).clipped()
             .overlay(alignment: .bottom) {
-                LinearGradient(colors: [.black.opacity(0), .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: total * 0.6).allowsHitTesting(false)
+                LinearGradient(colors: [.black.opacity(0), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: total * 0.7).allowsHitTesting(false)
             }
             .overlay(alignment: .topLeading) {
                 if t.style == .pantry {
@@ -125,7 +125,7 @@ struct SaveCard: View {
                 } else {
                     Label(kind.label, systemImage: kind.symbol).font(.caption.weight(.semibold)).labelStyle(.titleAndIcon)
                         .foregroundStyle(.white).padding(.horizontal, 9).padding(.vertical, 5)
-                        .glassEffect(.clear, in: .capsule).padding(10)
+                        .glassEffect(.clear.tint(.black.opacity(0.35)), in: .capsule).padding(10)
                 }
             }
             .overlay(alignment: .bottomLeading) {
