@@ -28,10 +28,12 @@ public enum Haptic {
         guard enabled else { return }
         let thunk = filedThunk ?? UIImpactFeedbackGenerator(style: .heavy)
         thunk.impactOccurred(intensity: 1)
-        filedThunk = nil
+        let echo = filedEcho ?? UIImpactFeedbackGenerator(style: .rigid)
+        echo.prepare()
+        filedThunk = nil; filedEcho = nil
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(70))
-            UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 1)
+            echo.impactOccurred(intensity: 1)
         }
         tick()
     }
@@ -40,9 +42,11 @@ public enum Haptic {
     public static func readyFiled() {
         guard enabled else { return }
         filedThunk = filedThunk ?? UIImpactFeedbackGenerator(style: .heavy)
-        filedThunk?.prepare()
+        filedEcho = filedEcho ?? UIImpactFeedbackGenerator(style: .rigid)
+        filedThunk?.prepare(); filedEcho?.prepare()
     }
-    private static var filedThunk: UIImpactFeedbackGenerator?
+    // Both beats prepared ahead: a cold generator can lag past the 110 ms close and drop the echo.
+    private static var filedThunk: UIImpactFeedbackGenerator?, filedEcho: UIImpactFeedbackGenerator?
     /// Plays at media volume and mixes under whatever else is playing (it never stops a podcast). Silent
     /// mode mutes it, like every other interface sound; Cooking mode's music session is left alone.
     public static func tick() {
