@@ -13,6 +13,7 @@ Implementation: SwiftUI `.sensoryFeedback(_:trigger:)` for standard moments; one
 | Save stored | Share card appears with "Saved" | `.success` | the save has landed; you can leave |
 | Destination detent | flicking the share slip / Move picker | `.selection` per detent | a card index clicking past tabs |
 | Destination chosen (lift finger) | share slip settles | `.impact(.soft, 0.6)` | the slip drops into its slot |
+| Done | share card | `.impact(.heavy, 1.0)`, then `.impact(.rigid, 1.0)` 70 ms later; the sheet closes after 110 ms | the binder snaps shut: firm enough to feel through a case |
 | Undo | share card, toasts | `.impact(.rigid, 0.5)` | something is taken back out |
 | Press on a card | Library, Home | none (visual press only) | too frequent; the sink is enough |
 | Lift a card to drag | long press, Library / iPad | `.impact(.medium)` | picked up |

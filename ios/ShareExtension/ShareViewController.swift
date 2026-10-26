@@ -80,6 +80,7 @@ final class ShareState {
             guard let s = result.save else { phase = .failed("Internet Binder couldn't read what was shared."); return }
             save = s
             Haptic.saved()
+            Haptic.readyFiled()
             phase = .saved
             destinations = (try? await library.destinations()) ?? []
             shelfPreview = (try? library.shelf(excluding: s.id)) ?? Library.Shelf()
@@ -198,8 +199,8 @@ final class ShareState {
     func done() {
         guard !closing else { return }
         closing = true
-        // The save already buzzed success when it landed; Done only needs to feel like it set down.
-        Haptic.settled()
+        // A firm press you can't miss; the sheet goes as soon as it has played.
+        Haptic.filed()
         let note = note.trimmingCharacters(in: .whitespaces), capture = capture
         closeThen { [self] in
             // Done while it still says Saving: let the save land first instead of dropping it.
@@ -215,7 +216,7 @@ final class ShareState {
         }
     }
 
-    /// Closes the sheet now and lets `work` carry on after it. The time is asked for before the sheet
+    /// Closes the sheet once the press has buzzed (a tenth of a second) and lets `work` carry on after it. The time is asked for before the sheet
     /// goes, so iOS keeps the extension running a few seconds more instead of stopping it with the sheet.
     /// If iOS says no, it does the work first and closes after, as before.
     private func closeThen(_ work: @escaping @MainActor () async -> Void) {
@@ -223,13 +224,13 @@ final class ShareState {
         ProcessInfo.processInfo.performExpiringActivity(withReason: "Finishing a save") { expired in
             if expired {
                 // Refused outright: finish here, then close. (Out of time later: nothing to do.)
-                if !began.value { began.value = true; Task { @MainActor in await work(); close() } }
+                if !began.value { began.value = true; Task { @MainActor in await work(); close() } }   // work outlasts the buzz
                 return
             }
             began.value = true
             let finished = DispatchSemaphore(value: 0)
             Task { @MainActor in await work(); finished.signal() }
-            DispatchQueue.main.async { close() }
+            Task { @MainActor in try? await Task.sleep(for: Haptic.filedLength); close() }
             _ = finished.wait(timeout: .now() + 8)
         }
     }
