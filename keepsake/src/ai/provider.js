@@ -79,7 +79,7 @@ export function describePayload(post) {
   };
 }
 
-async function callProvider(cfg, apiKey, { system, userText, imageDataUrl, maxTokens = 600 }) {
+async function callProvider(cfg, apiKey, { system, userText, imageDataUrl, maxTokens = 600, cache = false }) {
   if (!apiKey) throw new Error('Add your API key in Settings → Optional AI first.');
   if (!cfg.baseUrl) throw new Error('Set the provider base URL first.');
   const controller = new AbortController();
@@ -92,10 +92,12 @@ async function callProvider(cfg, apiKey, { system, userText, imageDataUrl, maxTo
         if (m) content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
       }
       content.push({ type: 'text', text: userText });
+      // Prompt caching: the next request with the same system prompt within 5 minutes reads it at a tenth of the input price or less.
+      const sys = cache ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : system;
       const res = await fetch(`${cfg.baseUrl}/v1/messages`, {
         method: 'POST', signal: controller.signal,
         headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ ...anthropicParams(cfg, maxTokens), system, messages: [{ role: 'user', content }] }),
+        body: JSON.stringify({ ...anthropicParams(cfg, maxTokens), system: sys, messages: [{ role: 'user', content }] }),
       });
       const data = await readJson(res);
       return (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
@@ -505,7 +507,8 @@ export async function understandWithAI(input, settings, apiKey) {
     input.image ? 'The image is the post\'s thumbnail.' : '',
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
-  const parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system: UNDERSTAND_SYSTEM, userText: text, imageDataUrl: image, maxTokens: 1800 }));
+  // Cached: AI cleanup and fills read saves one after another with this same long prompt.
+  const parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system: UNDERSTAND_SYSTEM, userText: text, imageDataUrl: image, maxTokens: 1800, cache: true }));
   if (!parsed || typeof parsed !== 'object') throw new Error('The provider didn’t return a usable answer.');
   const kinds = ['recipe', 'workout', 'place', 'video', 'article', 'media', 'book', 'product', 'link'];
   const kind = kinds.includes(parsed.kind) ? parsed.kind : 'link';

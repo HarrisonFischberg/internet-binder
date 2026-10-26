@@ -119,6 +119,8 @@ test('understandWithAI: one request with the image; the answer is normalised', a
   globalThis.fetch = async (url, opts) => { body = JSON.parse(opts.body); return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: '```json\n{"kind":"workout","confidence":1.4,"title":"  Leg day  ","details":{"exercises":[{"name":"Squat","sets":3,"seconds":30}]},"drafted":["exercises",5]}\n```' }] }) }; };
   const r = await understandWithAI({ title: 'Leg day', caption: 'legs', image: 'data:image/jpeg;base64,QUJD' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk');
   assert.equal(body.messages[0].content[0].type, 'image');
+  assert.deepEqual(body.system[0].cache_control, { type: 'ephemeral' }, 'the long understand prompt is cached');
+  assert.match(body.system[0].text, /^You read one thing a person saved/);
   assert.deepEqual([r.kind, r.confidence, r.title, r.details.exercises[0].durationSeconds, r.drafted], ['workout', 1, 'Leg day', 30, ['exercises']]);
 });
 
