@@ -28,7 +28,7 @@ final class ShareViewController: UIViewController {
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(host.view)
         host.didMove(toParent: self)
-        Task { await state.save(items: extensionContext?.inputItems as? [NSExtensionItem] ?? []) }
+        state.capture = Task { [state] in await state.save(items: extensionContext?.inputItems as? [NSExtensionItem] ?? []) }
     }
 }
 
@@ -52,6 +52,8 @@ final class ShareState {
     var touched = false
     var note = ""
     var finish: () -> Void = {}
+    /// Reading and saving what was shared; Done waits on it if it's still going.
+    var capture: Task<Void, Never>?
     /// Done or Undo was tapped: the sheet is on its way out, so a second tap does nothing.
     private(set) var closing = false
     private var library: Library?
@@ -196,18 +198,20 @@ final class ShareState {
     func done() {
         guard !closing else { return }
         closing = true
-        Haptic.saved()
-        guard let save, let library else { finish(); return }
-        let note = note.trimmingCharacters(in: .whitespaces)
-        var kept = false
-        if case .saved = phase { kept = true }
-        let id = save.id, title = save.title, label = destinationLabel
+        // The save already buzzed success when it landed; Done only needs to feel like it set down.
+        Haptic.settled()
+        let note = note.trimmingCharacters(in: .whitespaces), capture = capture
         closeThen { [self] in
-            if !note.isEmpty { try? await library.update(id, ["note": note]) }
+            // Done while it still says Saving: let the save land first instead of dropping it.
+            await capture?.value
+            guard let save, let library else { return }
+            let kept: Bool
+            if case .saved = phase { kept = true } else { kept = false }
+            if !note.isEmpty { try? await library.update(save.id, ["note": note]) }
             // Kept where it went: that's a choice the sorter learns from (a save you moved already taught it).
-            if kept { try? await library.confirmFiling(id) }
-            if kept { await SaveNotice.post(id: id, title: title, destination: label) }
-            await sendToICloud(id)
+            if kept { try? await library.confirmFiling(save.id) }
+            if kept { await SaveNotice.post(id: save.id, title: save.title, destination: destinationLabel) }
+            await sendToICloud(save.id)
         }
     }
 
