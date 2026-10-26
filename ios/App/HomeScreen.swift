@@ -121,10 +121,10 @@ struct HomeScreen: View {
         let calm = t.style == .pantry || t.style == .atlas
         return NavigationLink(value: route) {
             HStack(spacing: 14) {
-                CoverFan(saves, symbol: symbol, tint: tint)
+                CoverFan(saves, symbol: symbol, tint: tint, calm: calm)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(KSFont.name(.title2)).foregroundStyle(calm ? t.kind(fill) : t.ink)
-                    Text(detail).font(.subheadline.weight(calm ? .semibold : .regular)).foregroundStyle(t.inkMuted).lineLimit(2)
+                    Text(detail).font(.subheadline.weight(calm ? .semibold : .regular)).foregroundStyle(calm ? t.ink : t.inkMuted).lineLimit(2)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).foregroundStyle(calm ? t.kind(fill) : t.inkMuted)

@@ -169,7 +169,9 @@ struct SaveDetailScreen: View {
             .accessibilityLabel(isInstagram ? "Open the post on Instagram" : "Open \(current.host ?? "the page")")
             .padding(.top, 8)
         } else {
-            SaveObject(current).frame(maxWidth: 260).frame(maxWidth: .infinity).padding(.top, 16)
+            // No picture: the title below leads, with just the kind's stamp above it (a card here would
+            // say the title twice).
+            Stamp(kind: current.kind, size: 44).padding(.top, 16)
         }
     }
 

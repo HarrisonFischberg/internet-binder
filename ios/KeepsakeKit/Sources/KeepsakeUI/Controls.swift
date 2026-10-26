@@ -54,7 +54,8 @@ public struct PrimarySlab: View {
         .buttonStyle(.glassProminent)
         .buttonBorderShape(.capsule)
         .controlSize(.large)
-        .tint(fill)
+        // A little of the page shows through: glass, not a painted slab.
+        .tint(fill.opacity(0.82))
         .opacity(enabled ? 1 : 0.45)
     }
 }

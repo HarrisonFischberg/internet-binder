@@ -88,21 +88,25 @@ public struct CoverFan: View {
     let symbol: String
     let tint: Color
     var size: CGFloat = 44
+    /// On a calm shelf: hairlines and no shadow, so the pictures don't outweigh what needs you.
+    var calm = false
     @Environment(\.ks) private var t
-    public init(_ saves: [Save], symbol: String, tint: Color, size: CGFloat = 44) { self.saves = saves; self.symbol = symbol; self.tint = tint; self.size = size }
+    public init(_ saves: [Save], symbol: String, tint: Color, size: CGFloat = 44, calm: Bool = false) {
+        self.saves = saves; self.symbol = symbol; self.tint = tint; self.size = size; self.calm = calm
+    }
     public var body: some View {
         let shown = Array(saves.filter(\.hasImage).prefix(3))
         ZStack {
             if shown.isEmpty {
                 Image(systemName: symbol).font(.system(size: size * 0.42, weight: .medium)).foregroundStyle(tint)
                     .frame(width: size, height: size)
-                    .ksSurface(t.well, radius: 8, scale: 0.5)
+                    .ksSurface(t.well, radius: 8, stroke: calm ? t.rule : nil, scale: 0.5, lifted: !calm)
             }
             ForEach(Array(shown.enumerated()), id: \.element.id) { i, save in
                 let angle = shown.count == 1 ? 0 : (Double(i) - Double(shown.count - 1) / 2) * 9
                 SaveImage(save, symbolSize: size * 0.3)
                     .frame(width: size, height: size)
-                    .ksSurface(radius: min(t.radius, 8), scale: 0.5)
+                    .ksSurface(radius: min(t.radius, 8), stroke: calm ? t.rule : nil, scale: 0.5, lifted: !calm)
                     .rotationEffect(.degrees(angle), anchor: .bottom)
                     .offset(x: CGFloat(i) * size * 0.32 - CGFloat(shown.count - 1) * size * 0.16)
                     .zIndex(Double(i))
