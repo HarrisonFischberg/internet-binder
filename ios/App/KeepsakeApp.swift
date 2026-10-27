@@ -273,6 +273,7 @@ final class LibraryModel {
         s.onChange = { [weak self] in Task { @MainActor in self?.syncChanged() } }
         s.onStatus = { [weak self] status in Task { @MainActor in self?.statusChanged(status) } }
         s.onError = { [weak self] error in Task { @MainActor in self?.syncStatus = .failed(error.localizedDescription) } }
+        s.onPurged = { [weak self] in Task { @MainActor in self?.setSync(false) } }
         sync = s
         s.start()
         Task { await checkAccount() }

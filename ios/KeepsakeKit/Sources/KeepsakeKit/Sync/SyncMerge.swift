@@ -89,7 +89,9 @@ enum SyncMerge {
     }
 
     /// `{ term: { collectionId: weight } }`: remote plus this device's change since the base. A weight
-    /// that lands on 0 is dropped, so Forget on one device removes the word everywhere.
+    /// that lands on 0 is dropped, so Forget on one device removes the word everywhere. Two sides that
+    /// reached the same weight made the same change (both moved a merged collection's words, both forgot
+    /// a word): it counts once, and a weight never goes below 0.
     static func mergeCounters(base: Any?, local: Any?, remote: Any?, cap: Double?) -> [String: Any] {
         let b = base as? [String: [String: Any]] ?? [:], l = local as? [String: [String: Any]] ?? [:], r = remote as? [String: [String: Any]] ?? [:]
         func n(_ v: Any?) -> Double { (v as? NSNumber)?.doubleValue ?? 0 }
@@ -98,7 +100,8 @@ enum SyncMerge {
             var entry: [String: Any] = [:]
             let bt = b[term] ?? [:], lt = l[term] ?? [:], rt = r[term] ?? [:]
             for cid in Set(bt.keys).union(lt.keys).union(rt.keys) {
-                var w = n(rt[cid]) + n(lt[cid]) - n(bt[cid])
+                let l = n(lt[cid]), r = n(rt[cid])
+                var w = l == r ? l : max(0, r + l - n(bt[cid]))
                 if let cap { w = min(cap, w) }
                 if w != 0 { entry[cid] = w }
             }

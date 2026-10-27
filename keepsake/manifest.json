@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Internet Binder",
-  "version": "2.2.4",
+  "version": "2.2.5",
   "description": "Save products, places, recipes, videos and more from any site. Sorted for you, kept on your device. No account.",
   "minimum_chrome_version": "121",
   "icons": {

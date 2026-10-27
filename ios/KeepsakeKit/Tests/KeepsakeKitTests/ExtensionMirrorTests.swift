@@ -72,6 +72,22 @@ struct ExtensionMirrorTests {
         #expect(s?["note"] as? String == "for Sunday")
     }
 
+    @Test func learnedWordsFromBothSidesCountOnce() throws {
+        try phone.put("kv", ["key": "prefs", "value": ["learnedKeywords": ["tent": ["camping": 2]], "retailerPrefs": ["rei.com": ["camping": 2]], "corrections": []]])
+        try syncAll(cloud, phone, mac)
+        let seen = try pull(0).cursor // Safari took it
+        // Both learn something before Safari's next round.
+        try phone.put("kv", ["key": "prefs", "value": ["learnedKeywords": ["tent": ["camping": 3]], "retailerPrefs": ["rei.com": ["camping": 3]], "corrections": []]])
+        try syncAll(cloud, phone, mac)
+        let safari: [String: Any] = ["key": "prefs", "value": ["learnedKeywords": ["tent": ["camping": 2], "stove": ["camping": 1]], "retailerPrefs": ["rei.com": ["camping": 2.5]], "corrections": []]]
+        _ = try ExtensionMirror.receive([["store": "kv", "key": "prefs", "rev": 1, "body": safari]], cursor: seen, into: mac.db)
+        let value = try SyncJSON.object(try #require(try mac.db.get("kv", "prefs")))["value"] as? [String: Any]
+        let words = value?["learnedKeywords"] as? [String: [String: Double]]
+        #expect(words?["tent"]?["camping"] == 3, "the phone's lesson, not the shared 2 counted twice")
+        #expect(words?["stove"]?["camping"] == 1, "Safari's lesson")
+        #expect((value?["retailerPrefs"] as? [String: [String: Double]])?["rei.com"]?["camping"] == 3.5)
+    }
+
     @Test func aiSettingsGoBothWays() throws {
         _ = try ExtensionMirror.receive([["store": "kv", "key": "aiSettings", "rev": 1, "body": ["key": "aiSettings", "value": ["model": "claude-sonnet-5-5"]]]], cursor: 0, into: mac.db)
         try syncAll(cloud, mac, phone)

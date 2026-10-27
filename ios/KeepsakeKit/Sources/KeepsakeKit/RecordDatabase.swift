@@ -130,6 +130,14 @@ public final class RecordDatabase: @unchecked Sendable {
                 CREATE TABLE sync_outbound ("seq" INTEGER PRIMARY KEY AUTOINCREMENT, "store" TEXT NOT NULL, "key" TEXT NOT NULL);
                 """)
         }
+        // The extension's merge base (ExtensionMirror): sync_ext_base, the version of each record Safari last
+        // took (pictures hashed); sync_ext_offer, versions handed over in a pull and not yet known to be taken.
+        m.registerMigration("v6-sync-ext-base") { db in
+            try db.execute(sql: """
+                CREATE TABLE sync_ext_base ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "body" TEXT NOT NULL, PRIMARY KEY ("store", "key"));
+                CREATE TABLE sync_ext_offer ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "seq" INTEGER NOT NULL, "body" TEXT, PRIMARY KEY ("store", "key"));
+                """)
+        }
         return m
     }
 

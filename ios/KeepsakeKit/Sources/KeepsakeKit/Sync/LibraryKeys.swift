@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import Security
+import os
 
 /// The keys that seal pictures before they go to iCloud. Record text is end-to-end encrypted by CloudKit
 /// itself (`encryptedValues`); assets are only end-to-end with Advanced Data Protection on, so pictures
@@ -12,27 +13,42 @@ import Security
 /// pictures still open with the key they name.
 public protocol LibraryKeyStore: Sendable {
     func all() -> [String: SymmetricKey]
-    func add(id: String, key: SymmetricKey)
+    /// Throws when the key couldn't be kept: pictures sealed with it could never be opened again.
+    func add(id: String, key: SymmetricKey) throws
 }
 
 public struct LibraryKeys: Sendable {
     public let store: LibraryKeyStore
     static let idLength = 16
+    /// The key to seal with is read again after this long, so a smaller id arriving through iCloud Keychain
+    /// is picked up, without a Keychain query for every picture sealed (a first sync seals thousands).
+    let cacheFor: TimeInterval
+    private let cached = OSAllocatedUnfairLock<(id: String, key: SymmetricKey, at: Date)?>(initialState: nil)
 
-    public init(store: LibraryKeyStore) { self.store = store }
+    public init(store: LibraryKeyStore, cacheFor: TimeInterval = 60) {
+        self.store = store
+        self.cacheFor = cacheFor
+    }
 
     /// The key to seal with, made the first time.
-    func current() -> (id: String, key: SymmetricKey) {
-        if let first = store.all().min(by: { $0.key < $1.key }) { return (first.key, first.value) }
-        let id = UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(Self.idLength).lowercased()
-        let key = SymmetricKey(size: .bits256)
-        store.add(id: id, key: key)
-        return (id, key)
+    func current() throws -> (id: String, key: SymmetricKey) {
+        if let c = cached.withLock({ $0 }), Date().timeIntervalSince(c.at) < cacheFor { return (c.id, c.key) }
+        let picked: (id: String, key: SymmetricKey)
+        if let first = store.all().min(by: { $0.key < $1.key }) {
+            picked = (first.key, first.value)
+        } else {
+            let id = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(Self.idLength).lowercased())
+            let key = SymmetricKey(size: .bits256)
+            try store.add(id: id, key: key)
+            picked = (id, key)
+        }
+        cached.withLock { $0 = (picked.id, picked.key, Date()) }
+        return picked
     }
 
     /// `key id (16 ASCII) ‖ nonce ‖ ciphertext ‖ tag`, bound to the record name.
     public func seal(_ data: Data, recordName: String) throws -> Data {
-        let (id, key) = current()
+        let (id, key) = try current()
         return Data(id.utf8) + (try Sealer(key: key).seal(data, recordName: recordName))
     }
 
@@ -75,12 +91,13 @@ public struct KeychainLibraryKeys: LibraryKeyStore {
         return keys
     }
 
-    public func add(id: String, key: SymmetricKey) {
+    public func add(id: String, key: SymmetricKey) throws {
         var q = base()
         q[kSecAttrAccount as String] = id
         q[kSecValueData as String] = key.withUnsafeBytes { Data($0) }
         q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(q as CFDictionary, nil)
+        let status = SecItemAdd(q as CFDictionary, nil)
+        guard status == errSecSuccess else { throw SyncError.keyNotSaved(Int(status)) }
     }
 }
 
