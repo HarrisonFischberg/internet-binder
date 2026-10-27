@@ -1,0 +1,82 @@
+[
+  {
+    "file": "cooking-01-bossa-antigua.m4a",
+    "title": "Bossa Antigua",
+    "artist": "Kevin MacLeod",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700069"
+  },
+  {
+    "file": "cooking-02-lobby-time.m4a",
+    "title": "Lobby Time",
+    "artist": "Kevin MacLeod",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1600054"
+  },
+  {
+    "file": "cooking-03-jazz-brunch.m4a",
+    "title": "Jazz Brunch",
+    "artist": "Kevin MacLeod",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700074"
+  },
+  {
+    "file": "cooking-04-backbay-lounge.m4a",
+    "title": "Backbay Lounge",
+    "artist": "Kevin MacLeod",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1700068"
+  },
+  {
+    "file": "cooking-05-laid-back-guitars.m4a",
+    "title": "Laid Back Guitars",
+    "artist": "Kevin MacLeod",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100181"
+  },
+  {
+    "file": "cooking-06-easy-lemon.m4a",
+    "title": "Easy Lemon",
+    "artist": "Kevin MacLeod",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1200076"
+  },
+  {
+    "file": "cooking-07-gymnopedie-no-1.m4a",
+    "title": "Gymnopedie No. 1",
+    "artist": "Kevin MacLeod (Erik Satie)",
+    "license": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/",
+    "source": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100787"
+  },
+  {
+    "file": "cooking-08-goldberg-aria.m4a",
+    "title": "Goldberg Variations: Aria, BWV 988",
+    "artist": "Kimiko Ishizaka (J.S. Bach)",
+    "license": "CC0",
+    "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_J.S._Bach-_-Open-_Goldberg_Variations,_BWV_988_(Piano)_-_01_Aria.mp3"
+  },
+  {
+    "file": "cooking-09-prelude-c-major.m4a",
+    "title": "Prelude No. 1 in C major, BWV 846",
+    "artist": "Kimiko Ishizaka (J.S. Bach)",
+    "license": "CC0",
+    "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "source": "https://commons.wikimedia.org/wiki/File:Kimiko_Ishizaka_-_Bach_-_Well-Tempered_Clavier,_Book_1_-_01_Prelude_No._1_in_C_major,_BWV_846.ogg"
+  },
+  {
+    "file": "cooking-10-nocturne-op9-no2.m4a",
+    "title": "Nocturne in E-flat major, Op. 9 No. 2",
+    "artist": "Frank Levy (Frédéric Chopin)",
+    "license": "Public domain",
+    "licenseURL": "https://creativecommons.org/publicdomain/mark/1.0/",
+    "source": "https://commons.wikimedia.org/wiki/File:Nocturne_in_E_flat_major,_Op._9_no._2.mp3"
+  }
+]
