@@ -175,7 +175,7 @@ struct ReviewScreen: View {
                     ForEach(destinations) { d in Button(d.label) { file(save, d.value, d.label) } }
                 } label: {
                     Text("Another collection…").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted)
-                        .underline(t.style != .pantry).padding(.horizontal, 6).frame(minHeight: 44)
+                        .underline().padding(.horizontal, 6).frame(minHeight: 44)
                 }
                 .accessibilityLabel("More")
             }

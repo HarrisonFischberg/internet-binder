@@ -7,7 +7,7 @@
   if (globalThis.__keepsakeFloating) return;
   const detector = globalThis.__keepsakeDetector;
   const toast = globalThis.__keepsakeToast;
-  // Every card uses the person's chosen style and theme (from FLOATING_CONFIG).
+  // Every card uses the person's chosen appearance (from FLOATING_CONFIG).
   const showCard = (o) => toast.show({ look: config && config.look, ...o });
   if (!detector || !toast || !globalThis.chrome?.runtime?.id) return;
 
@@ -17,26 +17,25 @@
     EXTRACT_TAB: 'keepsake:extract-tab', PAGE_TOAST: 'keepsake:page-toast',
   };
   const SIZES = { small: 28, medium: 34, large: 42 };
-  // Styles other than the default (Pantry Pop), as in src/shared/storage.js.
-  const STYLES = ['notebook', 'gallery', 'atlas', 'swiss'];
+  // Appearances other than the default (Nocturne), as in src/shared/storage.js.
+  const STYLES = ['paper', 'chromatic'];
   // Colours and shape come from the Internet Binder design tokens (tokens-content.js, injected first); the host
-  // carries data-style / data-theme from the person's settings, like the capture card.
+  // carries data-style from the person's settings, like the capture card.
   const CSS = `
     :host { all: initial; }
     .btn {
       position: fixed; z-index: 2147483646; display: inline-flex; align-items: center; gap: 6px; height: var(--h, 34px); padding: 0 12px 0 7px;
       border-radius: var(--r-pill); border: var(--bw) solid var(--c-line); background: var(--c-surface); color: var(--c-text); cursor: pointer;
-      font-family: var(--font-sans); font-size: calc(var(--h, 34px) * .4); font-weight: 800; letter-spacing: -.01em; line-height: 1;
+      font-family: var(--font-sans); font-size: calc(var(--h, 34px) * .4); font-weight: 650; letter-spacing: -.01em; line-height: 1;
       box-shadow: var(--shadow-raised);
       opacity: 0; transform: translateY(-4px) scale(.96); transition: opacity .14s ease, transform .14s ease, background .14s ease, box-shadow .14s ease; pointer-events: none; white-space: nowrap;
     }
     .btn.show { opacity: 1; transform: none; pointer-events: auto; }
     .btn:hover { background: var(--c-surface-2); }
-    .btn:active { transform: translate(2px, 2px); box-shadow: none; }
+    .btn:active { transform: scale(.97); }
     .btn:focus-visible { outline: 2px solid var(--c-focus); outline-offset: 2px; }
     .btn.busy { pointer-events: none; opacity: .7; }
-    .mark { width: calc(var(--h, 34px) * .6); height: calc(var(--h, 34px) * .6); border-radius: 32%; background: var(--c-kind-recipe-fill); color: var(--c-on-kind-fill); display: grid; place-items: center; flex: none; }
-    :host([data-style]) .mark { background: var(--c-accent); color: var(--c-on-accent); }
+    .mark { width: calc(var(--h, 34px) * .6); height: calc(var(--h, 34px) * .6); border-radius: 32%; background: var(--c-accent); color: var(--c-on-accent); display: grid; place-items: center; flex: none; }
     .mark svg { width: 58%; height: 58%; }
     .btn.compact { padding: 0; width: var(--h, 34px); justify-content: center; gap: 0; }
     .btn.compact .label { display: none; }
@@ -128,11 +127,8 @@
   function applyLook() {
     const look = config && config.look;
     const style = look && STYLES.includes(look.style) ? look.style : '';
-    const theme = look && ['light', 'dark'].includes(look.theme) ? look.theme : '';
     if (style) host.setAttribute('data-style', style);
     else host.removeAttribute('data-style');
-    if (theme) host.setAttribute('data-theme', theme);
-    else host.removeAttribute('data-theme');
   }
 
   function applySize() {

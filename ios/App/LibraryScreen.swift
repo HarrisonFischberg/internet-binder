@@ -80,7 +80,7 @@ struct LibraryScreen: View {
                     if !model.saves.isEmpty && query.isEmpty { filters }
                     content
                 }
-                .padding(.horizontal, 18)
+                .padding(.horizontal, 20)
                 .padding(.bottom, selecting ? 140 : 32)
             }
             .scrollDismissesKeyboard(.immediately)
@@ -120,8 +120,8 @@ struct LibraryScreen: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Library").font(KSFont.display()).foregroundStyle(t.ink)
                     .accessibilityAddTraits(.isHeader)
-                Text(model.saves.count == 1 ? "1 save" : "\(model.saves.count) saves")
-                    .font(KSFont.note).foregroundStyle(t.inkMuted)
+                Text(model.saves.count == 1 ? "1 save" : "\(model.saves.count.formatted()) saves")
+                    .font(KSFont.note).foregroundStyle(t.inkMuted).monospacedDigit()
             }
             Spacer()
             GlassEffectContainer(spacing: 10) {
@@ -151,15 +151,15 @@ struct LibraryScreen: View {
                     }
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease").font(.subheadline.weight(.bold))
-                        .foregroundStyle(status != nil || source != nil ? t.table : t.ink)
+                        .foregroundStyle(status != nil || source != nil ? t.onAccent : t.ink)
                         .frame(width: 44, height: 44)
-                        .background(status != nil || source != nil ? t.ink : t.paper, in: Circle())
-                        .overlay(Circle().strokeBorder(t.style == .pantry ? t.line : t.rule, lineWidth: t.style == .pantry ? 2.5 : 1))
+                        .background(status != nil || source != nil ? t.accent : t.well, in: Circle())
+                        .overlay(Circle().strokeBorder(t.rule, lineWidth: 1))
                 }
                 .accessibilityLabel("Filter")
                 Chip("All", selected: filter == .all) { set(.all) }
-                Chip("Collections", symbol: "bag", tint: KindStyle("product").color, selected: filter == .collections) { set(.collections) }
-                Chip("Lifestyle", symbol: "sparkles", tint: KindStyle("recipe").color, selected: filter == .lifestyle) { set(.lifestyle) }
+                Chip("Collections", symbol: "folder", tint: t.detail, selected: filter == .collections) { set(.collections) }
+                Chip("Lifestyle", symbol: "sparkles", tint: t.style == .chromatic ? t.alt : t.accent, selected: filter == .lifestyle) { set(.lifestyle) }
                 if model.reviewCount > 0 {
                     Chip("Review \(model.reviewCount)", symbol: "tray", selected: filter == .review) { set(.review) }
                 }
@@ -173,7 +173,7 @@ struct LibraryScreen: View {
                 }
                 divider
                 ForEach(collections) { c in
-                    Chip(c.name, symbol: "bag", tint: KindStyle("product").color, selected: filter == .collection(c.id)) { set(.collection(c.id)) }
+                    Chip(c.name, symbol: "folder", tint: t.detail, selected: filter == .collection(c.id)) { set(.collection(c.id)) }
                         .accessibilityLabel("Collection \(c.name)")
                 }
                 if !collections.isEmpty && !kinds.isEmpty { divider }
@@ -182,10 +182,10 @@ struct LibraryScreen: View {
                     Chip(plural(k), symbol: s.symbol, tint: s.color, kind: k, selected: filter == .kind(k)) { set(.kind(k)) }
                 }
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 20)
         }
         .scrollIndicators(.hidden)
-        .padding(.horizontal, -18)
+        .padding(.horizontal, -20)
     }
 
     /// A hairline between the chip groups: the two libraries, your collections, then the kinds.
@@ -210,7 +210,7 @@ struct LibraryScreen: View {
         } else if !model.loaded {
             ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
         } else if model.saves.isEmpty {
-            EmptyNote(symbol: "bookmark", text: "Nothing saved yet. Share a page, a post or a place to Internet Binder from any app, or import your Chrome library.") {
+            EmptyNote(symbol: "bookmark", text: "Save something worth coming back to. Share a page, a post or a place to Internet Binder from any app, or import your Chrome library.") {
                 importing = true
             }
         } else if grouped {
@@ -292,9 +292,9 @@ struct LibraryScreen: View {
                 Spacer()
                 Image(systemName: "chevron.right").font(.footnote.weight(.bold))
             }
-            .foregroundStyle(t.style == .gallery ? t.ink : t.onHighlight)
+            .foregroundStyle(t.onHighlight)
             .padding(.horizontal, 14).frame(minHeight: 52)
-            .ksSurface(t.style == .gallery ? t.well : t.highlight)
+            .ksSurface(t.highlight, stroke: .clear)
         }
         .buttonStyle(PressStyle())
     }
@@ -333,8 +333,9 @@ struct LibraryScreen: View {
                 }
             }
             .padding(.horizontal, 16)
-            .frame(minHeight: 50)
-            .ksSurface(radius: t.style == .pantry ? 16 : t.controlRadius.isInfinite ? 25 : t.controlRadius, lifted: false)
+            .frame(minHeight: 52)
+            .background(t.well, in: Capsule())
+            .overlay(Capsule().strokeBorder(searching ? t.accent : t.rule, lineWidth: searching ? 1.5 : 1))
             // The system Paste button reads the clipboard only when tapped, so iOS never asks to allow it.
             PasteButton(payloadType: URL.self) { urls in
                 Task { await model.pasteLink(urls.first?.absoluteString) }
@@ -363,7 +364,13 @@ struct EmptyNote: View {
     @Environment(\.ks) private var t
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: symbol).font(.largeTitle.weight(.light)).foregroundStyle(t.inkMuted).accessibilityHidden(true)
+            if symbol == "bookmark" {
+                // Nothing saved yet: the brand's binder mark.
+                BinderMark().stroke(t.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                    .frame(width: 64, height: 64).accessibilityHidden(true)
+            } else {
+                Image(systemName: symbol).font(.largeTitle.weight(.light)).foregroundStyle(t.inkMuted).accessibilityHidden(true)
+            }
             Text(text).font(.body).foregroundStyle(t.ink).multilineTextAlignment(.center)
             if let action {
                 Button("Import from Chrome", action: action).buttonStyle(.bordered).frame(minHeight: 44)

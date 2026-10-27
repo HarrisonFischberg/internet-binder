@@ -52,7 +52,7 @@ final class SaveFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Saved to Videos"].waitForExistence(timeout: 5), "Chrome's rule: anything on YouTube is a video")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS 'Video'")).firstMatch.waitForExistence(timeout: 3))
         app.buttons["Undo"].tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Nothing saved yet'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Save something worth coming back to'")).firstMatch.waitForExistence(timeout: 5))
     }
 
     func testSearchForgivesATypo() {
@@ -69,7 +69,7 @@ final class SaveFlowTests: XCTestCase {
     func testSearchTabFindsASave() {
         let app = launch(seeded: true)
         tab(app, "Search")
-        let search = app.searchFields.firstMatch
+        let search = app.textFields["Search your saves"]
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Kinds"].waitForExistence(timeout: 5), "nothing typed: the kinds you have")
         search.tap()
@@ -82,14 +82,12 @@ final class SaveFlowTests: XCTestCase {
         let button = app.buttons["Appearance"]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "Appearance sits next to Settings on Home")
         button.tap()
-        let notebook = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Field Notebook.'")).firstMatch
-        XCTAssertTrue(notebook.waitForExistence(timeout: 5))
-        notebook.tap()
-        XCTAssertEqual(notebook.value as? String, "Selected")
-        app.buttons["Dark"].tap()
-        XCTAssertTrue(app.buttons["Dark"].isSelected)
-        app.buttons["System"].tap()
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Pantry Pop.'")).firstMatch.tap()
+        let paper = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Paper & Ink.'")).firstMatch
+        XCTAssertTrue(paper.waitForExistence(timeout: 5))
+        paper.tap()
+        XCTAssertEqual(paper.value as? String, "Selected")
+        XCTAssertFalse(app.buttons["Dark"].exists, "each appearance is light or dark on its own")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Nocturne.'")).firstMatch.tap()
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 3))
     }

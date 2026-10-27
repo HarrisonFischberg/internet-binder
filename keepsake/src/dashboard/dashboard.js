@@ -220,11 +220,8 @@ function sortCollections(list) {
 }
 
 function applyTheme() {
-  const theme = state.settings?.theme || 'system';
   applyLook(document.documentElement, state.settings);
   setActionIcon(state.settings?.icon);
-  const btn = $('themeToggle');
-  if (btn) btn.title = `Theme: ${theme}`;
 }
 
 function parseHash() {
@@ -287,13 +284,6 @@ function bindChrome() {
   $('selectToggle').addEventListener('click', () => (state.selecting ? exitSelection(true) : enterSelection()));
   $('aiCheck').addEventListener('click', () => checkWithAI());
   $('placesMapToggle').addEventListener('click', () => setPlacesView(placesView() === 'map' ? 'list' : 'map'));
-  $('themeToggle').addEventListener('click', async () => {
-    const order = ['system', 'light', 'dark'];
-    const cur = state.settings?.theme || 'system';
-    const next = order[(order.indexOf(cur) + 1) % order.length];
-    await store.updateSettings({ theme: next });
-    UI.toast(`Theme: ${next}`, { duration: 1800 });
-  });
   $('bulkAll').addEventListener('click', () => {
     const visible = selectableIds();
     const all = visible.every((id) => state.selected.has(id));
@@ -2021,7 +2011,8 @@ function renderPlacesMap(view, items) {
 }
 
 function placesMapStyle() {
-  const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  // Nocturne and Chromatic are dark, Paper & Ink light (tokens.css sets color-scheme per appearance).
+  const dark = getComputedStyle(document.documentElement).colorScheme !== 'light';
   return `https://tiles.openfreemap.org/styles/${dark ? 'dark' : 'positron'}`;
 }
 

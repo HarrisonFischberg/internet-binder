@@ -20,8 +20,8 @@ final class ShareViewController: UIViewController {
         state.finish = { [weak self] in self?.extensionContext?.completeRequest(returningItems: nil) }
         let look = Appearance.load()
         let host = UIHostingController(rootView: ShareCard(state: state).keepsakeAppearance(look))
-        // Light or dark as chosen in Appearance (System follows the device).
-        host.overrideUserInterfaceStyle = look.mode == "light" ? .light : look.mode == "dark" ? .dark : .unspecified
+        // Light or dark, as the chosen appearance is.
+        host.overrideUserInterfaceStyle = look.colorScheme == .dark ? .dark : .light
         host.view.backgroundColor = .clear
         addChild(host)
         host.view.frame = view.bounds
@@ -318,7 +318,7 @@ struct ShareCard: View {
                         SaveObject(save)
                             .frame(maxWidth: 210)
                             .frame(maxWidth: .infinity)
-                            .rotationEffect(.degrees(appeared || reduce ? (t.style == .pantry ? -2 : 0) : -8))
+                            .rotationEffect(.degrees(appeared || reduce ? 0 : -8))
                             .scaleEffect(appeared || reduce ? 1 : 0.85)
                             .opacity(appeared ? 1 : 0)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -523,7 +523,7 @@ struct ShareCard: View {
                 if here { Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundStyle(t.accent) }
             }
             .padding(.horizontal, 14).frame(minHeight: 56)
-            .background(RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(here ? t.ink : t.ink.opacity(0.4), style: StrokeStyle(lineWidth: t.style == .pantry ? 2 : 1, dash: here ? [] : [4, 3])))
+            .background(RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(here ? t.ink : t.ink.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: here ? [] : [4, 3])))
             .background(here ? t.highlight.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: t.radius, style: .continuous))
             .contentShape(Rectangle())
         }

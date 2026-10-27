@@ -150,14 +150,11 @@ final class LibraryModel {
         static func == (a: Toast, b: Toast) -> Bool { a.id == b.id }
     }
 
-    /// The saved appearance; in Debug, -ksTheme <id> and -ksMode light|dark override it (screenshots of every theme).
+    /// The saved appearance; in Debug, -ksTheme <id> overrides it (screenshots of every theme).
     static func startingAppearance() -> Appearance {
         var a = Appearance.load()
         #if DEBUG
         if let theme = UserDefaults.standard.string(forKey: "ksTheme") { a.theme = theme }
-        if let mode = UserDefaults.standard.string(forKey: "ksMode") { a.mode = mode }
-        // Screenshots: the simulator's Safari keeps its share sheet light, so -ksShareMode tells the Share Extension.
-        if let m = UserDefaults.standard.string(forKey: "ksShareMode") { Appearance.defaults.set(m, forKey: "ks.mode") }
         #endif
         return a
     }

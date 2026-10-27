@@ -227,7 +227,7 @@ struct SyncTests {
     }
 
     @Test func aiSettingsSyncButTheKeyNeverDoes() throws {
-        try phone.db.setSettings(["keepsake_settings": ["style": "swiss", "ai": ["on": true, "provider": "anthropic", "model": "claude-sonnet-5-5", "effort": "medium"]],
+        try phone.db.setSettings(["keepsake_settings": ["style": "paper", "ai": ["on": true, "provider": "anthropic", "model": "claude-sonnet-5-5", "effort": "medium"]],
                                   "keepsake_secrets": ["aiApiKey": "sk-test"]])
         try syncAll(cloud, phone, mac)
         var macSettings = try mac.db.settings(nil)
@@ -243,7 +243,7 @@ struct SyncTests {
         try syncAll(cloud, mac, phone)
         let phoneSettings = try phone.db.settings(["keepsake_settings"])["keepsake_settings"] as? [String: Any]
         #expect((phoneSettings?["ai"] as? [String: Any])?["effort"] as? String == "high")
-        #expect(phoneSettings?["style"] as? String == "swiss")
+        #expect(phoneSettings?["style"] as? String == "paper")
         macSettings = try mac.db.settings(nil)
         #expect(try mac.db.pendingChanges().isEmpty)
     }

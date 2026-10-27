@@ -15,7 +15,7 @@ final class TabBarAndConsentTests: XCTestCase {
         XCUIDevice.shared.appearance = ProcessInfo.processInfo.environment["KEEPSAKE_SHOT_MODES"] == "dark" ? .dark : .light
         let app = XCUIApplication()
         app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
-        app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "pantry"]
+        app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "nocturne"]
         app.launch()
         XCTAssertTrue(app.staticTexts["Recent"].waitForExistence(timeout: 10))
         sleep(2)

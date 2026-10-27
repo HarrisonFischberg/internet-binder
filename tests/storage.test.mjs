@@ -594,7 +594,7 @@ function v2Library() {
     [KEYS.prefs]: { confidenceThreshold: 0.7, learnedKeywords: { oven: { colA1: 2 } }, retailerPrefs: {}, corrections: [] },
     [KEYS.importHistory]: { instagram: { 'instagram.com/p/AbCdE1': 'itm002' } },
     keepsake_aiLog: [{ id: 'log1', itemId: 'itm001', changes: [] }],
-    [KEYS.settings]: { theme: 'dark' },
+    [KEYS.settings]: { style: 'paper' },
     [KEYS.secrets]: { aiApiKey: 'keep-me' },
   };
 }
@@ -612,7 +612,7 @@ test('migration v2 -> v3 copies every save, collection, preference, history and 
   assert.equal(all.collections.colA1.name, 'Kitchen');
   assert.equal(all.prefs.confidenceThreshold, 0.7);
   assert.equal(all.prefs.learnedKeywords.oven.colA1, 2);
-  assert.equal(all.settings.theme, 'dark');
+  assert.equal(all.settings.style, 'paper');
   assert.equal(await store.getSecret('aiApiKey'), 'keep-me');
   assert.equal(await store.importedItemIdFor('https://www.instagram.com/p/AbCdE1/'), 'itm002');
   assert.equal((await store.getAiLog())[0].id, 'log1');

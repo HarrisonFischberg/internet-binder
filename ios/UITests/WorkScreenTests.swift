@@ -6,7 +6,7 @@ import XCTest
 final class WorkScreenTests: XCTestCase {
     let demo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../demo/keepsake-demo.json").standardized.path
 
-    private func launch(_ kind: String, theme: String = "pantry", mode: String = "light") -> XCUIApplication {
+    private func launch(_ kind: String, theme: String = "nocturne", mode: String = "light") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["KEEPSAKE_DB"] = "work-\(UUID().uuidString)"
         app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", theme, "-ksMode", mode, "-demoWork", kind]
@@ -55,7 +55,7 @@ final class WorkScreenTests: XCTestCase {
     /// Every theme, light and dark (screenshots only).
     func testThemes() throws {
         guard ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] != nil else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
-        for theme in ["pantry", "notebook", "atlas", "swiss"] {
+        for theme in ["nocturne", "paper", "chromatic"] {
             for mode in ["light", "dark"] {
                 let app = launch("ai", theme: theme, mode: mode)
                 XCTAssertTrue(app.buttons["workInBackground"].waitForExistence(timeout: 15))
