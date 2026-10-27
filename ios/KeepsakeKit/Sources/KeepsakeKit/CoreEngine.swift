@@ -153,14 +153,16 @@ public final class KeepsakeCore: @unchecked Sendable {
         }
     }
 
-    /// __native.appleAI: ready() → Bool, respond(system, userText, maxTokens, done(text | null, error | null)).
+    /// __native.appleAI: ready() → Bool, resting() → Bool (Low Power Mode or a hot phone),
+    /// respond(system, userText, maxTokens, done(text | null, error | null)), behind what you're doing.
     /// The model on this device (OnDeviceAI); provider.js asks it before your provider.
     private func appleAIBridge(in ctx: JSContext) -> JSValue {
         let o = JSValue(newObjectIn: ctx)!
         let ready: @convention(block) () -> Bool = { OnDeviceAI.status == .ready }
+        let resting: @convention(block) () -> Bool = { OnDeviceAI.resting }
         let respond: @convention(block) (String, String, Int, JSValue) -> Void = { [unowned self] system, prompt, maxTokens, done in
             let callback = JSBox(done)
-            Task {
+            Task(priority: .utility) {
                 do {
                     let text = try await OnDeviceAI.respond(system: system, prompt: prompt, maxTokens: maxTokens)
                     self.queue.async { callback.value.call(withArguments: [text, NSNull()]) }
@@ -171,6 +173,7 @@ public final class KeepsakeCore: @unchecked Sendable {
             }
         }
         o.setObject(ready, forKeyedSubscript: "ready" as NSString)
+        o.setObject(resting, forKeyedSubscript: "resting" as NSString)
         o.setObject(respond, forKeyedSubscript: "respond" as NSString)
         return o
     }

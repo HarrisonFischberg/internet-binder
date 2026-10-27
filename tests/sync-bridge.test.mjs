@@ -7,7 +7,7 @@ import { idbBackend } from '../keepsake/src/shared/db.js';
 import { createSyncBridge, batches, SYNC_KEY } from '../keepsake/src/shared/syncBridge.js';
 
 let n = 0;
-function setup({ onPush } = {}) {
+function setup({ onPush, onPull } = {}) {
   const db = idbBackend(indexedDB, `sync-${process.pid}-${++n}`, { journal: true });
   const local = new Map();
   let settings = { ai: { on: false, model: 'claude-haiku-5-5' } };
@@ -25,6 +25,7 @@ function setup({ onPush } = {}) {
     }
     if (msg.type === 'sync') { native.synced++; return { ok: true, status: 'upToDate' }; }
     if (msg.type === 'pull') {
+      if (onPull) await onPull(msg);
       const changes = native.outbound.filter((c) => c.seq > msg.cursor);
       return { ok: true, changes, cursor: native.outbound.length ? native.outbound.at(-1).seq : msg.cursor, more: false };
     }
@@ -88,6 +89,22 @@ test('an edit made while a round is running stays pending, and isn\'t overwritte
   assert.equal((await db.get('items', 'a')).title, 'Edited meanwhile');
   assert.deepEqual((await db.syncPending()).map((p) => p.key), ['a']);
   assert.deepEqual(s.native.held, [{ store: 'items', key: 'a' }], 'the Mac app merges the two when this edit is pushed');
+});
+
+test('an edit saved just as iCloud\'s version arrives is skipped in the same write, not overwritten', async () => {
+  let edit = null;
+  // The edit lands while the pull is answered, before anything is written.
+  const s = setup({ onPull: async () => { if (edit) await edit(); } });
+  await s.db.put('items', [{ id: 'a', title: 'First' }]);
+  await s.bridge.setOn(true);
+  s.native.outbound.push({ seq: 1, store: 'items', key: 'a', body: { id: 'a', title: 'From iCloud' } }, { seq: 2, store: 'items', key: 'b', body: { id: 'b', title: 'New' } });
+  edit = () => s.db.put('items', [{ id: 'a', title: 'Typed now' }]);
+  await s.bridge.run();
+  assert.deepEqual(s.native.held, [{ store: 'items', key: 'a' }]);
+  assert.equal((await s.db.get('items', 'a')).title, 'Typed now');
+  assert.equal((await s.db.get('items', 'b')).title, 'New');
+  assert.deepEqual(await s.db.syncApply([{ store: 'items', key: 'a', body: { id: 'a', title: 'Again from iCloud' } }]), [{ store: 'items', key: 'a', body: { id: 'a', title: 'Again from iCloud' } }]);
+  assert.equal((await s.db.get('items', 'a')).title, 'Typed now');
 });
 
 test('AI settings go up when changed here and come down when changed on the iPhone', async () => {

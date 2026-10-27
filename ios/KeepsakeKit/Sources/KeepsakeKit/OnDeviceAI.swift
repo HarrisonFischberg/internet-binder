@@ -37,6 +37,15 @@ public enum OnDeviceAI {
         return .unsupported
     }
 
+    /// Low Power Mode is on or the phone is hot: what runs by itself waits for a later open (you can still ask).
+    public static var resting: Bool {
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "ks.appleAIResting") { return true }
+        #endif
+        let info = ProcessInfo.processInfo
+        return info.isLowPowerModeEnabled || info.thermalState == .serious || info.thermalState == .critical
+    }
+
     public struct Failure: Error, LocalizedError {
         public let message: String
         public var errorDescription: String? { message }

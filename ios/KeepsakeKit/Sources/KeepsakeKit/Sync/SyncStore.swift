@@ -11,6 +11,8 @@ import GRDB
 public struct PendingChange: Hashable, Sendable {
     public let id: SyncID
     public let rev: Int64
+    /// Deleted here (nothing left to send but its deletion).
+    public let deleted: Bool
 }
 
 public enum OutgoingChange: Equatable, Sendable {
@@ -29,10 +31,22 @@ extension RecordDatabase {
 
     // MARK: sending
 
+    /// Read from the keys alone, never the bodies: a first sync asks after every batch, and the bodies of
+    /// a library with pictures are hundreds of megabytes.
     public func pendingChanges() throws -> [PendingChange] {
         try pool.read { db in
-            try Row.fetchAll(db, sql: "SELECT store, key, rev FROM sync_pending ORDER BY store, key").compactMap { row in
-                SyncID(store: row["store"], key: row["key"]).map { PendingChange(id: $0, rev: row["rev"]) }
+            var gone = Set<SyncID>()
+            for (store, s) in Self.specs {
+                let keys = try String.fetchAll(db, sql: """
+                    SELECT p.key FROM sync_pending p
+                    WHERE p.store = ? AND NOT EXISTS (SELECT 1 FROM "\(s.table)" t WHERE t.key = p.key)
+                    """, arguments: [store])
+                for key in keys { if let id = SyncID(store: store, key: key) { gone.insert(id) } }
+            }
+            // The AI settings live in the settings, not the kv table.
+            if try localBody(db, SyncID.aiSettings) != nil { gone.remove(SyncID.aiSettings) }
+            return try Row.fetchAll(db, sql: "SELECT store, key, rev FROM sync_pending ORDER BY store, key").compactMap { row in
+                SyncID(store: row["store"], key: row["key"]).map { PendingChange(id: $0, rev: row["rev"], deleted: gone.contains($0)) }
             }
         }
     }
@@ -47,7 +61,13 @@ extension RecordDatabase {
         try pool.read { db in
             guard let rev = try Int64.fetchOne(db, sql: "SELECT rev FROM sync_pending WHERE store = ? AND key = ?", arguments: [id.store, id.key]) else { return nil }
             guard let body = try localBody(db, id) else { return .delete(id, rev: rev) }
-            return .save(try SyncRecord(id: id, stored: body), rev: rev)
+            var rec = try SyncRecord(id: id, stored: body)
+            // Edited before its pictures could be opened here: send them back still sealed, or the save
+            // would reach iCloud without them and every other device would drop its copy.
+            if rec.pictures.isEmpty, rec.body.contains(SyncRecord.markerPrefix) {
+                rec.sealed = try Data.fetchOne(db, sql: "SELECT data FROM sync_sealed WHERE store = ? AND key = ?", arguments: [id.store, id.key])
+            }
+            return .save(rec, rev: rev)
         }
     }
 

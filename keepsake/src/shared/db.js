@@ -216,14 +216,23 @@ export function idbBackend(factory = globalThis.indexedDB, name = DB_NAME, { jou
         }
       }, { track: false });
     },
+    // A record edited here (pending) is skipped, checked in the same transaction as the write so an edit
+    // can't land in between; the skipped ones are returned for the Mac app to hold.
     syncApply(changes) {
       const stores = [...new Set(changes.map((c) => c.store))];
-      if (!stores.length) return Promise.resolve();
-      return write(stores, (tx) => {
+      if (!stores.length) return Promise.resolve([]);
+      return write([...stores, PENDING], (tx) => {
+        const skipped = [];
+        const pending = tx.objectStore(PENDING);
         for (const c of changes) {
-          const os = tx.objectStore(c.store);
-          if (c.body === null) os.delete(c.key); else os.put(c.body);
+          const r = pending.get(`${c.store}\u0000${c.key}`);
+          r.onsuccess = () => {
+            if (r.result) { skipped.push(c); return; }
+            const os = tx.objectStore(c.store);
+            if (c.body === null) os.delete(c.key); else os.put(c.body);
+          };
         }
+        return skipped;
       }, { track: false });
     },
     // Forgets what's pending, then (markAll) marks every synced record: turning sync on.

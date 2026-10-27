@@ -95,15 +95,15 @@ export function createSyncBridge({ db, store, local, send }) {
   async function pull(cursor) {
     for (;;) {
       const res = await ask({ type: 'pull', cursor });
-      const pendingNow = new Set((await db.syncPending()).map((p) => `${p.store}\u0000${p.key}`));
       const all = res.changes || [];
-      const changes = all.filter((c) => !pendingNow.has(`${c.store}\u0000${c.key}`));
-      // Edited here meanwhile: the Mac app keeps the iCloud version as unseen, so this edit is merged
-      // with it when it's pushed (not written over it), and the merge comes back on the next pull.
-      const held = all.filter((c) => !changes.includes(c)).map(({ store: s, key }) => ({ store: s, key }));
+      const ai = all.find((c) => c.store === 'kv' && c.key === 'aiSettings');
+      // Edited here meanwhile (syncApply skips those): the Mac app keeps the iCloud version as unseen, so
+      // this edit is merged with it when it's pushed (not written over it), and the merge comes back on
+      // the next pull.
+      const skipped = await db.syncApply(all.filter((c) => c !== ai));
+      const held = skipped.map(({ store: s, key }) => ({ store: s, key }));
       if (held.length) await ask({ type: 'hold', changes: held });
-      const ai = changes.find((c) => c.store === 'kv' && c.key === 'aiSettings');
-      await db.syncApply(changes.filter((c) => c !== ai));
+      const changes = all.filter((c) => !skipped.includes(c));
       if (ai && ai.body && (await state()).aiRev === 0) {
         applyingAi = true;
         try { await store.updateSettings({ ai: ai.body.value || {} }); } finally { applyingAi = false; }

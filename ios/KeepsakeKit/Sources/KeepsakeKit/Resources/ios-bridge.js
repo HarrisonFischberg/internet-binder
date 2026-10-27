@@ -36,9 +36,11 @@
     if (typeof fn !== 'function') { resolve(null); return; }
     fn(String(url), (v) => resolve(typeof v === 'string' && v ? v : null));
   });
-  // Apple Intelligence (__native.appleAI, KeepsakeKit OnDeviceAI.swift): every AI task asks the model on this
-  // device first and your provider only when it can't help (src/ai/provider.js onDeviceFirst).
-  //   ready() → boolean     respond(system, userText, maxTokens, done(text | null, error | null))
+  // Apple Intelligence (__native.appleAI, KeepsakeKit OnDeviceAI.swift): work that runs by itself uses the model
+  // on this device; your key only when you ask (src/ai/provider.js withReader, keyFor).
+  //   ready() → boolean     resting() → boolean (Low Power Mode, or the phone is hot)
+  //   respond(system, userText, maxTokens, done(text | null, error | null))
+  const resting = () => typeof __native !== 'undefined' && !!__native.appleAI?.resting?.();
   if (typeof __native !== 'undefined' && __native.appleAI) {
     const apple = __native.appleAI;
     KeepsakeCore.provider.setLocalModel({
@@ -50,6 +52,17 @@
   }
   // Only the shop page: the app reads no page a save links to (PRIVACY-iOS.md), so fetchPage stays unset.
   const aiDeps = { fetchShopPage: viaNative('fetchPage'), loadImage: viaNative('loadImage') };
+  // What fill.js needs for a run of fill-ins: Lookups only where turned on, one request every 1.1 s
+  // (the free public sources ask for that), and the AI reads above.
+  const fillDeps = () => {
+    let last = 0;
+    const waitTurn = async () => {
+      const wait = 1100 - (Date.now() - last);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      last = Date.now();
+    };
+    return { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...aiDeps };
+  };
   // Work that runs by itself (after a save, when the app opens) stays on the device while Apple
   // Intelligence is there; your key is only used when you ask (provider.js keyFor).
   const autoDeps = { ...aiDeps, deviceOnly: true };
@@ -307,23 +320,21 @@
       let tidied = 0;
       // With AI on, tidySave first has your provider work out what each save is (understand.js). A handful
       // at most: a pile from an import waits for Run AI on imported saves instead (fill.js pendingToTidy).
-      for (const it of await K.fill.pendingToTidy(store)) { await K.fill.tidySave(store, it.id, autoDeps); tidied++; }
+      // In Low Power Mode or on a hot phone, Apple Intelligence's work waits for a later open: new saves stay
+      // as they were saved (still waiting to be tidied) and nothing is swept.
+      const waitForLater = K.provider.localModelReady() && resting();
+      if (!waitForLater) for (const it of await K.fill.pendingToTidy(store)) { await K.fill.tidySave(store, it.id, autoDeps); tidied++; }
       const read = await views.readOnDevice();
-      if (!aiOn && !lookupsOn) return { tidied, filled: 0, read };
+      if ((!aiOn && !lookupsOn) || waitForLater) return { tidied, filled: 0, read };
       const raw = await store.backend.get(['keepsake_ios_filled']);
       const filled = new Set(raw.keepsake_ios_filled || []);
       // Read again: a save the tidy found to be a recipe or place is filled in now. A save your provider
       // hasn't read yet (you moved it into a Lifestyle view) is filled in again.
       // An imported save waiting for Run AI (needsAi) gets its Lookups only, once.
       const todo = listItems().filter((i) => K.capture.FILLED_KINDS.includes(K.kinds.kindOf(i)) && (!filled.has(i.id) || (aiOn && !i.understoodAt && !i.needsAi))).slice(0, 20);
-      let last = 0;
-      const waitTurn = async () => {
-        const wait = 1100 - (Date.now() - last);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        last = Date.now();
-      };
+      const deps = fillDeps();
       for (const it of todo) {
-        await K.fill.fillSave(store, it.id, {}, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...autoDeps });
+        await K.fill.fillSave(store, it.id, {}, { ...deps, deviceOnly: true });
         filled.add(it.id);
       }
       await store.backend.set({ keepsake_ios_filled: [...filled].slice(-5000) });
@@ -334,7 +345,7 @@
     // AI, on the device only). Each save is tried once; what it can't work out stays as it is, for Fix with
     // AI with your key. Nothing leaves the device.
     async readOnDevice() {
-      if (!K.provider.localModelReady()) return 0;
+      if (!K.provider.localModelReady() || resting()) return 0;
       const raw = await store.backend.get(['keepsake_ios_device_read']);
       const tried = new Set(raw.keepsake_ios_device_read || []);
       const todo = listItems().filter((i) => !i.understoodAt && !tried.has(i.id) && i.captureState !== 'pending').slice(0, DEVICE_SWEEP);
@@ -348,13 +359,7 @@
     // Run AI on imported saves, one save (fill.js readImported): your provider reads it, then its fill-in
     // or the shopping tidy. Throws the provider's error, so the app can slow down and try again.
     async readImported(id) {
-      const last = { at: 0 };
-      const waitTurn = async () => {
-        const wait = 1100 - (Date.now() - last.at);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        last.at = Date.now();
-      };
-      const r = await K.fill.readImported(store, id, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...aiDeps });
+      const r = await K.fill.readImported(store, id, fillDeps());
       return { changed: !!r?.changed, kind: r?.kind || '' };
     },
     // Fix with AI / Read again for one save (Places review): Chrome's fill-in with review on.

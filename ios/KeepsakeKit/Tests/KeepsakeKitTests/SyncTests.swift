@@ -208,7 +208,7 @@ struct SyncTests {
         let (early, kept) = try CloudSync.decode(record, keys: other)
         #expect(early.pictures.isEmpty)
         #expect(kept == sealed)
-        for (kid, key) in keys.store.all() { other.store.add(id: kid, key: key) }
+        for (kid, key) in keys.store.all() { try other.store.add(id: kid, key: key) }
         #expect(try SyncRecord.pictures(from: try other.open(try #require(kept), recordName: id.recordName)) == rec.pictures)
 
         // An update carries the change tag of the version iCloud has.
@@ -217,13 +217,56 @@ struct SyncTests {
         #expect(update.recordID == record.recordID)
     }
 
-    @Test func keysConvergeOnTheSmallestId() {
+    @Test func keysConvergeOnTheSmallestId() throws {
         let store = MemoryLibraryKeys()
-        let keys = LibraryKeys(store: store)
-        let first = keys.current().id
+        let keys = LibraryKeys(store: store, cacheFor: 0)
+        let first = try keys.current().id
         store.add(id: "0000000000000000", key: SymmetricKey(size: .bits256))
-        #expect(keys.current().id == "0000000000000000")
+        #expect(try keys.current().id == "0000000000000000")
         #expect(first != "0000000000000000")
+
+        // Normally the key is read once a minute, not for every picture sealed.
+        let cached = LibraryKeys(store: MemoryLibraryKeys())
+        let mine = try cached.current().id
+        try cached.store.add(id: "0000000000000000", key: SymmetricKey(size: .bits256))
+        #expect(try cached.current().id == mine)
+    }
+
+    struct RefusingKeys: LibraryKeyStore {
+        func all() -> [String: SymmetricKey] { [:] }
+        func add(id: String, key: SymmetricKey) throws { throw SyncError.keyNotSaved(-34018) }
+    }
+
+    @Test func aKeyTheKeychainWontKeepIsNeverUsed() {
+        #expect(throws: SyncError.keyNotSaved(-34018)) {
+            try LibraryKeys(store: RefusingKeys()).seal(Data("pictures".utf8), recordName: "Item.s1")
+        }
+    }
+
+    @Test func aSaveEditedBeforeItsPicturesOpenSendsThemBackSealed() throws {
+        let id = try #require(SyncID(store: "items", key: "s1"))
+        // From iCloud with pictures this device can't open yet: the body keeps a marker, the sealed bytes wait.
+        let sealed = Data("sealed-pictures".utf8)
+        try mac.db.applyRemote(SyncRecord(id: id, body: #"{"id":"s1","image":"ks-picture:0","updatedAt":"2026-10-25T10:00:00.000Z"}"#), system: nil)
+        try mac.db.keepSealed(id, sealed)
+        // Opening it is a write, and the write goes to iCloud.
+        var save = try #require(try mac.item("s1"))
+        save["openedAt"] = "2026-10-26T10:00:00.000Z"
+        try mac.put(save)
+        guard case .save(let rec, _)? = try mac.db.outgoing(id) else { Issue.record("not a save"); return }
+        #expect(rec.sealed == sealed)
+        let (record, file) = try CloudSync.makeRecord(rec, system: nil, keys: LibraryKeys(store: MemoryLibraryKeys()))
+        #expect(record["pictures"] is CKAsset)
+        #expect(try Data(contentsOf: try #require(file)) == sealed, "the pictures go back as they came, not dropped")
+    }
+
+    @Test func pendingKnowsDeletionsWithoutReadingBodies() throws {
+        try phone.put(["id": "s1", "title": "Keep"])
+        try phone.put(["id": "s2", "title": "Go"])
+        try phone.db.remove("items", keys: ["s2"])
+        try phone.db.setSettings([RecordDatabase.settingsKey: ["ai": ["on": true]]])
+        let pending = Dictionary(uniqueKeysWithValues: try phone.db.pendingChanges().map { ($0.id.key, $0.deleted) })
+        #expect(pending == ["s1": false, "s2": true, "aiSettings": false])
     }
 
     @Test func aiSettingsSyncButTheKeyNeverDoes() throws {
