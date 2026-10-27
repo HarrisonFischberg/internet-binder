@@ -122,3 +122,22 @@ test('tidySave with only the device model: a new save is read and tidied with no
   assert.deepEqual([saved.kind, saved.captureState], ['recipe', 'complete']);
   assert.equal(sent.length, 0);
 });
+
+// What Apple Intelligence really answered (FoundationModels on a Mac, Oct 2026): the format's examples
+// copied as details, and a second object after the answer.
+test('the device model: examples it copied are dropped, a second object after the answer is ignored, and it gets the note', async () => {
+  const place = '{"kind":"place","confidence":0.9,"title":"Lilia","details":{"locality":"Brooklyn","region":"NY","category":"restaurant","hours":["Mon–Fri 8am–3pm"],"phone":null},"drafted":[]}\n{"reason":"a restaurant"}';
+  const asked = device(place);
+  const r = await understandWithAI({ title: 'Lilia', caption: 'Finally got a table', location: 'Lilia, Brooklyn' }, {}, '');
+  assert.deepEqual([r.kind, r.details.locality, r.details.hours], ['place', 'Brooklyn', []]);
+  assert.match(asked[0].system, /never copy them/);
+  device({ kind: 'recipe', confidence: 0.6, title: 'Pasta', details: { ingredients: ['quantity + ingredient', '200g pasta'], steps: ['one step'], yield: 'e.g. 4 servings', category: 'dinner' } });
+  const p = await understandWithAI({ title: 'Pasta' }, {}, '');
+  assert.deepEqual(p.details, { ingredients: ['200g pasta'], steps: [], category: 'dinner' });
+});
+
+test('your provider is not sent the device note', async () => {
+  const sent = provider(recipe);
+  await understandWithAI({ title: 'Brownies' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk');
+  assert.doesNotMatch(JSON.stringify(sent[0]), /never copy them/);
+});

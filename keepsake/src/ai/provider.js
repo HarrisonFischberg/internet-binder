@@ -107,7 +107,7 @@ const LOCAL_TOKENS = 1500;
 // run(ask) does the whole task with the given way to ask.
 async function withReader(cfg, apiKey, run) {
   if (!apiKey && localModelReady()) {
-    return markOnDevice(await run((req) => localModel.respond({ system: req.system, userText: String(req.userText || '').slice(0, LOCAL_TEXT), maxTokens: Math.min(req.maxTokens || 600, LOCAL_TOKENS) })));
+    return markOnDevice(await run((req) => localModel.respond({ system: req.system + (req.deviceNote || ''), userText: String(req.userText || '').slice(0, LOCAL_TEXT), maxTokens: Math.min(req.maxTokens || 600, LOCAL_TOKENS) })));
   }
   return run((req) => callProvider(cfg, apiKey, req));
 }
@@ -195,7 +195,7 @@ function parseJsonBlock(s) {
   const cleaned = String(s).replace(/```(?:json)?/gi, '').trim();
   const start = cleaned.search(/[[{]/);
   if (start < 0) return null;
-  const candidates = [cleaned.slice(start), cleaned.slice(start, cleaned.lastIndexOf('}') + 1), cleaned.slice(start, cleaned.lastIndexOf(']') + 1)];
+  const candidates = [cleaned.slice(start), firstJson(cleaned, start), cleaned.slice(start, cleaned.lastIndexOf('}') + 1), cleaned.slice(start, cleaned.lastIndexOf(']') + 1)];
   for (const c of candidates) {
     try {
       return JSON.parse(c);
@@ -204,6 +204,22 @@ function parseJsonBlock(s) {
     }
   }
   return null;
+}
+
+// The first whole object or array from `start`: the device model sometimes adds a second one after it.
+function firstJson(s, start) {
+  let depth = 0;
+  let quoted = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (quoted) {
+      if (ch === '\\') i++;
+      else if (ch === '"') quoted = false;
+    } else if (ch === '"') quoted = true;
+    else if (ch === '{' || ch === '[') depth++;
+    else if ((ch === '}' || ch === ']') && --depth === 0) return s.slice(start, i + 1);
+  }
+  return '';
 }
 
 // Only data: URLs are sent as images. Remote thumbnail URLs are not forwarded,
@@ -556,6 +572,11 @@ Rules:
 - A round-up of several places, recipes or workouts ("Top 10 …"): give the kind but leave details empty, and say so in reason.
 - confidence is how sure you are of the kind (0.9+ only when it clearly is that kind).`;
 
+// Apple Intelligence's small model copies the format's examples as answers (opening hours, "one step").
+const UNDERSTAND_DEVICE_NOTE = `\nOn this device: the e.g. values and formats above only show the shape; never copy them. A detail the input does not state is "" or null, and a place's hours are [] unless the input lists them.`;
+// A detail that is a whole example from the format above ("Mon–Fri 8am–3pm", "quantity + ingredient") was copied, not read.
+const isExample = (v) => typeof v === 'string' && UNDERSTAND_SYSTEM.includes(`"${v.trim()}"`);
+
 export async function understandWithAI(input, settings, apiKey) {
   const cfg = providerConfig(settings);
   const cut = (v, n) => String(v || '').slice(0, n);
@@ -575,7 +596,7 @@ export async function understandWithAI(input, settings, apiKey) {
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
   // The device model reads the text only; your provider sees the picture too.
-  return withReader(cfg, apiKey, async (ask) => understandAnswer(parseJsonBlock(await ask({ system: UNDERSTAND_SYSTEM, userText: text, imageDataUrl: image, maxTokens: 1800 }))));
+  return withReader(cfg, apiKey, async (ask) => understandAnswer(parseJsonBlock(await ask({ system: UNDERSTAND_SYSTEM, deviceNote: UNDERSTAND_DEVICE_NOTE, userText: text, imageDataUrl: image, maxTokens: 1800 }))));
 }
 
 function understandAnswer(parsed) {
@@ -584,6 +605,10 @@ function understandAnswer(parsed) {
   const kinds = ['recipe', 'workout', 'place', 'video', 'article', 'media', 'book', 'product', 'link'];
   const kind = kinds.includes(parsed.kind) ? parsed.kind : 'link';
   const details = parsed.details && typeof parsed.details === 'object' ? { ...parsed.details } : {};
+  for (const [k, v] of Object.entries(details)) {
+    if (isExample(v)) delete details[k];
+    else if (Array.isArray(v)) details[k] = v.filter((x) => !isExample(x));
+  }
   // The card's exercise times are in seconds under another name.
   if (Array.isArray(details.exercises)) details.exercises = details.exercises.map((e) => (e && typeof e === 'object' ? { ...e, durationSeconds: e.durationSeconds ?? e.seconds } : e));
   return {
