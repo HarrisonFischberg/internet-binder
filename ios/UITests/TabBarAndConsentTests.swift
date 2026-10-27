@@ -35,9 +35,9 @@ final class TabBarAndConsentTests: XCTestCase {
         sleep(1)
         try shoot(folder, "tabbar-3-home-settled")
 
-        // Optional AI: the consent sheet.
+        // Your own AI key: the consent sheet.
         app.buttons["Settings"].tap()
-        let toggle = app.switches["Optional AI"]
+        let toggle = app.switches["Use your own key"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         toggle.switches.firstMatch.tap()
         XCTAssertTrue(app.buttons["Turn on"].waitForExistence(timeout: 5))

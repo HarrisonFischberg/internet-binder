@@ -19,7 +19,7 @@ final class SaveNoticeTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 10))
         app.buttons["Settings"].tap()
-        XCTAssertTrue(app.switches["Optional AI"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.switches["Use your own key"].waitForExistence(timeout: 5))
         // Settings is a lazy list: scroll down to the toggle and the version.
         let toggle = app.switches["Notify after saving"], version = app.staticTexts["appVersion"]
         for _ in 0..<8 where !toggle.exists { app.swipeUp() }

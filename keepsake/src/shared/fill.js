@@ -9,7 +9,7 @@ import { kindOf, kindInfo, detailsForKind, genericTitle, hasOwnView } from './ki
 import { placeNamed, placeReviewReasons, stateCode } from './places.js';
 import { lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './lookups.js';
 import { FILLED_KINDS } from './capture.js';
-import { cleanupWithAI, identifyForKind } from '../ai/provider.js';
+import { cleanupWithAI, identifyForKind, keyFor, aiAvailable } from '../ai/provider.js';
 import { understandItem } from './understand.js';
 
 // What a Lifestyle save is still missing, for Check with AI to read it again.
@@ -28,15 +28,17 @@ function incompleteDetails(kind, d = {}) {
 // when it has a title.
 // verify: Check with AI on the Places list: a place missing its street, city or state goes to your provider
 // too; only the missing fields are filled, and a name it already has stays.
-export async function fillSave(store, id, { review = false, verify = false, force = false } = {}, { fetchFn, allowed, waitTurn = async () => {}, fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null }) {
+export async function fillSave(store, id, { review = false, verify = false, force = false } = {}, { fetchFn, allowed, waitTurn = async () => {}, fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null, deviceOnly = false }) {
   let item = await store.getItem(id);
   if (!item || item.deletedAt) return;
   let kind = kindOf(item);
   if (!FILLED_KINDS.includes(kind)) return;
   const settings = await store.getSettings();
   // A save from a bulk import waits for Run AI (needsAi): only a check you asked for sends it now.
-  const aiAllowed = settings.ai?.on && (!item.needsAi || review || verify || force);
-  const key = aiAllowed ? await store.getSecret('aiApiKey') : '';
+  const aiAllowed = !item.needsAi || review || verify || force;
+  const key = aiAllowed ? keyFor(settings, await store.getSecret('aiApiKey'), { deviceOnly }) : '';
+  // Apple Intelligence on this device, else your provider with your key.
+  const canRead = aiAllowed && aiAvailable(settings, key);
   // An Instagram place: its caption read again with today's rules first (nothing sent anywhere). Normally
   // that only fills what's missing. From Places review (you asked), what an older reading wrote is replaced:
   // its name, street, city and state, never what you typed yourself; a new street drops the old pin.
@@ -63,11 +65,11 @@ export async function fillSave(store, id, { review = false, verify = false, forc
   const inReview = review && kind === 'place' && placeReviewReasons(item).length > 0;
   const incomplete = verify && kind === 'place' && (!d.address || !d.locality || !d.region);
   const unnamed = (genericTitle(item.title) || unknownPlace || inReview || incomplete) && !(item.userFields || []).includes('title');
-  if (key && !review && !verify) {
+  if (canRead && !review && !verify) {
     // Your provider reads the save: what it is and everything that kind's card shows.
     if (!item.understoodAt || (force && incompleteDetails(kind, d))) {
       try {
-        await understandItem(store, id, { force: true }, { fetchPage, fetchShopPage, loadImage });
+        await understandItem(store, id, { force: true }, { fetchPage, fetchShopPage, loadImage, deviceOnly });
         item = await store.getItem(id);
         d = item.details || {};
         kind = kindOf(item);
@@ -76,7 +78,7 @@ export async function fillSave(store, id, { review = false, verify = false, forc
       }
       if (!FILLED_KINDS.includes(kind)) return; // it turned out to be something else
     }
-  } else if (key && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length))) {
+  } else if (canRead && ((['place', 'media', 'book'].includes(kind) && unnamed) || (kind === 'workout' && !d.exercises?.length))) {
     // Places review and the Places list's Check with AI: your provider names the place and its city.
     try {
       let patch = null;
@@ -112,8 +114,9 @@ export async function fillSave(store, id, { review = false, verify = false, forc
 export async function tidySave(store, id, deps = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt || item.captureState !== 'pending') return null;
-  const [collections, prefs, settings, key] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings(), store.getSecret('aiApiKey')]);
-  if (!settings.ai?.on || !key) {
+  const [collections, prefs, settings, secret] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings(), store.getSecret('aiApiKey')]);
+  const key = keyFor(settings, secret, { deviceOnly: !!deps.deviceOnly });
+  if (!aiAvailable(settings, key)) {
     await store.updateItem(id, { captureState: 'complete' }, { by: 'machine' });
     return { kind: kindOf(item) };
   }
@@ -173,8 +176,7 @@ export async function readImported(store, id, deps = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt || !item.needsAi) return null;
   const settings = await store.getSettings();
-  const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
-  if (!key) throw new Error('Turn on Optional AI and add your API key first.');
+  if (!aiAvailable(settings, keyFor(settings, await store.getSecret('aiApiKey')))) throw new Error('Turn on Optional AI and add your API key first.');
   const before = JSON.stringify([item.title, item.kind, item.collectionId, item.details]);
   await understandItem(store, id, { force: true, runId: deps.runId || '' }, deps);
   let current = await store.getItem(id);

@@ -23,7 +23,12 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
 - **The sites your saves came from**, to show their pictures, as a web page would.
 - **Apple Maps** to draw maps of your places; **Directions** opens Apple Maps with the place's name and
   address (built from what's saved; nothing is looked up).
-- **Optional AI** (off until you turn it on and add your own key): your chosen provider only, with the
+- **Apple Intelligence** (no network): where the device has it turned on, Apple's on-device model reads
+  each save's text (title, caption, description, hashtags, location tag, site) on the device, after a save
+  and a few unread saves each time the app opens, to work out what it is, fill in its card, tidy the title
+  and pick a collection. Nothing is sent anywhere. Every change can be undone.
+- **Your own AI key** ("Optional AI", off until you turn it on and add your own key). Where Apple
+  Intelligence is on, it is used only when you ask (Fix with AI, Run AI on imported saves): your chosen provider only, with the
   same payloads as Chrome (`PRIVACY.md`, "Optional AI"), except that the app reads no pages a post links
   to: *Understanding a save* sends the save's own text and its picture (the copy stored on the device, or
   a small copy of the picture its card shows, made on the device). *Understanding a product* also lets

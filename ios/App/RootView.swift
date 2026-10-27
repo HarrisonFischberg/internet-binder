@@ -68,7 +68,8 @@ struct RootView: View {
         .onChange(of: phase) { _, now in
             if now == .active {
                 model.refresh()
-                model.finishSaves()
+                // Apple Intelligence may have been turned on in the Settings app meanwhile.
+                Task { await model.refreshAIReady(); model.finishSaves() }
                 model.syncNow()
             }
         }

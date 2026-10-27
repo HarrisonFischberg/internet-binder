@@ -63,6 +63,7 @@ public final class KeepsakeCore: @unchecked Sendable {
         native.setObject(imageBridge(), forKeyedSubscript: "loadImage" as NSString)
         native.setObject(recordBridge(in: ctx), forKeyedSubscript: "db" as NSString)
         native.setObject(settingsBridge(in: ctx), forKeyedSubscript: "kv" as NSString)
+        native.setObject(appleAIBridge(in: ctx), forKeyedSubscript: "appleAI" as NSString)
         ctx.setObject(native, forKeyedSubscript: "__native" as NSString)
 
         for name in ["keepsake-core", "ios-bridge"] {
@@ -150,6 +151,31 @@ public final class KeepsakeCore: @unchecked Sendable {
                 self.queue.async { callback.value.call(withArguments: [small ?? NSNull()]) }
             }
         }
+    }
+
+    /// __native.appleAI: ready() → Bool, resting() → Bool (Low Power Mode or a hot phone),
+    /// respond(system, userText, maxTokens, done(text | null, error | null)), behind what you're doing.
+    /// The model on this device (OnDeviceAI); provider.js asks it before your provider.
+    private func appleAIBridge(in ctx: JSContext) -> JSValue {
+        let o = JSValue(newObjectIn: ctx)!
+        let ready: @convention(block) () -> Bool = { OnDeviceAI.status == .ready }
+        let resting: @convention(block) () -> Bool = { OnDeviceAI.resting }
+        let respond: @convention(block) (String, String, Int, JSValue) -> Void = { [unowned self] system, prompt, maxTokens, done in
+            let callback = JSBox(done)
+            Task(priority: .utility) {
+                do {
+                    let text = try await OnDeviceAI.respond(system: system, prompt: prompt, maxTokens: maxTokens)
+                    self.queue.async { callback.value.call(withArguments: [text, NSNull()]) }
+                } catch {
+                    let message = error.localizedDescription
+                    self.queue.async { callback.value.call(withArguments: [NSNull(), message]) }
+                }
+            }
+        }
+        o.setObject(ready, forKeyedSubscript: "ready" as NSString)
+        o.setObject(resting, forKeyedSubscript: "resting" as NSString)
+        o.setObject(respond, forKeyedSubscript: "respond" as NSString)
+        return o
     }
 
     static func thumbnailDataURL(_ data: Data) -> String? {

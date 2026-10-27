@@ -58,6 +58,7 @@ struct HomeScreen: View {
                         }
                     }
                     if model.reviewCount > 0 { reviewBanner }
+                    if showAppleNote { appleNote }
                     FinishFixingButton()
                         .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
                     if model.aiReady && !model.aiBacklog.isEmpty {
@@ -97,7 +98,7 @@ struct HomeScreen: View {
         .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
             Button("Fix everything") { Task { await model.fixWithAI(model.saves, screen: true) } }
         } message: {
-            Text("Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone. Fix one collection or Lifestyle view from its own page.")
+            Text("\(model.aiReadsAgain) Every change can be undone. Fix one collection or Lifestyle view from its own page.")
         }
         .sheet(isPresented: $appearance) { AppearanceSheet() }
         .task(id: model.saves.count) { collections = (try? model.library?.collections()) ?? [] }
@@ -189,6 +190,44 @@ struct HomeScreen: View {
         .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
         .background(FolderShape(tab: 18, radius: t.radius).fill(fill))
         .contentShape(FolderShape(tab: 18, radius: t.radius))
+    }
+
+    /// Apple Intelligence's state, once per state: on a new install (or the first open after it arrived) it
+    /// says it's on, or how to turn it on; dismissed, it comes back only when the state changes (turned on
+    /// later, say). Never on a device that can't run it.
+    @AppStorage("ks.appleAINoteSeen") private var appleNoteSeen = ""
+    private var showAppleNote: Bool { model.loaded && model.appleAI != .unsupported && appleNoteSeen != model.appleAI.rawValue }
+
+    private var appleNote: some View {
+        let (title, line): (String, String) = switch model.appleAI {
+        case .ready: ("Apple Intelligence is on", "It reads your saves on this iPhone and fixes what it can, as they come in. Nothing leaves your iPhone.")
+        case .off: ("Turn on Apple Intelligence", "In the Settings app, under Apple Intelligence & Siri. Then your saves are read and fixed on this iPhone.")
+        default: ("Apple Intelligence is getting ready", "Once it has downloaded, your saves are read and fixed on this iPhone.")
+        }
+        return HStack(alignment: .top, spacing: 14) {
+            Image(systemName: "apple.intelligence").font(.title3.weight(.semibold)).foregroundStyle(t.accent)
+                .frame(width: 40, height: 40)
+                .background(t.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline).foregroundStyle(t.ink)
+                Text(line).font(.subheadline).foregroundStyle(t.inkMuted).fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            Button {
+                withAnimation(reduce ? nil : .snappy) { appleNoteSeen = model.appleAI.rawValue }
+            } label: {
+                Image(systemName: "xmark").font(.footnote.weight(.bold)).foregroundStyle(t.inkMuted)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+            .padding(.top, -10).padding(.trailing, -10)
+        }
+        .padding(14)
+        .ksSurface(radius: 14)
+        .accessibilityIdentifier("appleAINote")
     }
 
     private var reviewBanner: some View {
