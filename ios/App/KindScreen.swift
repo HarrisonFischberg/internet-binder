@@ -358,8 +358,8 @@ extension LibraryModel {
     }
 }
 
-/// "Run AI on N imported saves": on Home and in Settings while Optional AI is on and imports are waiting.
-/// Asks first, with how many and about how long, since each one is a request to your provider.
+/// "Run AI on N imported saves" (with Apple Intelligence: "Read N imported saves now"): on Home and in
+/// Settings while AI is ready and imports are waiting. Asks first, with how many and about how long.
 struct RunAIOnImportedButton: View {
     var label: String? = nil
     @Environment(LibraryModel.self) private var model
@@ -367,11 +367,14 @@ struct RunAIOnImportedButton: View {
 
     var body: some View {
         let waiting = model.aiBacklog
+        // Apple Intelligence already reads a few imports each time the app opens: this reads the rest now.
+        let onDevice = model.appleAI == .ready && !model.aiBackup
+        let saves = "\(waiting.count) imported \(waiting.count == 1 ? "save" : "saves")"
         if model.aiReady && !waiting.isEmpty {
-            Button(label ?? "Run AI on \(waiting.count) imported \(waiting.count == 1 ? "save" : "saves")", systemImage: "sparkles") { confirming = true }
+            Button(label ?? (onDevice ? "Read \(saves) now" : "Run AI on \(saves)"), systemImage: "sparkles") { confirming = true }
                 .disabled(model.aiRun != nil)
-                .accessibilityHint("Your AI provider reads the saves you imported, which it hasn't seen yet.")
-                .confirmationDialog("Run AI on \(waiting.count) imported \(waiting.count == 1 ? "save" : "saves")?", isPresented: $confirming, titleVisibility: .visible) {
+                .accessibilityHint(onDevice ? "Apple Intelligence reads them all on this iPhone now, rather than a few each time you open the app." : "Your AI provider reads the saves you imported, which it hasn't seen yet.")
+                .confirmationDialog(onDevice ? "Read \(saves) now?" : "Run AI on \(saves)?", isPresented: $confirming, titleVisibility: .visible) {
                     if waiting.count > 100 { Button("Newest 100") { Task { await model.runAIOnImported(Array(waiting.prefix(100))) } } }
                     Button(waiting.count > 100 ? "All \(waiting.count)" : "Run AI") { Task { await model.runAIOnImported(waiting) } }
                 } message: {
