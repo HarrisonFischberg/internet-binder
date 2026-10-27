@@ -73,7 +73,8 @@ struct SaveCard: View {
         Group {
             if t.style == .paper { paperCard } else { overlaidCard }
         }
-        .overlay(alignment: .bottomTrailing) { badge }
+        // Paper's shelf keeps the badge on the picture: its fixed height has room for the name only.
+        .overlay(alignment: .bottomTrailing) { if !(t.style == .paper && shelf) { badge } }
     }
 
     // MARK: Nocturne and Chromatic: the picture fills the card, the name on its darkened foot
@@ -117,6 +118,7 @@ struct SaveCard: View {
             }
             .frame(height: h).frame(maxWidth: .infinity).clipped()
             .clipShape(RoundedRectangle(cornerRadius: shelf ? 12 : 0, style: .continuous))
+            .overlay(alignment: .bottomLeading) { if shelf { badge } }
             VStack(alignment: .leading, spacing: 3) {
                 if !shelf { KindLabel(kind: save.kind) }
                 Text(save.title).font(KSFont.name(compact || shelf ? .subheadline : .headline, t)).foregroundStyle(t.ink)
@@ -126,7 +128,7 @@ struct SaveCard: View {
                 }
             }
             .padding(.horizontal, shelf ? 2 : (compact ? 10 : 12)).padding(.vertical, shelf ? 0 : (compact ? 8 : 10))
-            .padding(.bottom, badgeRoom)
+            .padding(.bottom, shelf ? 0 : badgeRoom)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(height: fixedHeight, alignment: .top)

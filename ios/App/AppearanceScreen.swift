@@ -142,6 +142,8 @@ struct StyleCard: View {
         .clipped()
         .background { TableBackground() }
         .environment(\.ks, theme)
+        // A miniature of the style: its type stops growing before it would break words in a 132 pt card.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityHidden(true)
     }
 }

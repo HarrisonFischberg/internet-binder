@@ -180,7 +180,7 @@ struct PlacesScreen: View {
 
     /// Photo, name, then city and kind of place; the whole row opens the save.
     private func rowBody(_ place: Save, city: String, menu: Bool) -> some View {
-        let detail = [city, place.fact ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        let detail = PlacesMap.detail(city, city: city, fact: place.fact)
         return HStack(spacing: 14) {
             SaveImage(place, symbolSize: 20).frame(width: 64, height: 64).clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -590,7 +590,7 @@ struct PlacesMap: View {
     private func card(_ save: Save) -> some View {
         let open = model.index.byId[save.id] ?? save
         let where_ = [save.details?["locality"]?.string, save.details?["region"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-        let detail = [where_, save.fact ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        let detail = Self.detail(where_, city: save.details?["locality"]?.string ?? "", fact: save.fact)
         return HStack(spacing: 14) {
             NavigationLink(value: open) {
                 HStack(spacing: 14) {
@@ -616,6 +616,13 @@ struct PlacesMap: View {
         }
         .padding(12)
         .ksSurface()
+    }
+
+    /// Where it is, then its fact; a place's fact starts with its city, so that part isn't said twice.
+    static func detail(_ lead: String, city: String, fact: String?) -> String {
+        var parts = (fact ?? "").components(separatedBy: " · ").filter { !$0.isEmpty }
+        if !city.isEmpty, parts.first == city { parts.removeFirst() }
+        return ([lead] + parts).filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     /// No pins at all: say so, and offer Review when places are waiting there for a place to be found.

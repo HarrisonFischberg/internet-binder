@@ -650,6 +650,9 @@ final class ScreenshotTests: XCTestCase {
                 field.typeText("coffee")
                 sleep(2)
                 try shoot(app, folder, "\(tag)-search-query")
+                field.typeText("zqx")
+                sleep(1)
+                try shoot(app, folder, "\(tag)-search-empty")
                 app.buttons["Cancel"].tap()
             }
             let recipes = app.buttons["Recipes"].firstMatch

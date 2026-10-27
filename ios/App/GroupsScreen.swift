@@ -234,12 +234,14 @@ struct GroupSection<Content: View>: View {
     let detail: String
     @ViewBuilder let content: Content
     @Environment(\.ks) private var t
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
+            // At accessibility sizes the count goes under the title, so the title never breaks mid-word.
+            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline))) {
                 Text(title).font(KSFont.section()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                Spacer()
+                if !typeSize.isAccessibilitySize { Spacer() }
                 Text(detail).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit()
             }
             content

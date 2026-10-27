@@ -140,7 +140,8 @@ struct HomeScreen: View {
         let fill: Color = paper ? (second ? t.alt : t.detail) : t.paper
         let ink: Color = paper ? (second ? t.onAlt : t.onDetail) : t.ink
         return HStack(spacing: 14) {
-            CoverFan(saves, symbol: symbol, tint: glow, size: 50)
+            // At accessibility sizes the fan steps aside, so the name has the width to stay whole.
+            if !typeSize.isAccessibilitySize { CoverFan(saves, symbol: symbol, tint: glow, size: 50) }
             VStack(alignment: .leading, spacing: 3) {
                 Label {
                     Text(title).font(paper ? .system(.title, design: .serif).weight(.medium) : KSFont.name(.title2))
@@ -179,6 +180,7 @@ struct HomeScreen: View {
             Text(title).font(KSFont.name(.title2)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.7)
             HStack(alignment: .bottom) {
                 Text(detail).font(.footnote.weight(.medium)).foregroundStyle(ink.opacity(0.8)).lineLimit(2).monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 ChevronDisc(fill: ink.opacity(0.12), ink: ink)
             }
