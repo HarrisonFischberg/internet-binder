@@ -51,6 +51,9 @@ public struct SyncRecord: Equatable, Sendable {
     public let id: SyncID
     public var body: String
     public var pictures: [String]
+    /// Pictures that came from iCloud sealed with a key this device doesn't have yet (`sync_sealed`),
+    /// still sealed. The body keeps their markers, so they go back to iCloud as they came.
+    public var sealed: Data?
 
     public init(id: SyncID, body: String, pictures: [String] = []) {
         self.id = id
@@ -104,6 +107,8 @@ public struct SyncRecord: Equatable, Sendable {
 public enum SyncError: Error, Equatable {
     case badRecord(String)
     case missingKey(String)
+    /// The Keychain refused to keep a new picture key (its OSStatus).
+    case keyNotSaved(Int)
 }
 
 /// JSON helpers shared by the sync code. Bodies are compared as values, never as text, because key
