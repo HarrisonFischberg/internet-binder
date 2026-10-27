@@ -99,26 +99,33 @@ test('deleting from Review moves the save to Trash, with Undo, and Trash can res
   assert.equal((await store.getTrash()).length, 0);
 });
 
-test('the Style setting restyles the page (Pantry Pop by default, no attribute)', async () => {
+test('the Style setting restyles the page (Nocturne by default, no attribute; old styles move over)', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
   assert.equal(window.document.documentElement.dataset.style, undefined);
   const text = await go('#settings');
   assert.match(text, /Style/);
-  for (const name of ['Pantry Pop', 'Field Notebook', 'Gallery', 'Night Atlas', 'Swiss Index']) assert.match(text, new RegExp(name));
+  for (const name of ['Nocturne', 'Paper & Ink', 'Chromatic']) assert.match(text, new RegExp(name));
+  for (const old of ['Pantry Pop', 'Light or dark']) assert.doesNotMatch(text, new RegExp(old));
   assert.match(text, /Toolbar icon/);
-  await store.updateSettings({ style: 'atlas', theme: 'dark' });
+  await store.updateSettings({ style: 'paper' });
   await afterChange();
-  assert.equal(window.document.documentElement.dataset.style, 'atlas');
-  assert.equal(window.document.documentElement.dataset.theme, 'dark');
-  // A style from before 1.5 falls back to the default.
-  await store.updateSettings({ style: 'moss', theme: 'system' });
-  await afterChange();
-  assert.equal(window.document.documentElement.dataset.style, undefined);
-  await store.updateSettings({ style: 'pantry', theme: 'system' });
-  await afterChange();
-  assert.equal(window.document.documentElement.dataset.style, undefined);
+  assert.equal(window.document.documentElement.dataset.style, 'paper');
   assert.equal(window.document.documentElement.dataset.theme, undefined);
+  await store.updateSettings({ style: 'chromatic' });
+  await afterChange();
+  assert.equal(window.document.documentElement.dataset.style, 'chromatic');
+  // The retired styles: Field Notebook goes to Paper & Ink, Night Atlas and Pantry Pop to Nocturne.
+  await store.updateSettings({ style: 'notebook', theme: 'dark' });
+  await afterChange();
+  assert.equal(window.document.documentElement.dataset.style, 'paper');
+  assert.equal(window.document.documentElement.dataset.theme, undefined);
+  await store.updateSettings({ style: 'atlas' });
+  await afterChange();
+  assert.equal(window.document.documentElement.dataset.style, undefined);
+  await store.updateSettings({ style: 'pantry' });
+  await afterChange();
+  assert.equal(window.document.documentElement.dataset.style, undefined);
 });
 
 test('Review rows offer numbered suggestions and file with a number key', async () => {

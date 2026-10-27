@@ -125,7 +125,6 @@ export function syncStatusText(st) {
 function appearanceSection(ctx) {
   const s = ctx.state.settings;
   return UI.section('Appearance', '', [
-    UI.settingRow('Light or dark', UI.selectInput({ value: s.theme || 'system', options: [{ value: 'system', label: 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], onChange: (v) => ctx.store.updateSettings({ theme: v }), label: 'Theme' }), 'Also toggled from the sun icon in the toolbar.'),
     el('div', { class: 'look-picker-block' }, [
       el('div', { class: 'setting-label', id: 'styleLabel' }, ['Style']),
       el('div', { class: 'help' }, ['Changes the colours, type and shapes of the popup, the dashboard and the save card on pages. The change shows right away.']),

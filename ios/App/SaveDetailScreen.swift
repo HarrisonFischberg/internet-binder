@@ -29,8 +29,8 @@ struct SaveDetailScreen: View {
     /// The recipe's steps, without wordless lines (older saves kept Instagram's "." spacers).
     private var steps: [String] { (d?["steps"]?.array?.compactMap(\.string) ?? []).filter { $0.contains(where: { $0.isLetter || $0.isNumber }) } }
 
-    /// Body text: serif in Field Notebook and Gallery, the style's sans everywhere else.
-    private var reading: Font { t.style == .notebook || t.style == .gallery ? .system(.body, design: .serif) : .body }
+    /// Body text: serif in Paper & Ink, SF Pro everywhere else.
+    private var reading: Font { t.style == .paper ? .system(.body, design: .serif) : .body }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -489,10 +489,10 @@ struct SaveDetailScreen: View {
         .ksSurface()
     }
 
-    /// A row's hairline: dashed in Pantry Pop, solid elsewhere.
+    /// A row's hairline.
     private var rule: some View {
         Rectangle().fill(.clear).frame(height: 1)
-            .overlay { Line().stroke(t.rule, style: StrokeStyle(lineWidth: t.style == .pantry ? 1.5 : 1, dash: t.style == .pantry ? [5, 4] : [])) }
+            .overlay { Line().stroke(t.rule, style: StrokeStyle(lineWidth: 1)) }
     }
 
     private func ruled(_ symbol: String, _ text: String) -> some View {

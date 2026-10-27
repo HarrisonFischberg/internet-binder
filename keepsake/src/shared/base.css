@@ -1,10 +1,10 @@
 /* Internet Binder shared tokens + base styles (popup and dashboard). */
 
 /* The colour, shape, type and motion values come from tokens.css (generated from the design
-   tokens: Pantry Pop, Field Notebook, Gallery, Night Atlas and Swiss Index, each light and dark; loaded
-   before this file; looks.css adds each style's details after the page's own CSS). These
-   names are the ones the existing components use; they now point at the token roles, so the
-   Style setting (data-style on <html>) and the theme (data-theme) restyle every page at once. */
+   tokens: Nocturne, Paper & Ink and Chromatic; loaded before this file; looks.css adds each
+   style's details after the page's own CSS). These names are the ones the existing components
+   use; they point at the token roles, so the Style setting (data-style on <html>) restyles
+   every page at once. */
 :root {
   --paper: var(--c-bg);
   --paper-2: var(--c-surface);
@@ -499,35 +499,17 @@ button {
   color: var(--ok);
 }
 
+/* The binder mark from the brand kit, drawn in the style's accent. */
 .mark {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  background: var(--moss);
-  color: var(--on-accent);
+  width: 24px;
+  height: 24px;
+  color: var(--c-accent);
   display: grid;
   place-items: center;
   flex: none;
 }
 
 .mark svg {
-  width: 20px;
-  height: 20px;
-}
-
-:root[data-style="minimal"] .mark path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-}
-
-.mark svg {
-  width: 13px;
-  height: 13px;
-}
-
-/* The binder mark only shows in Pantry Pop (looks.css); other styles keep the bookmark. */
-.mark .mark-patch {
-  display: none;
+  width: 24px;
+  height: 24px;
 }

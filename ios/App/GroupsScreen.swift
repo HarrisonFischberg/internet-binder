@@ -87,11 +87,11 @@ struct LifestyleTiles: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: groupColumns, spacing: 20) {
-                ForEach(order, id: \.self) { kind in
+                ForEach(Array(order.enumerated()), id: \.element) { i, kind in
                     let items = model.index.kind(kind)
                     let k = KindStyle(kind)
                     let tile = GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind)
+                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind, number: i + 1)
                     if let selection {
                         let on = selection.wrappedValue.contains(kind)
                         Button {
@@ -137,6 +137,7 @@ struct CollectionTiles: View {
     var onSelect: ((String) -> Void)?
     @Environment(LibraryModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduce
+    @Environment(\.ks) private var t
     @State private var order: [String] = []
     @State private var dragging: String?
     @State private var manual = !SavedOrder.get(Self.key).isEmpty
@@ -163,10 +164,11 @@ struct CollectionTiles: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: groupColumns, spacing: 20) {
-                ForEach(order.compactMap { id in collections.first { $0.id == id } }) { c in
+                ForEach(Array(order.compactMap { id in collections.first { $0.id == id } }.enumerated()), id: \.element.id) { i, c in
                     let items = model.index.collection(c.id)
                     let tile = GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: KindStyle("product").color)
+                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: t.detail,
+                                         number: i + 1, menuRoom: selection == nil)
                     if let selection {
                         let on = selection.wrappedValue.contains(c.id)
                         Button {
@@ -184,6 +186,14 @@ struct CollectionTiles: View {
                             Task { try? await model.library?.reorderCollections(ids) }
                         }
                         .contextMenu { CollectionMenu(collection: c, saves: items.count, onSelect: onSelect.map { f in { f(c.id) } }) }
+                        // The same menu, one tap away, for anyone who doesn't know about the long press.
+                        .overlay(alignment: .bottomTrailing) {
+                            Menu { CollectionMenu(collection: c, saves: items.count, onSelect: onSelect.map { f in { f(c.id) } }) } label: {
+                                GlassIcon("ellipsis", size: 36, font: .footnote.weight(.bold)).frame(width: 44, height: 44)
+                            }
+                            .accessibilityLabel("More for \(c.name)")
+                            .padding(t.style == .chromatic ? 6 : 4)
+                        }
                     }
                 }
                 if let onNew, selection == nil {
@@ -228,9 +238,9 @@ struct GroupSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Text(title).font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                Text(title).font(KSFont.section()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
                 Spacer()
-                Text(detail).font(.footnote).foregroundStyle(t.inkMuted)
+                Text(detail).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit()
             }
             content
         }

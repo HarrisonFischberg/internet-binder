@@ -90,7 +90,7 @@ The browser extension is Manifest V3, plain HTML/CSS/JS, no build step, no depen
 ## Contents
 
 1. [Install](#install)
-2. [Dark mode](#dark-mode)
+2. [Appearances](#appearances)
 3. [Pin the icon and learn the shortcut](#pin-the-icon-and-learn-the-shortcut)
 4. [Saving from the toolbar](#saving-from-the-toolbar)
 5. [On-page save buttons (optional)](#on-page-save-buttons-optional)
@@ -147,15 +147,15 @@ xcodebuild -project ios/Keepsake.xcodeproj -scheme Keepsake -destination 'platfo
 
 See [ios/README.md](ios/README.md) for the Swift package, tests and the shared core bundle.
 
-## Dark mode
+## Appearances
 
-Internet Binder follows your system's light or dark setting everywhere, and you can pin it to one.
+Internet Binder has three appearances from its brand kit, each with its own type, cards and a slowly moving background (still when Reduce Motion is on):
 
-- **Chrome and Safari extension:** Dashboard → **Settings → Appearance** has *System*, *Light* and *Dark*; the sun button at the top of the dashboard cycles through them. The choice applies to the dashboard, the popup and the save card shown on pages. The toolbar icon swaps to its dark version when the browser is dark.
-- **iPhone and iPad:** Settings → **Appearance → Mode** has *System*, *Light* and *Dark*. The app icon has light, dark and tinted versions that follow the Home Screen.
-- **Mac app:** follows the Mac's appearance.
+- **Nocturne** (the default): a luminous private archive. Deep night blue, amber for every touch, cyan details.
+- **Paper & Ink**: warm and editorial. Serif headings and espresso ink on cream paper.
+- **Chromatic**: curious and colourful. Lilac, coral and pistachio, with collections as numbered folders.
 
-Every style has a light and a dark version: Pantry Pop (the default), Field Notebook, Night Atlas and Swiss Index, plus Gallery in the browser extension. Pick one under Appearance, along with a matching toolbar or app icon.
+Each appearance is light or dark on its own, so there is no separate light/dark switch. Pick one in Dashboard → **Settings → Appearance** (extension) or **Appearance** on Home (iPhone). A choice from before 2.3 moves to the nearest one: Night Atlas and Pantry Pop become Nocturne; Field Notebook, Gallery and Swiss Index become Paper & Ink. The toolbar and app icons are picked separately and follow the system's light or dark setting.
 
 ## Pin the icon and learn the shortcut
 
@@ -225,7 +225,7 @@ Open it from the popup or from the extension's Options; it opens on **Home**, an
 - **Select** mode for bulk move, favorite, delete (to Trash) and (when AI is on) *Find products*.
 - **Trash** (`#trash`): deleted saves stay 30 days, with Restore (back to their collection, or Review if it's gone), Delete forever and Empty Trash.
 - **Collections**: the sidebar lists every pinned collection, then the ones you saved into most recently, up to eight; the collection you have open is always listed. **All collections** opens every collection as a cover tile (a collage of its latest images), pinned first, with a name/keyword search and sorting by recently saved to, A–Z or most saves. Pin a collection from its tile, its page, or the sidebar (drag or Alt+↑/↓ to reorder pinned ones). Rename by editing the name on the collection's page; keywords, description and cover (newest image or your own URL) under *Keywords*; merge by selecting items and ticking *Merge* in **Move to…**; delete (items become uncategorized, waiting in Review, unless you choose otherwise).
-- **Style and theme**: five styles (Pantry Pop, the default; Field Notebook; Gallery; Night Atlas; Swiss Index), each with system / light / dark (Settings → Appearance; the sun button in the header cycles the theme), and a matching toolbar icon. The style applies to the popup, the dashboard and the save card shown on pages. See [Dark mode](#dark-mode).
+- **Style**: three appearances (Nocturne, the default; Paper & Ink; Chromatic) under Settings → Appearance, plus a separate toolbar icon. The style applies to the popup, the dashboard and the save card shown on pages. See [Appearances](#appearances).
 - **Load sample data** from the welcome page or the empty state to see the layout; delete it any time.
 
 ## Instagram Saved-collection import
@@ -350,7 +350,7 @@ Inside `keepsake/`:
 ```
 manifest.json                MV3 manifest
 background.js                service worker: context menu, message hub, saving, content-script registration
-icons/styles/                one toolbar icon per style (Pantry Pop is the default), each with a dark/ version for dark toolbars
+icons/styles/                the toolbar icons to pick from (the patchwork binder is the default), each with a dark/ version for dark toolbars
 src/shared/                  util, url, taxonomy, categorizer, storage (schema 3 + migrations), db (IndexedDB records), messages, base.css
 src/extract/extract.js       page extractor (JSON-LD → OG/Twitter → microdata → visible heuristics)
 src/content/                 toast.js (Shadow DOM toast), detector.js (card detection), floating.js (hover button)

@@ -52,34 +52,43 @@ const USER_FIELDS = ['title', 'price', 'currency', 'note', 'image', 'images', 'u
 const CAPTURE_STATES = ['pending', 'complete', 'failed'];
 export const LIMITS = { maxItems: 20000, maxCollections: 500, maxImportBytes: 150 * 1024 * 1024, maxImageBytes: 400 * 1024, maxGoals: 2000, maxCheckins: 50000, maxCheckinsPerGoal: 2000 };
 
-// Styles a person can pick in Settings → Appearance. The first is the default.
-// `about` and `swatch` (page, card, accent, a kind colour) are for the picker in Settings.
+// Appearances a person can pick in Settings → Appearance (the brand kit's three). The first is the
+// default. Each is light or dark on its own. `about` and `swatch` (page, card, accent, detail) are
+// for the picker in Settings. Same ids as the iPhone app (KSTheme.Style).
 export const STYLES = [
-  { value: 'pantry', label: 'Pantry Pop', about: 'Bold outlines, hard shadows, a bright colour per kind.', swatch: ['#FFF7E8', '#FFFFFF', '#FFC23D', '#FF5A36'] },
-  { value: 'notebook', label: 'Field Notebook', about: 'Graph paper, serif names, a highlighter swipe.', swatch: ['#F6F2E7', '#FFFDF7', '#F7EBA8', '#A63A28'] },
-  { value: 'gallery', label: 'Gallery', about: 'White walls, big serif titles, photos first.', swatch: ['#FFFFFF', '#F6F6F4', '#111111', '#E4E4E4'] },
-  { value: 'atlas', label: 'Night Atlas', about: 'Dark panels, lamp-lit photos, one amber action.', swatch: ['#0B0F17', '#1B2433', '#FFB547', '#6FE3E8'] },
-  { value: 'swiss', label: 'Swiss Index', about: 'Hairlines, condensed type, one signal red.', swatch: ['#FAFAF7', '#FFFFFF', '#CC2A1E', '#0A0A0A'] },
+  { value: 'nocturne', label: 'Nocturne', about: 'A luminous private archive. Deep night blue, amber for every touch.', swatch: ['#090D14', '#141C29', '#FFC268', '#80DFE8'] },
+  { value: 'paper', label: 'Paper & Ink', about: 'Warm and editorial. Serif headings, espresso ink on cream paper.', swatch: ['#F7F0E3', '#FFFBF5', '#A6421B', '#D9DCC7'] },
+  { value: 'chromatic', label: 'Chromatic', about: 'Curious and colourful. Saves in coral, pistachio and lilac folders.', swatch: ['#0C0F16', '#191E2A', '#B7ADFF', '#FFAAA0'] },
 ];
 
-// Toolbar icons (Settings → Appearance): one per style. Pantry's (id pantry) is the app's own four-scraps
-// icon and the default, so it carries the app's name rather than its style's.
-export const ICONS = STYLES.map((s) => ({ value: s.value, label: s.value === 'pantry' ? 'Internet Binder' : s.label }));
+// A saved style id as one of STYLES. The retired styles move to the nearest new one: Night Atlas to
+// Nocturne; Field Notebook, Gallery and Swiss Index (light and editorial) to Paper & Ink; Pantry Pop
+// and anything older to the default.
+export function canonicalStyle(id) {
+  if (STYLES.some((s) => s.value === id)) return id;
+  return ['notebook', 'gallery', 'swiss'].includes(id) ? 'paper' : STYLES[0].value;
+}
 
-// Sets data-style / data-theme on <html> (or any element) from settings. Pantry Pop needs no attribute.
-// Styles from before 1.5 (modern, moss, minimal) fall back to the default.
+// Toolbar icons (Settings → Appearance), kept apart from the appearances: the binder icon (id pantry,
+// the default) and the earlier style icons. New brand icons wait for approval.
+export const ICONS = [
+  { value: 'pantry', label: 'Internet Binder' },
+  { value: 'notebook', label: 'Field Notebook' },
+  { value: 'gallery', label: 'Gallery' },
+  { value: 'atlas', label: 'Night Atlas' },
+  { value: 'swiss', label: 'Swiss Index' },
+];
+
+// Sets data-style on <html> (or any element) from settings. Nocturne, the default, needs no attribute.
 export function applyLook(node, settings) {
-  const theme = settings?.theme || 'system';
-  const style = STYLES.some((s) => s.value === settings?.style) ? settings.style : STYLES[0].value;
-  if (theme === 'light' || theme === 'dark') node.dataset.theme = theme;
-  else delete node.dataset.theme;
+  const style = canonicalStyle(settings?.style);
+  delete node.dataset.theme;
   if (style === STYLES[0].value) delete node.dataset.style;
   else node.dataset.style = style;
 }
 
 export const DEFAULT_SETTINGS = {
-  theme: 'system', // system | light | dark
-  style: 'pantry', // pantry | notebook | gallery | atlas | swiss: the look, per device (see src/shared/tokens.css)
+  style: 'nocturne', // nocturne | paper | chromatic: the look, per device (see src/shared/tokens.css)
   icon: 'pantry', // toolbar icon: a style id (see ICONS and src/toolbar/icon.js)
   home: { comeBack: true }, // Home's "Come back to": saves not opened in 6+ weeks (worked out on this device)
   // Lookups (off until turned on, each needs its site granted): fill in places (OpenStreetMap), films and
@@ -426,7 +435,12 @@ export function createStore(kv, db = memoryRecordBackend()) {
 
   async function readSettings() {
     const raw = await be.get([KEYS.meta, KEYS.settings, KEYS.secrets]);
-    return { meta: raw[KEYS.meta] || null, settings: deepMerge(DEFAULT_SETTINGS, raw[KEYS.settings] || {}), secrets: raw[KEYS.secrets] || {} };
+    const settings = deepMerge(DEFAULT_SETTINGS, raw[KEYS.settings] || {});
+    // Retired styles read as their nearest appearance (kept on the next write); light or dark now comes
+    // with the appearance, so the old theme switch is gone.
+    settings.style = canonicalStyle(settings.style);
+    delete settings.theme;
+    return { meta: raw[KEYS.meta] || null, settings, secrets: raw[KEYS.secrets] || {} };
   }
 
   async function readAll() {

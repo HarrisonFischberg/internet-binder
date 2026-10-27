@@ -11,12 +11,15 @@ struct PlacesScreen: View {
     @Environment(\.ks) private var t
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var mode: Mode = .list
     @State private var view: PlacesView?
     @State private var editing: Save?
     @State private var reading: String?
     @State private var selecting = false
     @State private var selected: Set<String> = []
+    /// Regions folded shut in the list (kept while the app runs).
+    @State private var folded: Set<String> = []
 
     enum Mode: String, CaseIterable { case list = "List", map = "Map", review = "Review" }
 
@@ -30,19 +33,14 @@ struct PlacesScreen: View {
                         ScreenHeader(title: "Places", subtitle: subtitle)
                         if mode != .map && !shownPlaces.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
                     }
-                    Picker("Show", selection: $mode) {
-                        ForEach(Mode.allCases, id: \.self) { m in
-                            Text(m == .review && waiting > 0 ? "Review \(waiting)" : m.rawValue).tag(m)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    SegmentedTabs(Mode.allCases.map { m in (m, m == .review && waiting > 0 ? "Review \(waiting)" : m.rawValue) }, selection: $mode)
                     .onChange(of: mode) {
                         Haptic.detent()
                         selecting = false
                         selected = []
                     }
                 }
-                .padding(.horizontal, 18).padding(.bottom, 12)
+                .padding(.horizontal, 20).padding(.bottom, 12)
                 switch mode {
                 case .list: list
                 case .map: map
@@ -72,47 +70,79 @@ struct PlacesScreen: View {
     private var ready: Int { view?.groups.reduce(0) { $0 + $1.cities.reduce(0) { $0 + $1.items.count } } ?? 0 }
     private var subtitle: String {
         guard view != nil else { return "" }
-        return waiting > 0 ? "\(ready) on your list · \(waiting) waiting in review" : "\(ready) on your list"
+        let saved = (ready + waiting).formatted()
+        return waiting > 0 ? "\(saved) saved · \(waiting.formatted()) to review" : "\(saved) saved"
     }
 
     // MARK: list
 
     private var list: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22, pinnedViews: [.sectionHeaders]) {
+            LazyVStack(alignment: .leading, spacing: 18, pinnedViews: [.sectionHeaders]) {
                 if let view, view.groups.isEmpty {
                     EmptyNote(symbol: "mappin.and.ellipse", text: waiting > 0
-                              ? "\(waiting) place\(waiting == 1 ? " is" : "s are") waiting in Places review for a name or a state."
-                              : "Save a restaurant, café or anywhere you want to go and it shows up here, by state and city.")
+                              ? "No places here yet. \(waiting) place\(waiting == 1 ? " is" : "s are") waiting in Review for a name or a state."
+                              : "No places here yet. Save a restaurant, café or anywhere you want to go and it shows up here, by state and city.")
+                } else if view == nil {
+                    // Loading: rows the size of real ones, so nothing jumps when they arrive.
+                    ForEach(0..<4, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: t.radius, style: .continuous).fill(t.well).frame(height: 88)
+                    }
+                    .accessibilityHidden(true)
                 }
                 ForEach(view?.groups ?? [], id: \.state) { group in
                     Section {
-                        ForEach(group.cities, id: \.city) { city in
-                            VStack(alignment: .leading, spacing: 8) {
-                                if group.cities.count > 1 || !city.city.isEmpty {
-                                    Text(city.city.isEmpty ? "Elsewhere in \(group.state)" : city.city)
-                                        .font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted)
+                        if !folded.contains(group.state) {
+                            ForEach(group.cities, id: \.city) { city in
+                                VStack(alignment: .leading, spacing: 10) {
+                                    if group.cities.count > 1 || !city.city.isEmpty {
+                                        Text(city.city.isEmpty ? "Elsewhere in \(group.state)" : city.city)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(t.style == .chromatic ? t.accent : t.inkMuted)
+                                            .accessibilityAddTraits(.isHeader)
+                                    }
+                                    ForEach(city.items) { place in row(place, city: city.city) }
                                 }
-                                ForEach(city.items) { place in row(place) }
                             }
                         }
                     } header: {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(group.state).font(KSFont.name(.title2)).foregroundStyle(t.ink)
-                            Text("\(group.cities.reduce(0) { $0 + $1.items.count })").font(.subheadline).foregroundStyle(t.inkMuted)
-                            Spacer()
-                        }
-                        .padding(.vertical, 6)
-                        .background(TablePatch())
-                        .accessibilityAddTraits(.isHeader)
+                        regionHeader(group.state, count: group.cities.reduce(0) { $0 + $1.items.count })
                     }
                 }
             }
-            .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+            .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
         }
     }
 
-    @ViewBuilder private func row(_ place: Save) -> some View {
+    /// A region's name and count; tap to fold it shut or open it again.
+    private func regionHeader(_ state: String, count: Int) -> some View {
+        let open = !folded.contains(state)
+        return Button {
+            Haptic.detent()
+            withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) {
+                if open { folded.insert(state) } else { folded.remove(state) }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(state).font(KSFont.section()).foregroundStyle(t.ink)
+                Text("\(count)").font(.subheadline).foregroundStyle(t.inkMuted).monospacedDigit()
+                Spacer()
+                Image(systemName: "chevron.up").font(.footnote.weight(.bold)).foregroundStyle(t.inkMuted)
+                    .rotationEffect(.degrees(open ? 0 : 180))
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 2)
+        .background(TablePatch())
+        .accessibilityLabel("\(state), \(count) place\(count == 1 ? "" : "s")")
+        .accessibilityValue(open ? "Expanded" : "Collapsed")
+        .accessibilityHint(open ? "Folds this region shut." : "Opens this region.")
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder private func row(_ place: Save, city: String) -> some View {
         let save = model.index.byId[place.id] ?? place
         if selecting {
             let on = selected.contains(place.id)
@@ -120,13 +150,23 @@ struct PlacesScreen: View {
                 Haptic.checked()
                 if on { selected.remove(place.id) } else { selected.insert(place.id) }
             } label: {
-                rowBody(place).selectionCheck(on, alignment: .trailing)
+                rowBody(place, city: city, menu: false).selectionCheck(on, alignment: .trailing)
+                    .overlay { if on { RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(t.accent, lineWidth: 2) } }
             }
             .buttonStyle(PressStyle())
             .accessibilityLabel(place.title)
+            .accessibilityAddTraits(on ? .isSelected : [])
         } else {
-            NavigationLink(value: save) { rowBody(place).matchedTransitionSource(id: place.id, in: zoom) }
+            NavigationLink(value: save) { rowBody(place, city: city, menu: true).matchedTransitionSource(id: place.id, in: zoom) }
                 .buttonStyle(PressStyle())
+                // The row's menu, one tap away: laid over the row, outside its link.
+                .overlay(alignment: .trailing) {
+                    Menu { SaveMenu(save: save) { startSelecting(place.id) } } label: {
+                        GlassIcon("ellipsis", size: 36, font: .footnote.weight(.bold)).frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("More for \(place.title)")
+                    .padding(.trailing, 8)
+                }
                 .contextMenu { SaveMenu(save: save) { startSelecting(place.id) } }
                 .swipeToDelete { Task { await model.trash(save) } }
         }
@@ -138,27 +178,32 @@ struct PlacesScreen: View {
         selecting = true
     }
 
-    private func rowBody(_ place: Save) -> some View {
-        HStack(spacing: 14) {
-            SaveImage(place, symbolSize: 18).frame(width: 56, height: 56).clipped()
-                .ksSurface(radius: min(t.radius, 10), scale: 0.5)
+    /// Photo, name, then city and kind of place; the whole row opens the save.
+    private func rowBody(_ place: Save, city: String, menu: Bool) -> some View {
+        let detail = [city, place.fact ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        return HStack(spacing: 14) {
+            SaveImage(place, symbolSize: 20).frame(width: 64, height: 64).clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text(place.title).font(KSFont.name(.headline)).foregroundStyle(t.ink)
-                if let fact = place.fact, !fact.isEmpty { Text(fact).font(.footnote).foregroundStyle(t.inkMuted) }
+                Text(place.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
+                if !detail.isEmpty { Text(detail).font(.subheadline).foregroundStyle(t.inkMuted).lineLimit(2) }
             }
-            Spacer()
+            Spacer(minLength: 0)
             if place.status == "done" {
                 Label("Been", systemImage: "checkmark.seal.fill").labelStyle(.iconOnly).foregroundStyle(t.stamp)
                     .accessibilityLabel("Been")
             }
         }
-        .padding(10)
+        .padding(.leading, 12).padding(.vertical, 12).padding(.trailing, menu ? 56 : 48)
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
         .ksSurface()
     }
 
     // MARK: map
 
-    private var map: some View { PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }) }
+    private var map: some View {
+        PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }, waiting: waiting) { mode = .review }
+    }
 
     // MARK: review
 
@@ -189,7 +234,7 @@ struct PlacesScreen: View {
                     }
                 }
             }
-            .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+            .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
         }
     }
 
@@ -317,8 +362,8 @@ private struct ReviewActionStyle: ButtonStyle {
         configuration.label
             .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
             .padding(.horizontal, 14).frame(minHeight: 44)
-            .background(t.paper, in: Capsule())
-            .overlay(Capsule().strokeBorder(t.style == .pantry ? t.line : t.rule, lineWidth: t.style == .pantry ? 2 : 1))
+            .background(t.well, in: Capsule())
+            .overlay(Capsule().strokeBorder(t.rule, lineWidth: 1))
             .opacity(enabled ? (configuration.isPressed && reduce ? 0.8 : 1) : 0.5)
             .scaleEffect(configuration.isPressed && !reduce ? 0.96 : 1)
             .animation(KSMotion.or(KSMotion.press, reduce: reduce), value: configuration.isPressed)
@@ -385,12 +430,21 @@ struct PlaceFixSheet: View {
     }
 }
 
-/// The places that have a pin, on Apple Maps; each pin opens its save. The Places tab's Map, and the
-/// map behind the Map button on Lifestyle's Places.
+/// The places that have a pin, on Apple Maps, gathered into numbered clusters that come apart as you
+/// zoom in. Tapping a pin selects it (larger, outlined, in the accent) and shows a card with its name,
+/// where it is and Open; tapping a cluster zooms into it. The Places tab's Map, and the map behind the
+/// Map button on Lifestyle's Places. "51 of 120 mapped" counts only places that have a pin.
 struct PlacesMap: View {
     let places: [Save]
+    /// Places waiting in Review, and how to get there (the Places tab only).
+    var waiting = 0
+    var onReview: (() -> Void)?
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    @State private var position: MapCameraPosition = .automatic
+    @State private var region: MKCoordinateRegion?
+    @State private var chosen: String?
 
     private var pinned: [(Save, CLLocationCoordinate2D)] {
         places.compactMap { s in
@@ -405,40 +459,185 @@ struct PlacesMap: View {
         return .region(MKCoordinateRegion(center: pin, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)))
     }
 
+    /// Pins that sit close together on screen at this zoom, as one cluster each.
+    private var clusters: [PinCluster] {
+        let pins = pinned
+        guard let region, pins.count > 1 else { return pins.map { PinCluster(members: [$0.0], centre: $0.1) } }
+        let cellLat = max(region.span.latitudeDelta / 8, 0.00001), cellLng = max(region.span.longitudeDelta / 6, 0.00001)
+        var cells: [String: [(Save, CLLocationCoordinate2D)]] = [:]
+        var keys: [String] = []
+        for p in pins {
+            let key = "\(Int((p.1.latitude / cellLat).rounded(.down)))|\(Int((p.1.longitude / cellLng).rounded(.down)))"
+            if cells[key] == nil { keys.append(key) }
+            cells[key, default: []].append(p)
+        }
+        return keys.map { k in
+            let m = cells[k]!
+            let lat = m.map(\.1.latitude).reduce(0, +) / Double(m.count), lng = m.map(\.1.longitude).reduce(0, +) / Double(m.count)
+            return PinCluster(members: m.map(\.0), centre: CLLocationCoordinate2D(latitude: lat, longitude: lng))
+        }
+    }
+
+    private var selectedSave: Save? { chosen.flatMap { id in pinned.first { $0.0.id == id }?.0 } }
+
     var body: some View {
-        Map(initialPosition: start) {
-            ForEach(pinned, id: \.0.id) { place, pin in
-                Annotation(place.title, coordinate: pin) {
-                    NavigationLink(value: model.index.byId[place.id] ?? place) {
-                        // A 32 pt pin with a 44 pt target; the glyph is drawn in the colour that reads on the pin.
-                        Image(systemName: place.status == "done" ? "checkmark" : "mappin")
-                            .font(.subheadline.weight(.bold)).foregroundStyle(t.onKind)
-                            .frame(width: 32, height: 32)
-                            .background(t.kindFill("place"), in: Circle())
-                            .overlay(Circle().strokeBorder(t.style == .pantry ? t.onKind : .white, lineWidth: 2))
-                            .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Circle())
-                    }
-                    .accessibilityLabel(place.title)
+        Map(position: $position) {
+            ForEach(clusters) { c in
+                Annotation(c.members.count == 1 ? c.members[0].title : "\(c.members.count) places", coordinate: c.centre) {
+                    if c.members.count == 1 { pin(c.members[0]) } else { cluster(c) }
                 }
+                .annotationTitles(.hidden)
             }
         }
         .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
-        .overlay {
-            if pinned.isEmpty {
-                Text("Places with a pin show up here.").font(KSFont.note).foregroundStyle(t.ink)
-                    .padding(14).ksSurface(radius: 24)
-            }
+        .mapControls { MapScaleView() }
+        .onMapCameraChange(frequency: .onEnd) { region = $0.region }
+        .onAppear { position = start }
+        // The selected place's card sits above the tab bar; the map's own logo and Legal link move up
+        // above it rather than under it.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let save = selectedSave { card(save).padding(.horizontal, 16).padding(.bottom, 12).transition(.move(edge: .bottom).combined(with: .opacity)) }
         }
-        // Say when some places aren't on the map (no pin yet), so a short map doesn't look like a lost save.
+        .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: chosen)
+        .overlay {
+            if pinned.isEmpty { emptyState }
+        }
         // At the top, so it never covers the Apple Maps logo and Legal link at the bottom.
         .overlay(alignment: .top) {
-            if !pinned.isEmpty && pinned.count < places.count {
-                Text("\(pinned.count) of \(places.count) on the map").font(KSFont.note).foregroundStyle(t.ink)
-                    .padding(.horizontal, 14).padding(.vertical, 8).ksSurface(radius: 24)
-                    .padding(.top, 12)
+            if !pinned.isEmpty {
+                HStack {
+                    Spacer()
+                    Text(pinned.count < places.count ? "\(pinned.count.formatted()) of \(places.count.formatted()) mapped" : "\(pinned.count.formatted()) mapped")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).monospacedDigit()
+                        .padding(.horizontal, 14).frame(minHeight: 36)
+                        .ksGlass(Capsule())
+                    Spacer()
+                }
+                .overlay(alignment: .trailing) {
+                    Button { showAll() } label: { GlassIcon("arrow.up.left.and.arrow.down.right", size: 44, font: .subheadline.weight(.bold)) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Show every place")
+                }
+                .padding(.horizontal, 16).padding(.top, 10)
             }
         }
     }
+
+    /// One place: a disc in the place colour; chosen, it grows, takes the accent and an outline, and
+    /// drops a point, so the choice never rests on colour alone.
+    private func pin(_ place: Save) -> some View {
+        let on = chosen == place.id
+        return Button {
+            Haptic.detent()
+            chosen = on ? nil : place.id
+        } label: {
+            VStack(spacing: -3) {
+                Image(systemName: place.status == "done" ? "checkmark" : "mappin")
+                    .font((on ? Font.body : .subheadline).weight(.bold)).foregroundStyle(on ? t.onAccent : t.onKind)
+                    .frame(width: on ? 42 : 30, height: on ? 42 : 30)
+                    .background(on ? t.accent : t.kindFill("place"), in: Circle())
+                    .overlay(Circle().strokeBorder(on ? t.ink : .white.opacity(0.9), lineWidth: on ? 3 : 2))
+                if on { Image(systemName: "triangle.fill").font(.system(size: 10)).foregroundStyle(t.ink).rotationEffect(.degrees(180)) }
+            }
+            .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(place.title)
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+        .accessibilityHint(on ? "Selected. Its card is below the map." : "Shows its card.")
+    }
+
+    /// Several places close together: their count in a ring. Tap to zoom in until they come apart.
+    private func cluster(_ c: PinCluster) -> some View {
+        Button {
+            Haptic.detent()
+            zoom(into: c)
+        } label: {
+            Text("\(c.members.count)").font(.subheadline.weight(.bold)).monospacedDigit().foregroundStyle(t.ink)
+                .frame(minWidth: 36, minHeight: 36).padding(.horizontal, c.members.count > 99 ? 6 : 0)
+                .background(t.paper.opacity(0.92), in: Capsule())
+                .overlay(Capsule().strokeBorder(t.style == .paper ? t.line : t.ink.opacity(0.85), lineWidth: 2))
+                .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(c.members.count) places")
+        .accessibilityHint("Zooms in to show them")
+    }
+
+    private func zoom(into c: PinCluster) {
+        let coords = pinned.filter { p in c.members.contains { $0.id == p.0.id } }.map(\.1)
+        guard let minLat = coords.map(\.latitude).min(), let maxLat = coords.map(\.latitude).max(),
+              let minLng = coords.map(\.longitude).min(), let maxLng = coords.map(\.longitude).max() else { return }
+        let span = MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.8, 0.004), longitudeDelta: max((maxLng - minLng) * 1.8, 0.004))
+        // Already as close as it goes (the same spot): pick the first, so its card answers the tap.
+        if let region, region.span.latitudeDelta <= 0.006 { chosen = c.members.first?.id; return }
+        withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) {
+            position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2), span: span))
+        }
+    }
+
+    private func showAll() {
+        Haptic.detent()
+        chosen = nil
+        withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { position = pinned.count == 1 ? start : .automatic }
+    }
+
+    /// The chosen place: picture, name, where it is, Open, and a close button.
+    private func card(_ save: Save) -> some View {
+        let open = model.index.byId[save.id] ?? save
+        let where_ = [save.details?["locality"]?.string, save.details?["region"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        let detail = [where_, save.fact ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        return HStack(spacing: 14) {
+            NavigationLink(value: open) {
+                HStack(spacing: 14) {
+                    SaveImage(save, symbolSize: 22).frame(width: 72, height: 72).clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(save.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
+                        if !detail.isEmpty { Text(detail).font(.subheadline).foregroundStyle(t.inkMuted).lineLimit(2) }
+                        Label("Open", systemImage: "arrow.up.right").font(.subheadline.weight(.semibold)).foregroundStyle(t.accent)
+                            .labelStyle(.titleAndIcon).padding(.top, 2)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel([save.title, detail].filter { !$0.isEmpty }.joined(separator: ", "))
+            .accessibilityHint("Opens the place")
+            Button { chosen = nil } label: { GlassIcon("xmark", size: 36, font: .footnote.weight(.bold)).frame(width: 44, height: 44) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+        }
+        .padding(12)
+        .ksSurface()
+    }
+
+    /// No pins at all: say so, and offer Review when places are waiting there for a place to be found.
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Text(places.isEmpty ? "No places here yet." : "None of your places has a pin yet.").font(.headline).foregroundStyle(t.ink)
+                .multilineTextAlignment(.center)
+            if waiting > 0, let onReview {
+                Button("Review \(waiting) place\(waiting == 1 ? "" : "s")", action: onReview)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(t.onAccent)
+                    .padding(.horizontal, 18).frame(minHeight: 44)
+                    .background(t.accent, in: Capsule())
+            }
+        }
+        .padding(18).ksSurface()
+        .padding(24)
+    }
+}
+
+/// Pins drawn as one marker at this zoom.
+struct PinCluster: Identifiable {
+    let members: [Save]
+    let centre: CLLocationCoordinate2D
+    var id: String { members.map(\.id).joined(separator: ",") }
 }

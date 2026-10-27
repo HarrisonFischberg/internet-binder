@@ -2,14 +2,13 @@
 import SwiftUI
 import KeepsakeKit
 
-/// A save as a card in the current style: its picture (or, without one, what the style makes of it:
-/// a jar label, an index card, a plate, a monogram, a numbered cell), its kind, its name and the one
-/// fact that matters. One accessibility element: "{title}, {kind}, {fact}" plus its state.
+/// A save as a card in the current style: its picture (or, without one, a themed placeholder with
+/// the kind's symbol), its kind, its name and the one fact that matters. One accessibility element:
+/// "{title}, {kind}, {fact}" plus its state.
 public struct SaveObject: View {
     let save: Save
     /// Smaller type and picture, for the style previews in Appearance.
     let compact: Bool
-    @Environment(\.ks) private var t
     public init(_ save: Save, compact: Bool = false) { self.save = save; self.compact = compact }
 
     private var done: Bool { save.status == "done" || save.purchased == true }
@@ -24,19 +23,19 @@ public struct SaveObject: View {
 }
 
 /// A save on Home's Recent shelf: every card the same size, so the row reads as one even line.
+/// Paper & Ink sets the picture on the page with the name under it, like a photo in a scrapbook
+/// page; Nocturne and Chromatic lay the name over the picture's darkened foot.
 public struct ShelfCard: View {
     let save: Save
     let width: CGFloat
-    /// Grows with Dynamic Type, so the name and fact keep their room.
-    @ScaledMetric(relativeTo: .headline) private var textHeight: CGFloat = 78
-    /// Pantry Pop on Home: a save without a picture is a soft-tinted jar, so only Review is loud.
-    let calm: Bool
-    public init(_ save: Save, width: CGFloat, calm: Bool = false) { self.save = save; self.width = width; self.calm = calm }
+    /// Grows with Dynamic Type, so the name keeps its two lines.
+    @ScaledMetric(relativeTo: .headline) private var textHeight: CGFloat = 54
+    public init(_ save: Save, width: CGFloat) { self.save = save; self.width = width }
 
     private var done: Bool { save.status == "done" || save.purchased == true }
 
     public var body: some View {
-        SaveCard(save: save, compact: false, pictureHeight: width * 0.72, fixedHeight: width * 0.72 + textHeight + 6, calm: calm)
+        SaveCard(save: save, compact: false, pictureHeight: width * 1.05, fixedHeight: width * 1.05 + textHeight, shelf: true)
             .frame(width: width)
             .saturation(done ? 0.4 : 1)
             .accessibilityElement(children: .ignore)
@@ -49,10 +48,11 @@ struct SaveCard: View {
     var compact = false
     var pictureHeight: CGFloat?
     var fixedHeight: CGFloat?
-    var calm = false
+    /// Home's Recent shelf.
+    var shelf = false
     @Environment(\.ks) private var t
     /// Room kept under the name for the state badge, so the badge never sits on the words.
-    @ScaledMetric(relativeTo: .caption2) private var badgeHeight: CGFloat = 20
+    @ScaledMetric(relativeTo: .caption2) private var badgeHeight: CGFloat = 24
     private var badgeRoom: CGFloat { Self.state(save).isEmpty ? 0 : badgeHeight }
 
     private var kind: KindStyle { KindStyle(save.kind) }
@@ -71,199 +71,66 @@ struct SaveCard: View {
 
     var body: some View {
         Group {
-            if save.hasImage { pictured } else { placeholder }
+            if t.style == .paper { paperCard } else { overlaidCard }
         }
         .overlay(alignment: .bottomTrailing) { badge }
     }
 
-    // MARK: with a picture
+    // MARK: Nocturne and Chromatic: the picture fills the card, the name on its darkened foot
 
-    @ViewBuilder private var pictured: some View {
-        let h = pictureHeight ?? (compact ? 96 : 150)
-        switch t.style {
-        case .gallery:
-            VStack(alignment: .leading, spacing: 8) {
-                SaveImage(save).frame(height: h).frame(maxWidth: .infinity).clipped()
-                caption
+    private var overlaidCard: some View {
+        let h = pictureHeight ?? (compact ? 120 : 190)
+        let total = fixedHeight ?? (h + (compact ? 36 : 56))
+        return ZStack(alignment: .bottomLeading) {
+            if save.hasImage {
+                SaveImage(save).frame(maxWidth: .infinity).frame(height: total).clipped()
+                // A scrim only behind the words, so the picture stays clear above them.
+                LinearGradient(stops: [.init(color: .black.opacity(0), location: 0), .init(color: .black.opacity(0.55), location: 0.55), .init(color: .black.opacity(0.78), location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: min(total * 0.62, 150)).allowsHitTesting(false)
+            } else {
+                Placeholder(save: save, compact: compact).frame(maxWidth: .infinity).frame(height: total)
             }
-            .frame(height: fixedHeight, alignment: .top)
-        case .notebook:
-            VStack(alignment: .leading, spacing: 8) {
-                SaveImage(save).frame(height: h).frame(maxWidth: .infinity).clipped()
-                    .padding(4).background(t.paper).resting()
-                    .overlay(alignment: .topLeading) { Tape().offset(x: -8, y: -4) }
-                caption.padding(.horizontal, 2)
-            }
-            .frame(height: fixedHeight, alignment: .top)
-        case .pantry, .atlas:
-            glassPictured(h)
-        default:
-            VStack(alignment: .leading, spacing: 0) {
-                SaveImage(save).frame(height: h).frame(maxWidth: .infinity).clipped()
-                    .overlay(alignment: .topLeading) { if t.style == .pantry { Sticker(kind: save.kind).padding(10) } }
-                if t.outline > 0 { Rectangle().fill(t.style == .pantry ? t.line : t.rule).frame(height: t.outline) }
-                caption.padding(compact ? 8 : 12)
-            }
-            .frame(height: fixedHeight, alignment: .top)
-            .clipped()
-            .ksSurface()
-        }
-    }
-
-    /// Pantry Pop and Night Atlas: the picture fills the card and the name sits on a clear glass label
-    /// inside it, over a dimmed band so white text keeps its contrast on any picture.
-    private func glassPictured(_ h: CGFloat) -> some View {
-        let total = fixedHeight ?? (h + (compact ? 48 : 76))
-        return SaveImage(save).frame(maxWidth: .infinity).frame(height: total).clipped()
-            .overlay(alignment: .bottom) {
-                LinearGradient(colors: [.black.opacity(0), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: total * 0.7).allowsHitTesting(false)
-            }
-            .overlay(alignment: .topLeading) {
-                if t.style == .pantry {
-                    Sticker(kind: save.kind).padding(10)
-                } else {
-                    Label(kind.label, systemImage: kind.symbol).font(.caption.weight(.semibold)).labelStyle(.titleAndIcon)
-                        .foregroundStyle(.white).padding(.horizontal, 9).padding(.vertical, 5)
-                        .glassEffect(.clear.tint(.black.opacity(0.35)), in: .capsule).padding(10)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(save.hasImage ? .white : t.ink)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    .shadow(color: save.hasImage ? .black.opacity(0.4) : .clear, radius: 2, y: 1)
+                if !fact.isEmpty && !compact && !shelf {
+                    Text(fact).font(KSFont.fact(t)).foregroundStyle(save.hasImage ? .white.opacity(0.88) : t.inkMuted).lineLimit(1)
                 }
             }
-            .overlay(alignment: .bottomLeading) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(.white)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    if !fact.isEmpty && !compact {
-                        Text(fact).font(KSFont.fact(t)).foregroundStyle(.white.opacity(0.9)).lineLimit(1)
-                    }
-                }
-                .padding(.horizontal, 12).padding(.vertical, 9)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(.clear, in: .rect(cornerRadius: max(t.radius - 6, 10)))
-                .padding(8).padding(.bottom, badgeRoom)
-            }
-            .ksSurface()
-    }
-
-    private var caption: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            if t.style != .pantry { KindLabel(kind: save.kind, fact: t.monoLabels ? fact : nil) }
-            Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(t.ink)
-                .lineLimit(compact || fixedHeight != nil ? 2 : 3).fixedSize(horizontal: false, vertical: true)
-            if !fact.isEmpty && !t.monoLabels && !compact {
-                Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2)
-            }
+            .padding(.horizontal, compact ? 10 : 12).padding(.bottom, (compact ? 10 : 12) + badgeRoom)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.bottom, badgeRoom)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: without a picture
-
-    @ViewBuilder private var placeholder: some View {
-        let minH: CGFloat = pictureHeight.map { $0 + 40 } ?? (compact ? 130 : 200)
-        switch t.style {
-        case .pantry: jar(minH)
-        case .notebook: indexCard(minH)
-        case .gallery: plate(minH)
-        case .atlas: monogram(minH)
-        case .swiss: cell(minH)
-        }
-    }
-
-    /// Pantry Pop: a solid jar label in the kind's colour, with a lid and the name set big. Calm (Home):
-    /// the kind's soft tint with its name in the kind's colour, a hairline and no shadow.
-    private func jar(_ minH: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(kind.label.uppercased(), systemImage: kind.symbol)
-                .font(.caption.weight(.black)).tracking(1.2).labelStyle(.titleAndIcon)
-                .foregroundStyle(calm ? t.kind(save.kind) : t.onKind)
-            Spacer(minLength: 12)
-            Text(save.title).font(KSFont.name(compact ? .headline : .title2, t)).lineLimit(4).minimumScaleFactor(0.8)
-            if !fact.isEmpty { Text(fact).font(.footnote.weight(.bold)).lineLimit(2).foregroundStyle(calm ? t.inkMuted : t.onKind) }
-        }
-        .foregroundStyle(calm ? t.ink : t.onKind)
-        .padding(.horizontal, 14).padding(.top, 22).padding(.bottom, 14 + badgeRoom)
-        .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
-        .background(alignment: .top) { Lid().fill((calm ? t.kind(save.kind) : t.onKind).opacity(calm ? 0.12 : 0.18)).frame(height: 12) }
-        .ksSurface(calm ? t.kindSoft(save.kind) : t.kindFill(save.kind), stroke: calm ? t.rule : nil, lifted: !calm)
-    }
-
-    /// Field Notebook: a ruled index card with the name written on it.
-    private func indexCard(_ minH: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            KindLabel(kind: save.kind, fact: nil)
-            Text(save.title).font(KSFont.name(compact ? .subheadline : .title3, t)).foregroundStyle(t.ink).lineLimit(4)
-            Spacer(minLength: 0)
-            if !fact.isEmpty { Text(fact.uppercased()).font(KSFont.label(t)).foregroundStyle(t.inkMuted).lineLimit(2) }
-        }
-        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 12 + badgeRoom)
-        .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
-        .background {
-            Canvas { ctx, size in
-                var lines = Path()
-                for y in stride(from: 46.0, to: size.height, by: 16) { lines.move(to: CGPoint(x: 0, y: y)); lines.addLine(to: CGPoint(x: size.width, y: y)) }
-                ctx.stroke(lines, with: .color(t.accent.opacity(0.14)), lineWidth: 1)
-                ctx.fill(Path(CGRect(x: 0, y: 30, width: size.width, height: 1)), with: .color(t.stamp.opacity(0.4)))
-            }
-        }
-        .background(t.paper)
-        .resting()
-    }
-
-    /// Gallery: a softly tinted plate with the one detail that names the save, set like a title page.
-    private func plate(_ minH: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading) {
-                Text(kind.label).font(.caption).foregroundStyle(t.inkMuted)
-                Spacer(minLength: 10)
-                Text(mark).font(.system(compact ? .title3 : .title, design: .serif)).foregroundStyle(t.ink).lineLimit(3).minimumScaleFactor(0.7)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: minH - 50, maxHeight: fixedHeight.map { $0 - 50 }, alignment: .topLeading)
-            .background(t.kindFill(save.kind))
-            caption
-        }
-    }
-
-    private var mark: String {
-        let d = save.details
-        switch save.kind {
-        case "book": return d?["author"]?.string ?? save.title
-        case "media": return d?["year"]?.number.map { String(Int($0)) } ?? save.title
-        case "place": return d?["locality"]?.string ?? save.title
-        case "article": return d?["siteName"]?.string ?? save.host ?? save.title
-        default: return save.title
-        }
-    }
-
-    /// Night Atlas: a dark monogram card with a dotted route in the kind's colour.
-    private func monogram(_ minH: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(String(save.title.prefix(1)).uppercased()).font(.system(size: compact ? 34 : 52, weight: .bold)).foregroundStyle(t.kind(save.kind))
-                .accessibilityHidden(true)
-            Path { p in p.move(to: CGPoint(x: 0, y: 6)); p.addCurve(to: CGPoint(x: 120, y: 2), control1: CGPoint(x: 40, y: -6), control2: CGPoint(x: 80, y: 16)) }
-                .stroke(t.kind(save.kind).opacity(0.7), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [1, 5]))
-                .frame(height: 14)
-            Spacer(minLength: 0)
-            caption
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
+        .frame(height: total)
+        .overlay(alignment: .topLeading) { KindBadge(kind: save.kind).padding(compact ? 8 : 10) }
         .ksSurface(t.well)
     }
 
-    /// Swiss Index: a white cell with the kind as a label and its code set huge.
-    private func cell(_ minH: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            KindLabel(kind: save.kind, fact: nil)
-            Spacer(minLength: 8)
-            Text(kind.code).font(.system(size: compact ? 40 : 64, weight: .bold).width(.condensed)).foregroundStyle(t.ink).accessibilityHidden(true)
-            Text(save.title).font(KSFont.name(compact ? .subheadline : .headline, t)).foregroundStyle(t.ink).lineLimit(3)
-            if !fact.isEmpty && !compact { Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2) }
+    // MARK: Paper & Ink: a picture with the words under it
+
+    private var paperCard: some View {
+        let h = pictureHeight ?? (compact ? 96 : 150)
+        return VStack(alignment: .leading, spacing: shelf ? 8 : 0) {
+            Group {
+                if save.hasImage { SaveImage(save) } else { Placeholder(save: save, compact: compact || shelf) }
+            }
+            .frame(height: h).frame(maxWidth: .infinity).clipped()
+            .clipShape(RoundedRectangle(cornerRadius: shelf ? 12 : 0, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                if !shelf { KindLabel(kind: save.kind) }
+                Text(save.title).font(KSFont.name(compact || shelf ? .subheadline : .headline, t)).foregroundStyle(t.ink)
+                    .lineLimit(shelf || compact ? 2 : 3).fixedSize(horizontal: false, vertical: true)
+                if !fact.isEmpty && !compact && !shelf {
+                    Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2)
+                }
+            }
+            .padding(.horizontal, shelf ? 2 : (compact ? 10 : 12)).padding(.vertical, shelf ? 0 : (compact ? 8 : 10))
+            .padding(.bottom, badgeRoom)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12).padding(.bottom, badgeRoom)
-        .frame(maxWidth: .infinity, minHeight: fixedHeight ?? minH, maxHeight: fixedHeight, alignment: .topLeading).clipped()
-        .ksSurface()
+        .frame(height: fixedHeight, alignment: .top)
+        .modifier(PaperCardSurface(on: !shelf))
     }
 
     @ViewBuilder private var badge: some View {
@@ -273,54 +140,75 @@ struct SaveCard: View {
             Label(text, systemImage: save.isFinishing ? "hourglass" : done ? "checkmark" : "tray")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(done ? t.ink : t.onHighlight)
-                .padding(.horizontal, 7).padding(.vertical, 4)
-                .background(done ? t.paper : t.highlight, in: ControlShape(radius: t.controlRadius))
-                .overlay { ControlShape(radius: t.controlRadius).strokeBorder(t.style == .pantry ? t.line : .clear, lineWidth: 1.5) }
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(done ? t.well : t.highlight, in: Capsule())
+                .overlay { if done { Capsule().strokeBorder(t.rule, lineWidth: 1) } }
                 .padding(8)
                 .accessibilityHidden(true)
         }
     }
 }
 
-/// A strip of tape holding a photo in the notebook.
-struct Tape: View {
+/// A card's surface in Paper & Ink, or nothing (the shelf sets pictures straight on the page).
+private struct PaperCardSurface: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on { content.ksSurface() } else { content }
+    }
+}
+
+/// What a save without a picture shows: the kind's own tint, its symbol large and quiet, and (for a
+/// book, a film, a place or an article) the one detail that names it. Never a made-up picture.
+struct Placeholder: View {
+    let save: Save
+    var compact = false
     @Environment(\.ks) private var t
     var body: some View {
-        Rectangle().fill(Color(red: 0.84, green: 0.77, blue: 0.59).opacity(0.7)).frame(width: 34, height: 12).rotationEffect(.degrees(-38))
-            .accessibilityHidden(true)
+        let k = KindStyle(save.kind)
+        ZStack(alignment: .topTrailing) {
+            switch t.style {
+            case .nocturne:
+                // A night panel lit by the kind's colour from one corner.
+                t.well
+                RadialGradient(colors: [t.kind(save.kind).opacity(0.28), .clear], center: .topTrailing, startRadius: 0, endRadius: compact ? 120 : 200)
+            case .paper:
+                t.kindFill(save.kind)
+            case .chromatic:
+                t.kindSoft(save.kind)
+                LinearGradient(colors: [t.kindFill(save.kind).opacity(0.35), .clear], startPoint: .topTrailing, endPoint: .bottomLeading)
+            }
+            Image(systemName: k.symbol)
+                .font(.system(size: compact ? 30 : 46, weight: .light))
+                .foregroundStyle(t.style == .paper ? t.onKind.opacity(0.55) : t.kind(save.kind).opacity(0.85))
+                .padding(compact ? 12 : 16)
+                .padding(.top, compact ? 22 : 30)
+        }
+        .accessibilityHidden(true)
     }
 }
 
-/// The ribbed lid on a jar label.
-struct Lid: Shape {
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        for x in stride(from: r.minX, to: r.maxX, by: 8) { p.addRect(CGRect(x: x, y: r.minY, width: 3, height: r.height)) }
-        return p
-    }
-}
-
-/// Pantry Pop's kind sticker: the kind's colour, an ink outline and a small hard shadow.
-public struct Sticker: View {
+/// The kind on a picture: a small dark capsule with its symbol and word (colour is never the only
+/// signal). Nocturne and Chromatic only; Paper & Ink names the kind under the picture.
+public struct KindBadge: View {
     let kind: String
     @Environment(\.ks) private var t
+    @Environment(\.accessibilityReduceTransparency) private var solid
     public init(kind: String) { self.kind = kind }
     public var body: some View {
-        let k = KindStyle(kind)
-        Label(k.label, systemImage: k.symbol)
-            .font(.caption.weight(.heavy)).labelStyle(.titleAndIcon)
-            .foregroundStyle(t.onKind)
-            .padding(.horizontal, 9).padding(.vertical, 4)
-            .background(t.kindFill(kind), in: Capsule())
-            .overlay(Capsule().strokeBorder(t.onKind, lineWidth: 2))
-            .compositingGroup()
-            .shadow(color: t.onKind, radius: 0, x: 2, y: 2)
-            .accessibilityHidden(true)
+        if t.style != .paper {
+            let k = KindStyle(kind)
+            Label(k.label, systemImage: k.symbol)
+                .font(.caption.weight(.semibold)).labelStyle(.titleAndIcon)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(.black.opacity(solid ? 0.8 : 0.5), in: Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+                .accessibilityHidden(true)
+        }
     }
 }
 
-/// The kind as a small label: icon and word (colour is never the only signal). Pantry Pop shows a
-/// sticker; Field Notebook and Night Atlas a mono line ("RECIPE · 6 INGREDIENTS").
+/// The kind as a small label: symbol and word in the kind's colour.
 public struct KindLabel: View {
     let kind: String
     let fact: String?
@@ -328,18 +216,15 @@ public struct KindLabel: View {
     public init(kind: String, fact: String? = nil) { self.kind = kind; self.fact = fact }
     public var body: some View {
         let k = KindStyle(kind)
-        switch t.style {
-        case .pantry: Sticker(kind: kind)
-        case .notebook, .atlas:
-            Text(([k.label] + [fact].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " · ").uppercased())
-                .font(KSFont.label(t)).tracking(0.8).foregroundStyle(t.style == .atlas ? t.kind(kind) : t.inkMuted).lineLimit(1)
-        case .gallery: Text(k.label).font(KSFont.label(t)).foregroundStyle(t.inkMuted)
-        case .swiss: Text(k.label.uppercased()).font(KSFont.label(t)).tracking(0.9).foregroundStyle(t.inkMuted)
-        }
+        let words = ([k.label] + [fact].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " · ")
+        Label(t.style == .paper ? words.uppercased() : words, systemImage: k.symbol)
+            .labelStyle(.titleAndIcon)
+            .font(KSFont.label(t)).tracking(t.style == .paper ? 0.8 : 0)
+            .foregroundStyle(t.kind(kind)).lineLimit(1)
     }
 }
 
-/// A kind's small mark (on a group's cover, a map).
+/// A kind's small mark (on a group's cover, a map, a widget).
 public struct Stamp: View {
     let kind: String
     var size: CGFloat = 30
@@ -347,13 +232,12 @@ public struct Stamp: View {
     public init(kind: String, size: CGFloat = 30) { self.kind = kind; self.size = size }
     public var body: some View {
         let k = KindStyle(kind)
-        let pantry = t.style == .pantry
         Image(systemName: k.symbol)
-            .font(.system(size: size * 0.42, weight: .bold))
-            .foregroundStyle(pantry ? t.onKind : t.kind(kind))
+            .font(.system(size: size * 0.42, weight: .semibold))
+            .foregroundStyle(t.onKind)
             .frame(width: size, height: size)
-            .background(pantry ? t.kindFill(kind) : t.paper, in: Circle())
-            .overlay(Circle().strokeBorder(pantry ? t.onKind : t.rule, lineWidth: pantry ? 2 : 1))
+            .background(t.kindFill(kind), in: Circle())
+            .overlay(Circle().strokeBorder(.black.opacity(0.12), lineWidth: 1))
             .accessibilityHidden(true)
     }
 }

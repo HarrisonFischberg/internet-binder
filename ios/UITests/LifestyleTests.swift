@@ -44,7 +44,7 @@ final class LifestyleTests: XCTestCase {
     func testPlacesReviewFixMovesItToItsState() {
         let app = launch()
         app.tabBars.buttons["Places"].tap()
-        XCTAssertTrue(app.staticTexts["Portugal"].waitForExistence(timeout: 5), "Café Azulejo, by country")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Portugal'")).firstMatch.waitForExistence(timeout: 5), "Café Azulejo, by country")
         app.buttons["Review 1"].tap()
         XCTAssertTrue(app.staticTexts["Needs a state or country"].waitForExistence(timeout: 3))
         // Read again answers even when the post has nothing new.
@@ -58,7 +58,7 @@ final class LifestyleTests: XCTestCase {
         country.tap(); country.typeText("Japan")
         app.buttons["Save"].tap()
         app.buttons["List"].tap()
-        XCTAssertTrue(app.staticTexts["Japan"].waitForExistence(timeout: 5), "now listed under its country")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Japan'")).firstMatch.waitForExistence(timeout: 5), "now listed under its country")
         XCTAssertTrue(app.buttons["List"].exists)
     }
 

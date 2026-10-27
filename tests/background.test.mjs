@@ -98,14 +98,14 @@ test('a suggestion chip can file into a default collection that does not exist y
 });
 
 test('the capture card on the page loads the design tokens first and follows the chosen style', async () => {
-  F.local.keepsake_settings = { ...F.local.keepsake_settings, style: 'minimal', theme: 'dark' };
+  F.local.keepsake_settings = { ...F.local.keepsake_settings, style: 'swiss', theme: 'dark' };
   F.state.executeScript = async (opts) => (opts.files && opts.files[0] === 'src/extract/extract.js' ? [{ result: { ...tent } }] : [{ result: null }]);
   F.calls.executeScript.length = 0;
   for (const fn of F.listeners.menu) await fn({ menuItemId: 'keepsake-save', pageUrl: tent.url }, { id: 3, url: tent.url });
   const inject = F.calls.executeScript.find((c) => c.files && c.files.includes('src/content/toast.js'));
   assert.deepEqual(inject.files, ['src/content/tokens-content.js', 'src/content/toast.js']);
   const show = F.calls.executeScript.find((c) => c.args && c.args[0] && c.args[0].kind === 'saved');
-  assert.deepEqual(show.args[0].look, { style: 'minimal', theme: 'dark' });
+  assert.deepEqual(show.args[0].look, { style: 'paper' }, 'a retired style comes through as its new one');
   assert.equal(show.args[0].title, tent.title);
   F.state.executeScript = async () => [{ result: null }];
 });
