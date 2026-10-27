@@ -4,7 +4,8 @@
 // kind: product | place | recipe | video | article | workout | media | book | link
 // details (by kind):
 //   recipe  { ingredients: [string], steps: [string], yield, totalMinutes, prepMinutes, cookMinutes,
-//             cuisine, category, author, source: 'page' | 'caption' | 'you' | 'ai' | 'ai-draft', drafted?: [field] }
+//             cuisine, category, author, source: 'page' | 'caption' | 'you' | 'ai' | 'ai-draft' | 'web', drafted?: [field],
+//             basedOn?: { url, site, title } }   ('web': a close recipe your AI provider found online, from basedOn)
 //   workout { exercises: [{ name, sets, reps, durationSeconds, restSeconds }], durationMinutes, focus,
 //             source: 'page' | 'caption' | 'you' | 'ai' | 'ai-draft', drafted?: [field] }   (goals and check-ins: goals.js)
 //   place   { address, locality, region, postalCode, country, lat, lng, phone, cuisine, priceRange, hours: [string],
@@ -1002,7 +1003,19 @@ export function bookFromSchema(node) {
 // --- details ------------------------------------------------------------------------------------
 
 // 'ai': read by your AI provider from the post, page or links; 'ai-draft': mostly written by it.
-const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai', 'ai-draft'];
+// 'web': the post never wrote its recipe down, so your provider found a close one online (basedOn says where).
+const RECIPE_SOURCES = ['page', 'caption', 'you', 'ai', 'ai-draft', 'web'];
+// The page a 'web' recipe came from: https only, so the card's link is always one that opens.
+function basedOnOf(v) {
+  if (!v || typeof v !== 'object') return {};
+  try {
+    const u = new URL(String(v.url || ''));
+    if (u.protocol !== 'https:') return {};
+    return { basedOn: { url: u.href.slice(0, 1000), site: clean(v.site, 80) || u.hostname.replace(/^www\./, ''), title: clean(v.title, 200) } };
+  } catch {
+    return {};
+  }
+}
 const WORKOUT_SOURCES = ['page', 'caption', 'you', 'ai', 'ai-draft'];
 const PLACE_SOURCES = ['page', 'maps-link', 'you', 'ai'];
 // Fields your AI provider drafted because the save didn't say (the recipe or routine is in the video).
@@ -1051,6 +1064,7 @@ export function sanitizeDetails(kind, details) {
       author: clean(details.author, 80),
       source: RECIPE_SOURCES.includes(details.source) ? details.source : 'you',
       ...draftedOf('recipe', details),
+      ...basedOnOf(details.basedOn),
     };
   }
   if (kind === 'workout') {

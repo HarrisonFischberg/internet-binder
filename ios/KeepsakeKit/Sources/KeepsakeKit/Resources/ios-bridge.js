@@ -286,12 +286,14 @@
       // Where the card's details came from (dashboard.js's labels), and what your AI provider drafted
       // because the save didn't say it ("AI draft" beside those headings).
       const SOURCE = {
-        recipe: { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', ai: 'Recipe read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' },
+        recipe: { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', ai: 'Recipe read by AI', 'ai-draft': 'Drafted by AI: check it before you cook', web: '' },
         workout: { page: 'Exercises from the page', caption: 'Exercises from the caption', you: 'Exercises added by you', ai: 'Exercises read by AI', 'ai-draft': 'Exercises drafted by AI: check them before you train' },
         place: { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you', ai: 'Details found by AI' },
       };
       out.sourceLabel = SOURCE[item.kind]?.[d.source] || '';
       out.drafted = Array.isArray(d.drafted) ? d.drafted : [];
+      // A recipe your provider found online because the post never wrote one down: the page it's based on.
+      if (item.kind === 'recipe' && d.basedOn?.url) out.basedOn = d.basedOn;
       return out;
     },
     // What the widgets show, worked out here so the widget process never runs this code: active goals

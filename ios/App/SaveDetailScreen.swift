@@ -188,7 +188,7 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var panel: some View {
         switch current.kind {
         case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placePanel }
-        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; recipePanel }
+        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; recipePanel }
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         case "product": productPanel
         case "book", "media": shelfPanel
@@ -203,6 +203,37 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var sourceNote: some View {
         if let label = detail?.sourceLabel, !label.isEmpty {
             Text(label).font(KSFont.note).foregroundStyle(t.inkMuted)
+        }
+    }
+
+    /// A recipe found online because the post never wrote one down (understand.js readRecipe): where it's
+    /// from, with its link, so nobody takes it for the creator's own.
+    @ViewBuilder private var basedOnNote: some View {
+        if let based = detail?.basedOn, let link = URL(string: based.url) {
+            let site = based.site.flatMap { $0.isEmpty ? nil : $0 } ?? link.host() ?? "another site"
+            Button { openURL(link) } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "link").font(.subheadline.weight(.semibold)).foregroundStyle(KindStyle("recipe").color)
+                        .padding(.top, 2).accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        (Text("Based on a recipe from ") + Text(site).fontWeight(.semibold).underline())
+                            .font(.subheadline).foregroundStyle(t.ink)
+                        Text("The post didn't share its recipe, so AI found a close one. It may differ from the video.")
+                            .font(.footnote).foregroundStyle(t.inkMuted)
+                    }
+                    .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted).accessibilityHidden(true)
+                }
+                .padding(14)
+                .frame(minHeight: 44)
+                .ksSurface()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityLabel("Based on a recipe from \(site). It may differ from the video.")
+            .accessibilityHint("Opens \(site)")
+            .accessibilityIdentifier("recipe.basedOn")
         }
     }
 

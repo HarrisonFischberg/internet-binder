@@ -2944,6 +2944,20 @@ button.home-attention {
   color: var(--c-text-muted);
 }
 
+.recipe-based-on {
+  margin: 0;
+  max-width: 52ch;
+  font: var(--t-footnote);
+  color: var(--c-text-muted);
+}
+
+.recipe-based-on a {
+  color: var(--c-text);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .recipe-facts-grid {
   display: grid;
   grid-template-columns: auto 1fr;

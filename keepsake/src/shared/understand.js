@@ -23,11 +23,16 @@
 // it's about, fills in the facts the card is missing (a show's seasons, a book's pages), names a page about
 // it whose cover or poster becomes the card's picture when it has none, and for a film or show says where it
 // streams in your country, as found on the day it looked (watchCheckedOn).
+//
+// A recipe that is still thin after that (a Reel that only shows the dish: no ingredients or steps in the
+// caption, so the first read had little to go on) gets a web read with your key, readRecipe: the provider
+// searches for a published recipe as close to the dish as it can find, and that page's recipe goes on the
+// card, labelled "Based on a recipe from <site>" with its link, so it is never taken for the creator's own.
 
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
 import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
-import { understandWithAI, understandProductWithAI, understandTitleWithAI, keyFor, aiAvailable } from '../ai/provider.js';
+import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI, supportsWebLookup, keyFor, aiAvailable } from '../ai/provider.js';
 
 // How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Internet Binder picked.
 export const UNDERSTAND_CONFIDENCE = 0.7;
@@ -279,6 +284,96 @@ async function readTitle(item, settings, key, pages, image, { fetchShopPage, reg
     }
   }
   return { ai, picture };
+}
+
+// --- A recipe the post never wrote down -------------------------------------------------------------
+
+// How close the provider must say a recipe it found is before it goes on the card.
+export const RECIPE_CONFIDENCE = 0.5;
+
+// Too little to cook from: fewer than three ingredients, or no more than one step.
+export function thinRecipe(details = {}) {
+  return (details.ingredients || []).length < 3 || (details.steps || []).length < 2;
+}
+
+// Whether a recipe save may get a close recipe from the web: it is thin, and what's on it isn't the save's own
+// page recipe or yours.
+export function wantsWebRecipe(item) {
+  const d = item.details || {};
+  if (kindOf(item) !== 'recipe' || (item.userFields || []).includes('details')) return false;
+  // An empty card is "yours" only by default.
+  const said = (d.ingredients || []).length || (d.steps || []).length;
+  if (d.source === 'page' || (d.source === 'you' && said)) return false;
+  return thinRecipe(d);
+}
+
+// The recipe on a page it found, from the page's schema.org Recipe (what the site itself publishes).
+export function recipeFromHtml(html) {
+  const src = String(html || '').slice(0, 2_000_000);
+  const nodes = [];
+  const walk = (n, depth = 0) => {
+    if (!n || depth > 5 || nodes.length > 200) return;
+    if (Array.isArray(n)) return n.forEach((x) => walk(x, depth + 1));
+    if (typeof n !== 'object') return;
+    nodes.push(n);
+    if (n['@graph']) walk(n['@graph'], depth + 1);
+  };
+  for (const m of src.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { walk(JSON.parse(m[1].trim())); } catch { /* not JSON */ }
+  }
+  const node = nodes.find((n) => [].concat(n['@type']).map(String).includes('Recipe'));
+  const r = node ? recipeFromSchema(node) : null;
+  const m = src.match(/<meta[^>]+property=["']og:site_name["'][^>]*content=(?:"([^"]*)"|'([^']*)')/i);
+  const siteName = decodeEntities((m && (m[1] ?? m[2])) || '').trim();
+  return r ? { ...r, title: node.name ? decodeEntities(String(node.name)).trim() : '', siteName } : null;
+}
+
+// The change a recipe found online makes to a save (pure): the page's own recipe when it could be read,
+// else what the provider read from it; always with where it came from.
+export function planRecipe(item, found, page = null) {
+  const patch = {};
+  const changes = [];
+  if (!found?.url || found.confidence < RECIPE_CONFIDENCE || !wantsWebRecipe(item)) return { patch, changes };
+  const from = page && page.ingredients?.length >= 3 ? page : found;
+  if (thinRecipe(from)) return { patch, changes };
+  const old = item.details || {};
+  const site = page?.siteName || found.site || prettyRetailer(hostnameOf(found.url));
+  const details = sanitizeDetails('recipe', {
+    ...old,
+    ingredients: from.ingredients,
+    steps: from.steps,
+    yield: from.yield || old.yield,
+    totalMinutes: from.totalMinutes || old.totalMinutes,
+    prepMinutes: page?.prepMinutes || old.prepMinutes,
+    cookMinutes: page?.cookMinutes || old.cookMinutes,
+    cuisine: old.cuisine || page?.cuisine || '',
+    category: old.category || page?.category || '',
+    source: 'web',
+    drafted: [],
+    basedOn: { url: found.url, site, title: page?.title || found.title },
+  });
+  patch.details = details;
+  changes.push({ field: 'recipe details', from: `${(old.ingredients || []).length} ingredient${(old.ingredients || []).length === 1 ? '' : 's'}`, to: `based on a recipe from ${details.basedOn?.site || site}` });
+  return { patch, changes };
+}
+
+// The web read: the provider's search, then the page itself for its own recipe.
+async function readRecipe(item, settings, key, { fetchShopPage }) {
+  const ig = item.instagram || {};
+  const found = await findRecipeWithAI({
+    title: item.title || '', caption: ig.caption || '', creator: ig.creator || '', hashtags: ig.hashtags || [],
+    description: item.description && item.description !== ig.caption ? item.description : '', site: item.retailer || item.host || '',
+  }, settings, key);
+  let page = null;
+  if (found?.url && found.confidence >= RECIPE_CONFIDENCE) {
+    try {
+      const html = await fetchShopPage(found.url);
+      page = html ? recipeFromHtml(html) : null;
+    } catch {
+      /* unreadable: what the provider read from it still goes */
+    }
+  }
+  return { found, page };
 }
 
 // --- Something to buy -----------------------------------------------------------------------------
@@ -536,6 +631,17 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
     changes = [...changes, ...title.changes];
     reason = found.reason || reason;
     confidence = found.confidence;
+  }
+  // Still too thin to cook from: a close recipe from the web, with your key (the device model can't search).
+  if (kind === 'recipe' && key && supportsWebLookup(settings) && wantsWebRecipe({ ...current, ...patch })) {
+    const { found, page } = await readRecipe({ ...current, ...patch }, settings, key, { fetchShopPage });
+    current = (await store.getItem(id)) || current;
+    const recipe = planRecipe({ ...current, ...patch }, found, page);
+    if (recipe.changes.length) {
+      patch = { ...patch, ...recipe.patch };
+      changes = [...changes.filter((c) => c.field !== 'recipe details'), ...recipe.changes];
+      reason = found.reason || reason;
+    }
   }
   const before = Object.fromEntries(LOGGED.filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
   await store.updateItem(id, { ...patch, understoodAt: nowIso(), needsAi: false }, { by: 'ai' });

@@ -2376,6 +2376,12 @@ async function openRecipe(id) {
   const ingredients = d.ingredients || [];
   const steps = d.steps || [];
   const sourceLabel = { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', ai: 'Recipe read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' }[d.source] || '';
+  // A close recipe your AI provider found online because the post never wrote one down (understand.js readRecipe).
+  const basedOn = d.basedOn?.url ? el('p', { class: 'recipe-based-on' }, [
+    'Based on a recipe from ',
+    el('a', { href: d.basedOn.url, target: '_blank', rel: 'noopener noreferrer' }, [d.basedOn.site || hostnameOf(d.basedOn.url)]),
+    '. The post didn’t share its recipe, so AI found a close one; it may differ from the video.',
+  ]) : null;
   const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const facts = [
     d.totalMinutes ? ['Time', formatMinutes(d.totalMinutes)] : null,
@@ -2433,6 +2439,7 @@ async function openRecipe(id) {
         el('span', { class: 'badge kind-badge kind-recipe' }, [kindIcon('recipe'), 'Recipe']),
         el('h2', { class: 'recipe-title' }, [item.title]),
         el('p', { class: 'recipe-from' }, [[from, d.author && d.author !== from ? `by ${d.author}` : '', sourceLabel].filter(Boolean).join(' · ')]),
+        basedOn,
         facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
         item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
         item.status === 'done' ? el('span', { class: 'badge' }, ['Cooked']) : null,
@@ -2853,7 +2860,7 @@ async function openItem(id) {
 
   function recipePanel() {
     const box = el('div', { class: 'recipe-panel' });
-    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you', ai: 'Read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' }[recipe.source] || '';
+    const sourceLabel = { page: 'From the page', caption: 'From the caption', you: 'Added by you', ai: 'Read by AI', 'ai-draft': 'Drafted by AI: check it before you cook', web: 'Based on a recipe found online' }[recipe.source] || '';
     const facts = [recipe.yield, formatMinutes(recipe.totalMinutes), sourceLabel].filter(Boolean);
     box.append(el('div', { class: 'recipe-head' }, [el('h3', {}, ['Recipe']), facts.length ? el('span', { class: 'recipe-facts' }, [facts.join(' · ')]) : null]));
     if (drafted) box.append(el('p', { class: 'notice notice-warn' }, ['Your AI provider drafted this from the title and caption. It’s a suggestion, not the creator’s recipe. Edit it, then Save changes to keep it (you can undo it from the AI change log).']));
@@ -2872,7 +2879,7 @@ async function openItem(id) {
         el('div', { class: 'price-inline' }, [yieldInput, minutes]),
         el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn btn-sm btn-primary', onClick: () => {
           const lines = (t) => t.value.split('\n').map((x) => x.trim()).filter(Boolean);
-          recipe = { ...recipe, ingredients: lines(ing), steps: lines(steps), yield: yieldInput.value.trim(), totalMinutes: Number(minutes.value) || null, source: drafted ? 'ai-draft' : (recipe.source === 'page' || recipe.source === 'caption' || recipe.source === 'ai') && !recipeChanged(ing, steps) ? recipe.source : 'you', drafted: recipeChanged(ing, steps) ? [] : recipe.drafted };
+          recipe = { ...recipe, ingredients: lines(ing), steps: lines(steps), yield: yieldInput.value.trim(), totalMinutes: Number(minutes.value) || null, source: drafted ? 'ai-draft' : (recipe.source === 'page' || recipe.source === 'caption' || recipe.source === 'ai' || recipe.source === 'web') && !recipeChanged(ing, steps) ? recipe.source : 'you', drafted: recipeChanged(ing, steps) ? [] : recipe.drafted };
           recipeEditing = false;
           renderKindPanel();
         } }, ['Done editing'])]),
