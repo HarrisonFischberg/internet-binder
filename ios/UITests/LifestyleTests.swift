@@ -138,7 +138,7 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: 3))
         XCTAssertTrue(toggle.isSelected)
         // One of the fixture's two places has no pin yet: the map says so.
-        XCTAssertTrue(app.staticTexts["1 of 2 on the map"].exists)
+        XCTAssertTrue(app.staticTexts["1 of 2 mapped"].exists)
         toggle.tap()
         XCTAssertFalse(app.maps.firstMatch.waitForExistence(timeout: 1))
     }
