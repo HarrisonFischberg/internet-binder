@@ -1,0 +1,435 @@
+{
+ "_about": "Nocturne: a luminous private archive. Amber is interaction, cyan is collection detail.",
+ "style": "nocturne",
+ "name": "Nocturne",
+ "mode": "dark",
+ "color": {
+  "bg": "#090D14",
+  "surface": "#141C29",
+  "surface-2": "#202B3A",
+  "raised": "#202B3A",
+  "border": "#374357",
+  "line": "#374357",
+  "border-input": "#6E7C93",
+  "text": "#F5F6FA",
+  "text-muted": "#ACB6C8",
+  "accent": "#FFC268",
+  "accent-soft": "#3A2E1C",
+  "on-accent": "#17110A",
+  "highlight": "#FFC268",
+  "highlight-soft": "#3A2E1C",
+  "detail": "#80DFE8",
+  "on-detail": "#0A1A1E",
+  "alt": "#E8A1B8",
+  "on-alt": "#1E0F15",
+  "danger": "#FF8A80",
+  "danger-soft": "#3A1C1E",
+  "success": "#8FD9A8",
+  "success-soft": "#16301F",
+  "warning": "#FFC268",
+  "warning-soft": "#3A2E1C",
+  "focus": "#80DFE8",
+  "kind-product": "#FFC268",
+  "kind-product-soft": "#3A2E1C",
+  "kind-product-fill": "#FFC268",
+  "kind-place": "#80DFE8",
+  "kind-place-soft": "#163842",
+  "kind-place-fill": "#80DFE8",
+  "kind-recipe": "#FFA37F",
+  "kind-recipe-soft": "#422A22",
+  "kind-recipe-fill": "#FFA37F",
+  "kind-video": "#E8A1B8",
+  "kind-video-soft": "#3E2633",
+  "kind-video-fill": "#E8A1B8",
+  "kind-article": "#E3D7BE",
+  "kind-article-soft": "#34322C",
+  "kind-article-fill": "#E3D7BE",
+  "kind-workout": "#A3E39A",
+  "kind-workout-soft": "#203A26",
+  "kind-workout-fill": "#A3E39A",
+  "kind-film": "#B7AEFF",
+  "kind-film-soft": "#2C2A4A",
+  "kind-film-fill": "#B7AEFF",
+  "kind-book": "#9FC3FF",
+  "kind-book-soft": "#1F3150",
+  "kind-book-fill": "#9FC3FF",
+  "kind-link": "#ACB6C8",
+  "kind-link-soft": "#283244",
+  "kind-link-fill": "#ACB6C8",
+  "on-kind-fill": "#17110A"
+ },
+ "pairs": [
+  [
+   "text",
+   "bg"
+  ],
+  [
+   "text",
+   "surface"
+  ],
+  [
+   "text",
+   "surface-2"
+  ],
+  [
+   "text",
+   "raised"
+  ],
+  [
+   "text-muted",
+   "bg"
+  ],
+  [
+   "text-muted",
+   "surface"
+  ],
+  [
+   "text-muted",
+   "surface-2"
+  ],
+  [
+   "text-muted",
+   "raised"
+  ],
+  [
+   "on-accent",
+   "accent"
+  ],
+  [
+   "accent",
+   "bg",
+   "ui"
+  ],
+  [
+   "accent",
+   "surface",
+   "ui"
+  ],
+  [
+   "highlight",
+   "surface",
+   "ui"
+  ],
+  [
+   "text",
+   "accent-soft"
+  ],
+  [
+   "text",
+   "highlight-soft"
+  ],
+  [
+   "danger",
+   "surface"
+  ],
+  [
+   "danger",
+   "danger-soft"
+  ],
+  [
+   "success",
+   "surface"
+  ],
+  [
+   "success",
+   "success-soft"
+  ],
+  [
+   "warning",
+   "surface"
+  ],
+  [
+   "warning",
+   "warning-soft"
+  ],
+  [
+   "border-input",
+   "surface",
+   "ui"
+  ],
+  [
+   "border-input",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "bg",
+   "ui"
+  ],
+  [
+   "focus",
+   "surface",
+   "ui"
+  ],
+  [
+   "on-detail",
+   "detail"
+  ],
+  [
+   "on-alt",
+   "alt"
+  ],
+  [
+   "kind-product",
+   "kind-product-soft"
+  ],
+  [
+   "kind-product",
+   "surface"
+  ],
+  [
+   "kind-product",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-product-fill"
+  ],
+  [
+   "kind-place",
+   "kind-place-soft"
+  ],
+  [
+   "kind-place",
+   "surface"
+  ],
+  [
+   "kind-place",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-place-fill"
+  ],
+  [
+   "kind-recipe",
+   "kind-recipe-soft"
+  ],
+  [
+   "kind-recipe",
+   "surface"
+  ],
+  [
+   "kind-recipe",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-recipe-fill"
+  ],
+  [
+   "kind-video",
+   "kind-video-soft"
+  ],
+  [
+   "kind-video",
+   "surface"
+  ],
+  [
+   "kind-video",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-video-fill"
+  ],
+  [
+   "kind-article",
+   "kind-article-soft"
+  ],
+  [
+   "kind-article",
+   "surface"
+  ],
+  [
+   "kind-article",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-article-fill"
+  ],
+  [
+   "kind-workout",
+   "kind-workout-soft"
+  ],
+  [
+   "kind-workout",
+   "surface"
+  ],
+  [
+   "kind-workout",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-workout-fill"
+  ],
+  [
+   "kind-film",
+   "kind-film-soft"
+  ],
+  [
+   "kind-film",
+   "surface"
+  ],
+  [
+   "kind-film",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-film-fill"
+  ],
+  [
+   "kind-book",
+   "kind-book-soft"
+  ],
+  [
+   "kind-book",
+   "surface"
+  ],
+  [
+   "kind-book",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-book-fill"
+  ],
+  [
+   "kind-link",
+   "kind-link-soft"
+  ],
+  [
+   "kind-link",
+   "surface"
+  ],
+  [
+   "kind-link",
+   "bg"
+  ],
+  [
+   "on-kind-fill",
+   "kind-link-fill"
+  ]
+ ],
+ "font": {
+  "display": "ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, -apple-system, sans-serif",
+  "sans": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  "mono": "ui-monospace, SFMono-Regular, Menlo, monospace"
+ },
+ "display": {
+  "font": "ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, -apple-system, sans-serif",
+  "weight": 700,
+  "tracking": "-0.01em",
+  "stretch": "100%",
+  "ios": "system rounded bold"
+ },
+ "radius": {
+  "xs": 6,
+  "sm": 12,
+  "md": 16,
+  "lg": 20,
+  "xl": 28,
+  "pill": 999
+ },
+ "shadow": {
+  "card": "0 1px 0 rgba(255,255,255,.04) inset, 0 12px 32px rgba(0,0,0,.35)",
+  "raised": "0 16px 40px rgba(0,0,0,.45)",
+  "overlay": "0 30px 70px rgba(0,0,0,.6)"
+ },
+ "stroke": 1,
+ "type": {
+  "caption": {
+   "size": 13,
+   "line": 18,
+   "weight": 400,
+   "ios": "caption"
+  },
+  "footnote": {
+   "size": 13,
+   "line": 18,
+   "weight": 400,
+   "ios": "footnote"
+  },
+  "label": {
+   "size": 15,
+   "line": 20,
+   "weight": 500,
+   "ios": "subheadline"
+  },
+  "subhead": {
+   "size": 15,
+   "line": 20,
+   "weight": 500,
+   "ios": "subheadline"
+  },
+  "title3": {
+   "size": 20,
+   "line": 25,
+   "weight": 600,
+   "ios": "title3"
+  },
+  "body-web": {
+   "size": 14,
+   "line": 20,
+   "weight": 400,
+   "ios": "-"
+  },
+  "body": {
+   "size": 17,
+   "line": 24,
+   "weight": 400,
+   "ios": "body"
+  },
+  "section": {
+   "size": 22,
+   "line": 28,
+   "weight": 600,
+   "font": "display",
+   "ios": "title2"
+  },
+  "title2": {
+   "size": 22,
+   "line": 28,
+   "weight": 600,
+   "font": "display",
+   "ios": "title2"
+  },
+  "title": {
+   "size": 28,
+   "line": 34,
+   "weight": 700,
+   "font": "display",
+   "ios": "title"
+  },
+  "display": {
+   "size": 34,
+   "line": 41,
+   "weight": 700,
+   "font": "display",
+   "ios": "largeTitle"
+  }
+ },
+ "space": [
+  0,
+  4,
+  8,
+  12,
+  16,
+  20,
+  24,
+  32,
+  40,
+  48
+ ],
+ "motion": {
+  "fast": "120ms",
+  "base": "180ms",
+  "slow": "280ms",
+  "ease": "cubic-bezier(.2,.7,.2,1)",
+  "reduced": "opacity cross-fade only"
+ }
+}

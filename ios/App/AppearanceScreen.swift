@@ -2,9 +2,9 @@ import SwiftUI
 import KeepsakeKit
 import KeepsakeUI
 
-/// Appearance, opened from the palette button on Home (and the iPad sidebar): light or dark, the
-/// style, the app icon, then feel. The sheet itself wears the chosen style, so a change
-/// shows at once.
+/// Appearance, opened from the palette button on Home (and the iPad sidebar): the three appearances
+/// from the brand kit, the app icon, then feel. The sheet itself wears the chosen appearance, so a
+/// change shows at once.
 struct AppearanceSheet: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -26,16 +26,7 @@ struct AppearanceScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    section("Mode") {
-                        Picker("Mode", selection: $model.appearance.mode) {
-                            Text("System").tag("system")
-                            Text("Light").tag("light")
-                            Text("Dark").tag("dark")
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: model.appearance.mode) { Haptic.detent() }
-                    }
-                    section("Style") {
+                    section("Appearance") {
                         VStack(spacing: 16) {
                             ForEach(KSTheme.all, id: \.id) { style in
                                 StyleCard(theme: style.theme, saves: samples, chosen: model.appearance.theme == style.id) {
@@ -62,7 +53,7 @@ struct AppearanceScreen: View {
                         .ksSurface(lifted: false)
                     }
                 }
-                .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 32)
+                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
             }
         }
         .navigationTitle("Appearance")
@@ -85,14 +76,14 @@ struct AppearanceScreen: View {
 
     private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+            Text(title).font(KSFont.section()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
             content()
         }
     }
 }
 
-/// One style, large: two sample saves drawn in it, its name in its own title face, a line on what
-/// it's like, and an unmistakable mark when it's the one in use.
+/// One appearance, large: two sample saves on its own moving page, its mark and name in its own
+/// title face, a line on what it's like, and an unmistakable mark when it's the one in use.
 struct StyleCard: View {
     let theme: KSTheme
     let saves: [Save]
@@ -105,9 +96,11 @@ struct StyleCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 preview
                 HStack(alignment: .center, spacing: 12) {
+                    BinderMark().stroke(theme.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                        .frame(width: 36, height: 36)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(theme.name).font(KSFont.name(.title3, theme)).foregroundStyle(theme.ink)
-                        Text(Self.blurb(theme.style)).font(.footnote).foregroundStyle(theme.inkMuted)
+                        Text(theme.name).font(KSFont.name(.title2, theme)).foregroundStyle(theme.ink)
+                        Text(theme.blurb).font(.footnote).foregroundStyle(theme.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
@@ -118,17 +111,17 @@ struct StyleCard: View {
                 .padding(14)
                 .background(theme.paper)
             }
-            .fontDesign(theme.bodyDesign)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .environment(\.colorScheme, theme.scheme)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(chosen ? t.ink : t.rule, lineWidth: chosen ? 4 : 1)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(chosen ? t.accent : t.rule, lineWidth: chosen ? 3 : 1)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(theme.name). \(Self.blurb(theme.style))")
+        .accessibilityLabel("\(theme.name). \(theme.blurb)")
         .accessibilityValue(chosen ? "Selected" : "")
         .accessibilityAddTraits(chosen ? [.isButton, .isSelected] : .isButton)
     }
@@ -149,17 +142,9 @@ struct StyleCard: View {
         .clipped()
         .background { TableBackground() }
         .environment(\.ks, theme)
+        // A miniature of the style: its type stops growing before it would break words in a 132 pt card.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityHidden(true)
-    }
-
-    static func blurb(_ style: KSTheme.Style) -> String {
-        switch style {
-        case .pantry: "Bold colours, thick outlines, buttons that press in."
-        case .notebook: "Graph paper, serif names and a highlighter for what matters."
-        case .gallery: "White walls, big photos, black as the only accent."
-        case .atlas: "Dark and cinematic, with one amber action per screen."
-        case .swiss: "Hairlines, strict type and one signal red."
-        }
     }
 }
 

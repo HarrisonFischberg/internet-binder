@@ -104,4 +104,26 @@ public struct Line: Shape {
 struct VLine: Shape {
     func path(in r: CGRect) -> Path { var p = Path(); p.move(to: CGPoint(x: r.midX, y: r.minY)); p.addLine(to: CGPoint(x: r.midX, y: r.maxY)); return p }
 }
+/// The brand kit's binder mark: an open binder with a bookmark (assets/*-mark.svg, 96-unit grid).
+/// Stroke it at about 1/24 of its width with round caps; never smaller than 24 pt.
+public struct BinderMark: Shape {
+    public init() {}
+    public func path(in r: CGRect) -> Path {
+        let k = min(r.width, r.height) / 96, ox = r.midX - 48 * k, oy = r.midY - 48 * k
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + x * k, y: oy + y * k) }
+        var p = Path()
+        p.move(to: pt(18, 17)); p.addLine(to: pt(32, 17))
+        p.addCurve(to: pt(48, 24), control1: pt(40, 17), control2: pt(45, 20))
+        p.addCurve(to: pt(64, 17), control1: pt(51, 20), control2: pt(56, 17))
+        p.addLine(to: pt(78, 17)); p.addLine(to: pt(78, 73)); p.addLine(to: pt(64, 73))
+        p.addCurve(to: pt(48, 79), control1: pt(57, 73), control2: pt(52, 75))
+        p.addCurve(to: pt(32, 73), control1: pt(44, 75), control2: pt(39, 73))
+        p.addLine(to: pt(18, 73)); p.closeSubpath()
+        p.move(to: pt(48, 25)); p.addLine(to: pt(48, 78))
+        p.move(to: pt(27, 29)); p.addLine(to: pt(36, 29))
+        p.move(to: pt(27, 38)); p.addLine(to: pt(36, 38))
+        p.move(to: pt(60, 17)); p.addLine(to: pt(60, 41)); p.addLine(to: pt(66, 37)); p.addLine(to: pt(72, 41)); p.addLine(to: pt(72, 17))
+        return p
+    }
+}
 #endif

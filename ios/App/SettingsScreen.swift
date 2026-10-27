@@ -341,7 +341,7 @@ struct ConsentSheet: View {
                 .padding(16)
                 .frame(maxWidth: .infinity)
                 .background(t.table.ignoresSafeArea(edges: .bottom))
-                .overlay(alignment: .top) { Rectangle().fill(t.style == .pantry ? t.line : t.rule).frame(height: t.style == .pantry ? 2 : 1) }
+                .overlay(alignment: .top) { Rectangle().fill(t.rule).frame(height: 1) }
             }
             .background(t.table.ignoresSafeArea())
             .onAppear { Haptic.warning() }

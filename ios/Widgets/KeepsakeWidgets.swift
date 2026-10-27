@@ -166,14 +166,12 @@ struct AnyLabelStyle: LabelStyle {
 func widgetTheme() -> KSTheme {
     let t = KSTheme.named(Appearance.load().theme)
     KSTheme.current = t
-    _ = KSFont.registered
     return t
 }
 
-/// Light or dark as chosen in Appearance; System follows the Home Screen.
+/// Light or dark, as the chosen appearance is.
 struct WidgetMode: ViewModifier {
-    @Environment(\.colorScheme) private var system
     func body(content: Content) -> some View {
-        content.environment(\.colorScheme, Appearance.load().colorScheme ?? system)
+        content.environment(\.colorScheme, Appearance.load().colorScheme)
     }
 }

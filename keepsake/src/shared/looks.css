@@ -1,13 +1,13 @@
 /* Internet Binder looks: the details that make each style its own world, on top of the tokens.
    Loaded last on the popup and dashboard. Colours, type, radius, outline width (--bw) and shadows come
-   from tokens.css; this file only adds what a token can't say (outlines that press, paper, rules).
+   from tokens.css; this file only adds what a token can't say (glows, paper, folders, the moving page).
 
-   Pantry Pop is the default and has no data-style attribute, so its rules use :root:not([data-style]).
-   The others: [data-style="notebook" | "gallery" | "atlas" | "swiss"]. */
+   The three appearances come from the brand kit. Nocturne is the default and has no data-style
+   attribute, so its rules use :root:not([data-style]). The others: [data-style="paper" | "chromatic"]. */
 
 /* Every style --------------------------------------------------------------- */
 
-/* A save with no picture is a jar label: the kind's colour, its icon, and the title set big. */
+/* A save with no picture shows the kind's colour, its icon, and the title set big. */
 .pic-kind {
   align-items: stretch;
   justify-content: space-between;
@@ -82,475 +82,484 @@
   letter-spacing: var(--track-display);
 }
 
-/* Pantry Pop ------------------------------------------------------------------ */
-/* Thick ink outlines, hard offset shadows that squash when pressed, one saturated colour per kind. */
+/* Every style: shared shapes ----------------------------------------------- */
 
-:root:not([data-style]) .card,
-:root:not([data-style]) .card-section,
-:root:not([data-style]) .modal,
-:root:not([data-style]) .popup-card {
-  border: var(--bw) solid var(--c-line);
-  box-shadow: var(--shadow-card);
+.card,
+.tile,
+.place-row,
+.shelf-row {
+  transition: border-color var(--m-fast) var(--m-ease), transform var(--m-fast) var(--m-ease), box-shadow var(--m-base) var(--m-ease);
 }
 
-:root:not([data-style]) .card {
-  transition: box-shadow var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+.card:active,
+.tile:active,
+.btn:active {
+  transform: scale(0.98);
 }
 
-:root:not([data-style]) .card:hover,
-:root:not([data-style]) .card:focus-within {
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-raised);
-}
-
-:root:not([data-style]) .card:active {
-  transform: translate(3px, 3px);
-  box-shadow: none;
-}
-
-:root:not([data-style]) .card .pic {
-  border-bottom: var(--bw) solid var(--c-line);
-}
-
-:root:not([data-style]) .card-title {
-  font-size: 16px;
-  font-weight: var(--w-display);
-  line-height: 1.15;
-}
-
-:root:not([data-style]) .btn {
-  border: var(--bw) solid var(--c-line);
-  font-weight: 800;
+.btn {
   border-radius: var(--r-pill);
 }
 
-:root:not([data-style]) .btn-primary {
-  box-shadow: var(--shadow-card);
+.input,
+.select {
+  border-radius: var(--r-pill);
 }
 
-:root:not([data-style]) .btn:active {
-  transform: translate(2px, 2px);
-  box-shadow: none;
-}
-
-:root:not([data-style]) .btn-quiet,
-:root:not([data-style]) .btn-link,
-:root:not([data-style]) .btn-icon:not(.btn) {
-  border-color: transparent;
-  box-shadow: none;
-}
-
-:root:not([data-style]) .input,
-:root:not([data-style]) .select,
-:root:not([data-style]) .textarea {
-  border: var(--bw) solid var(--c-line);
+.textarea {
   border-radius: var(--r-md);
 }
 
-:root:not([data-style]) .nav-item {
-  font-weight: 700;
-  border: var(--bw) solid transparent;
+.search .input,
+.home-search .input {
+  min-height: 44px;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
 }
 
-:root:not([data-style]) .nav-item.active {
-  background: var(--c-kind-product-fill);
-  color: var(--c-on-kind-fill);
-  border-color: var(--c-line);
-  box-shadow: var(--shadow-card);
+.search .input:focus,
+.home-search .input:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-soft);
 }
 
-:root:not([data-style]) .nav-item.active .count {
-  color: var(--c-on-kind-fill);
+.nav-item {
+  border-radius: var(--r-pill);
+  font-weight: 600;
 }
 
-:root:not([data-style]) .kind-chip,
-:root:not([data-style]) .kind-badge {
-  border: 1.5px solid var(--c-line);
-  color: var(--c-on-kind-fill);
+.nav-item.active {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  box-shadow: none;
 }
 
-:root:not([data-style]) .kind-filter {
-  border: var(--bw) solid var(--c-line);
-  color: var(--c-on-kind-fill);
-  font-weight: 800;
+.nav-item.active .count,
+.nav-item.active svg {
+  color: var(--c-on-accent);
 }
 
-:root:not([data-style]) .kind-filter .count {
+.kind-filter {
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  font-weight: 600;
+}
+
+.kind-filter .count {
+  color: var(--c-text-muted);
+}
+
+.kind-filter:hover {
+  border-color: var(--c-accent);
+}
+
+.kind-filter.on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+}
+
+.kind-filter.on .count {
   color: inherit;
 }
 
-:root:not([data-style]) .kind-filter:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: var(--shadow-card);
-}
-
-:root:not([data-style]) .kind-filter.on {
-  box-shadow: inset 0 0 0 2px var(--c-line), var(--shadow-card);
-}
-
-:root:not([data-style]) .kind-filter.on::before {
+.kind-filter.on::before {
   content: "✓";
-  font-weight: 900;
+  font-weight: 800;
 }
 
-:root:not([data-style]) .kind-chip.kind-product,
-:root:not([data-style]) .kind-filter.kind-product,
-:root:not([data-style]) .kind-filter.kind-product:hover { background: var(--c-kind-product-fill); }
-:root:not([data-style]) .kind-chip.kind-place,
-:root:not([data-style]) .kind-filter.kind-place,
-:root:not([data-style]) .kind-filter.kind-place:hover { background: var(--c-kind-place-fill); }
-:root:not([data-style]) .kind-chip.kind-recipe,
-:root:not([data-style]) .kind-filter.kind-recipe,
-:root:not([data-style]) .kind-filter.kind-recipe:hover { background: var(--c-kind-recipe-fill); }
-:root:not([data-style]) .kind-chip.kind-video,
-:root:not([data-style]) .kind-filter.kind-video,
-:root:not([data-style]) .kind-filter.kind-video:hover { background: var(--c-kind-video-fill); }
-:root:not([data-style]) .kind-chip.kind-article,
-:root:not([data-style]) .kind-filter.kind-article,
-:root:not([data-style]) .kind-filter.kind-article:hover { background: var(--c-kind-article-fill); }
-:root:not([data-style]) .kind-chip.kind-workout,
-:root:not([data-style]) .kind-filter.kind-workout,
-:root:not([data-style]) .kind-filter.kind-workout:hover { background: var(--c-kind-workout-fill); }
-:root:not([data-style]) .kind-chip.kind-media,
-:root:not([data-style]) .kind-filter.kind-media,
-:root:not([data-style]) .kind-filter.kind-media:hover { background: var(--c-kind-film-fill); }
-:root:not([data-style]) .kind-chip.kind-book,
-:root:not([data-style]) .kind-filter.kind-book,
-:root:not([data-style]) .kind-filter.kind-book:hover { background: var(--c-kind-book-fill); }
-
-:root:not([data-style]) .segmented,
-:root:not([data-style]) .toggle-chip {
-  border: var(--bw) solid var(--c-line);
+.segmented .seg.on,
+.toggle-chip.on,
+.library-tab.on,
+button.library-tab.on {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
 }
 
-:root:not([data-style]) .segmented .seg.on,
-:root:not([data-style]) .toggle-chip.on {
-  background: var(--c-text);
-  color: var(--c-bg);
+.places-map-toggle[aria-pressed='true'] {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  border-color: var(--c-accent);
 }
 
-:root:not([data-style]) .hero-image,
-:root:not([data-style]) .collection-row,
-:root:not([data-style]) .dup,
-:root:not([data-style]) .capture-thumb,
-:root:not([data-style]) .ig-card {
-  border: var(--bw) solid var(--c-line);
+.place-thumb,
+.shelf-thumb {
+  border-radius: var(--r-sm);
+}
+
+.place-row.selected,
+.shelf-row.selected,
+.tile.selected {
+  box-shadow: 0 0 0 2px var(--c-accent);
+}
+
+.home-attention {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  border-color: transparent;
+}
+
+.home-attention .help,
+.home-attention-go {
+  color: inherit;
+}
+
+.home-section-title {
+  font: var(--t-section);
+  letter-spacing: var(--track-display);
+}
+
+.map-pin {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  border-color: var(--c-bg);
+}
+
+/* Nocturne -------------------------------------------------------------------------- */
+/* A luminous private archive: night blue panels, amber for every touch, cyan details. */
+
+:root:not([data-style]) .card,
+:root:not([data-style]) .tile,
+:root:not([data-style]) .card-section,
+:root:not([data-style]) .popup-card {
+  background: color-mix(in srgb, var(--c-surface) 88%, transparent);
+  border: 1px solid var(--c-border);
   box-shadow: var(--shadow-card);
 }
 
-:root:not([data-style]) .btn-save {
-  height: 46px;
-  font-size: 16px;
-  border-radius: var(--r-pill);
+:root:not([data-style]) .card:hover,
+:root:not([data-style]) .card:focus-within,
+:root:not([data-style]) .tile:hover,
+:root:not([data-style]) .tile:focus-within {
+  border-color: color-mix(in srgb, var(--c-accent) 55%, var(--c-border));
+  box-shadow: var(--shadow-card), 0 0 24px color-mix(in srgb, var(--c-accent) 14%, transparent);
 }
 
-:root:not([data-style]) .hero-placeholder {
-  background: var(--c-kind-product-fill);
-  color: var(--c-on-kind-fill);
+:root:not([data-style]) .card-title {
+  font-weight: 650;
 }
 
-/* The logo: the app icon's four scraps, tilted, with the same hard shadow. The outline is
-   always the icon's ink (it matches the seams); the shadow follows the line colour, cream in dark like the
-   dark app icon. */
-:root:not([data-style]) .mark {
-  background: none;
-  border: 2px solid #2A2420;
-  border-radius: 7px;
-  overflow: hidden;
-  transform: rotate(-6deg);
-  box-shadow: 2px 2px 0 var(--c-line);
+:root:not([data-style]) .btn-primary {
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--c-accent) 28%, transparent);
 }
 
-:root:not([data-style]) .mark .mark-patch {
-  display: block;
-  width: 100%;
-  height: 100%;
+:root:not([data-style]) .card-meta,
+:root:not([data-style]) .nav-item .count,
+:root:not([data-style]) .tile-count {
+  font-variant-numeric: tabular-nums;
 }
 
-:root:not([data-style]) .mark .mark-glyph {
-  display: none;
+:root:not([data-style]) .place-city {
+  color: var(--c-detail);
 }
 
-/* Field Notebook -------------------------------------------------------------- */
-/* Graph paper, serif names, mono labels, one highlighter swipe for what matters now. */
-
-:root[data-style="notebook"] body {
-  background-color: var(--c-bg);
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--c-text) 6%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--c-text) 6%, transparent) 1px, transparent 1px);
-  background-size: 24px 24px;
+:root:not([data-style]) .pic-kind {
+  background-image: radial-gradient(circle at 80% 18%, color-mix(in srgb, #fff 40%, transparent), transparent 40%);
 }
 
-:root[data-style="notebook"] .card {
-  border: 1px solid var(--c-line);
+/* Paper & Ink ----------------------------------------------------------------------- */
+/* Warm and editorial: cream paper, serif names, espresso ink, small caps labels in rust. */
+
+:root[data-style="paper"] .card,
+:root[data-style="paper"] .tile,
+:root[data-style="paper"] .card-section,
+:root[data-style="paper"] .popup-card {
+  background: var(--c-raised);
+  border: 1px solid #DCCFBE;
+  box-shadow: 0 1px 2px rgba(44, 32, 24, 0.06);
 }
 
-:root[data-style="notebook"] .card-title {
-  font-size: 16px;
+:root[data-style="paper"] .card:hover,
+:root[data-style="paper"] .card:focus-within,
+:root[data-style="paper"] .tile:hover,
+:root[data-style="paper"] .tile:focus-within {
+  border-color: var(--c-border);
+  box-shadow: 0 6px 18px rgba(44, 32, 24, 0.1);
 }
 
-:root[data-style="notebook"] .card-meta,
-:root[data-style="notebook"] .kind-chip,
-:root[data-style="notebook"] .nav-item .count,
-:root[data-style="notebook"] .sidebar-heading {
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 10.5px;
+:root[data-style="paper"] .card-title,
+:root[data-style="paper"] .tile-name {
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.2;
 }
 
-:root[data-style="notebook"] .nav-item.active {
-  background: linear-gradient(100deg, transparent 2%, var(--c-accent-soft) 4%, var(--c-accent-soft) 94%, transparent 97%);
-  box-shadow: none;
-}
-
-:root[data-style="notebook"] .pic-kind {
-  background-image: repeating-linear-gradient(transparent 0 23px, color-mix(in srgb, var(--c-text) 12%, transparent) 23px 24px);
-}
-
-:root[data-style="notebook"] .pic-kind .pic-kind-icon {
-  border-radius: 50%;
-}
-
-/* Gallery ----------------------------------------------------------------------- */
-/* White walls, photos edge to edge, serif titles, wall-label captions, black as the only accent. */
-
-:root[data-style="gallery"] .card {
-  box-shadow: none;
-  border-radius: 0;
+:root[data-style="paper"] .kind-chip,
+:root[data-style="paper"] .sidebar-heading {
   background: transparent;
-}
-
-:root[data-style="gallery"] .card:hover,
-:root[data-style="gallery"] .card:focus-within {
-  box-shadow: none;
-  transform: none;
-}
-
-:root[data-style="gallery"] .card-body {
-  padding-left: 0;
-  padding-right: 0;
-}
-
-:root[data-style="gallery"] .card-title {
-  font-size: 19px;
-  line-height: 1.15;
-}
-
-:root[data-style="gallery"] .kind-chip {
-  background: transparent;
+  color: var(--c-accent);
   padding: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 10.5px;
-}
-
-:root[data-style="gallery"] .pic-kind .pic-kind-icon {
-  border: 0;
-  background: transparent;
-  width: auto;
-  justify-content: start;
-}
-
-:root[data-style="gallery"] .pic-jar-title {
-  font-size: 26px;
-}
-
-:root[data-style="gallery"] .nav-item.active {
-  background: transparent;
-  box-shadow: none;
-  text-decoration: underline;
-  text-underline-offset: 5px;
-  text-decoration-thickness: 1.5px;
-}
-
-:root[data-style="gallery"] .btn {
-  border-radius: 0;
-}
-
-/* Night Atlas ------------------------------------------------------------------- */
-/* Lamp-lit panels, coordinates in mono, one amber action per screen. */
-
-:root[data-style="atlas"] body {
-  background:
-    radial-gradient(ellipse 80% 50% at 70% -10%, color-mix(in srgb, var(--c-accent) 9%, transparent), transparent 70%),
-    var(--c-bg);
-  background-attachment: fixed;
-}
-
-:root[data-style="atlas"] .card {
-  border: 1px solid var(--c-line);
-}
-
-:root[data-style="atlas"] .card:hover,
-:root[data-style="atlas"] .card:focus-within {
-  border-color: color-mix(in srgb, var(--c-accent) 60%, var(--c-line));
-}
-
-:root[data-style="atlas"] .card-meta,
-:root[data-style="atlas"] .nav-item .count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
-:root[data-style="atlas"] .nav-item.active {
-  box-shadow: inset 3px 0 0 var(--c-accent), var(--shadow-card);
-}
-
-:root[data-style="atlas"] .btn-primary {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-accent) 50%, transparent), 0 6px 24px color-mix(in srgb, var(--c-accent) 25%, transparent);
-}
-
-:root[data-style="atlas"] .pic-kind {
-  background-image: radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--c-on-kind-fill) 10%, transparent) 0 2px, transparent 3px);
-  background-size: 14px 14px;
-}
-
-/* Swiss Index ------------------------------------------------------------------- */
-/* Hairlines, condensed type, one signal red, flush left. */
-
-:root[data-style="swiss"] .card {
-  box-shadow: none;
-  border: 1px solid var(--c-line);
-}
-
-:root[data-style="swiss"] .card:hover,
-:root[data-style="swiss"] .card:focus-within {
-  box-shadow: none;
-  transform: none;
-  border-color: var(--c-text);
-}
-
-:root[data-style="swiss"] .card-title {
-  font-size: 18px;
-  line-height: 1.05;
-}
-
-:root[data-style="swiss"] .kind-chip,
-:root[data-style="swiss"] .sidebar-heading {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 10.5px;
   font-weight: 700;
-  background: transparent;
-  padding: 0;
 }
 
-:root[data-style="swiss"] .nav-item .count,
-:root[data-style="swiss"] .card-meta {
-  font-family: var(--font-mono);
+:root[data-style="paper"] .nav-item.active {
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+}
+
+:root[data-style="paper"] .nav-item.active .count,
+:root[data-style="paper"] .nav-item.active svg {
+  color: var(--c-accent);
+}
+
+:root[data-style="paper"] .library-tab.on,
+:root[data-style="paper"] button.library-tab.on {
+  background: var(--c-accent-soft);
+  color: var(--c-accent);
+}
+
+:root[data-style="paper"] .search .input,
+:root[data-style="paper"] .home-search .input {
+  background: var(--c-raised);
+}
+
+:root[data-style="paper"] .home-attention {
+  background: var(--c-highlight-soft);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+}
+
+:root[data-style="paper"] .place-city {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+:root[data-style="paper"] .pic-kind .pic-kind-icon {
+  border-radius: 50%;
+}
+
+/* Chromatic ------------------------------------------------------------------------- */
+/* Curious and colourful: lilac, coral and pistachio on a dark desk, collections as folders. */
+
+:root[data-style="chromatic"] .card,
+:root[data-style="chromatic"] .card-section,
+:root[data-style="chromatic"] .popup-card {
+  background: color-mix(in srgb, var(--c-surface) 90%, transparent);
+  border: 1px solid var(--c-border);
+}
+
+:root[data-style="chromatic"] .card:hover,
+:root[data-style="chromatic"] .card:focus-within {
+  border-color: var(--c-accent);
+}
+
+:root[data-style="chromatic"] .card-title,
+:root[data-style="chromatic"] .tile-name {
+  font-weight: 800;
+}
+
+/* Collections are coloured folders with a tab, numbered in order. */
+:root[data-style="chromatic"] .tile-grid {
+  counter-reset: folder;
+}
+
+:root[data-style="chromatic"] .tile {
+  --folder: #B7ADFF;
+  counter-increment: folder;
+  position: relative;
+  margin-top: 14px;
+  background: var(--folder);
+  color: #19142E;
+  border: 0;
+  border-top-left-radius: 0;
+  overflow: visible;
+}
+
+:root[data-style="chromatic"] .tile::before {
+  content: counter(folder, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: -14px;
+  height: 15px;
+  width: 44%;
+  padding: 2px 12px 0;
+  box-sizing: border-box;
+  background: var(--folder);
+  border-radius: 12px 14px 0 0;
+  font: 800 10px/1 var(--font-display);
+  letter-spacing: 0.06em;
+  color: #19142E;
+}
+
+:root[data-style="chromatic"] .tile:nth-child(4n+2) { --folder: #C0DB98; }
+:root[data-style="chromatic"] .tile:nth-child(4n+3) { --folder: #FFAAA0; }
+:root[data-style="chromatic"] .tile:nth-child(4n+4) { --folder: #D9B2FF; }
+
+:root[data-style="chromatic"] .tile:hover,
+:root[data-style="chromatic"] .tile:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-style="chromatic"] .tile .tile-name,
+:root[data-style="chromatic"] .tile .tile-count {
+  color: #19142E;
+}
+
+:root[data-style="chromatic"] .tile .tile-pin {
+  background: rgba(255, 255, 255, 0.85);
+  color: #19142E;
+}
+
+:root[data-style="chromatic"] .tile-art {
+  border-radius: calc(var(--r-lg) - 6px);
+  margin: 8px 8px 0;
+}
+
+:root[data-style="chromatic"] .place-city {
+  color: var(--c-accent);
+}
+
+:root[data-style="chromatic"] .kind-filter.on {
+  background: var(--c-detail);
+  border-color: var(--c-detail);
+  color: var(--c-on-detail);
+}
+
+/* Cooking: the ingredients under each recipe step. */
+.step-ing,
+.step-carry {
+  border-radius: var(--r-pill);
+}
+
+.step-ing:has(input:checked) {
+  background: var(--c-accent-soft);
+}
+
+.step-ing b {
+  color: var(--c-accent);
   font-variant-numeric: tabular-nums;
 }
 
-:root[data-style="swiss"] .nav-item.active {
-  box-shadow: inset 3px 0 0 var(--c-accent);
-  background: var(--c-surface);
-}
-
-:root[data-style="swiss"] .pic-kind .pic-kind-icon {
-  border: 0;
-  background: transparent;
-  justify-content: start;
-}
-
-:root[data-style="swiss"] .pic-jar-title {
-  font-size: 28px;
-  line-height: 0.98;
-}
-
-/* Cooking: the ingredients under each recipe step, in each style. */
-:root:not([data-style]) .step-ing,
-:root:not([data-style]) .step-carry {
-  border: 2px solid var(--c-line);
-  font-weight: 600;
-}
-:root:not([data-style]) .step-ing {
-  box-shadow: 2px 2px 0 var(--c-line);
-}
-:root:not([data-style]) .step-ing:has(input:checked) {
-  background: var(--c-kind-recipe-fill);
-  color: var(--c-on-kind-fill, var(--c-text));
-  box-shadow: none;
-  transform: translate(2px, 2px);
-}
-:root[data-style="notebook"] .recipe-steps-big .step-mark {
-  background: linear-gradient(100deg, transparent 2%, var(--c-accent-soft) 6%, var(--c-accent-soft) 94%, transparent 98%);
+:root[data-style="paper"] .recipe-steps-big .step-mark {
+  background: linear-gradient(100deg, transparent 2%, var(--c-highlight-soft) 6%, var(--c-highlight-soft) 94%, transparent 98%);
   padding: 0 2px;
   margin: 0 -2px;
 }
-:root[data-style="notebook"] .step-ing b,
-:root[data-style="atlas"] .step-ing b {
-  font-family: var(--font-mono);
-  font-weight: 500;
-}
-:root[data-style="atlas"] .step-ing b {
-  color: var(--c-accent);
-}
-:root[data-style="swiss"] .step-ing,
-:root[data-style="swiss"] .step-carry {
-  border-radius: 0;
-}
-:root[data-style="swiss"] .step-ing:has(input:checked) {
-  background: var(--c-surface-2);
-}
-:root[data-style="swiss"] .step-ing:has(input:checked) span {
-  text-decoration-color: var(--c-accent);
+
+/* The moving page ------------------------------------------------------------------- */
+/* Behind the dashboard and popup, each style's own light drifts slowly (iOS draws the same in
+   TableBackground). The top stays the plain colour so headings read cleanly. Reduce Motion stops
+   the drift; Increase Contrast gets the plain page. */
+
+body:has(> .app),
+body.popup {
+  isolation: isolate;
+  background: var(--c-bg);
 }
 
-/* Dashboard pages ------------------------------------------------------------------ */
-/* The page behind the tiles, in each style's own material (iOS draws the same in
-   TableBackground). The page itself never scrolls, so it stays put under the tiles. The
-   top of the page stays the plain colour; each style shows lower down. Increase-contrast
-   users get the plain page. */
+body:has(> .app)::before,
+body.popup::before {
+  content: "";
+  position: fixed;
+  inset: -12%;
+  z-index: -1;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(rgba(0, 0, 0, 0.35), #000 45%);
+  mask-image: linear-gradient(rgba(0, 0, 0, 0.35), #000 45%);
+  animation: page-drift 48s ease-in-out infinite alternate;
+}
 
-:root:not([data-style]) body:has(> .app) {
+body:has(> .app)::after,
+body.popup::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+@keyframes page-drift {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50% { transform: translate3d(3%, -2%, 0) rotate(4deg) scale(1.04); }
+  100% { transform: translate3d(-2%, 2%, 0) rotate(-3deg) scale(1.02); }
+}
+
+@keyframes page-twinkle {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
+}
+
+/* Nocturne: amber and cyan glows turning slowly around faint orbit rings, under twinkling stars. */
+:root:not([data-style]) body:has(> .app)::before,
+:root:not([data-style]) body.popup::before {
   background:
-    radial-gradient(ellipse 60% 55% at 105% 62%, color-mix(in srgb, var(--c-kind-product-fill) var(--page-glow, 26%), transparent), transparent 70%),
-    radial-gradient(ellipse 55% 50% at -5% 105%, color-mix(in srgb, var(--c-kind-recipe-fill) var(--page-glow-2, 14%), transparent), transparent 70%),
-    radial-gradient(ellipse 35% 35% at 85% 112%, color-mix(in srgb, var(--c-kind-place-fill) 9%, transparent), transparent 70%),
-    linear-gradient(var(--c-bg) 30%, color-mix(in srgb, var(--c-bg) 0%, transparent) 95%),
-    radial-gradient(circle, color-mix(in srgb, var(--c-text) 8%, transparent) 1.4px, transparent 1.9px) 0 0 / 14px 14px,
-    var(--c-bg);
+    radial-gradient(ellipse 42% 38% at 82% 70%, color-mix(in srgb, var(--c-accent) 16%, transparent), transparent 70%),
+    radial-gradient(ellipse 40% 36% at 14% 88%, color-mix(in srgb, var(--c-detail) 13%, transparent), transparent 70%),
+    radial-gradient(ellipse 30% 26% at 55% 40%, color-mix(in srgb, var(--c-alt) 6%, transparent), transparent 70%),
+    repeating-radial-gradient(ellipse 120% 70% at 78% 78%, transparent 0 139px, color-mix(in srgb, var(--c-text) 5%, transparent) 139px 140px);
 }
 
-:root[data-style="notebook"] body:has(> .app) {
+:root:not([data-style]) body:has(> .app)::after,
+:root:not([data-style]) body.popup::after {
   background:
-    radial-gradient(ellipse 80% 75% at 50% 42%, transparent 55%, color-mix(in srgb, #8A6A3A 6%, transparent)),
-    linear-gradient(transparent 35%, color-mix(in srgb, var(--c-accent-soft) 45%, transparent)),
-    linear-gradient(color-mix(in srgb, var(--c-text) 8%, transparent) 1px, transparent 1px) 0 0 / 120px 120px,
-    linear-gradient(90deg, color-mix(in srgb, var(--c-text) 8%, transparent) 1px, transparent 1px) 0 0 / 120px 120px,
-    linear-gradient(color-mix(in srgb, var(--c-text) 4.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
-    linear-gradient(90deg, color-mix(in srgb, var(--c-text) 4.5%, transparent) 1px, transparent 1px) 0 0 / 24px 24px,
-    var(--c-bg);
+    radial-gradient(circle, color-mix(in srgb, #fff 55%, transparent) 0.8px, transparent 1.4px) 0 0 / 173px 151px,
+    radial-gradient(circle, color-mix(in srgb, var(--c-detail) 50%, transparent) 0.9px, transparent 1.5px) 61px 89px / 229px 197px;
+  -webkit-mask-image: linear-gradient(transparent 15%, #000 70%);
+  mask-image: linear-gradient(transparent 15%, #000 70%);
+  animation: page-twinkle 5s ease-in-out infinite alternate;
 }
 
-/* Night Atlas: an amber lamp, deep water, and chart contours rising from the lower corner. */
-:root[data-style="atlas"] body:has(> .app) {
+/* Paper & Ink: sage, rose and warm light moving across cream paper with a fine grain. */
+:root[data-style="paper"] body:has(> .app)::before,
+:root[data-style="paper"] body.popup::before {
   background:
-    radial-gradient(ellipse 50% 55% at 18% 60%, color-mix(in srgb, var(--c-accent) 12%, transparent), transparent 70%),
-    radial-gradient(ellipse 55% 60% at 100% 105%, color-mix(in srgb, var(--c-kind-place-fill) 45%, transparent), transparent 70%),
-    linear-gradient(var(--c-bg) 30%, color-mix(in srgb, var(--c-bg) 0%, transparent) 75%),
-    repeating-radial-gradient(circle at 96% 108%, transparent 0 63px, var(--c-border) 63px 64px),
-    var(--c-bg);
+    radial-gradient(ellipse 45% 40% at 86% 74%, color-mix(in srgb, var(--c-detail) 70%, transparent), transparent 70%),
+    radial-gradient(ellipse 40% 36% at 10% 92%, color-mix(in srgb, var(--c-alt) 60%, transparent), transparent 70%),
+    radial-gradient(ellipse 30% 30% at 50% 60%, color-mix(in srgb, #F2D9A6 35%, transparent), transparent 70%);
 }
 
-:root[data-style="swiss"] body:has(> .app) {
+:root[data-style="paper"] body:has(> .app)::after,
+:root[data-style="paper"] body.popup::after {
+  opacity: 0.5;
   background:
-    radial-gradient(circle at calc(100% - 8vmin) calc(100% - 14vmin), color-mix(in srgb, var(--c-accent) var(--page-disc, 6%), transparent) 0 18vmin, transparent calc(18vmin + 1px)),
-    repeating-linear-gradient(90deg, color-mix(in srgb, var(--c-text) 7%, transparent) 0 1px, transparent 1px 160px) 280px 0 / auto,
-    var(--c-bg);
+    radial-gradient(circle, rgba(44, 32, 24, 0.07) 0.6px, transparent 1px) 0 0 / 5px 5px,
+    radial-gradient(circle, rgba(44, 32, 24, 0.05) 0.6px, transparent 1px) 2px 3px / 7px 7px;
 }
 
-/* After dark the warm glows turn muddy at full strength, and the red disc needs a little more
-   to show; the halftone carries Pantry Pop. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --page-glow: 12%; --page-glow-2: 10%; --page-disc: 9%; }
+/* Chromatic: a lilac, coral and pistachio aurora over a dot grid. */
+:root[data-style="chromatic"] body:has(> .app)::before,
+:root[data-style="chromatic"] body.popup::before {
+  background:
+    radial-gradient(ellipse 44% 38% at 84% 68%, color-mix(in srgb, var(--c-accent) 20%, transparent), transparent 70%),
+    radial-gradient(ellipse 38% 34% at 16% 90%, color-mix(in srgb, var(--c-alt) 15%, transparent), transparent 70%),
+    radial-gradient(ellipse 30% 28% at 52% 98%, color-mix(in srgb, var(--c-detail) 13%, transparent), transparent 70%);
+  animation-duration: 36s;
 }
-:root[data-theme="dark"] { --page-glow: 12%; --page-glow-2: 10%; --page-disc: 9%; }
+
+:root[data-style="chromatic"] body:has(> .app)::after,
+:root[data-style="chromatic"] body.popup::after {
+  background: radial-gradient(circle, color-mix(in srgb, var(--c-text) 9%, transparent) 1px, transparent 1.6px) 0 0 / 18px 18px;
+  -webkit-mask-image: linear-gradient(transparent 20%, #000 80%);
+  mask-image: linear-gradient(transparent 20%, #000 80%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:has(> .app)::before,
+  body:has(> .app)::after,
+  body.popup::before,
+  body.popup::after {
+    animation: none;
+  }
+}
 
 @media (prefers-contrast: more) {
-  :root body:has(> .app) {
-    background: var(--c-bg) !important;
+  body:has(> .app)::before,
+  body:has(> .app)::after,
+  body.popup::before,
+  body.popup::after {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root:not([data-style]) .card,
+  :root:not([data-style]) .tile,
+  :root[data-style="chromatic"] .card {
+    background: var(--c-surface);
   }
 }

@@ -2,7 +2,7 @@
 // Rendered inside a closed Shadow DOM with adopted stylesheets so host page CSS
 // cannot leak in and ours cannot leak out. All text is set via textContent.
 // Colours, type and shape come from the Internet Binder design tokens (tokens-content.js, injected
-// first); the host element carries data-style / data-theme from the person's settings.
+// first); the host element carries data-style from the person's settings.
 
 (function keepsakeToastModule() {
   if (globalThis.__keepsakeToast) return;
@@ -91,13 +91,10 @@
   }
 
   function setLook(look) {
-    // Styles other than the default (Pantry Pop), as in src/shared/storage.js.
-    const style = look && ['notebook', 'gallery', 'atlas', 'swiss'].includes(look.style) ? look.style : '';
-    const theme = look && ['light', 'dark'].includes(look.theme) ? look.theme : '';
+    // Appearances other than the default (Nocturne), as in src/shared/storage.js.
+    const style = look && ['paper', 'chromatic'].includes(look.style) ? look.style : '';
     if (style) host.setAttribute('data-style', style);
     else host.removeAttribute('data-style');
-    if (theme) host.setAttribute('data-theme', theme);
-    else host.removeAttribute('data-theme');
   }
 
   function svg(d, { fill = 'none', stroke = 'currentColor', width = '2.2' } = {}) {
@@ -139,7 +136,7 @@
     return n;
   };
 
-  // show({ title, message, tone: ok|review|error|info, thumb, meta, status, look: { style, theme },
+  // show({ title, message, tone: ok|review|error|info, thumb, meta, status, look: { style },
   //        actions: [{ label, primary, quiet, onClick, keepOpen }],
   //        picker: { options: [{id,name}], selectedId, label, onChange },
   //        suggestions: { items: [{ id, name }], onPick }, duration })

@@ -18,8 +18,8 @@ let package = Package(
             dependencies: [.product(name: "GRDB", package: "GRDB.swift")],
             resources: [.copy("Resources/keepsake-core.js"), .copy("Resources/ios-bridge.js")]
         ),
-        // The look: five styles (Pantry Pop by default), cards, controls, haptics, the bundled title face.
-        .target(name: "KeepsakeUI", dependencies: ["KeepsakeKit"], resources: [.copy("Resources/Fonts")]),
+        // The look: the three appearances (Nocturne by default), cards, controls, haptics.
+        .target(name: "KeepsakeUI", dependencies: ["KeepsakeKit"]),
         .testTarget(
             name: "KeepsakeKitTests",
             dependencies: ["KeepsakeKit", "KeepsakeUI"],

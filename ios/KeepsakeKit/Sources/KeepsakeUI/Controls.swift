@@ -1,17 +1,15 @@
 #if canImport(UIKit)
 import SwiftUI
 
-/// Pressing answers within a frame: Pantry Pop's cards and buttons move into their hard shadow,
-/// everything else sinks a little. Springs back on release.
+/// Pressing answers within a frame (120 ms): the card sinks a little and springs back on release.
+/// Under Reduce Motion it dims instead.
 public struct PressStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduce
-    @Environment(\.ks) private var t
     public init() {}
     public func makeBody(configuration: Configuration) -> some View {
-        let hard = if case .hard = t.depth { true } else { false }
         configuration.label
             .environment(\.ksPressed, configuration.isPressed && !reduce)
-            .scaleEffect(configuration.isPressed && !reduce && !hard ? 0.97 : 1)
+            .scaleEffect(configuration.isPressed && !reduce ? 0.97 : 1)
             .opacity(configuration.isPressed && reduce ? 0.8 : 1)
             .animation(KSMotion.or(KSMotion.press, reduce: reduce), value: configuration.isPressed)
     }
@@ -29,8 +27,8 @@ struct ControlShape: InsettableShape {
 }
 
 /// The screen's one primary action: full width, docked at the bottom, under the thumb, on tinted
-/// Liquid Glass so the page shows through as it scrolls under. In Pantry Pop a kind's action wears the
-/// kind's colour (a tomato Start cooking).
+/// Liquid Glass in the accent so the page shows through as it scrolls under (solid with Reduce
+/// Transparency).
 public struct PrimarySlab: View {
     let title: String
     let symbol: String
@@ -38,34 +36,47 @@ public struct PrimarySlab: View {
     let action: () -> Void
     @Environment(\.ks) private var t
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceTransparency) private var solid
     public init(_ title: String, symbol: String, kind: String? = nil, action: @escaping () -> Void) {
         self.title = title; self.symbol = symbol; self.kind = kind; self.action = action
     }
     public var body: some View {
-        let useKind = t.style == .pantry && kind != nil
-        let fill = useKind ? t.kindFill(kind!) : t.primary
-        let ink = useKind ? t.onKind : t.onPrimary
         Button(action: action) {
             Label(title, systemImage: symbol)
-                .font(t.style == .pantry ? KSFont.name(.headline) : .headline)
-                .foregroundStyle(ink)
+                .font(.headline)
+                .foregroundStyle(t.onPrimary)
                 .frame(maxWidth: .infinity, minHeight: 36)
         }
         .buttonStyle(.glassProminent)
         .buttonBorderShape(.capsule)
         .controlSize(.large)
-        // A little of the page shows through: glass, not a painted slab.
-        .tint(fill.opacity(0.82))
+        .tint(solid ? t.primary : t.primary.opacity(0.88))
         .opacity(enabled ? 1 : 0.45)
+    }
+}
+
+/// Liquid Glass on a control that floats over the page; a solid raised fill with a hairline when
+/// Reduce Transparency is on.
+struct KSGlass<S: Shape>: ViewModifier {
+    let shape: S
+    let tint: Color?
+    @Environment(\.ks) private var t
+    @Environment(\.accessibilityReduceTransparency) private var solid
+    func body(content: Content) -> some View {
+        if solid {
+            content.background(tint ?? t.well, in: shape).overlay(shape.stroke(t.rule, lineWidth: 1))
+        } else {
+            content.glassEffect(tint.map { Glass.regular.tint($0).interactive() } ?? Glass.regular.interactive(), in: shape)
+        }
     }
 }
 
 extension View {
     /// Liquid Glass for a control that floats over the page (header buttons, Select, back, the map
-    /// toggle). The style stays on the content; controls float on glass. A tint marks a control
+    /// controls). The style stays on the content; controls float on glass. A tint marks a control
     /// that's on.
     public func ksGlass<S: Shape>(_ shape: S, tint: Color? = nil) -> some View {
-        glassEffect(tint.map { Glass.regular.tint($0).interactive() } ?? Glass.regular.interactive(), in: shape)
+        modifier(KSGlass(shape: shape, tint: tint))
     }
 }
 
@@ -89,7 +100,8 @@ public struct GlassIcon: View {
     }
 }
 
-/// A chip for filters and choices. In Pantry Pop a kind's chip is filled with its colour.
+/// A chip for filters and choices: a capsule on the well, filled with the accent (and a checkmark
+/// for a filter) when selected, so selection never rests on colour alone.
 public struct Chip: View {
     let title: String
     let symbol: String?
@@ -99,46 +111,83 @@ public struct Chip: View {
     let selected: Bool
     /// The best guess among choices: filled like the screen's primary, without being "selected".
     let prominent: Bool
+    /// Show a checkmark when selected (filters that toggle).
+    let checks: Bool
     let action: () -> Void
     @Environment(\.ks) private var t
+    @Environment(\.isEnabled) private var enabled
     public init(_ title: String, symbol: String? = nil, tint: Color? = nil, kind: String? = nil, trailing: String? = nil, selected: Bool,
-                prominent: Bool = false, action: @escaping () -> Void) {
+                prominent: Bool = false, checks: Bool = false, action: @escaping () -> Void) {
         self.title = title; self.symbol = symbol; self.tint = tint; self.kind = kind; self.trailing = trailing; self.selected = selected
-        self.prominent = prominent; self.action = action
+        self.prominent = prominent; self.checks = checks; self.action = action
     }
     public var body: some View {
-        let filled = t.style == .pantry && kind != nil && !selected
-        // Gallery marks the chosen chip with an underline, not a fill.
-        let gallerySelected = selected && t.style == .gallery
-        let bg: Color = prominent ? t.primary : gallerySelected ? .clear : selected ? (t.style == .atlas ? t.highlight : t.ink) : filled ? t.kindFill(kind!) : (t.style == .gallery ? .clear : t.paper)
-        let fg: Color = prominent ? t.onPrimary : gallerySelected ? t.ink : selected ? (t.style == .atlas ? t.onHighlight : t.table) : filled ? t.onKind : t.ink
-        let icon: Color = selected || filled || prominent ? fg : (tint ?? t.ink)
-        let shape = ControlShape(radius: t.style == .notebook ? 16 : t.controlRadius)
+        let on = selected || prominent
+        let bg: Color = on ? t.accent : t.well
+        let fg: Color = on ? t.onAccent : t.ink
+        let icon: Color = on ? fg : (tint ?? t.ink)
+        let shape = Capsule()
         Button {
             Haptic.detent()
             action()
         } label: {
-            HStack(spacing: 5) {
-                if let symbol { Image(systemName: symbol).imageScale(.small).foregroundStyle(icon) }
-                Text(title)
+            HStack(spacing: 6) {
+                if checks && selected {
+                    Image(systemName: "checkmark").imageScale(.small).fontWeight(.bold).accessibilityHidden(true)
+                } else if let symbol {
+                    Image(systemName: symbol).imageScale(.small).foregroundStyle(icon).accessibilityHidden(true)
+                }
+                Text(title).lineLimit(1)
                 if let trailing { Image(systemName: trailing).imageScale(.small).accessibilityHidden(true) }
             }
-            .font(t.style == .pantry ? .subheadline.weight(.heavy) : .subheadline.weight(.medium))
+            .font(.subheadline.weight(on ? .semibold : .medium))
             .foregroundStyle(fg)
-            .padding(.horizontal, t.style == .gallery ? 4 : 14)
+            .padding(.horizontal, 14)
             .frame(minHeight: 44)
             .background(bg, in: shape)
-            .overlay {
-                if t.style == .gallery && !prominent {
-                    if selected { Rectangle().fill(t.ink).frame(height: 2).frame(maxHeight: .infinity, alignment: .bottom).padding(.bottom, 6) }
-                } else if t.outline > 0 || t.style == .notebook {
-                    shape.strokeBorder(t.style == .pantry ? t.line : t.rule, lineWidth: t.style == .pantry ? 2.5 : 1)
-                }
-            }
-            .background(.clear)
+            .overlay { if !on { shape.strokeBorder(t.rule, lineWidth: 1) } }
+            .opacity(enabled ? 1 : 0.45)
+            .contentShape(shape)
         }
         .buttonStyle(PressStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// List / Map / Review: a capsule track on the well with the chosen segment filled in the accent.
+/// A real picker for VoiceOver (each segment a button with its selected state).
+public struct SegmentedTabs<Value: Hashable>: View {
+    let options: [(value: Value, title: String)]
+    @Binding var selection: Value
+    @Environment(\.ks) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduce
+    @Namespace private var pill
+    public init(_ options: [(value: Value, title: String)], selection: Binding<Value>) { self.options = options; self._selection = selection }
+    public var body: some View {
+        HStack(spacing: 4) {
+            ForEach(options.indices, id: \.self) { i in
+                let o = options[i]
+                let on = o.value == selection
+                Button {
+                    guard !on else { return }
+                    Haptic.detent()
+                    withAnimation(KSMotion.or(.spring(response: 0.18, dampingFraction: 0.86), reduce: reduce)) { selection = o.value }
+                } label: {
+                    Text(o.title).font(.subheadline.weight(on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.85)
+                        .foregroundStyle(on ? t.onAccent : t.ink)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background {
+                            if on { Capsule().fill(t.accent).matchedGeometryEffect(id: "pill", in: pill) }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? [.isSelected] : [])
+            }
+        }
+        .padding(4)
+        .background(t.well, in: Capsule())
+        .overlay(Capsule().strokeBorder(t.rule, lineWidth: 1))
     }
 }
 
@@ -183,7 +232,7 @@ public struct ShareStamp: View {
     }
 }
 
-/// A secondary action in the current style.
+/// A secondary action in the current style: a capsule on the well, or filled in the accent.
 public struct Pill: View {
     let title: String
     let symbol: String
@@ -191,15 +240,14 @@ public struct Pill: View {
     @Environment(\.ks) private var t
     public init(title: String, symbol: String, filled: Bool) { self.title = title; self.symbol = symbol; self.filled = filled }
     public var body: some View {
-        let shape = ControlShape(radius: t.controlRadius)
+        let shape = Capsule()
         Label(title, systemImage: symbol)
-            .font(t.style == .pantry ? .subheadline.weight(.heavy) : .subheadline.weight(.semibold))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(filled ? t.onPrimary : t.ink)
             .padding(.horizontal, 16)
             .frame(minHeight: 44)
-            .background(filled ? t.primary : (t.style == .gallery ? .clear : t.paper), in: shape)
-            .overlay { shape.strokeBorder(t.style == .pantry ? t.line : t.style == .gallery ? t.ink : t.rule, lineWidth: t.style == .pantry ? 2.5 : 1) }
-            .resting(0.75)
+            .background(filled ? t.primary : t.well, in: shape)
+            .overlay { if !filled { shape.strokeBorder(t.rule, lineWidth: 1) } }
     }
 }
 

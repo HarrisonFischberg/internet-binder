@@ -1,5 +1,5 @@
 // The design tokens the extension ships: in sync with replica/design, and readable (WCAG AA) in every
-// style and theme. Contrast is computed here with the WCAG 2 formula; no browser involved.
+// appearance. Contrast is computed here with the WCAG 2 formula; no browser involved.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -8,9 +8,8 @@ const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const DESIGN = '../replica/design/';
 const files = readdirSync(new URL(`${DESIGN}tokens/`, import.meta.url)).filter((f) => f.endsWith('.json'));
 
-test('ten token sets: pantry, notebook, gallery, atlas and swiss, each light and dark, with identical roles', () => {
-  const styles = ['atlas', 'gallery', 'notebook', 'pantry', 'swiss'];
-  assert.deepEqual(files.sort(), styles.flatMap((s) => [`${s}.dark.json`, `${s}.light.json`]));
+test('three token sets from the brand kit: nocturne, paper and chromatic, with identical roles', () => {
+  assert.deepEqual(files.sort(), ['chromatic.json', 'nocturne.json', 'paper.json']);
   const roles = files.map((f) => Object.keys(JSON.parse(read(`${DESIGN}tokens/${f}`)).color).sort().join(','));
   assert.equal(new Set(roles).size, 1, 'every style defines the same colour roles');
 });
@@ -20,7 +19,8 @@ test('the extension ships the generated tokens unchanged (run replica/design/bui
   const js = read('../keepsake/src/content/tokens-content.js');
   const g = {};
   new Function('globalThis', js)(g);
-  assert.match(g.__keepsakeTokenCss, /:host\(\[data-style="swiss"\]\[data-theme="dark"\]\)/);
+  assert.match(g.__keepsakeTokenCss, /:host\(\[data-style="chromatic"\]\)/);
+  assert.doesNotMatch(g.__keepsakeTokenCss, /data-theme/);
   assert.doesNotMatch(g.__keepsakeTokenCss, /:root/);
 });
 

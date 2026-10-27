@@ -192,7 +192,7 @@ struct ToastView: View {
                 }
                 .padding(.horizontal, 18).frame(minHeight: 48)
                 .ksSurface(radius: 24)
-                .shadow(color: .black.opacity(t.style == .pantry ? 0 : 0.15), radius: 14, y: 6)
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
                 .transition(reduce ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 .task(id: toast.id) {
                     UIAccessibility.post(notification: .announcement, argument: toast.text)
@@ -217,13 +217,13 @@ struct CelebrationView: View {
         ZStack {
             if let c = model.celebration {
                 HStack(spacing: 10) {
-                    Image(systemName: "party.popper.fill").font(.title.weight(.semibold)).foregroundStyle(t.style == .pantry ? t.onHighlight : t.stamp)
+                    Image(systemName: "party.popper.fill").font(.title.weight(.semibold)).foregroundStyle(t.onAccent)
                         .accessibilityHidden(true)
-                    Text(c.text).font(KSFont.name(.title2)).foregroundStyle(t.style == .pantry ? t.onHighlight : t.ink)
+                    Text(c.text).font(KSFont.name(.title2)).foregroundStyle(t.onAccent)
                 }
                 .padding(.horizontal, 26).padding(.vertical, 16)
-                .ksSurface(t.style == .pantry ? t.highlight : nil, radius: 36)
-                .shadow(color: .black.opacity(t.style == .pantry ? 0 : 0.18), radius: 18, y: 8)
+                .ksSurface(t.accent, radius: 36)
+                .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
                 .rotationEffect(.degrees(reduce ? 0 : -3))
                 .transition(reduce ? .opacity : .scale(scale: 0.6).combined(with: .opacity))
                 .task(id: c.id) {
@@ -239,17 +239,17 @@ struct CelebrationView: View {
     }
 }
 
-/// A screen's big serif title and a quiet line under it.
+/// A screen's big title in the appearance's display face, and a quiet line under it.
 struct ScreenHeader: View {
     let title: String
     var subtitle: String?
     @Environment(\.ks) private var t
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            // A one-word title shrinks to fit rather than breaking mid-word ("Patchw / ork" at the largest sizes).
+            // A one-word title shrinks to fit rather than breaking mid-word ("Libr / ary" at the largest sizes).
             Text(title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
                 .lineLimit(title.contains(" ") ? nil : 1).minimumScaleFactor(0.5)
-            if let subtitle { Text(subtitle).font(KSFont.note).foregroundStyle(t.inkMuted) }
+            if let subtitle, !subtitle.isEmpty { Text(subtitle).font(KSFont.note).foregroundStyle(t.inkMuted).monospacedDigit() }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 8)

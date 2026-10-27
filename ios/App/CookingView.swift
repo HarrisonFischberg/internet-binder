@@ -52,7 +52,7 @@ struct CookingView: View {
                         ScrollView {
                             CookingStep(index: i, count: steps.count, text: text, plan: plan, extras: i == 0 ? plan.unmatched : [],
                                         checked: $checked)
-                                .padding(t.style == .swiss ? 20 : 24)
+                                .padding(24)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .tag(i)
@@ -134,7 +134,7 @@ struct CookingView: View {
     }
 }
 
-/// Where you are: a bar of segments and "Step 2 of 4" (Night Atlas "STEP 02 / 04", Swiss Index "2/4").
+/// Where you are: a bar of segments and "Step 2 of 4".
 /// Tapping it opens every step and the whole ingredient list.
 private struct CookingProgress: View {
     let step: Int
@@ -146,26 +146,13 @@ private struct CookingProgress: View {
         Button(action: open) {
             let bar = HStack(spacing: 4) {
                 ForEach(0..<count, id: \.self) { k in
-                    if t.style == .pantry {
-                        Capsule().fill(k <= step ? t.kindFill("recipe") : t.paper).overlay(Capsule().strokeBorder(t.line, lineWidth: 1.5))
-                            .frame(height: 7)
-                    } else {
-                        Rectangle().fill(k <= step ? t.stamp : t.rule).frame(height: 4)
-                            .clipShape(RoundedRectangle(cornerRadius: t.style == .swiss ? 0 : 2))
-                    }
+                    Capsule().fill(k <= step ? t.accent : t.rule).frame(height: 5)
                 }
             }
             .frame(width: min(132, CGFloat(count) * 33))
-            if t.style == .swiss {
-                HStack(spacing: 10) { bar; Text("\(step + 1)/\(count)").font(.subheadline.weight(.bold)).foregroundStyle(t.ink) }
-            } else {
-                VStack(spacing: 6) {
-                    bar
-                    Text(t.style == .atlas ? String(format: "STEP %02d / %02d", step + 1, count) : "Step \(step + 1) of \(count)")
-                        .font(t.style == .atlas ? .system(.caption, design: .monospaced).weight(.medium) : .subheadline.weight(.semibold))
-                        .tracking(t.style == .atlas ? 1 : 0)
-                        .foregroundStyle(t.inkMuted)
-                }
+            VStack(spacing: 6) {
+                bar
+                Text("Step \(step + 1) of \(count)").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted).monospacedDigit()
             }
         }
         .buttonStyle(.plain)
@@ -180,10 +167,9 @@ private struct CookingProgress: View {
 }
 
 /// One step: its number, the instruction and the ingredients it uses, drawn in the current style.
-/// Pantry Pop: labelled jars that press into their shadow when checked. Field Notebook: the ingredient
-/// words highlighted in the instruction, a ruled list with amounts in mono. Night Atlas: a lit panel of
-/// what to gather above the instruction, amounts in amber. Swiss Index: a condensed red numeral beside
-/// the instruction and a table with the amounts right-aligned.
+/// Chromatic: coloured ingredient chips that fill when checked. Paper & Ink: the ingredient words
+/// highlighted in the instruction, a ruled list with amounts. Nocturne: a lit panel of what to gather
+/// above the instruction, amounts in amber.
 private struct CookingStep: View {
     let index: Int
     let count: Int
@@ -195,8 +181,7 @@ private struct CookingStep: View {
     @Environment(\.ks) private var t
     @Environment(\.dynamicTypeSize) private var typeSize
     @ScaledMetric(relativeTo: .largeTitle) private var numeral: CGFloat = 64
-    @ScaledMetric(relativeTo: .body) private var amountWidth: CGFloat = 64
-    /// Field Notebook's amounts are small mono, so their column is narrower ("50 g", "1 tbsp").
+    /// The amounts column beside the names ("50 g", "1 tbsp").
     @ScaledMetric(relativeTo: .footnote) private var noteAmountWidth: CGFloat = 48
 
     private var current: StepIngredients.Step { plan.steps.indices.contains(index) ? plan.steps[index] : .init() }
@@ -209,26 +194,27 @@ private struct CookingStep: View {
 
     var body: some View {
         switch t.style {
-        case .pantry:
+        case .chromatic:
             VStack(alignment: .leading, spacing: 20) {
-                Text("\(index + 1)").font(.custom("BricolageGrotesque-Display", size: 72, relativeTo: .largeTitle))
-                    .foregroundStyle(t.stamp).accessibilityHidden(true)
+                Text("\(index + 1)").font(.system(size: numeral, weight: .heavy, design: .rounded))
+                    .foregroundStyle(t.accent).accessibilityHidden(true)
                 instruction(.system(.title2, design: .rounded).weight(.bold))
                 ForEach(groups, id: \.label) { g in
                     VStack(alignment: .leading, spacing: 12) {
-                        Text(g.label).font(.system(.subheadline, design: .rounded).weight(.heavy)).foregroundStyle(t.ink)
+                        Text(g.label).font(.system(.subheadline, design: .rounded).weight(.bold)).foregroundStyle(t.ink)
                         Flow(spacing: 10) { ForEach(g.items, id: \.self) { jar($0) } }
                     }
                 }
                 if !current.carried.isEmpty {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Bring together").font(.system(.subheadline, design: .rounded).weight(.heavy)).foregroundStyle(t.ink)
+                        Text("Bring together").font(.system(.subheadline, design: .rounded).weight(.bold)).foregroundStyle(t.ink)
                         Flow(spacing: 10) { ForEach(current.carried, id: \.fromStep) { carriedJar($0) } }
                     }
                 }
             }
-        case .atlas:
+        case .nocturne:
             VStack(alignment: .leading, spacing: 24) {
+                Text("Step \(index + 1)").font(.system(.title3, design: .rounded).weight(.bold)).foregroundStyle(t.accent).accessibilityHidden(true)
                 if !groups.isEmpty || !current.carried.isEmpty {
                     VStack(spacing: 0) {
                         ForEach(Array(allRows.enumerated()), id: \.offset) { k, row in
@@ -241,21 +227,11 @@ private struct CookingStep: View {
                 }
                 instruction(.title2.weight(.semibold))
             }
-        case .swiss:
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top, spacing: 12) {
-                    Text("\(index + 1)").font(.system(size: numeral * 1.3, weight: .heavy).width(.condensed))
-                        .foregroundStyle(t.stamp).lineLimit(1).minimumScaleFactor(0.5)
-                        .frame(width: amountWidth, alignment: .leading).accessibilityHidden(true)
-                    instruction(.title2.weight(.semibold))
-                }
-                table
-            }
-        default:
+        case .paper:
             VStack(alignment: .leading, spacing: 20) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text("\(index + 1).").font(.system(size: numeral * 0.9, weight: .semibold, design: .serif)).foregroundStyle(t.stamp)
-                    Text("OF \(count)").font(.system(.caption, design: .monospaced).weight(.medium)).tracking(1).foregroundStyle(t.inkMuted)
+                    Text("of \(count)").font(.subheadline.weight(.medium)).foregroundStyle(t.inkMuted)
                 }
                 .accessibilityHidden(true)
                 instruction(.system(.title2, design: .serif), highlight: true)
@@ -264,7 +240,7 @@ private struct CookingStep: View {
         }
     }
 
-    /// The instruction; Field Notebook runs the highlighter over the words that name an ingredient.
+    /// The instruction; Paper & Ink runs a highlighter over the words that name an ingredient.
     private func instruction(_ font: Font, highlight: Bool = false) -> some View {
         var s = AttributedString(text)
         if highlight {
@@ -278,7 +254,7 @@ private struct CookingStep: View {
             .accessibilityLabel("Step \(index + 1). \(text)")
     }
 
-    // MARK: Rows (Field Notebook, Night Atlas, Swiss Index)
+    // MARK: Rows (Paper & Ink, Nocturne)
 
     @ViewBuilder private var table: some View {
         if !groups.isEmpty || !current.carried.isEmpty {
@@ -304,23 +280,13 @@ private struct CookingStep: View {
     }
 
     private func label(_ s: String) -> some View {
-        Group {
-            if t.style == .swiss {
-                HStack(spacing: 12) {
-                    Text("Qty").frame(width: amountWidth, alignment: .trailing)
-                    Text(s == "You'll need" ? "Ingredient" : s)
-                }
-                .font(.footnote.weight(.bold)).foregroundStyle(t.ink)
-            } else {
-                Text(t.monoLabels ? s.uppercased() : s).font(KSFont.label(t)).tracking(t.monoLabels ? 1 : 0).foregroundStyle(t.inkMuted)
-            }
-        }
-        .accessibilityAddTraits(.isHeader)
+        Text(s).font(KSFont.label(t)).foregroundStyle(t.inkMuted)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func ruled(_ rows: [AnyView]) -> some View {
         VStack(spacing: 0) {
-            Rectangle().fill(t.style == .swiss ? t.ink : t.rule).frame(height: 1)
+            Rectangle().fill(t.rule).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
                 r
                 Rectangle().fill(t.rule).frame(height: 1)
@@ -332,13 +298,12 @@ private struct CookingStep: View {
         let item = plan.items[i]
         let done = checked.contains(i)
         let name = Text(item.name)
-            .font(t.style == .notebook ? .system(.title3, design: .serif) : .body)
+            .font(t.style == .paper ? .system(.title3, design: .serif) : .body)
             .strikethrough(done, color: t.stamp)
             .foregroundStyle(done ? t.inkMuted : t.ink)
-        let amount = Text(item.amount.isEmpty && t.style == .swiss ? "–" : item.amount)
-            .font(t.style == .swiss ? .body.weight(.bold).monospacedDigit()
-                  : .system(t.style == .atlas ? .subheadline : .footnote, design: .monospaced))
-            .foregroundStyle(t.style == .atlas ? t.accent : t.style == .swiss && !done ? t.ink : t.inkMuted)
+        let amount = Text(item.amount)
+            .font((t.style == .nocturne ? Font.subheadline : .footnote).weight(.semibold).monospacedDigit())
+            .foregroundStyle(t.style == .nocturne ? t.accent : t.inkMuted)
         // Amount over name: when the row is too narrow, and always at accessibility sizes, where a
         // scaled amount column would push the names to the far side.
         let stacked = HStack(alignment: .top, spacing: 12) {
@@ -353,10 +318,10 @@ private struct CookingStep: View {
                 } else {
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 12) {
-                            switch t.style {
-                            case .atlas: box(done); name; Spacer(minLength: 8); amount
-                            case .swiss: amount.frame(width: amountWidth, alignment: .trailing); name; Spacer(minLength: 8); box(done)
-                            default: box(done); amount.frame(width: noteAmountWidth, alignment: .leading); name; Spacer(minLength: 0)
+                            if t.style == .nocturne {
+                                box(done); name; Spacer(minLength: 8); amount
+                            } else {
+                                box(done); amount.frame(width: noteAmountWidth, alignment: .leading); name; Spacer(minLength: 0)
                             }
                         }
                         stacked
@@ -373,12 +338,11 @@ private struct CookingStep: View {
 
     private func carriedRow(_ c: StepIngredients.Carried) -> some View {
         Group {
-            HStack(alignment: t.style == .swiss ? .firstTextBaseline : .center, spacing: 12) {
-                if t.style == .swiss { Text("–").font(.body.weight(.bold)).foregroundStyle(t.inkMuted).frame(width: amountWidth, alignment: .trailing) }
-                else { Image(systemName: "plus.circle").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted).frame(width: 24) }
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "plus.circle").font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted).frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(names(c)).font(t.style == .notebook ? .system(.title3, design: .serif) : .body).foregroundStyle(t.ink)
-                    Text("From step \(c.fromStep + 1)").font(t.monoLabels ? .system(.caption, design: .monospaced) : .caption).foregroundStyle(t.inkMuted)
+                    Text(names(c)).font(t.style == .paper ? .system(.title3, design: .serif) : .body).foregroundStyle(t.ink)
+                    Text("From step \(c.fromStep + 1)").font(.caption).foregroundStyle(t.inkMuted)
                 }
                 Spacer(minLength: 0)
             }
@@ -389,17 +353,14 @@ private struct CookingStep: View {
     }
 
     private func box(_ done: Bool) -> some View {
-        let round = t.style == .atlas
-        let shape = RoundedRectangle(cornerRadius: round ? 12 : t.style == .notebook ? 3 : 0)
-        let fill: Color = !done || t.style == .notebook ? .clear : t.style == .atlas ? t.primary : t.stamp
-        let mark: Color = t.style == .notebook ? t.stamp : t.style == .atlas ? t.onPrimary : t.onAccent
-        return shape.fill(fill)
-            .overlay { shape.strokeBorder(done && t.style != .notebook ? fill : t.style == .atlas ? t.inkMuted : t.ink, lineWidth: 1.5) }
-            .overlay { if done { Image(systemName: "checkmark").font(.system(size: t.style == .notebook ? 17 : 12, weight: .bold)).foregroundStyle(mark) } }
+        let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+        return shape.fill(done ? t.primary : .clear)
+            .overlay { shape.strokeBorder(done ? t.primary : t.inkMuted, lineWidth: 1.5) }
+            .overlay { if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(t.onPrimary) } }
             .frame(width: 24, height: 24)
     }
 
-    // MARK: Jars (Pantry Pop)
+    // MARK: Chips (Chromatic)
 
     private func jar(_ i: Int) -> some View {
         let item = plan.items[i]
@@ -408,19 +369,17 @@ private struct CookingStep: View {
         return Button { toggle(i) } label: {
             HStack(spacing: 8) {
                 Circle().fill(done ? t.onKind : t.paper)
-                    .overlay { Circle().strokeBorder(done ? t.onKind : t.line, lineWidth: 2) }
+                    .overlay { Circle().strokeBorder(done ? t.onKind : t.rule, lineWidth: 1.5) }
                     .overlay { if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .black)).foregroundStyle(t.kindFill("recipe")) } }
                     .frame(width: 26, height: 26)
-                if !item.amount.isEmpty { Text(item.amount).font(.system(.body, design: .rounded).weight(.black)).foregroundStyle(ink) }
+                if !item.amount.isEmpty { Text(item.amount).font(.system(.body, design: .rounded).weight(.heavy)).foregroundStyle(ink) }
                 Text(item.name).font(.system(.body, design: .rounded).weight(.semibold)).foregroundStyle(ink)
                     .strikethrough(done, color: ink).multilineTextAlignment(.leading)
             }
             .padding(.leading, 10).padding(.trailing, 16).padding(.vertical, 9)
             .frame(minHeight: 48)
-            .background(done ? t.kindFill("recipe") : t.paper, in: Capsule())
-            .overlay { Capsule().strokeBorder(t.line, lineWidth: 2.5) }
-            .resting(done ? 0 : 0.75)
-            .offset(x: done ? 3 : 0, y: done ? 3 : 0)
+            .background(done ? t.kindFill("recipe") : t.well, in: Capsule())
+            .overlay { Capsule().strokeBorder(done ? .clear : t.rule, lineWidth: 1) }
         }
         .buttonStyle(PressStyle())
         .accessibilityElement(children: .ignore)
@@ -431,14 +390,14 @@ private struct CookingStep: View {
     private func carriedJar(_ c: StepIngredients.Carried) -> some View {
         Group {
             HStack(spacing: 8) {
-                Text("Step \(c.fromStep + 1)").font(.system(.caption, design: .rounded).weight(.heavy)).foregroundStyle(t.table)
-                    .padding(.horizontal, 8).padding(.vertical, 4).background(t.ink, in: Capsule())
+                Text("Step \(c.fromStep + 1)").font(.system(.caption, design: .rounded).weight(.bold)).foregroundStyle(t.onAccent)
+                    .padding(.horizontal, 8).padding(.vertical, 4).background(t.accent, in: Capsule())
                 Text(names(c)).font(.system(.body, design: .rounded).weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
             }
             .padding(.leading, 8).padding(.trailing, 16).padding(.vertical, 9)
             .frame(minHeight: 48)
             .background(t.well, in: Capsule())
-            .overlay { Capsule().strokeBorder(t.line, style: StrokeStyle(lineWidth: 2, dash: [6, 4])) }
+            .overlay { Capsule().strokeBorder(t.rule, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])) }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(names(c)), from step \(c.fromStep + 1)")
