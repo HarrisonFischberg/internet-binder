@@ -39,6 +39,18 @@ struct SyncDedupeTests {
         #expect(cloud.records[SyncID(store: "collections", key: "c-phone")!] == nil, "the other one is gone from iCloud too")
     }
 
+    @Test func whatTheSorterLearnedMovesWithTheMergedCollection() throws {
+        try phone.put("collections", ["id": "k2", "name": "Kitchen", "updatedAt": "2026-10-20T10:00:00.000Z"])
+        try phone.put("kv", ["key": "prefs", "value": ["learnedKeywords": ["skillet": ["k2": 3]], "retailerPrefs": ["lodge.com": ["k2": 2]], "corrections": []]])
+        try mac.put("collections", ["id": "k1", "name": "Kitchen", "updatedAt": "2026-10-21T10:00:00.000Z"])
+        try meet()
+        for d in [phone, mac] {
+            let value = try SyncJSON.object(try #require(try d.db.get("kv", "prefs")))["value"] as? [String: Any]
+            #expect((value?["learnedKeywords"] as? [String: [String: Double]])?["skillet"] == ["k1": 3], "on the kept Kitchen, once")
+            #expect((value?["retailerPrefs"] as? [String: [String: Double]])?["lodge.com"] == ["k1": 2])
+        }
+    }
+
     @Test func theSameLinkSavedOnBothBecomesOneSave() throws {
         try phone.put(["id": "z1", "title": "Shakshuka", "urlKey": "nyt/shakshuka", "note": "Sunday", "userFields": ["note"], "createdAt": "2026-10-01T10:00:00.000Z", "updatedAt": "2026-10-01T10:00:00.000Z"])
         try mac.put(["id": "a1", "title": "Shakshuka with feta", "urlKey": "nyt/shakshuka", "createdAt": "2026-10-05T10:00:00.000Z", "updatedAt": "2026-10-05T10:00:00.000Z"])

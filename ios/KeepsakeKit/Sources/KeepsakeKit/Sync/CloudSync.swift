@@ -40,6 +40,9 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     public var onError: (@Sendable (Error) -> Void)?
     /// Runs when the sync status changes, for Settings.
     public var onStatus: (@Sendable (Status) -> Void)?
+    /// Runs when the person deleted the library's iCloud data; the app turns sync off. Without it, the
+    /// library is uploaded again.
+    public var onPurged: (@Sendable () -> Void)?
     private var queued: Task<Void, Never>?
 
     public init(database: RecordDatabase, keys: LibraryKeys, container: CKContainer = CKContainer(identifier: CloudSync.containerID)) {
@@ -84,12 +87,7 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     /// Hands every pending local change to the engine. Cheap: call it after each write.
     public func noteLocalChanges() {
         guard let engine = lock.withLock({ self.engine }), let pending = try? db.pendingChanges() else { return }
-        var changes: [CKSyncEngine.PendingRecordZoneChange] = []
-        for p in pending {
-            let rid = Self.recordID(p.id)
-            if case .delete = (try? db.outgoing(p.id)) ?? nil { changes.append(.deleteRecord(rid)) } else { changes.append(.saveRecord(rid)) }
-        }
-        engine.state.add(pendingRecordZoneChanges: changes)
+        engine.state.add(pendingRecordZoneChanges: pending.map { $0.deleted ? .deleteRecord(Self.recordID($0.id)) : .saveRecord(Self.recordID($0.id)) })
     }
 
     /// Fetches, then sends, now (pull to refresh, the Safari extension opening its popup).
@@ -148,17 +146,34 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
             case .signIn:
                 try? db.markAllPending()
                 noteLocalChanges()
-            case .signOut, .switchAccounts:
+            case .signOut:
                 // The library stays on the device; what iCloud had is forgotten.
                 try? db.resetSyncBase()
                 try? db.setSyncState(Self.stateKey, nil)
                 onStatus?(.signedOut)
+            case .switchAccounts:
+                // Another account's iCloud: the whole library goes up there, not only what changes next.
+                try? db.resetSyncBase()
+                try? db.setSyncState(Self.stateKey, nil)
+                try? db.markAllPending()
+                noteLocalChanges()
             @unknown default:
                 break
             }
 
         case .fetchedDatabaseChanges(let changes):
-            if changes.deletions.contains(where: { $0.zoneID == Self.zoneID }) { try? db.resetSyncBase() }
+            guard let gone = changes.deletions.first(where: { $0.zoneID == Self.zoneID }) else { break }
+            try? db.resetSyncBase()
+            if gone.reason == .purged, let onPurged {
+                // The person deleted this app's iCloud data (Settings, Manage Storage): sync goes off rather
+                // than uploading it all again behind their back.
+                onPurged()
+            } else {
+                // iCloud lost the zone: the whole library goes up again, so a new device gets all of it.
+                syncEngine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: Self.zoneID))])
+                try? db.markAllPending()
+                noteLocalChanges()
+            }
 
         case .fetchedRecordZoneChanges(let changes):
             var changed = false
@@ -172,6 +187,8 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
             }
             // Two libraries meeting for the first time: one Roadtrips, one save per link.
             if changed { do { try db.mergeDuplicates() } catch { onError?(error) } }
+            // The picture key may have reached this device since the last fetch.
+            retrySealedPictures()
             noteLocalChanges()
             if changed { onChange?() }
 
@@ -297,9 +314,9 @@ public final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         let record = system.flatMap(record(fromSystemFields:)) ?? CKRecord(recordType: rec.id.recordType, recordID: recordID(rec.id))
         record.encryptedValues["body"] = rec.body
         var file: URL?
-        if let data = try rec.picturesData() {
+        if let sealed = try rec.picturesData().map({ try keys.seal($0, recordName: rec.id.recordName) }) ?? rec.sealed {
             let url = FileManager.default.temporaryDirectory.appendingPathComponent("ks-sync-\(UUID().uuidString)")
-            try keys.seal(data, recordName: rec.id.recordName).write(to: url)
+            try sealed.write(to: url)
             record["pictures"] = CKAsset(fileURL: url)
             file = url
         } else {

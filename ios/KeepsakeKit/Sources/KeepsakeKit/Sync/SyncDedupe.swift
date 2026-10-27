@@ -58,6 +58,7 @@ extension RecordDatabase {
             }
         }
         var changed = false
+        var moved: [String: String] = [:]
         for (_, cols) in groups where cols.count > 1 {
             let sorted = cols.sorted { ($0["id"] as! String) < ($1["id"] as! String) }
             var keep = sorted[0]
@@ -74,11 +75,34 @@ extension RecordDatabase {
                     try writeMerged(db, "items", item)
                 }
                 try removeMerged(db, "collections", otherId)
+                moved[otherId] = keepId
             }
             try writeMerged(db, "collections", keep)
             changed = true
         }
+        try moveLearned(db, moved)
         return changed
+    }
+
+    /// What the sorter learned for a collection that merged away now counts for the one kept (categorizer.js
+    /// `forgetCollection`): a word left pointing at a gone id would also stop the kept one's built-in words.
+    private func moveLearned(_ db: Database, _ moved: [String: String]) throws {
+        guard !moved.isEmpty, let text = try String.fetchOne(db, sql: "SELECT body FROM kv WHERE key = 'prefs'") else { return }
+        var prefs = try SyncJSON.object(text)
+        guard var value = prefs["value"] as? [String: Any] else { return }
+        for (field, cap) in [("learnedKeywords", SyncMerge.learnedWeightCap as Double?), ("retailerPrefs", nil)] {
+            guard let all = value[field] as? [String: [String: Any]] else { continue }
+            var out: [String: Any] = [:]
+            for (term, entry) in all {
+                var e: [String: Double] = [:]
+                for (id, w) in entry { e[moved[id] ?? id, default: 0] += (w as? NSNumber)?.doubleValue ?? 0 }
+                if let cap { for (id, w) in e { e[id] = min(cap, w) } }
+                out[term] = e
+            }
+            value[field] = out
+        }
+        prefs["value"] = value
+        try writeMerged(db, "kv", prefs)
     }
 
     private func mergeItems(_ db: Database) throws -> Bool {

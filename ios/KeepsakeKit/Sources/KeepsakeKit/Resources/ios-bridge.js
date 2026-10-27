@@ -38,6 +38,17 @@
   });
   // Only the shop page: the app reads no page a save links to (PRIVACY-iOS.md), so fetchPage stays unset.
   const aiDeps = { fetchShopPage: viaNative('fetchPage'), loadImage: viaNative('loadImage') };
+  // What fill.js needs for a run of fill-ins: Lookups only where turned on, one request every 1.1 s
+  // (the free public sources ask for that), and the AI reads above.
+  const fillDeps = () => {
+    let last = 0;
+    const waitTurn = async () => {
+      const wait = 1100 - (Date.now() - last);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      last = Date.now();
+    };
+    return { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...aiDeps };
+  };
 
   function nativeRecordBackend() {
     const n = __native.db;
@@ -299,14 +310,9 @@
       // hasn't read yet (you moved it into a Lifestyle view) is filled in again.
       // An imported save waiting for Run AI (needsAi) gets its Lookups only, once.
       const todo = listItems().filter((i) => K.capture.FILLED_KINDS.includes(K.kinds.kindOf(i)) && (!filled.has(i.id) || (aiOn && !i.understoodAt && !i.needsAi))).slice(0, 20);
-      let last = 0;
-      const waitTurn = async () => {
-        const wait = 1100 - (Date.now() - last);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        last = Date.now();
-      };
+      const deps = fillDeps();
       for (const it of todo) {
-        await K.fill.fillSave(store, it.id, {}, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...aiDeps });
+        await K.fill.fillSave(store, it.id, {}, deps);
         filled.add(it.id);
       }
       await store.backend.set({ keepsake_ios_filled: [...filled].slice(-5000) });
@@ -315,13 +321,7 @@
     // Run AI on imported saves, one save (fill.js readImported): your provider reads it, then its fill-in
     // or the shopping tidy. Throws the provider's error, so the app can slow down and try again.
     async readImported(id) {
-      const last = { at: 0 };
-      const waitTurn = async () => {
-        const wait = 1100 - (Date.now() - last.at);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        last.at = Date.now();
-      };
-      const r = await K.fill.readImported(store, id, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...aiDeps });
+      const r = await K.fill.readImported(store, id, fillDeps());
       return { changed: !!r?.changed, kind: r?.kind || '' };
     },
     // Fix with AI / Read again for one save (Places review): Chrome's fill-in with review on.
