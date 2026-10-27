@@ -82,8 +82,12 @@ final class LibraryModel {
     var opening: (stack: String, id: String)?
     /// ⌘F on iPad: focus the Library's search.
     var focusSearch = false
-    /// Optional AI is on with a key: the Fix with AI buttons show.
+    /// Apple Intelligence is ready, or Optional AI is on with a key: the Fix with AI buttons show.
     private(set) var aiReady = false
+    /// Apple Intelligence on this device (OnDeviceAI): it reads every save first.
+    private(set) var appleAI = OnDeviceAI.Status.unsupported
+    /// Optional AI is on with a key: your provider takes over when Apple Intelligence can't help.
+    private(set) var aiBackup = false
     /// A Fix with AI run in progress (one save, a collection, a Lifestyle view or everything).
     var aiRun: AIRun?
     struct AIRun: Equatable {
@@ -342,18 +346,32 @@ final class LibraryModel {
     }
 
     /// The after-save work that's turned on (AI tidy, Lifestyle fill-in), for saves made in the Share
-    /// Extension or while the app was away. Runs quietly; changes appear as they land.
+    /// Extension or while the app was away, and Apple Intelligence reading a few saves it hasn't yet
+    /// (views.readOnDevice). Runs quietly, one run at a time; changes appear as they land.
     func finishSaves() {
-        guard let library else { return }
+        guard let library, !finishing else { return }
+        finishing = true
         Task {
             try? await library.finishSaves()
+            finishing = false
             refresh()
         }
     }
+    @ObservationIgnored private var finishing = false
 
     /// Whether the Fix with AI buttons show (after Settings turns Optional AI on or off, or a key changes).
     func refreshAIReady() async {
+        appleAI = OnDeviceAI.status
+        aiBackup = await library?.aiBackupReady() ?? false
         aiReady = await library?.aiReady() ?? false
+    }
+
+    /// Who reads saves again when you ask (Fix with AI), for the confirmations: your provider with your key
+    /// (Apple Intelligence has had its go already), else Apple Intelligence on this iPhone.
+    var aiReadsAgain: String {
+        aiBackup || appleAI != .ready
+            ? "Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes."
+            : "Apple Intelligence reads each save again on this iPhone, so nothing leaves it."
     }
 
     /// Rewrites the widgets' snapshot and asks WidgetKit to redraw them, once things settle: a run of

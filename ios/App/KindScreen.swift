@@ -376,7 +376,7 @@ struct RunAIOnImportedButton: View {
                     Button(waiting.count > 100 ? "All \(waiting.count)" : "Run AI") { Task { await model.runAIOnImported(waiting) } }
                 } message: {
                     let minutes = max(1, Int((Double(waiting.count) * 7 / 60).rounded()))
-                    Text("Your AI provider reads each one: what it is, then its details or collection. About \(minutes) \(minutes == 1 ? "minute" : "minutes") with the app open. Pause any time; the rest stay waiting. Every change can be undone.")
+                    Text("\(model.aiBackup || model.appleAI != .ready ? "Your AI provider" : "Apple Intelligence") reads each one: what it is, then its details or collection. About \(minutes) \(minutes == 1 ? "minute" : "minutes") with the app open. Pause any time; the rest stay waiting. Every change can be undone.")
                 }
         }
     }
@@ -425,7 +425,7 @@ struct FixWithAIButton: View {
             .confirmationDialog("Fix \(saves.count) saves with AI?", isPresented: $confirming, titleVisibility: .visible) {
                 Button("Fix \(what)") { Task { await model.fixWithAI(saves) } }
             } message: {
-                Text("Your AI provider reads each one again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone.")
+                Text("\(model.aiReadsAgain) Every change can be undone.")
             }
         }
     }

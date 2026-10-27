@@ -36,8 +36,25 @@
     if (typeof fn !== 'function') { resolve(null); return; }
     fn(String(url), (v) => resolve(typeof v === 'string' && v ? v : null));
   });
+  // Apple Intelligence (__native.appleAI, KeepsakeKit OnDeviceAI.swift): every AI task asks the model on this
+  // device first and your provider only when it can't help (src/ai/provider.js onDeviceFirst).
+  //   ready() → boolean     respond(system, userText, maxTokens, done(text | null, error | null))
+  if (typeof __native !== 'undefined' && __native.appleAI) {
+    const apple = __native.appleAI;
+    KeepsakeCore.provider.setLocalModel({
+      ready: () => !!apple.ready(),
+      respond: ({ system, userText, maxTokens }) => new Promise((resolve, reject) => {
+        apple.respond(String(system || ''), String(userText || ''), Number(maxTokens) || 600, (text, error) => (typeof text === 'string' ? resolve(text) : reject(new Error(error || 'Apple Intelligence didn’t answer.'))));
+      }),
+    });
+  }
   // Only the shop page: the app reads no page a save links to (PRIVACY-iOS.md), so fetchPage stays unset.
   const aiDeps = { fetchShopPage: viaNative('fetchPage'), loadImage: viaNative('loadImage') };
+  // Work that runs by itself (after a save, when the app opens) stays on the device while Apple
+  // Intelligence is there; your key is only used when you ask (provider.js keyFor).
+  const autoDeps = { ...aiDeps, deviceOnly: true };
+  // How many unread saves Apple Intelligence reads each time the app opens or a save finishes.
+  const DEVICE_SWEEP = 12;
 
   function nativeRecordBackend() {
     const n = __native.db;
@@ -285,14 +302,14 @@
     // run here when the app is open. Only what is turned on runs; a save is filled in once.
     async finishSaves() {
       const settings = await store.getSettings();
-      const key = await store.getSecret('aiApiKey');
-      const aiOn = !!settings.ai?.on && !!key;
+      const aiOn = K.provider.aiAvailable(settings, await store.getSecret('aiApiKey'));
       const lookupsOn = Object.values(settings.lookups || {}).some(Boolean);
       let tidied = 0;
       // With AI on, tidySave first has your provider work out what each save is (understand.js). A handful
       // at most: a pile from an import waits for Run AI on imported saves instead (fill.js pendingToTidy).
-      for (const it of await K.fill.pendingToTidy(store)) { await K.fill.tidySave(store, it.id, aiDeps); tidied++; }
-      if (!aiOn && !lookupsOn) return { tidied, filled: 0 };
+      for (const it of await K.fill.pendingToTidy(store)) { await K.fill.tidySave(store, it.id, autoDeps); tidied++; }
+      const read = await views.readOnDevice();
+      if (!aiOn && !lookupsOn) return { tidied, filled: 0, read };
       const raw = await store.backend.get(['keepsake_ios_filled']);
       const filled = new Set(raw.keepsake_ios_filled || []);
       // Read again: a save the tidy found to be a recipe or place is filled in now. A save your provider
@@ -306,11 +323,27 @@
         last = Date.now();
       };
       for (const it of todo) {
-        await K.fill.fillSave(store, it.id, {}, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...aiDeps });
+        await K.fill.fillSave(store, it.id, {}, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which], waitTurn, ...autoDeps });
         filled.add(it.id);
       }
       await store.backend.set({ keepsake_ios_filled: [...filled].slice(-5000) });
-      return { tidied, filled: todo.length };
+      return { tidied, filled: todo.length, read };
+    },
+    // Apple Intelligence reads every save it hasn't yet, a few at a time (each app open and finished save),
+    // newest first, imports included: what it is, its details, a tidier title and a collection (Fix with
+    // AI, on the device only). Each save is tried once; what it can't work out stays as it is, for Fix with
+    // AI with your key. Nothing leaves the device.
+    async readOnDevice() {
+      if (!K.provider.localModelReady()) return 0;
+      const raw = await store.backend.get(['keepsake_ios_device_read']);
+      const tried = new Set(raw.keepsake_ios_device_read || []);
+      const todo = listItems().filter((i) => !i.understoodAt && !tried.has(i.id) && i.captureState !== 'pending').slice(0, DEVICE_SWEEP);
+      if (!todo.length) return 0;
+      // Marked first, so a save that stops the run (or the app) isn't tried again and again.
+      for (const i of todo) tried.add(i.id);
+      await store.backend.set({ keepsake_ios_device_read: [...tried].slice(-20000) });
+      const report = await views.fixWithAI(todo.map((i) => i.id), { deviceOnly: true });
+      return report.changed || 0;
     },
     // Run AI on imported saves, one save (fill.js readImported): your provider reads it, then its fill-in
     // or the shopping tidy. Throws the provider's error, so the app can slow down and try again.
@@ -350,10 +383,15 @@
       if (done.length) await store.markAiLogUndone(done);
       return done.length;
     },
-    // Optional AI is on and a key is set: the AI buttons show.
+    // Apple Intelligence is ready on this device, or Optional AI is on with a key: the AI buttons show.
     async aiReady() {
       const settings = await store.getSettings();
-      return !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
+      return K.provider.aiAvailable(settings, await store.getSecret('aiApiKey'));
+    },
+    // Optional AI is on with a key: your provider backs Apple Intelligence up.
+    async aiBackupReady() {
+      const settings = await store.getSettings();
+      return !!K.provider.usableKey(settings, await store.getSecret('aiApiKey'));
     },
     // Fix with AI for any saves (one, a collection, a Lifestyle view, everything; dashboard/aiCleanup.js
     // runAiCleanup, planFixes): each is read again by your provider (understand.js, with its picture; a
@@ -361,10 +399,11 @@
     // (an Instagram post's caption) and current collection go to your provider in batches; a confident
     // answer files a save from Review and confirms a price. Every change is logged with Undo. Hand-edited
     // fields stay.
-    async fixWithAI(ids) {
+    // deviceOnly: readOnDevice's own run, which never uses your key.
+    async fixWithAI(ids, { deviceOnly = false } = {}) {
       const settings = await store.getSettings();
-      const key = await store.getSecret('aiApiKey');
-      if (!settings.ai?.on || !key) throw new Error('Turn on Optional AI and add your key first.');
+      const key = K.provider.keyFor(settings, await store.getSecret('aiApiKey'), { deviceOnly });
+      if (!K.provider.aiAvailable(settings, key)) throw new Error('Turn on Apple Intelligence, or Optional AI with your key, first.');
       const prefs = await store.getPrefs();
       const threshold = prefs.confidenceThreshold || 0.6;
       const FIELDS = ['title', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
@@ -378,7 +417,7 @@
       for (const it of found) {
         let r = null;
         try {
-          r = await K.understand.understandItem(store, it.id, { force: true, runId }, aiDeps);
+          r = await K.understand.understandItem(store, it.id, { force: true, runId }, deviceOnly ? autoDeps : aiDeps);
         } catch (e) {
           report.error = String((e && e.message) || e);
           if (/\((401|403|429)\)|API key|base URL/i.test(report.error)) { report.changed = changed.size; return report; }

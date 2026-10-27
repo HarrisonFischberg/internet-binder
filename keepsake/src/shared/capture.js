@@ -9,6 +9,7 @@ import { parsePrice, sanitizeText } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
 import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
 import { guessTopics } from './topics.js';
+import { aiAvailable, usableKey } from '../ai/provider.js';
 
 // Lifestyle kinds whose details are filled in after the save (AI or Lookups, when turned on).
 export const FILLED_KINDS = ['place', 'media', 'book', 'recipe', 'workout'];
@@ -223,7 +224,7 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
   // With AI on, the save is stored first with the local result and marked "finishing details"; your
   // provider then works out what it is (a product may turn out to be a recipe) and tidies it (tidySave).
   // Nothing waits on the network. Lifestyle saves get the same reading from their fill-in (fillSave).
-  const aiWanted = !deferAi && !FILLED_KINDS.includes(kind) && !collectionId && !!settings.ai?.on && !!(await store.getSecret('aiApiKey'));
+  const aiWanted = !deferAi && !FILLED_KINDS.includes(kind) && !collectionId && aiAvailable(settings, usableKey(settings, await store.getSecret('aiApiKey')));
 
   if (instant && !collectionId && !classification.isInbox && classification.confidence < AUTO_FILE_CONFIDENCE) {
     const pick = { collectionId: classification.collectionId, collectionName: classification.collectionName, taxonomyKey: classification.taxonomyKey, isNew: classification.isNew };
