@@ -77,6 +77,12 @@ final class LifestyleTests: XCTestCase {
         app.buttons["Pause music"].tap()
         XCTAssertTrue(app.buttons["Play music"].waitForExistence(timeout: 2))
         app.buttons["Next song"].tap()
+        // Tapping the song's name lists every song; pick one.
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Now playing'")).firstMatch.tap()
+        let lobby = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Lobby Time'")).firstMatch
+        XCTAssertTrue(lobby.waitForExistence(timeout: 3))
+        lobby.tap()
+        XCTAssertTrue(app.buttons["Now playing Lobby Time by Kevin MacLeod"].waitForExistence(timeout: 3))
         app.buttons["Turn music off"].tap()
         XCTAssertTrue(app.buttons["Turn music on"].waitForExistence(timeout: 2))
         app.buttons["Turn music on"].tap()

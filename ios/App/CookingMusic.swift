@@ -103,6 +103,15 @@ final class CookingMusic {
         if !p.isPlaying { fadeIn(p) }
     }
 
+    /// Picked from the song list: that song now, heard even on silent, then the shuffle carries on.
+    func play(_ track: Track) {
+        guard player != nil, let i = order.firstIndex(of: track) else { return }
+        index = i
+        heldByUser = false
+        makeAudible()
+        load(play: true)
+    }
+
     func skip() {
         guard !order.isEmpty, player != nil else { return }
         index = (index + 1) % order.count
@@ -156,12 +165,14 @@ final class CookingMusic {
 }
 
 /// The small now-playing capsule under Cooking mode's header: pause, next song, and turn music off.
+/// Tapping the song's name opens every song (CookingSongList) to scroll through and pick one.
 /// Until the music is audible it is a "Tap to unmute music" button instead (Silent mode mutes the
 /// ambient start). With music off it is one button that turns it back on.
 struct CookingMusicBar: View {
     let music: CookingMusic
     @Binding var on: Bool
     @Environment(\.ks) private var t
+    @State private var showSongs = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -176,16 +187,18 @@ struct CookingMusicBar: View {
                 .accessibilityHint("Plays quietly, even with your iPhone on silent")
                 button("Turn music off", "xmark") { on = false }
             } else if on, let track = music.current {
-                Image(systemName: "music.note").font(.footnote.weight(.semibold)).foregroundStyle(t.stamp)
-                    .padding(.leading, 14).accessibilityHidden(true)
-                HStack(spacing: 6) {
-                    Text(track.title).fontWeight(.semibold).foregroundStyle(t.ink).layoutPriority(1)
-                    Text(track.artist).foregroundStyle(t.inkMuted)
+                Button { showSongs = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "music.note.list").fontWeight(.semibold).foregroundStyle(t.stamp)
+                        Text(track.title).fontWeight(.semibold).foregroundStyle(t.ink).layoutPriority(1)
+                        Text(track.artist).foregroundStyle(t.inkMuted)
+                    }
+                    .font(.footnote).lineLimit(1)
+                    .padding(.leading, 14).padding(.trailing, 2).frame(height: 44)
+                    .contentShape(Rectangle())
                 }
-                .font(.footnote).lineLimit(1)
-                .padding(.leading, 6).padding(.trailing, 2)
-                .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Now playing \(track.title) by \(track.artist)")
+                .accessibilityHint("Shows every song")
                 button(music.playing ? "Pause music" : "Play music", music.playing ? "pause.fill" : "play.fill") { music.toggle() }
                 button("Next song", "forward.fill") { music.skip() }
                 button("Turn music off", "speaker.slash.fill") { on = false }
@@ -200,6 +213,7 @@ struct CookingMusicBar: View {
         .ksGlass(Capsule())
         .opacity(on && music.current == nil ? 0 : 1)
         .animation(.snappy, value: music.audible)
+        .sheet(isPresented: $showSongs) { CookingSongList(music: music) }
     }
 
     private func button(_ label: String, _ symbol: String, action: @escaping () -> Void) -> some View {
@@ -208,5 +222,38 @@ struct CookingMusicBar: View {
                 .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
+    }
+}
+
+/// Every cooking song, to scroll through; tap one to play it. The one playing shows a speaker.
+struct CookingSongList: View {
+    let music: CookingMusic
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.ks) private var t
+
+    var body: some View {
+        NavigationStack {
+            List(CookingMusic.tracks, id: \.file) { track in
+                let current = music.current == track
+                Button { music.play(track); dismiss() } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(track.title).font(.body.weight(.semibold)).foregroundStyle(t.ink)
+                            Text(track.artist).font(.subheadline).foregroundStyle(t.inkMuted)
+                        }
+                        Spacer()
+                        if current {
+                            Image(systemName: music.playing ? "speaker.wave.2.fill" : "speaker.fill")
+                                .foregroundStyle(t.stamp).accessibilityHidden(true)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .accessibilityAddTraits(current ? .isSelected : [])
+            }
+            .navigationTitle("Songs").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
