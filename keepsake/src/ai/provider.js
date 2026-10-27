@@ -14,6 +14,12 @@
 //      its title, caption or description, hashtags, location tag, site, the
 //      text of pages it links to and its locally stored thumbnail.
 // Nothing else leaves the browser: no cookies, no account data, no history.
+//
+// On iPhone and iPad, Apple Intelligence reads saves on the device (setLocalModel, registered by the app):
+// what runs by itself (after a save, when the app opens) uses only the device model (keyFor deviceOnly), and
+// what it can't work out stays as it is. Your key is used only when you ask (Fix with AI and the like),
+// to take a save further: web search, the picture, and whatever the device model left as it was. Without
+// a key, asking runs the device model again.
 
 export const PROVIDERS = {
   anthropic: { label: 'Anthropic (Claude)', baseUrl: 'https://api.anthropic.com', model: 'claude-haiku-5-5' },
@@ -58,6 +64,57 @@ export function providerConfig(settings) {
 // answer, and that thinking counts against max_tokens, so leave room for it on top of the answer.
 function anthropicParams(cfg, maxTokens) {
   return { model: cfg.model, max_tokens: maxTokens + 8000, ...(cfg.effort ? { output_config: { effort: cfg.effort } } : {}) };
+}
+
+// --- The model on this device (Apple Intelligence) ---------------------------------------------------
+// The host registers { ready() → boolean, respond({ system, userText, maxTokens }) → Promise<string> }.
+// Chrome never does, so there everything goes to your provider as before.
+let localModel = null;
+export function setLocalModel(model) {
+  localModel = model && typeof model.respond === 'function' ? model : null;
+}
+export function localModelReady() {
+  try {
+    return !!localModel && localModel.ready() !== false;
+  } catch {
+    return false;
+  }
+}
+
+// The key that may be used: yours, while Optional AI is on.
+export function usableKey(settings, key) {
+  return settings?.ai?.on && key ? key : '';
+}
+
+// The key for a task. deviceOnly: work that runs by itself (after a save, when the app opens) stays on the
+// device while its model is there; your provider is only asked when you ask (Fix with AI).
+export function keyFor(settings, key, { deviceOnly = false } = {}) {
+  return deviceOnly && localModelReady() ? '' : usableKey(settings, key);
+}
+
+// Something can read saves: the model on this device, or your provider with your key.
+export function aiAvailable(settings, key) {
+  return localModelReady() || !!usableKey(settings, key);
+}
+
+// The device model's context is small: the task's text is cut to fit, the instructions are kept.
+const LOCAL_TEXT = 6000;
+const LOCAL_TOKENS = 1500;
+
+// Who does a task. Without a key in play (none set, or work that runs by itself: keyFor deviceOnly) the
+// model on this device does it, when it's there, and its answer stands. With your key (you asked: Fix with
+// AI, Run AI on imports, a recipe draft) your provider does it: the device model has had its go already.
+// run(ask) does the whole task with the given way to ask.
+async function withReader(cfg, apiKey, run) {
+  if (!apiKey && localModelReady()) {
+    return markOnDevice(await run((req) => localModel.respond({ system: req.system + (req.deviceNote || ''), userText: String(req.userText || '').slice(0, LOCAL_TEXT), maxTokens: Math.min(req.maxTokens || 600, LOCAL_TOKENS) })));
+  }
+  return run((req) => callProvider(cfg, apiKey, req));
+}
+
+function markOnDevice(result) {
+  if (result && typeof result === 'object' && !(result instanceof Map) && !Array.isArray(result)) return { ...result, onDevice: true };
+  return result;
 }
 
 export function originFor(settings) {
@@ -138,7 +195,7 @@ function parseJsonBlock(s) {
   const cleaned = String(s).replace(/```(?:json)?/gi, '').trim();
   const start = cleaned.search(/[[{]/);
   if (start < 0) return null;
-  const candidates = [cleaned.slice(start), cleaned.slice(start, cleaned.lastIndexOf('}') + 1), cleaned.slice(start, cleaned.lastIndexOf(']') + 1)];
+  const candidates = [cleaned.slice(start), firstJson(cleaned, start), cleaned.slice(start, cleaned.lastIndexOf('}') + 1), cleaned.slice(start, cleaned.lastIndexOf(']') + 1)];
   for (const c of candidates) {
     try {
       return JSON.parse(c);
@@ -147,6 +204,22 @@ function parseJsonBlock(s) {
     }
   }
   return null;
+}
+
+// The first whole object or array from `start`: the device model sometimes adds a second one after it.
+function firstJson(s, start) {
+  let depth = 0;
+  let quoted = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (quoted) {
+      if (ch === '\\') i++;
+      else if (ch === '"') quoted = false;
+    } else if (ch === '"') quoted = true;
+    else if (ch === '{' || ch === '[') depth++;
+    else if ((ch === '}' || ch === ']') && --depth === 0) return s.slice(start, i + 1);
+  }
+  return '';
 }
 
 // Only data: URLs are sent as images. Remote thumbnail URLs are not forwarded,
@@ -342,7 +415,10 @@ export async function cleanupWithAI(entries, collections, settings, apiKey) {
     return out;
   });
   const userText = `Collections: ${JSON.stringify(names)}\n\nItems:\n${JSON.stringify(payload)}`;
-  const raw = await callProvider(cfg, apiKey, { system: CLEANUP_SYSTEM, userText, maxTokens: 220 * entries.length + 100 });
+  return withReader(cfg, apiKey, async (ask) => cleanupAnswer(await ask({ system: CLEANUP_SYSTEM, userText, maxTokens: 220 * entries.length + 100 }), payload, collections));
+}
+
+function cleanupAnswer(raw, payload, collections) {
   const parsed = parseJsonBlock(raw);
   const list = Array.isArray(parsed?.items) ? parsed.items : Array.isArray(parsed) ? parsed : [];
   const byRef = new Map(payload.map((p) => [p.ref, p]));
@@ -382,7 +458,10 @@ export async function draftRecipe(item, settings, apiKey) {
     item.description ? `Description: ${String(item.description).slice(0, 800)}` : '',
     item.retailer || item.host ? `From: ${item.retailer || item.host}` : '',
   ].filter(Boolean).join('\n');
-  const raw = await callProvider(cfg, apiKey, { system: RECIPE_SYSTEM, userText: text, maxTokens: 900 });
+  return withReader(cfg, apiKey, async (ask) => recipeAnswer(await ask({ system: RECIPE_SYSTEM, userText: text, maxTokens: 900 })));
+}
+
+function recipeAnswer(raw) {
   const parsed = parseJsonBlock(raw);
   if (!parsed || !Array.isArray(parsed.ingredients) || !parsed.ingredients.length) throw new Error('The provider didn’t return a usable recipe.');
   return {
@@ -413,7 +492,10 @@ export async function suggestProgression(item, goal, progress, settings, apiKey)
     progress?.best ? `Best so far: ${progress.best.result.sets || 1} sets of ${progress.best.result.durationSeconds ? `${progress.best.result.durationSeconds} seconds` : `${progress.best.result.reps} reps`}.` : '',
     progress?.weekNumber ? `They are in week ${progress.weekNumber}.` : '',
   ].filter(Boolean).join('\n');
-  const raw = await callProvider(cfg, apiKey, { system: PROGRESSION_SYSTEM, userText: text, maxTokens: 700 });
+  return withReader(cfg, apiKey, async (ask) => progressionAnswer(await ask({ system: PROGRESSION_SYSTEM, userText: text, maxTokens: 700 }), goal, s, weeks));
+}
+
+function progressionAnswer(raw, goal, s, weeks) {
   const parsed = parseJsonBlock(raw);
   const num = (v, max) => (Number.isFinite(Number(v)) && Number(v) > 0 && Number(v) <= max ? Math.round(Number(v)) : null);
   const plan = (Array.isArray(parsed?.plan) ? parsed.plan : []).slice(0, weeks).map((p, i) => ({
@@ -447,7 +529,10 @@ export async function identifyForKind(kind, item, settings, apiKey) {
     item.description ? `Description: ${String(item.description).slice(0, 1200)}` : '',
     item.retailer || item.host ? `From: ${item.retailer || item.host}` : '',
   ].filter(Boolean).join('\n');
-  const parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system, userText: text, maxTokens: 500 }));
+  return withReader(cfg, apiKey, async (ask) => identifyAnswer(kind, parseJsonBlock(await ask({ system, userText: text, maxTokens: 500 }))));
+}
+
+function identifyAnswer(kind, parsed) {
   if (!parsed || typeof parsed !== 'object') return null;
   const s = (v, n) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim().slice(0, n) : '');
   if (kind === 'place') return s(parsed.name, 120) ? { name: s(parsed.name, 120), locality: s(parsed.city, 80), address: s(parsed.address, 200), state: s(parsed.state, 60) } : null;
@@ -487,6 +572,11 @@ Rules:
 - A round-up of several places, recipes or workouts ("Top 10 …"): give the kind but leave details empty, and say so in reason.
 - confidence is how sure you are of the kind (0.9+ only when it clearly is that kind).`;
 
+// Apple Intelligence's small model copies the format's examples as answers (opening hours, "one step").
+const UNDERSTAND_DEVICE_NOTE = `\nOn this device: the e.g. values and formats above only show the shape; never copy them. A detail the input does not state is "" or null, and a place's hours are [] unless the input lists them.`;
+// A detail that is a whole example from the format above ("Mon–Fri 8am–3pm", "quantity + ingredient") was copied, not read.
+const isExample = (v) => typeof v === 'string' && UNDERSTAND_SYSTEM.includes(`"${v.trim()}"`);
+
 export async function understandWithAI(input, settings, apiKey) {
   const cfg = providerConfig(settings);
   const cut = (v, n) => String(v || '').slice(0, n);
@@ -505,11 +595,20 @@ export async function understandWithAI(input, settings, apiKey) {
     input.image ? 'The image is the post\'s thumbnail.' : '',
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
-  const parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system: UNDERSTAND_SYSTEM, userText: text, imageDataUrl: image, maxTokens: 1800 }));
+  // The device model reads the text only; your provider sees the picture too.
+  return withReader(cfg, apiKey, async (ask) => understandAnswer(parseJsonBlock(await ask({ system: UNDERSTAND_SYSTEM, deviceNote: UNDERSTAND_DEVICE_NOTE, userText: text, imageDataUrl: image, maxTokens: 1800 }))));
+}
+
+function understandAnswer(parsed) {
+  const cut = (v, n) => String(v || '').slice(0, n);
   if (!parsed || typeof parsed !== 'object') throw new Error('The provider didn’t return a usable answer.');
   const kinds = ['recipe', 'workout', 'place', 'video', 'article', 'media', 'book', 'product', 'link'];
   const kind = kinds.includes(parsed.kind) ? parsed.kind : 'link';
   const details = parsed.details && typeof parsed.details === 'object' ? { ...parsed.details } : {};
+  for (const [k, v] of Object.entries(details)) {
+    if (isExample(v)) delete details[k];
+    else if (Array.isArray(v)) details[k] = v.filter((x) => !isExample(x));
+  }
   // The card's exercise times are in seconds under another name.
   if (Array.isArray(details.exercises)) details.exercises = details.exercises.map((e) => (e && typeof e === 'object' ? { ...e, durationSeconds: e.durationSeconds ?? e.seconds } : e));
   return {
@@ -569,7 +668,6 @@ function productAnswer(parsed, seen) {
 
 export async function understandProductWithAI(input, settings, apiKey) {
   const cfg = providerConfig(settings);
-  if (!apiKey) throw new Error('Add your API key in Settings → Optional AI first.');
   const cut = (v, n) => String(v || '').slice(0, n);
   const text = [
     `Title: ${cut(input.title, 200)}`,
@@ -585,10 +683,10 @@ export async function understandProductWithAI(input, settings, apiKey) {
     input.image ? 'The image is the saved thumbnail.' : 'There is no image.',
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
-  if (!supportsWebLookup(settings)) {
-    // A custom endpoint has no search tool: the image and text only, and no shop page.
+  if (!apiKey || !supportsWebLookup(settings)) {
+    // No search here (the device model, or a custom endpoint): the text (and image) only, and no shop page.
     const system = PRODUCT_SYSTEM.replace(/SEARCH\n[^\n]*\n/, 'You cannot search the web: leave listing empty and features and specs empty unless the text states them.\n');
-    return productAnswer(parseJsonBlock(await callProvider(cfg, apiKey, { system, userText: text, imageDataUrl: image, maxTokens: 900 })), null);
+    return withReader(cfg, apiKey, async (ask) => productAnswer(parseJsonBlock(await ask({ system, userText: text, imageDataUrl: image, maxTokens: 900 })), null));
   }
   const system = PRODUCT_SYSTEM.replace('SEARCH\n', '');
   const controller = new AbortController();
@@ -631,7 +729,6 @@ Rules:
 
 export async function understandTitleWithAI(input, settings, apiKey) {
   const cfg = providerConfig(settings);
-  if (!apiKey) throw new Error('Add your API key in Settings → Optional AI first.');
   const cut = (v, n) => String(v || '').slice(0, n);
   const text = [
     `Saved as: ${input.kind === 'book' ? 'a book' : 'a film or TV show'}`,
@@ -647,10 +744,14 @@ export async function understandTitleWithAI(input, settings, apiKey) {
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
   let parsed;
   let seen = null;
-  if (!supportsWebLookup(settings)) {
-    // A custom endpoint has no search tool: what it knows, and no links.
+  if (!apiKey || !supportsWebLookup(settings)) {
+    // No search here (the device model, or a custom endpoint): what it knows, and no links.
     const system = TITLE_SYSTEM.replace(/SEARCH\n/, 'You cannot search the web: leave page and watch empty.\n');
-    parsed = parseJsonBlock(await callProvider(cfg, apiKey, { system, userText: text, imageDataUrl: image, maxTokens: 900 }));
+    return withReader(cfg, apiKey, async (ask) => {
+      const p = parseJsonBlock(await ask({ system, userText: text, imageDataUrl: image, maxTokens: 900 }));
+      if (!p || typeof p !== 'object') throw new Error('The provider didn’t return a usable answer.');
+      return titleAnswer(p, null);
+    });
   } else {
     const system = TITLE_SYSTEM.replace('SEARCH\n', 'Search the web (a few searches at most) for it: a page about it, and for a film or show where it streams.\n');
     const controller = new AbortController();

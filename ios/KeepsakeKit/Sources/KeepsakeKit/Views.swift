@@ -321,6 +321,8 @@ extension Library {
     @discardableResult public func undoAI(_ ids: [String]) async throws -> Int { try await core.call("views.undoAi", [ids], as: Int.self) }
     /// Optional AI is on and a key is set.
     public func aiReady() async -> Bool { (try? await core.call("views.aiReady") as? Bool) ?? false }
+    /// Optional AI is on with a key, so your provider takes over when Apple Intelligence can't help.
+    public func aiBackupReady() async -> Bool { (try? await core.call("views.aiBackupReady") as? Bool) ?? false }
     /// Chrome's Fix with AI for any saves: reads each again (a product from its picture and shop page) and
     /// files the ones in Review the AI is confident about.
     public func fixWithAI(_ ids: [String]) async throws -> AIFixReport { try await prepare(); return try await core.call("views.fixWithAI", [ids], as: AIFixReport.self) }

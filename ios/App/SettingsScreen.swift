@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 import KeepsakeKit
 import KeepsakeUI
 
-/// Settings: Optional AI, Lookups, the change log, import and export, privacy, and erase.
+/// Settings: Apple Intelligence, your own AI key, Lookups, the change log, import and export, privacy, and erase.
 /// Everything that sends anything anywhere is off until turned on, and says exactly what it sends
 /// (the same wording as Chrome's PRIVACY.md).
 struct SettingsScreen: View {
@@ -79,6 +79,7 @@ struct SettingsScreen: View {
         NavigationStack {
             Form {
                 syncSection
+                appleSection
                 aiSection
                 lookupsSection
                 instagramSection
@@ -123,16 +124,51 @@ struct SettingsScreen: View {
             .confirmationDialog("Fix all \(model.saves.count) saves with AI?", isPresented: $fixingAll, titleVisibility: .visible) {
                 Button("Fix everything") { Task { await model.fixWithAI(model.saves, screen: true) } }
             } message: {
-                Text("Your AI provider reads each save again: what it is from its picture, a product's shop page, and where it goes. Every change can be undone.")
+                Text("\(model.aiReadsAgain) Every change can be undone.")
             }
         }
     }
 
     // MARK: AI
 
+    /// Apple Intelligence (OnDeviceAI): reads every save by itself, on this iPhone. No switch: it's on
+    /// whenever the system says it's ready, and this says why when it isn't.
+    private var appleSection: some View {
+        Section {
+            LabeledContent("Apple Intelligence") {
+                Text(appleStatusText).accessibilityIdentifier("appleAIStatus")
+            }
+            if model.aiReady && !model.saves.isEmpty {
+                Button("Fix every save with AI", systemImage: "sparkles") { fixingAll = true }
+                    .disabled(model.aiRun != nil)
+            }
+            RunAIOnImportedButton()
+        } header: { Text("AI") } footer: {
+            Text(appleFooter)
+        }
+    }
+
+    private var appleStatusText: String {
+        switch model.appleAI {
+        case .ready: "On"
+        case .off: "Off"
+        case .preparing: "Getting ready"
+        case .unsupported: "Not on this device"
+        }
+    }
+
+    private var appleFooter: String {
+        switch model.appleAI {
+        case .ready: "Reads your saves on this iPhone as they come in and whenever you open the app: what each one is, its details, a cleaner title and a collection. Nothing leaves your iPhone. What it can't work out stays as it is."
+        case .off: "Turn on Apple Intelligence in the Settings app (Apple Intelligence & Siri), and Internet Binder reads your saves on this iPhone by itself. Nothing leaves your iPhone."
+        case .preparing: "Apple Intelligence is still downloading. Once it's ready, Internet Binder reads your saves on this iPhone by itself."
+        case .unsupported: "This device can't run Apple Intelligence. Add your own AI key below to have saves read."
+        }
+    }
+
     private var aiSection: some View {
         Section {
-            Toggle("Optional AI", isOn: Binding(get: { aiOn }, set: { on in
+            Toggle("Use your own key", isOn: Binding(get: { aiOn }, set: { on in
                 if on { consent = .ai } else { Task { aiOn = false; try? await model.library?.updateSettings(["ai": ["on": false]]); await model.refreshAIReady() } }
             }))
             if aiOn {
@@ -176,14 +212,11 @@ struct SettingsScreen: View {
                     }
                 }
                 if let testResult { Text(testResult).font(.footnote).foregroundStyle(.secondary) }
-                if model.aiReady && !model.saves.isEmpty {
-                    Button("Fix every save with AI", systemImage: "sparkles") { fixingAll = true }
-                        .disabled(model.aiRun != nil)
-                }
-                RunAIOnImportedButton()
             }
-        } header: { Text("Optional AI") } footer: {
-            Text("Off by default. Uses your own key, kept in this iPhone's Keychain and never exported. Sends only what each feature says, to the provider you choose.")
+        } header: { Text("Your own AI key") } footer: {
+            Text(model.appleAI == .ready
+                 ? "Off by default. For what Apple Intelligence can't do: when you tap Fix with AI, Claude or another provider looks at the picture, searches the web for a product's shop page or where to watch, and sorts out what Apple Intelligence left. Your key stays in this iPhone's Keychain and is never exported."
+                 : "Off by default. Uses your own key, kept in this iPhone's Keychain and never exported. Sends only what each feature says, to the provider you choose.")
         }
     }
 
@@ -295,7 +328,7 @@ struct ConsentSheet: View {
 
     private var title: String {
         switch consent {
-        case .ai: "Turn on Optional AI?"
+        case .ai: "Use your own AI key?"
         case .lookup("places"): "Look up places on OpenStreetMap?"
         case .lookup("media"): "Look up films and shows on Wikidata?"
         default: "Look up books on Open Library?"
@@ -305,6 +338,7 @@ struct ConsentSheet: View {
         switch consent {
         case .ai: [
             "Uses your own key with the provider you choose. Internet Binder has no AI server.",
+            "Where your iPhone has Apple Intelligence, it reads new saves by itself, on this iPhone, and your key is only used when you tap Fix with AI or Run AI.",
             "After a save: its title, caption or description, hashtags, location tag, site and the thumbnail stored on this iPhone, to work out what it is (a recipe, workout, place…) and fill in its card. What the post doesn't say is drafted and marked AI draft. You can undo every change.",
             "Something to buy (an Instagram or Facebook post of a product, say) is worked out from its picture, since a post's caption can be wrong. Your provider searches the web for the product, and Internet Binder reads the one shop page it found, without cookies, for its name, price and details. The card shows the shop's facts first and the AI's summary beside them.",
             "Its price, shop and your collection names also go, to tidy the title and pick a collection.",
@@ -481,12 +515,13 @@ struct PrivacyScreen: View {
         List {
             Section("On this iPhone") {
                 Text("Your saves, collections, goals and settings live in Internet Binder's storage on this device. No account, no Internet Binder server, no analytics.")
+                Text("Apple Intelligence reads your saves on this device. What it reads never leaves it.")
                 Text("Your AI key is kept in the Keychain on this device and never exported.")
             }
             Section("When Internet Binder uses the network") {
                 Text("Pictures of your saves load from the sites they came from, as a web page loads them. A small copy is kept on this iPhone so the picture stays if the site removes it.")
                 Text("Maps are drawn by Apple Maps. Directions open Apple Maps with the place's name and address.")
-                Text("Optional AI and each Lookup: only when you turn them on, and only what their switch says.")
+                Text("Your own AI key and each Lookup: only when you turn them on, and only what their switch says.")
                 Text("Sharing from Safari: Internet Binder reads the page you shared, on this iPhone.")
                 Text("Sharing an Instagram post or reel: Internet Binder opens that post's public page once, without your account or cookies, to save its caption and picture. You can turn this off under Instagram.")
             }

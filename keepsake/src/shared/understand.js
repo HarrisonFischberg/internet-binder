@@ -27,7 +27,7 @@
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
 import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
-import { understandWithAI, understandProductWithAI, understandTitleWithAI } from '../ai/provider.js';
+import { understandWithAI, understandProductWithAI, understandTitleWithAI, keyFor, aiAvailable } from '../ai/provider.js';
 
 // How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Internet Binder picked.
 export const UNDERSTAND_CONFIDENCE = 0.7;
@@ -482,12 +482,14 @@ async function readProduct(item, settings, key, pages, image, { fetchShopPage })
 // found for a product (fetchPage unless the caller says otherwise); loadImage(url) returns a small data: copy
 // of a picture, or null.
 // Throws when the provider fails, so a batch can stop on a bad key.
-export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null, region = '' } = {}) {
+export async function understandItem(store, id, { force = false, runId = '' } = {}, { fetchPage = async () => null, fetchShopPage = fetchPage, loadImage = async () => null, region = '', deviceOnly = false } = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt || (item.understoodAt && !force)) return null;
   const settings = await store.getSettings();
-  const key = settings.ai?.on ? await store.getSecret('aiApiKey') : '';
-  if (!key) return null;
+  // Apple Intelligence on this device reads it first; your key (while Optional AI is on) is the backup, except
+  // in work that runs by itself (deviceOnly).
+  const key = keyFor(settings, await store.getSecret('aiApiKey'), { deviceOnly });
+  if (!aiAvailable(settings, key)) return null;
   const pages = [];
   for (const url of pagesToRead(item)) {
     try {

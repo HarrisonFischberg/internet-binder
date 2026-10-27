@@ -212,6 +212,9 @@ struct SharedLibraryTests {
 
 @Suite("Capture follows Chrome's rules")
 struct CaptureTests {
+    // These tests fake your provider; Apple Intelligence on this Mac would answer first (in memory only).
+    init() { UserDefaults.standard.register(defaults: ["ks.appleAIStatus": "unsupported"]) }
+
     func library() throws -> Library {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-capture-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
