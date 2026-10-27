@@ -16,7 +16,7 @@ final class AppleIntelligenceTests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["KEEPSAKE_DB"] = db
         app.launchArguments += ["-importOnLaunch", demo, "-ks.appleAIStatus", status]
-        if reset { app.launchArguments += ["-ks.appleAINoteSeen", ""] }
+        if reset { app.launchArguments += ["-ks.freshAppleNote", "YES"] }
         app.launch()
         return app
     }
@@ -32,7 +32,7 @@ final class AppleIntelligenceTests: XCTestCase {
         app.buttons["Settings"].tap()
         let status = app.staticTexts["appleAIStatus"]
         XCTAssertTrue(status.waitForExistence(timeout: 5))
-        XCTAssertEqual(status.label, "On")
+        XCTAssertEqual(status.label, "Apple Intelligence, On")
         XCTAssertTrue(app.switches["Use your own key"].exists)
         shoot("apple-2-settings-on")
     }
@@ -44,7 +44,7 @@ final class AppleIntelligenceTests: XCTestCase {
         XCTAssertFalse(app.buttons["Fix everything with AI"].exists, "no key and no Apple Intelligence: nothing reads saves")
         app.buttons["Settings"].tap()
         XCTAssertTrue(app.staticTexts["appleAIStatus"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.staticTexts["appleAIStatus"].label, "Off")
+        XCTAssertEqual(app.staticTexts["appleAIStatus"].label, "Apple Intelligence, Off")
         shoot("apple-4-settings-off")
     }
 

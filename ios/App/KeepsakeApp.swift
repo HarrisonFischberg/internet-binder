@@ -164,6 +164,11 @@ final class LibraryModel {
     }
 
     init() {
+        #if DEBUG
+        // UI tests: -ks.freshAppleNote YES shows Home's Apple Intelligence note again (a launch argument
+        // for ks.appleAINoteSeen itself would pin it, so Dismiss couldn't hide it).
+        if UserDefaults.standard.bool(forKey: "ks.freshAppleNote") { UserDefaults.standard.removeObject(forKey: "ks.appleAINoteSeen") }
+        #endif
         do {
             // UI tests pass a name in KEEPSAKE_DB for a fresh library in the app's temporary folder.
             let name = ProcessInfo.processInfo.environment["KEEPSAKE_DB"]
