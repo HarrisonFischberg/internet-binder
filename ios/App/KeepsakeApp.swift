@@ -172,13 +172,15 @@ final class LibraryModel {
             self.library = library
             ThumbnailStore.shared.use(library)
             // A few indexed reads, so Home opens filled in rather than waiting on the whole library.
-            glance = try? library.glance()
-            reviewCount = glance?.reviewCount ?? 0
+            let first = try? library.glance()
+            glance = first
+            reviewCount = first?.reviewCount ?? 0
+            cloud = SyncModel(database: library.database)
         } catch {
             library = nil
             problem = "Internet Binder couldn't open your library. \(error.localizedDescription)"
+            cloud = SyncModel(database: nil)
         }
-        cloud = SyncModel(database: library?.database)
         cloud.onRemoteChange = { [weak self] in self?.syncChanged() }
         cloud.onTurned = { [weak self] on in if on { self?.beginSyncRun() } else { self?.endSyncRun() } }
     }
