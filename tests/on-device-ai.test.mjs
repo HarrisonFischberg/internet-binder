@@ -100,9 +100,11 @@ test('understandItem after a save (deviceOnly): Apple Intelligence reads it even
   assert.equal(r.kind, 'recipe');
   assert.equal(sent.length, 0);
   assert.equal((await store.getItem(it.id)).kind, 'recipe');
-  // Fix with AI (you asked) takes it further with your key.
+  // Fix with AI (you asked) takes it further with your key: a read, then (the recipe is too thin to cook
+  // from) a search for a close one online.
   await understandItem(store, it.id, { force: true });
-  assert.equal(sent.length, 1);
+  assert.equal(sent.length, 2);
+  assert.ok(sent[1].tools, 'the second request searches the web');
 });
 
 test('understandItem with no key and no device model does nothing', async () => {

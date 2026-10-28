@@ -1,0 +1,231 @@
+{
+ "format": "keepsake-export",
+ "schemaVersion": 3,
+ "exportedAt": "2026-10-27T18:00:00.000Z",
+ "collections": {
+  "79f8e6cd-a5fa-4e30-b1d1-4aabd1e72f4d": {
+   "id": "79f8e6cd-a5fa-4e30-b1d1-4aabd1e72f4d",
+   "name": "Home Decor",
+   "description": "Lighting, furniture, rugs, mirrors, art, plants and the things that make a room.",
+   "coverImage": "",
+   "color": "#B9924F",
+   "keywords": [],
+   "aliases": [
+    "home",
+    "decor",
+    "home decor",
+    "interior",
+    "interiors",
+    "furniture",
+    "living room",
+    "bedroom",
+    "apartment",
+    "house",
+    "homewares",
+    "home goods"
+   ],
+   "taxonomyKey": "home",
+   "sortOrder": 1,
+   "pinned": false,
+   "createdAt": "2026-10-20T19:54:45.912Z",
+   "updatedAt": "2026-10-20T19:54:45.912Z"
+  },
+  "713a3251-c89b-4c4c-8543-739f07e0c116": {
+   "id": "713a3251-c89b-4c4c-8543-739f07e0c116",
+   "name": "Clothing",
+   "description": "Shoes, jackets, tops, pants, dresses, accessories and everything you wear.",
+   "coverImage": "",
+   "color": "#8B6F8F",
+   "keywords": [],
+   "aliases": [
+    "clothes",
+    "clothing",
+    "apparel",
+    "fashion",
+    "wardrobe",
+    "outfits",
+    "style",
+    "shoes",
+    "footwear",
+    "accessories",
+    "wear",
+    "menswear",
+    "womenswear"
+   ],
+   "taxonomyKey": "clothing",
+   "sortOrder": 2,
+   "pinned": false,
+   "createdAt": "2026-10-20T19:54:45.915Z",
+   "updatedAt": "2026-10-20T19:54:45.915Z"
+  },
+  "6945d7fa-9ee8-48da-b981-293fd9fbf510": {
+   "id": "6945d7fa-9ee8-48da-b981-293fd9fbf510",
+   "name": "Technology",
+   "description": "Headphones, computers, phones, cameras, audio, smart home and gadgets.",
+   "coverImage": "",
+   "color": "#5B7C8F",
+   "keywords": [],
+   "aliases": [
+    "tech",
+    "technology",
+    "electronics",
+    "gadgets",
+    "gear",
+    "computers",
+    "audio",
+    "devices",
+    "gaming",
+    "pc",
+    "setup",
+    "desk setup"
+   ],
+   "taxonomyKey": "tech",
+   "sortOrder": 3,
+   "pinned": false,
+   "createdAt": "2026-10-20T19:54:45.915Z",
+   "updatedAt": "2026-10-20T19:54:45.915Z"
+  }
+ },
+ "items": {
+  "5a1f0c3e-7b2d-4c8e-9f41-2e6b8d0a7c11": {
+   "id": "5a1f0c3e-7b2d-4c8e-9f41-2e6b8d0a7c11",
+   "collectionId": null,
+   "type": "instagram",
+   "kind": "recipe",
+   "details": {
+    "ingredients": [
+     "2 1/2 cups (313 g) all-purpose flour",
+     "1 cup (200 g) granulated sugar",
+     "2 tsp baking powder",
+     "1 tsp ground cinnamon",
+     "1/2 cup (115 g) unsalted butter, melted",
+     "2 large eggs, room temperature",
+     "3/4 cup (180 ml) whole milk",
+     "2 medium apples, peeled and diced"
+    ],
+    "steps": [
+     "Heat the oven to 350°F (177°C) and grease a 9x13-inch pan.",
+     "Whisk the flour, sugar, baking powder and cinnamon, then stir in the butter, eggs and milk until just combined.",
+     "Fold in the apples, spread the batter in the pan and swirl cinnamon sugar through the top.",
+     "Bake 40 to 45 minutes until a toothpick comes out clean, cool 15 minutes, then drizzle with glaze."
+    ],
+    "yield": "12 slices",
+    "totalMinutes": 70,
+    "prepMinutes": null,
+    "cookMinutes": null,
+    "cuisine": "",
+    "category": "",
+    "author": "",
+    "source": "web",
+    "basedOn": {
+     "url": "https://sallysbakingaddiction.com/apple-fritter-cake/",
+     "site": "Sally's Baking Addiction",
+     "title": "Apple Fritter Cake"
+    }
+   },
+   "status": "saved",
+   "title": "Apple Fritter Coffee Cake",
+   "description": "",
+   "note": "",
+   "price": null,
+   "currency": "",
+   "retailer": "Instagram",
+   "host": "instagram.com",
+   "url": "https://www.instagram.com/p/DemoFritter1/",
+   "canonicalUrl": "https://www.instagram.com/p/DemoFritter1/",
+   "sourceUrl": "https://www.instagram.com/p/DemoFritter1/",
+   "urlKey": "instagram.com/p/DemoFritter1",
+   "image": "",
+   "images": [],
+   "productType": "",
+   "tags": [],
+   "openedAt": null,
+   "topics": [],
+   "topicsBy": "",
+   "imageAspect": null,
+   "favorite": false,
+   "archived": false,
+   "purchased": false,
+   "confidence": null,
+   "categorizationSource": "local",
+   "categorizationReason": "",
+   "needsReview": false,
+   "previousCollections": [],
+   "instagram": {
+    "collectionName": "Baking",
+    "creator": "obsessedwithcashews",
+    "caption": "apple fritter coffee cake 🍎 the crumb!! comment CAKE for the recipe",
+    "postType": "",
+    "importedAt": "2026-10-27T18:00:00.000Z",
+    "postedAt": "",
+    "location": "",
+    "place": null,
+    "originalImage": "",
+    "hashtags": [],
+    "links": [],
+    "products": [],
+    "linkInBio": false,
+    "details": false
+   },
+   "ai": null,
+   "relatedItemId": null,
+   "originalTitle": "Apple Fritter Coffee Cake",
+   "userFields": [],
+   "captureState": "complete",
+   "captureError": "",
+   "understoodAt": null,
+   "needsAi": false,
+   "deletedAt": null,
+   "createdAt": "2026-10-27T18:00:00.000Z",
+   "updatedAt": "2026-10-27T18:00:00.000Z"
+  }
+ },
+ "goals": [],
+ "checkins": [],
+ "prefs": {
+  "learnedKeywords": {},
+  "retailerPrefs": {},
+  "corrections": [],
+  "confidenceThreshold": 0.6,
+  "autoCreateCollections": true
+ },
+ "settings": {
+  "theme": "system",
+  "style": "pantry",
+  "icon": "pantry",
+  "home": {
+   "comeBack": true
+  },
+  "lookups": {
+   "places": false,
+   "media": false,
+   "books": false
+  },
+  "floating": {
+   "mode": "off",
+   "sites": [],
+   "hiddenSites": [],
+   "size": "medium",
+   "position": "top-right"
+  },
+  "instagram": {
+   "storeThumbnails": true,
+   "safetyLimit": 300,
+   "idleTimeoutMs": 6000,
+   "readPostDetails": true,
+   "readDelayMs": 1500
+  },
+  "ai": {
+   "on": false,
+   "webLookup": false,
+   "provider": "anthropic",
+   "effort": "medium",
+   "baseUrl": "",
+   "model": ""
+  },
+  "onboardingDone": false
+ },
+ "importHistory": {
+  "instagram": {}
+ }
+}

@@ -3,8 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture } from '../keepsake/src/shared/understand.js';
-import { understandWithAI, understandProductWithAI, understandTitleWithAI } from '../keepsake/src/ai/provider.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe } from '../keepsake/src/shared/understand.js';
+import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
 
@@ -132,7 +132,7 @@ test('understandItem: reads a save once, applies the answer with Undo, and reads
   await store.setSecret('aiApiKey', 'sk');
   const it = await store.addItem(post('Brownies 😍'));
   let calls = 0;
-  globalThis.fetch = async () => { calls++; return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ kind: 'recipe', confidence: 0.95, title: 'Brownies', details: { ingredients: ['200g chocolate', '3 eggs'], steps: ['Bake'] }, drafted: ['ingredients', 'steps'] }) }] }) }; };
+  globalThis.fetch = async () => { calls++; return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ kind: 'recipe', confidence: 0.95, title: 'Brownies', details: { ingredients: ['200g chocolate', '3 eggs', '120g flour'], steps: ['Mix', 'Bake'] }, drafted: ['ingredients', 'steps'] }) }] }) }; };
   const r = await understandItem(store, it.id, { runId: 'run1' });
   assert.deepEqual([r.kind, r.changed], ['recipe', true]);
   const saved = await store.getItem(it.id);
@@ -303,4 +303,96 @@ test('understandItem: a book saved from Open Library is searched, filled in and 
   assert.match(saved.details.summary, /Walden Pond/);
   const log = (await store.getAiLog()).at(-1);
   assert.equal(log.before.image, '', 'Undo takes the cover off again');
+});
+
+// --- A recipe the post never wrote down: a close one from the web, labelled with where it came from -------------
+
+const FRITTER_PAGE = `<html><head><meta property="og:site_name" content="Sally's Baking Addiction">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage"},{"@type":"Recipe","name":"Apple Fritter Cake","recipeYield":"12 slices","totalTime":"PT1H10M",
+"recipeIngredient":["2 cups all-purpose flour","1 cup sugar","2 apples, diced","2 eggs","1 cup milk"],
+"recipeInstructions":[{"@type":"HowToStep","text":"Heat the oven to 350°F."},{"@type":"HowToStep","text":"Mix the batter and fold in the apples."},{"@type":"HowToStep","text":"Bake 45 minutes, then glaze."}]}]}</script></head></html>`;
+
+test('the device model copying the format ("1 quantity + APPLE FRITTER COFFEE CAKE") or naming the dish is not an ingredient', async () => {
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ kind: 'recipe', confidence: 0.9, title: 'Apple Fritter Coffee Cake', details: { ingredients: ['1 quantity + APPLE FRITTER COFFEE CAKE', '1 Apple fritter coffee cake', '2 apples'] } }) }] }) });
+  const r = await understandWithAI({ title: 'This is my apple fritter' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk');
+  assert.deepEqual(r.details.ingredients, ['2 apples']);
+});
+
+test('thin recipes: fewer than three ingredients or one step; yours and a page\'s own recipe are never replaced', () => {
+  assert.equal(thinRecipe({ ingredients: ['a'], steps: [] }), true);
+  assert.equal(thinRecipe({ ingredients: ['a', 'b', 'c'], steps: ['x', 'y'] }), false);
+  const reel = post('This is my apple fritter', { kind: 'recipe', details: { ingredients: ['1 cake'], steps: [], source: 'ai-draft' } });
+  assert.equal(wantsWebRecipe(reel), true);
+  assert.equal(wantsWebRecipe({ ...reel, details: { ...reel.details, source: 'you' } }), false);
+  assert.equal(wantsWebRecipe({ ...reel, userFields: ['details'] }), false);
+  assert.equal(wantsWebRecipe({ ...reel, kind: 'link' }), false);
+});
+
+test('recipeFromHtml reads the page\'s own schema.org recipe and site name', () => {
+  const r = recipeFromHtml(FRITTER_PAGE);
+  assert.deepEqual([r.title, r.siteName, r.ingredients.length, r.steps.length, r.totalMinutes, r.yield], ['Apple Fritter Cake', "Sally's Baking Addiction", 5, 3, 70, '12 slices']);
+});
+
+test('planRecipe: the page\'s recipe goes on the card, labelled as based on it, with its link; unsure or unlinked finds do nothing', () => {
+  const reel = post('This is my apple fritter', { kind: 'recipe', title: 'Apple Fritter Coffee Cake', details: { ingredients: ['1 cake'], steps: [], source: 'ai-draft', drafted: ['ingredients'] } });
+  const found = { url: 'https://sallysbakingblog.com/apple-fritter-cake/', site: 'Sally’s', title: 'Apple Fritter Cake', ingredients: ['x', 'y', 'z'], steps: ['s'], confidence: 0.8, reason: 'same dish' };
+  const { patch, changes } = planRecipe(reel, found, recipeFromHtml(FRITTER_PAGE));
+  assert.equal(patch.details.source, 'web');
+  assert.equal(patch.details.ingredients.length, 5);
+  assert.equal(patch.details.drafted, undefined, 'not an AI draft: it is a real recipe from a page');
+  assert.deepEqual(patch.details.basedOn, { url: 'https://sallysbakingblog.com/apple-fritter-cake/', site: "Sally's Baking Addiction", title: 'Apple Fritter Cake' });
+  assert.match(changes[0].to, /based on a recipe from Sally's Baking Addiction/);
+  // Unreadable page: what the provider read from it, when it is enough to cook from.
+  const read = planRecipe(reel, { ...found, ingredients: ['2 cups flour', '1 cup sugar', '2 apples'], steps: ['Mix', 'Bake'] }, null);
+  assert.deepEqual([read.patch.details.ingredients.length, read.patch.details.basedOn.site], [3, 'Sally’s']);
+  assert.deepEqual(planRecipe(reel, found, null).patch, {}, 'one step is not a recipe');
+  assert.deepEqual(planRecipe(reel, { ...found, url: '' }, recipeFromHtml(FRITTER_PAGE)).patch, {}, 'no checked link, no recipe');
+  assert.deepEqual(planRecipe(reel, { ...found, confidence: 0.3 }, recipeFromHtml(FRITTER_PAGE)).patch, {}, 'not close enough');
+});
+
+test('findRecipeWithAI: a link the search never returned is dropped; no key or a custom endpoint never searches', async () => {
+  let calls = 0;
+  globalThis.fetch = async (url, opts) => { calls++; assert.ok(JSON.parse(opts.body).tools, 'searches the web'); return { ok: true, status: 200, text: async () => JSON.stringify({ content: [
+    { type: 'web_search_tool_result', content: [{ url: 'https://sallysbakingblog.com/apple-fritter-cake/' }] },
+    { type: 'text', text: JSON.stringify({ title: 'Apple Fritter Cake', url: 'https://made-up.example/cake', site: 'Made up', ingredients: ['a'], steps: ['b'], confidence: 0.9 }) },
+  ] }) }; };
+  const r = await findRecipeWithAI({ title: 'Apple Fritter Coffee Cake' }, { ai: { provider: 'anthropic', model: 'm' } }, 'sk');
+  assert.equal(r.url, '');
+  assert.equal(await findRecipeWithAI({ title: 'x' }, { ai: { provider: 'anthropic', model: 'm' } }, ''), null);
+  assert.equal(await findRecipeWithAI({ title: 'x' }, { ai: { provider: 'custom', model: 'm', baseUrl: 'https://x.example' } }, 'sk'), null);
+  assert.equal(calls, 1);
+});
+
+test('understandItem: a Reel that only shows the dish gets a close recipe from the web, with Undo', async () => {
+  const kv = {};
+  const store = createStore({ get: async (k) => Object.fromEntries((Array.isArray(k) ? k : [k]).filter((x) => x in kv).map((x) => [x, kv[x]])), set: async (o) => Object.assign(kv, o), remove: async () => {}, clear: async () => {}, onChanged: () => () => {} }, memoryRecordBackend());
+  await store.init();
+  await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await store.setSecret('aiApiKey', 'sk');
+  const it = await store.addItem(post('This is my apple fritter coffee cake 🍎'));
+  const bodies = [];
+  globalThis.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    bodies.push(body);
+    if (!body.tools) return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ kind: 'recipe', confidence: 0.9, title: 'Apple Fritter Coffee Cake', details: { ingredients: ['1 quantity + APPLE FRITTER COFFEE CAKE'] }, drafted: ['ingredients'] }) }] }) };
+    return { ok: true, status: 200, text: async () => JSON.stringify({ content: [
+      { type: 'web_search_tool_result', content: [{ url: 'https://sallysbakingblog.com/apple-fritter-cake/' }] },
+      { type: 'text', text: JSON.stringify({ title: 'Apple Fritter Cake', url: 'https://sallysbakingblog.com/apple-fritter-cake/', site: 'Sally’s', ingredients: [], steps: [], confidence: 0.8, reason: 'Same cake' }) },
+    ] }) };
+  };
+  const read = [];
+  const r = await understandItem(store, it.id, { force: true, runId: 'f' }, { fetchShopPage: async (u) => { read.push(u); return FRITTER_PAGE; } });
+  assert.deepEqual([r.kind, r.changed], ['recipe', true]);
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(read, ['https://sallysbakingblog.com/apple-fritter-cake/']);
+  const saved = await store.getItem(it.id);
+  assert.deepEqual([saved.title, saved.details.source, saved.details.ingredients.length, saved.details.steps.length, saved.details.basedOn.site], ['Apple Fritter Coffee Cake', 'web', 5, 3, "Sally's Baking Addiction"]);
+  const log = (await store.getAiLog()).at(-1);
+  assert.ok(log.changes.some((c) => /based on a recipe from/.test(c.to)));
+  assert.equal(log.before.kind, 'link', 'Undo puts it back');
+  // Apple Intelligence alone (no key in play) can't search: nothing is looked up.
+  bodies.length = 0;
+  await store.setSecret('aiApiKey', '');
+  await understandItem(store, it.id, { force: true }, { fetchShopPage: async () => FRITTER_PAGE });
+  assert.equal(bodies.length, 0);
 });
