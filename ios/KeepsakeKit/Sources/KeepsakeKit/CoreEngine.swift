@@ -227,6 +227,7 @@ public final class KeepsakeCore: @unchecked Sendable {
         }
         let missingFacts: @convention(block) () -> String = { (try? db.itemsMissingFacts()) ?? "[]" }
         let listItems: @convention(block) () -> String = { (try? db.liveItemsForLists()) ?? "[]" }
+        let itemsRevision: @convention(block) () -> Int = { (try? db.itemsRevision()) ?? -1 }
         let trashedBefore: @convention(block) (String) -> String = { cutoff in
             String(decoding: (try? JSONSerialization.data(withJSONObject: (try? db.trashedItemKeys(before: cutoff)) ?? [])) ?? Data("[]".utf8), as: UTF8.self)
         }
@@ -248,7 +249,7 @@ public final class KeepsakeCore: @unchecked Sendable {
         }
         for (k, v) in [("all", all as Any), ("get", get), ("byIndex", byIndex), ("count", count), ("put", put),
                        ("remove", remove), ("swap", swap), ("clear", clear), ("liveCounts", liveCounts), ("missingFacts", missingFacts),
-                       ("setFacts", setFacts), ("listItems", listItems), ("trashedBefore", trashedBefore)] {
+                       ("setFacts", setFacts), ("listItems", listItems), ("itemsRevision", itemsRevision), ("trashedBefore", trashedBefore)] {
             o.setObject(v, forKeyedSubscript: k as NSString)
         }
         return o

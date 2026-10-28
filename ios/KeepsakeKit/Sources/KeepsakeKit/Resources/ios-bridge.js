@@ -11,6 +11,7 @@
 //   listItems() → "[...]" (items not in the Trash, newest first, without the pictures stored inside them:
 //     `image` is "data:image/stored;<length>" and the app reads the picture when it draws it)
 //   trashedBefore(isoDate) → "[keys]" (items in the Trash since before that date)
+//   itemsRevision() → number (moves on every write to an item, from any process; -1 if unreadable)
 // __native.kv: get("[keys]") → "{...}", set("{...}") → ""|error, remove("[keys]"), clear()
 
 (function () {
@@ -130,7 +131,15 @@
   // Saves for lists, search and counts, read without their pictures (~35 KB each, stored twice): the
   // whole library with pictures took seconds to parse here and hundreds of MB to hold. Read-only: never
   // write one of these back (its picture is a marker), read the save with store.getItem first.
-  const listItems = () => JSON.parse(__native.db.listItems());
+  // Parsed once per change: SQLite moves itemsRevision on every write to a save, from any process, so a
+  // search keystroke or a view read again with nothing changed reuses the list. Callers get their own
+  // array; the saves in it are shared, so treat them as read-only too.
+  let listed = { revision: -1, items: [] };
+  const listItems = () => {
+    const revision = __native.db.itemsRevision();
+    if (revision < 0 || revision !== listed.revision) listed = { revision, items: JSON.parse(__native.db.listItems()) };
+    return listed.items.slice();
+  };
 
   // The same answers as storage.js, asked of SQLite's columns instead of parsing every save: these run
   // each time the app opens or comes back.
