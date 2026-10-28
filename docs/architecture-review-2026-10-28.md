@@ -36,7 +36,11 @@ on the Mac.
 
 ## Architecture cards
 
-### Fix with AI lives twice  [Strong]
+### Fix with AI lives twice  [Strong] — done
+
+Done: `keepsake/src/shared/aiFix.js` (`planFixes`, `applyFix`, `undoFixes`), tests in `tests/ai-fix.test.mjs`.
+Moving them found one drift: Chrome wrote an undefined price when the provider's answer had none.
+
 
 Files: `keepsake/src/dashboard/aiCleanup.js` (637 lines), `ios/KeepsakeKit/Sources/KeepsakeKit/Resources/ios-bridge.js` (`views.fixWithAI`, `views.undoAi`, ~120 lines)
 Signal: drifted copy. The bridge's comments point at `aiCleanup.js runAiCleanup, planFixes` and `undoEntries`;
@@ -53,7 +57,12 @@ Benefits: one place for the rules; `aiCleanup.js` keeps only progress UI; the br
 Proof: `tests/ai-backlog.test.mjs`, `tests/on-device-ai.test.mjs` plus a new shared test run against both callers; `npm run test:ios-core`.
 Plan: (1) add `aiFix.js` with tests, (2) move the dashboard to it, (3) move the bridge to it, re-bundle.
 
-### A library change counter for list reads  [Worth exploring]
+### A library change counter for list reads  [Worth exploring] — done on iOS
+
+Done on iOS: migration `v7-item-revision` (SQLite triggers on `item`, so every process counts) and
+`itemsRevision()`; `ios-bridge.js` keeps its parsed list until it moves. Chrome's `reload()` is unchanged:
+it needs the changed keys carried through every write path in `db.js`, and nothing measured asks for it yet.
+
 
 Files: `ios-bridge.js` (`listItems`), `RecordDatabase.swift`, `dashboard.js` (`reload`)
 Signal: performance item 5 and 6; the same "read everything again" in two places.
@@ -63,7 +72,12 @@ revision moves. Chrome's `db.onChanged` already carries the store; adding the ch
 patch `state.items` instead of reading all of them.
 Proof: search and view results identical before/after on the 5,000-save perf library; timing in the PR.
 
-### `LibraryModel` holds the whole app  [Worth exploring]
+### `LibraryModel` holds the whole app  [Worth exploring] — sync done
+
+Done: iCloud sync is `ios/App/SyncModel.swift` (`model.cloud`). Correction to the signal below: `@Observable`
+tracks each property, so a sync tick never redrew the grids; the split is for locality and tests, not
+speed. The AI-run state stays put for now: it is woven through six screens and gains nothing in speed.
+
 
 Files: `ios/App/KeepsakeApp.swift` (531 lines, 23 changes in 30 days), `ios/App/Selection.swift` (its extension)
 Signal: a god model: the library list, toasts, appearance, AI runs and their progress, iCloud sync state and
@@ -74,7 +88,12 @@ Benefits: a sync status tick or an AI progress tick no longer touches the object
 logic becomes testable without the app target.
 Plan: one area per commit, `SyncModel` first (it has the clearest edges).
 
-### `dashboard.js` is 3,814 lines  [Worth exploring]
+### `dashboard.js` is 3,814 lines  [Worth exploring] — first two moves done
+
+Done: `places.js` (list, Places review, map) and `lifestyleViews.js` (workout and recipe views), moved as
+they were; `dashboard.js` is 3,078 lines. Home, Review and Collections share too many helpers with the grid
+to move without a redesign of those helpers, so they stay.
+
 
 Signal: file over 1,000 lines and the most changed file in the repo (24 changes in 30 days).
 Proposal: move each route's renderer to its own module beside `aiCleanup.js`, `importer.js`, `ui.js`
