@@ -85,7 +85,8 @@ struct SettingsScreen: View {
                 instagramSection
                 Section {
                     Toggle("Music while cooking", isOn: $cookingMusic)
-                } footer: { Text("Ten quiet, original tunes play while you follow a recipe step by step. They stay silent when your iPhone is on silent and never stop a podcast or song you're already playing.") }
+                    NavigationLink("Music credits") { MusicCreditsScreen() }
+                } footer: { Text("Ten freely licensed songs, jazz, soft guitar and classical piano, play quietly while you follow a recipe step by step. With your iPhone on silent, tap Unmute in Cooking to hear them. They never stop a podcast or song you're already playing.") }
                 noticesSection
                 Section {
                     NavigationLink("What it learned") { LearnedScreen() }
@@ -527,6 +528,31 @@ struct PrivacyScreen: View {
             }
         }
         .navigationTitle("Privacy")
+    }
+}
+
+/// Who made the cooking music and the license each song is shared under (mirrors MUSIC-CREDITS.md).
+struct MusicCreditsScreen: View {
+    @Environment(\.openURL) private var openURL
+    var body: some View {
+        List {
+            Section {
+                ForEach(CookingMusic.tracks, id: \.file) { track in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(track.title).font(.body.weight(.semibold))
+                        Text(track.artist).foregroundStyle(.secondary)
+                        HStack(spacing: 16) {
+                            // Ten rows of "Source" read alike in VoiceOver's links rotor; name the song.
+                            if let url = URL(string: track.licenseURL) { Link(track.license, destination: url).accessibilityLabel("\(track.license) license for \(track.title)") }
+                            if let url = URL(string: track.source) { Link("Source", destination: url).accessibilityLabel("Source of \(track.title)") }
+                        }
+                        .font(.footnote)
+                    }
+                    .padding(.vertical, 2)
+                }
+            } footer: { Text("Each recording is in the public domain or shared under a Creative Commons license that allows use in apps, with credit to the performer.") }
+        }
+        .navigationTitle("Music credits")
     }
 }
 

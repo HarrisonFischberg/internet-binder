@@ -70,11 +70,19 @@ final class LifestyleTests: XCTestCase {
         // Each step shows the ingredients it uses; sage isn't named by any step, so it waits on step 1.
         XCTAssertTrue(app.buttons["350 g rigatoni"].exists)
         XCTAssertTrue(app.buttons["12 sage leaves"].exists)
-        // Music plays along: pause, next song, off and back on.
+        // Music plays along, muted until asked: unmute, pause, next song, off and back on.
+        XCTAssertTrue(app.buttons["Unmute music"].waitForExistence(timeout: 3))
+        app.buttons["Unmute music"].tap()
         XCTAssertTrue(app.buttons["Next song"].waitForExistence(timeout: 3))
         app.buttons["Pause music"].tap()
         XCTAssertTrue(app.buttons["Play music"].waitForExistence(timeout: 2))
         app.buttons["Next song"].tap()
+        // Tapping the song's name lists every song; pick one.
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Now playing'")).firstMatch.tap()
+        let lobby = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Lobby Time'")).firstMatch
+        XCTAssertTrue(lobby.waitForExistence(timeout: 3))
+        lobby.tap()
+        XCTAssertTrue(app.buttons["Now playing Lobby Time by Kevin MacLeod"].waitForExistence(timeout: 3))
         app.buttons["Turn music off"].tap()
         XCTAssertTrue(app.buttons["Turn music on"].waitForExistence(timeout: 2))
         app.buttons["Turn music on"].tap()
