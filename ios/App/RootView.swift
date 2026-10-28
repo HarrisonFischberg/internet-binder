@@ -70,13 +70,13 @@ struct RootView: View {
                 model.refresh()
                 // Apple Intelligence may have been turned on in the Settings app meanwhile.
                 Task { await model.refreshAIReady(); model.finishSaves() }
-                model.syncNow()
+                model.cloud.syncNow()
             }
         }
         // Once, on a device that had a library before iCloud sync arrived (new installs just turn it on).
-        .alert("Sync this library with iCloud?", isPresented: Binding(get: { model.askToSync }, set: { model.askToSync = $0 })) {
-            Button("Not Now", role: .cancel) { model.setSync(false) }
-            Button("Turn On") { model.setSync(true) }
+        .alert("Sync this library with iCloud?", isPresented: Binding(get: { model.cloud.askToSync }, set: { model.cloud.askToSync = $0 })) {
+            Button("Not Now", role: .cancel) { model.cloud.set(false) }
+            Button("Turn On") { model.cloud.set(true) }
         } message: {
             Text("Your saves, collections and AI settings stay the same on your iPhone and Mac. They go to your own iCloud, encrypted, and nothing here is deleted. You can change this in Settings.")
         }

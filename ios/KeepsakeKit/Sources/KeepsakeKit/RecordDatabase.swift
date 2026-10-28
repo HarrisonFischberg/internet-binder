@@ -138,6 +138,17 @@ public final class RecordDatabase: @unchecked Sendable {
                 CREATE TABLE sync_ext_offer ("store" TEXT NOT NULL, "key" TEXT NOT NULL, "seq" INTEGER NOT NULL, "body" TEXT, PRIMARY KEY ("store", "key"));
                 """)
         }
+        // A counter SQLite moves on every change to a save, from any process (the app, the Share Extension,
+        // iCloud sync): the shared code keeps its parsed list of saves until it moves (`itemsRevision`).
+        m.registerMigration("v7-item-revision") { db in
+            try db.execute(sql: """
+                CREATE TABLE item_revision ("n" INTEGER NOT NULL);
+                INSERT INTO item_revision VALUES (0);
+                CREATE TRIGGER item_revision_insert AFTER INSERT ON item BEGIN UPDATE item_revision SET n = n + 1; END;
+                CREATE TRIGGER item_revision_update AFTER UPDATE ON item BEGIN UPDATE item_revision SET n = n + 1; END;
+                CREATE TRIGGER item_revision_delete AFTER DELETE ON item BEGIN UPDATE item_revision SET n = n + 1; END;
+                """)
+        }
         return m
     }
 
@@ -211,6 +222,11 @@ public final class RecordDatabase: @unchecked Sendable {
             try String.fetchAll(db, sql: "SELECT \(Library.listBody) FROM item WHERE deletedAt IS NULL ORDER BY createdAt DESC")
         }
         return "[" + bodies.joined(separator: ",") + "]"
+    }
+
+    /// Moves whenever any save is written or removed, by any process (the v7 triggers).
+    public func itemsRevision() throws -> Int {
+        try pool.read { db in try Int.fetchOne(db, sql: "SELECT n FROM item_revision") ?? 0 }
     }
 
     /// Keys of saves in the Trash since before `cutoff` (an ISO date), read from the column.

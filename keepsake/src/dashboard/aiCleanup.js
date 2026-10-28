@@ -8,11 +8,12 @@
 // from this browser without cookies (credentials: 'omit') and parsed with
 // DOMParser, which never runs the page's scripts.
 
-import { el, clear, formatPrice, parsePrice, pluralize, uid, nowIso } from '../shared/util.js';
+import { el, clear, parsePrice, pluralize, uid } from '../shared/util.js';
 import { providerConfig, originFor, cleanupWithAI, CLEANUP_BATCH, MODELS } from '../ai/provider.js';
 import * as UI from './ui.js';
 import { MSG } from '../shared/messages.js';
 import { needsCollection, hasOwnView, kindOf, kindInfo } from '../shared/kinds.js';
+import { planFixes, applyFix, undoFixes, REFILE_CONFIDENCE } from '../shared/aiFix.js';
 import { understandItem } from '../shared/understand.js';
 import { fetchPage, loadImage } from '../ai/pages.js';
 
@@ -20,10 +21,6 @@ import { fetchPage, loadImage } from '../ai/pages.js';
 const UNDERSTAND_AT_ONCE = 4;
 
 const ALL_SITES = '*://*/*';
-// Moving an item that is already in a collection needs more certainty than
-// filing one from Review; items the user filed themselves are never moved.
-const REFILE_CONFIDENCE = 0.85;
-const FIELDS = ['title', 'price', 'currency', 'image', 'images', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
 
 async function hasOrigins(origins) {
   try {
@@ -227,20 +224,17 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
       }
       report.checked++;
       const current = (await ctx.store.getItem(p.item.id)) || p.item;
-      const { patch, changes } = planFixes(current, ai, p, { scope, threshold });
-      noteIssues(report, current, p, ai, patch);
-      if (!changes.length) continue;
-      const before = {};
-      for (const f of FIELDS) if (f in patch) before[f] = current[f] === undefined ? null : current[f];
+      const plan = planFixes(current, ai, { live: p.live, imageOk: p.imageOk, scope, threshold });
+      noteIssues(report, current, p, ai, plan.patch);
+      if (!plan.changes.length) continue;
       try {
-        await ctx.store.updateItem(current.id, patch, { by: 'ai' });
+        logEntries.push(await applyFix(ctx.store, current, plan, { runId, reason: ai.reason || '' }));
       } catch {
         report.failed++;
         continue;
       }
       report.changed++;
-      for (const c of changes) report[c.kind]++;
-      logEntries.push({ id: uid(), runId, at: nowIso(), itemId: current.id, itemTitle: patch.title || current.title, changes: changes.map(({ kind, ...rest }) => rest), before, after: patch, reason: ai.reason || '', undone: false });
+      for (const c of plan.changes) report[c.kind]++;
     }
     if (logEntries.length) await ctx.store.appendAiLog(logEntries);
     update();
@@ -250,47 +244,6 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
   const dialog = body.closest('.modal');
   if (dialog && dialog.close) dialog.close(true);
   return report;
-}
-
-// Decide which fixes to apply to one item from the AI's answer and the live page.
-function planFixes(item, ai, prepared, { scope, threshold }) {
-  const patch = {};
-  const changes = [];
-  // Fields the person edited by hand stay as they are.
-  const mine = new Set(item.userFields || []);
-  if (item.type === 'product') {
-    if (ai.title && ai.title !== item.title && !mine.has('title')) {
-      patch.title = ai.title;
-      changes.push({ kind: 'titles', field: 'title', from: item.title, to: ai.title });
-    }
-    const currency = ai.currency || item.currency || '';
-    if (ai.price !== null && !mine.has('price') && (ai.price !== item.price || (ai.currency && ai.currency !== item.currency))) {
-      patch.price = ai.price;
-      patch.currency = currency;
-      changes.push({ kind: 'prices', field: 'price', from: formatPrice(item.price, item.currency) || 'none', to: formatPrice(ai.price, currency) });
-    }
-    const liveImage = prepared.live && prepared.live.image;
-    if (liveImage && liveImage !== item.image && !mine.has('image') && (!item.image || !prepared.imageOk)) {
-      patch.image = liveImage;
-      patch.images = [liveImage, ...(item.images || []).filter((u) => u !== liveImage && u !== item.image)].slice(0, 8);
-      changes.push({ kind: 'images', field: 'image', from: item.image ? 'broken image' : 'no image', to: 'image from the live page' });
-    }
-  }
-  if (ai.collectionId && ai.collectionId !== item.collectionId) {
-    const filedByUser = item.collectionId && (item.categorizationSource === 'manual' || mine.has('collectionId'));
-    const needed = item.collectionId ? Math.max(threshold, REFILE_CONFIDENCE) : threshold;
-    const allowed = scope === 'review' ? needsCollection(item) : !filedByUser;
-    if (allowed && ai.confidence >= needed) {
-      patch.collectionId = ai.collectionId;
-      patch.needsReview = false;
-      patch.categorizationSource = 'ai';
-      patch.confidence = ai.confidence;
-      patch.categorizationReason = `AI: ${ai.reason || 'best match'}`;
-      if (item.collectionId) patch.previousCollections = [...(item.previousCollections || []), item.collectionId].slice(-20);
-      changes.push({ kind: 'moved', field: 'collection', fromId: item.collectionId || null, toId: ai.collectionId, to: ai.collectionName });
-    }
-  }
-  return { patch, changes };
 }
 
 function noteIssues(report, item, prepared, ai, patch) {
@@ -348,34 +301,9 @@ async function showSummary(ctx, report) {
 
 // --- undo -----------------------------------------------------------------------------------------
 
-// Restores each item's fields to what they were before the AI change. Newest first, so
-// undoing a whole run that touched an item twice ends at the oldest "before".
+// Puts each save back to what it was before the AI change (shared/aiFix.js); returns how many saves.
 export async function undoEntries(ctx, entries) {
-  const sorted = [...entries].sort((a, b) => (a.at < b.at ? 1 : -1));
-  const done = [];
-  for (const e of sorted) {
-    if (e.goalId) {
-      // A workout goal's plan, suggested on request.
-      if (await ctx.store.getGoal(e.goalId)) await ctx.store.updateGoal(e.goalId, e.before);
-      done.push(e.id);
-      continue;
-    }
-    const item = await ctx.store.getItem(e.itemId);
-    if (!item) {
-      done.push(e.id);
-      continue;
-    }
-    const restore = { ...e.before };
-    if ('collectionId' in restore && restore.collectionId && !ctx.collectionById(restore.collectionId)) {
-      // The old collection was deleted since; put the item back in Review instead.
-      restore.collectionId = null;
-      restore.needsReview = true;
-    }
-    await ctx.store.updateItem(item.id, restore, { by: 'ai' });
-    done.push(e.id);
-  }
-  if (done.length) await ctx.store.markAiLogUndone(done);
-  return new Set(sorted.map((e) => e.itemId)).size;
+  return (await undoFixes(ctx.store, entries)).items;
 }
 
 // --- change log page (#ailog) --------------------------------------------------------------------
