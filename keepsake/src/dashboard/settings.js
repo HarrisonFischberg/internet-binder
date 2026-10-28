@@ -49,7 +49,7 @@ async function removeOrigin(pattern) {
 
 export function renderSettings(ctx, view) {
   const page = el('div', { class: 'page' });
-  page.append(el('p', { class: 'page-intro' }, [`Everything here is stored in this browser only. Nothing is sent to a server unless you turn on ${syncCapable() ? 'iCloud sync or ' : ''}the optional AI feature with your own key.`]));
+  page.append(el('p', { class: 'page-intro' }, [syncCapable() ? 'Everything here is stored in this browser. With iCloud sync on, your library is also kept in your own iCloud (end-to-end encrypted, never your AI key). Nothing else is sent anywhere unless you turn on the optional AI feature with your own key.' : 'Everything here is stored in this browser only. Nothing is sent to a server unless you turn on the optional AI feature with your own key.']));
   page.append(syncSection(ctx));
   page.append(appearanceSection(ctx));
   page.append(floatingSection(ctx));
@@ -489,7 +489,7 @@ function dataSection(ctx) {
       usage.querySelector('.stat-value').textContent = kvBytes === null && dbBytes === null ? '—' : formatBytes(total);
     })
     .catch(() => { usage.querySelector('.stat-value').textContent = '—'; });
-  return UI.section('Your data', 'Stored in this browser profile only (IndexedDB for your saves, chrome.storage.local for settings). Export a JSON backup any time; it includes the Trash and never includes your AI key.', [
+  return UI.section('Your data', `Stored in this browser profile (IndexedDB for your saves, chrome.storage.local for settings)${syncCapable() ? ', and in your own iCloud while iCloud sync is on' : ' only'}. Export a JSON backup any time; it includes the Trash and never includes your AI key.`, [
     stats,
     el('div', { class: 'actions-row' }, [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: async () => {
@@ -543,7 +543,7 @@ function stat(value, label) {
 function aboutSection(ctx) {
   const manifest = chrome.runtime.getManifest();
   return UI.section('About', '', [
-    el('p', { class: 'prose' }, [`Internet Binder ${manifest.version}. Open source, no account, no telemetry. `, el('button', { type: 'button', class: 'link-btn', onClick: () => openPrivacy(ctx) }, ['Privacy details'])]),
+    el('p', { class: 'prose' }, [`Internet Binder ${manifest.version}. Open source, no Internet Binder account, no telemetry. `, el('button', { type: 'button', class: 'link-btn', onClick: () => openPrivacy(ctx) }, ['Privacy details'])]),
   ]);
 }
 
@@ -777,7 +777,7 @@ export function openPrivacy(ctx) {
 }
 
 function privacySection(ctx) {
-  return UI.section('Privacy', 'Everything stays in this browser. No account, no tracking; the only network calls are the ones you turn on.', [
+  return UI.section('Privacy', syncCapable() ? 'Everything stays in this browser and, with iCloud sync on, your own iCloud. No Internet Binder account or server, no tracking; the only network calls are the ones you turn on.' : 'Everything stays in this browser. No account, no tracking; the only network calls are the ones you turn on.', [
     el('div', { class: 'review-actions' }, [el('button', { type: 'button', class: 'btn', onClick: () => openPrivacy(ctx) }, ['See what Internet Binder stores and sends'])]),
   ]);
 }
@@ -803,7 +803,7 @@ export function renderPrivacy(ctx, view) {
       el('thead', {}, [el('tr', {}, [el('th', {}, ['Permission']), el('th', {}, ['Why'])])]),
       el('tbody', {}, [
         permRow('storage', 'Keep your settings in your browser.'),
-        permRow('unlimitedStorage', 'Let your library grow past Chrome’s 10 MB default. It still stays in this browser.'),
+        permRow('unlimitedStorage', syncCapable() ? 'Let your library grow past the browser’s default storage limit.' : 'Let your library grow past Chrome’s 10 MB default. It still stays in this browser.'),
         permRow('activeTab + scripting', 'Read the page you clicked the icon on (title, price, images) at that moment only, and show the save toast.'),
         permRow('contextMenus', 'The “Save to Internet Binder” right-click item.'),
         ...(syncCapable() ? [

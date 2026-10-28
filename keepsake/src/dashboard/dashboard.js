@@ -1111,7 +1111,7 @@ function gridEmptyState() {
 function nothingSavedState() {
   return UI.emptyState({
     title: 'Nothing saved yet',
-    message: 'Nothing saved yet. Save a page with the Internet Binder button or Alt+Shift+K, or try the sample library. Everything you keep stays in this browser.',
+    message: 'Nothing saved yet. Save a page with the Internet Binder button or Alt+Shift+K, or try the sample library. Everything you keep stays in this browser' + (syncCapable() ? ' and, with iCloud sync on, in your own iCloud.' : '.'),
     icon: UI.bagIcon(),
     actions: [
       el('button', { type: 'button', class: 'btn btn-primary', onClick: () => loadSample() }, ['Load sample data']),
@@ -3050,7 +3050,7 @@ function renderWelcome(view) {
   const w = el('div', { class: 'welcome' }, [
     el('div', { class: 'welcome-hero' }, [
       el('h2', {}, ['Keep what catches your eye.']),
-      el('p', {}, ['Internet Binder saves products from any site into collections that sort themselves. Everything stays in this browser — no account, no cloud, no tracking.']),
+      el('p', {}, [`Internet Binder saves products from any site into collections that sort themselves. ${syncCapable() ? 'Everything stays in this browser and, if you turn on iCloud sync, your own iCloud' : 'Everything stays in this browser'}: no Internet Binder account or server, no tracking.`]),
       el('div', { class: 'actions-row', style: { marginTop: '18px' } }, [
         el('button', { type: 'button', class: 'btn btn-primary', onClick: () => navigate('#home') }, ['Start saving']),
         el('button', { type: 'button', class: 'btn', onClick: async () => { await loadSample(); navigate('#home'); } }, ['Load sample data']),
