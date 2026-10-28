@@ -474,6 +474,66 @@ function recipeAnswer(raw) {
   };
 }
 
+// --- A close recipe from the web (a dish whose post never wrote its recipe down) -------------------------
+// For a recipe save whose post only shows the dish (a Reel with no recipe in the caption): the provider
+// searches the web for a published recipe as close to it as it can find, and reads that page. The card then
+// says it is based on that page, with its link, so nobody takes it for the creator's own. The link must be
+// one the search returned (urlVerified); without one nothing is kept. Applied by src/shared/understand.js
+// readRecipe, which reads the page itself when it can (its schema.org recipe wins over this answer).
+const RECIPE_FIND_SYSTEM = `Someone saved a social media post of a dish, but the post doesn't write the recipe down. Find them a real, published recipe that is as close as possible to this dish.
+Search the web (a few searches at most). If the creator published this recipe on their own site, use that; otherwise pick a well-reviewed recipe for the same dish from a reputable recipe site or food blog. Read that page.
+Return ONLY JSON: {"title":"the recipe's name on that page","url":"","site":"the site's name","ingredients":["as the page lists them, quantities included"],"steps":["as the page gives them, one step each"],"yield":"","totalMinutes":number|null,"same":true|false,"confidence":0-1,"reason":"one short sentence on how it matches the post"}
+Rules:
+- url is the exact address of that recipe page, from your search results. If you found nothing reasonably close, leave url empty and the lists empty.
+- ingredients and steps come from that page, not from you. Keep its quantities and order.
+- same is true only when the page is clearly the creator's own recipe for this post.
+- confidence is how close the recipe is to the dish in the post (0.8+ only for the same dish, made the same way).`;
+
+export async function findRecipeWithAI(input, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  if (!apiKey || !supportsWebLookup(settings)) return null;
+  const cut = (v, n) => String(v || '').slice(0, n);
+  const text = [
+    `Dish: ${cut(input.title, 200)}`,
+    input.caption ? `Caption: ${cut(input.caption, 1500)}` : '',
+    input.creator ? `Posted by: ${cut(input.creator, 80)}` : '',
+    input.hashtags?.length ? `Hashtags: ${input.hashtags.slice(0, 20).map((h) => `#${cut(h, 60)}`).join(' ')}` : '',
+    input.description ? `Description: ${cut(input.description, 800)}` : '',
+    input.site ? `From: ${cut(input.site, 120)}` : '',
+  ].filter(Boolean).join('\n');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90000);
+  try {
+    const opts = { system: RECIPE_FIND_SYSTEM, maxTokens: 3000, searches: 4 };
+    const { text: out, seen } = cfg.provider === 'anthropic'
+      ? await findViaAnthropic(cfg, apiKey, text, '', controller, opts)
+      : await findViaOpenAI(cfg, apiKey, text, '', controller, opts);
+    const p = parseJsonBlock(out);
+    if (!p || typeof p !== 'object') throw new Error('The provider didn’t return a usable answer.');
+    return foundRecipeAnswer(p, seen);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function foundRecipeAnswer(p, seen) {
+  const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  const url = cut(p.url, 1000);
+  const strings = (v, n, each) => (Array.isArray(v) ? v : []).map((x) => cut(String(x ?? ''), each)).filter(Boolean).slice(0, n);
+  return {
+    title: cut(p.title, 200),
+    url: urlVerified(url, seen) ? url : '',
+    site: cut(p.site, 80),
+    ingredients: strings(p.ingredients, 60, 200),
+    steps: strings(p.steps, 40, 600),
+    yield: cut(p.yield, 60),
+    totalMinutes: Number.isFinite(Number(p.totalMinutes)) && Number(p.totalMinutes) > 0 ? Math.round(Number(p.totalMinutes)) : null,
+    same: p.same === true,
+    confidence: Math.max(0, Math.min(1, Number(p.confidence) || 0)),
+    reason: cut(p.reason, 200),
+  };
+}
+
 const PROGRESSION_SYSTEM = `You plan gentle, safe training progressions for a home workout app. Only on the person's request.
 Return ONLY JSON: {"plan":[{"week":1,"perWeek":number|null,"sets":number|null,"reps":number|null,"durationSeconds":number|null,"note":"short"}, …],"note":"one short caveat"}
 Rules: one entry per week; for a frequency goal set perWeek (never above the goal's) and leave sets/reps empty unless useful; for a target goal build sets and reps (or seconds) up to the target by the last week, in small steps, starting near the person's best so far; never more than 10% harder week to week; no medical claims.`;
@@ -575,7 +635,8 @@ Rules:
 // Apple Intelligence's small model copies the format's examples as answers (opening hours, "one step").
 const UNDERSTAND_DEVICE_NOTE = `\nOn this device: the e.g. values and formats above only show the shape; never copy them. A detail the input does not state is "" or null, and a place's hours are [] unless the input lists them.`;
 // A detail that is a whole example from the format above ("Mon–Fri 8am–3pm", "quantity + ingredient") was copied, not read.
-const isExample = (v) => typeof v === 'string' && UNDERSTAND_SYSTEM.includes(`"${v.trim()}"`);
+// A line built on the format's own words ("1 quantity + APPLE FRITTER COFFEE CAKE") is a copy too.
+const isExample = (v) => typeof v === 'string' && (UNDERSTAND_SYSTEM.includes(`"${v.trim()}"`) || /\bquantity\s*\+/i.test(v));
 
 export async function understandWithAI(input, settings, apiKey) {
   const cfg = providerConfig(settings);
@@ -609,6 +670,9 @@ function understandAnswer(parsed) {
     if (isExample(v)) delete details[k];
     else if (Array.isArray(v)) details[k] = v.filter((x) => !isExample(x));
   }
+  // An ingredient that is only the dish's own name ("1 Apple fritter coffee cake") says nothing.
+  const letters = (v) => String(v || '').toLowerCase().replace(/[^\p{L}]+/gu, '');
+  if (Array.isArray(details.ingredients) && letters(parsed.title)) details.ingredients = details.ingredients.filter((x) => letters(x) !== letters(parsed.title));
   // The card's exercise times are in seconds under another name.
   if (Array.isArray(details.exercises)) details.exercises = details.exercises.map((e) => (e && typeof e === 'object' ? { ...e, durationSeconds: e.durationSeconds ?? e.seconds } : e));
   return {

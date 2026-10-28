@@ -94,6 +94,9 @@ public struct SaveDetail: Decodable, Sendable {
     public let sourceLabel: String?
     /// The fields your AI provider drafted because the save didn't say them ("ingredients", "steps", "exercises").
     public let drafted: [String]?
+    /// A recipe your AI provider found online because the post never wrote one down: the page it's based on.
+    public struct BasedOn: Decodable, Sendable { public let url: String; public let site: String?; public let title: String? }
+    public let basedOn: BasedOn?
 }
 
 public struct GoalView: Decodable, Sendable {
