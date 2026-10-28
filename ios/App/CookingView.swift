@@ -46,6 +46,7 @@ struct CookingView: View {
                 }
                 .padding(.horizontal, 12)
                 CookingMusicBar(music: music, on: $musicOn)
+                    .padding(.horizontal, 16)   // a long title truncates inside the screen, not past its edges
                     .frame(maxWidth: .infinity).padding(.top, 2)
                 TabView(selection: $step) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, text in

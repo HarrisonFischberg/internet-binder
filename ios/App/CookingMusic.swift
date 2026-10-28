@@ -233,23 +233,27 @@ struct CookingSongList: View {
 
     var body: some View {
         NavigationStack {
-            List(CookingMusic.tracks, id: \.file) { track in
-                let current = music.current == track
-                Button { music.play(track); dismiss() } label: {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(track.title).font(.body.weight(.semibold)).foregroundStyle(t.ink)
-                            Text(track.artist).font(.subheadline).foregroundStyle(t.inkMuted)
+            ScrollViewReader { list in
+                List(CookingMusic.tracks, id: \.file) { track in
+                    let current = music.current == track
+                    Button { music.play(track); dismiss() } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(track.title).font(.body.weight(.semibold)).foregroundStyle(t.ink)
+                                Text(track.artist).font(.subheadline).foregroundStyle(t.inkMuted)
+                            }
+                            Spacer()
+                            if current {
+                                Image(systemName: music.playing ? "speaker.wave.2.fill" : "speaker.fill")
+                                    .foregroundStyle(t.stamp).accessibilityHidden(true)
+                            }
                         }
-                        Spacer()
-                        if current {
-                            Image(systemName: music.playing ? "speaker.wave.2.fill" : "speaker.fill")
-                                .foregroundStyle(t.stamp).accessibilityHidden(true)
-                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .accessibilityAddTraits(current ? .isSelected : [])
                 }
-                .accessibilityAddTraits(current ? .isSelected : [])
+                // Opens on the song playing, which may be below the medium detent's fold.
+                .onAppear { if let file = music.current?.file { list.scrollTo(file, anchor: .center) } }
             }
             .navigationTitle("Songs").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

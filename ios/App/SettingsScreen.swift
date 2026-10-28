@@ -542,8 +542,9 @@ struct MusicCreditsScreen: View {
                         Text(track.title).font(.body.weight(.semibold))
                         Text(track.artist).foregroundStyle(.secondary)
                         HStack(spacing: 16) {
-                            if let url = URL(string: track.licenseURL) { Link(track.license, destination: url) }
-                            if let url = URL(string: track.source) { Link("Source", destination: url) }
+                            // Ten rows of "Source" read alike in VoiceOver's links rotor; name the song.
+                            if let url = URL(string: track.licenseURL) { Link(track.license, destination: url).accessibilityLabel("\(track.license) license for \(track.title)") }
+                            if let url = URL(string: track.source) { Link("Source", destination: url).accessibilityLabel("Source of \(track.title)") }
                         }
                         .font(.footnote)
                     }
