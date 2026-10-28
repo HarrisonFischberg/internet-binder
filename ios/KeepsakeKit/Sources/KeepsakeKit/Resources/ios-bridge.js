@@ -11,6 +11,7 @@
 //   listItems() → "[...]" (items not in the Trash, newest first, without the pictures stored inside them:
 //     `image` is "data:image/stored;<length>" and the app reads the picture when it draws it)
 //   trashedBefore(isoDate) → "[keys]" (items in the Trash since before that date)
+//   itemsRevision() → number (moves on every write to an item, from any process; -1 if unreadable)
 // __native.kv: get("[keys]") → "{...}", set("{...}") → ""|error, remove("[keys]"), clear()
 
 (function () {
@@ -130,7 +131,15 @@
   // Saves for lists, search and counts, read without their pictures (~35 KB each, stored twice): the
   // whole library with pictures took seconds to parse here and hundreds of MB to hold. Read-only: never
   // write one of these back (its picture is a marker), read the save with store.getItem first.
-  const listItems = () => JSON.parse(__native.db.listItems());
+  // Parsed once per change: SQLite moves itemsRevision on every write to a save, from any process, so a
+  // search keystroke or a view read again with nothing changed reuses the list. Callers get their own
+  // array; the saves in it are shared, so treat them as read-only too.
+  let listed = { revision: -1, items: [] };
+  const listItems = () => {
+    const revision = __native.db.itemsRevision();
+    if (revision < 0 || revision !== listed.revision) listed = { revision, items: JSON.parse(__native.db.listItems()) };
+    return listed.items.slice();
+  };
 
   // The same answers as storage.js, asked of SQLite's columns instead of parsing every save: these run
   // each time the app opens or comes back.
@@ -370,25 +379,11 @@
       return withFact(await store.getItem(id));
     },
     async aiLog() { return (await store.getAiLog()).slice().reverse(); },
-    // Undo AI changes (dashboard/aiCleanup.js undoEntries): newest first, back to each "before"; a
-    // collection deleted since sends the save to Review instead.
+    // Undo AI changes (shared/aiFix.js undoFixes): newest first, back to each "before"; a collection
+    // deleted since sends the save to Review instead.
     async undoAi(ids) {
       const want = new Set(ids);
-      const entries = (await store.getAiLog()).filter((e) => want.has(e.id) && !e.undone).sort((a, b) => (a.at < b.at ? 1 : -1));
-      const cols = new Set((await store.getCollections()).map((c) => c.id));
-      const done = [];
-      for (const e of entries) {
-        if (e.goalId) { if (await store.getGoal(e.goalId)) await store.updateGoal(e.goalId, e.before); done.push(e.id); continue; }
-        const item = await store.getItem(e.itemId);
-        if (item) {
-          const restore = { ...e.before };
-          if ('collectionId' in restore && restore.collectionId && !cols.has(restore.collectionId)) { restore.collectionId = null; restore.needsReview = true; }
-          await store.updateItem(item.id, restore, { by: 'ai' });
-        }
-        done.push(e.id);
-      }
-      if (done.length) await store.markAiLogUndone(done);
-      return done.length;
+      return (await K.aiFix.undoFixes(store, (await store.getAiLog()).filter((e) => want.has(e.id)))).entries;
     },
     // Apple Intelligence is ready on this device, or Optional AI is on with a key: the AI buttons show.
     async aiReady() {
@@ -413,7 +408,6 @@
       if (!K.provider.aiAvailable(settings, key)) throw new Error('Turn on Apple Intelligence, or Optional AI with your key, first.');
       const prefs = await store.getPrefs();
       const threshold = prefs.confidenceThreshold || 0.6;
-      const FIELDS = ['title', 'price', 'currency', 'collectionId', 'needsReview', 'categorizationSource', 'categorizationReason', 'confidence', 'previousCollections'];
       const report = { checked: 0, changed: 0, products: 0, filed: [], error: '' };
       const changed = new Set();
       const runId = `ios-fix-${Date.now()}`;
@@ -461,29 +455,13 @@
           if (!ai) continue;
           report.checked++;
           const item = (await store.getItem(batch[n].id)) || batch[n];
-          const mine = new Set(item.userFields || []);
-          const patch = {};
-          const changes = [];
-          if (item.type === 'product') {
-            if (ai.title && ai.title !== item.title && !mine.has('title') && !changed.has(item.id)) { patch.title = ai.title; changes.push({ field: 'title', from: item.title, to: ai.title }); }
-            const currency = ai.currency || item.currency || '';
-            if (ai.price !== null && ai.price !== undefined && !mine.has('price') && (ai.price !== item.price || (ai.currency && ai.currency !== item.currency))) {
-              patch.price = ai.price;
-              patch.currency = currency;
-              changes.push({ field: 'price', from: K.util.formatPrice(item.price, item.currency) || 'none', to: K.util.formatPrice(ai.price, currency) });
-            }
-          }
-          if (ai.collectionId && ai.collectionId !== item.collectionId && K.kinds.needsCollection(item) && ai.confidence >= threshold) {
-            Object.assign(patch, { collectionId: ai.collectionId, needsReview: false, categorizationSource: 'ai', confidence: ai.confidence, categorizationReason: `AI: ${ai.reason || 'best match'}` });
-            changes.push({ field: 'collection', fromId: item.collectionId || null, toId: ai.collectionId, to: ai.collectionName });
-            report.filed.push({ id: item.id, collection: ai.collectionName || '' });
-          }
-          if (!changes.length) continue;
-          const before = {};
-          for (const f of FIELDS) if (f in patch) before[f] = item[f] === undefined ? null : item[f];
-          await store.updateItem(item.id, patch, { by: 'ai' });
+          // Review only, and a title the read above just chose stays (shared/aiFix.js, as Chrome's Review run).
+          const plan = K.aiFix.planFixes(item, ai, { scope: 'review', threshold, keepTitle: changed.has(item.id) });
+          if (!plan.changes.length) continue;
+          const moved = plan.changes.find((c) => c.field === 'collection');
+          if (moved) report.filed.push({ id: item.id, collection: moved.to || '' });
+          log.push(await K.aiFix.applyFix(store, item, plan, { runId, reason: ai.reason || '' }));
           changed.add(item.id);
-          log.push({ id: K.util.uid(), runId, at: K.util.nowIso(), itemId: item.id, itemTitle: patch.title || item.title, changes, before, after: patch, reason: ai.reason || '', undone: false });
         }
         if (log.length) await store.appendAiLog(log);
         report.logIds = [...(report.logIds || []), ...log.map((e) => e.id)];

@@ -162,7 +162,7 @@ extension LibraryModel {
                 workEnd = WorkEnd(title: "All done", text: "Your library is in iCloud. Changes from now on go up by themselves.")
                 return
             }
-            switch syncStatus {
+            switch cloud.status {
             case .failed(let message)?:
                 endSyncRun()
                 Haptic.refused()

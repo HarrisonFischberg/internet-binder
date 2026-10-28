@@ -140,12 +140,8 @@ final class LibraryModel {
     /// Imported saves your provider hasn't read yet (needsAi), newest first.
     var aiBacklog: [Save] { index.aiBacklog }
     let library: Library?
-    /// iCloud sync (Settings → iCloud), running while it's on.
-    private(set) var sync: CloudSync?
-    private(set) var syncOn = SyncPreference.isOn
-    private(set) var syncStatus: CloudSync.Status?
-    /// The one-time question for a device that already has a library when sync arrives.
-    var askToSync = false
+    /// iCloud sync (Settings → iCloud).
+    let cloud: SyncModel
 
     struct Toast: Identifiable, Equatable {
         let id = UUID()
@@ -176,12 +172,17 @@ final class LibraryModel {
             self.library = library
             ThumbnailStore.shared.use(library)
             // A few indexed reads, so Home opens filled in rather than waiting on the whole library.
-            glance = try? library.glance()
-            reviewCount = glance?.reviewCount ?? 0
+            let first = try? library.glance()
+            glance = first
+            reviewCount = first?.reviewCount ?? 0
+            cloud = SyncModel(database: library.database)
         } catch {
             library = nil
             problem = "Internet Binder couldn't open your library. \(error.localizedDescription)"
+            cloud = SyncModel(database: nil)
         }
+        cloud.onRemoteChange = { [weak self] in self?.syncChanged() }
+        cloud.onTurned = { [weak self] on in if on { self?.beginSyncRun() } else { self?.endSyncRun() } }
     }
 
     func start() async {
@@ -193,26 +194,28 @@ final class LibraryModel {
                 try await library.prepare()
                 #if DEBUG
                 // Screenshots and UI tests: -importOnLaunch <path to a Chrome export> fills an empty library.
-                if let path = UserDefaults.standard.string(forKey: "importOnLaunch"), (try? library.saves().isEmpty) == true {
+                if let path = UserDefaults.standard.string(forKey: "importOnLaunch"), (try? library.isEmpty()) == true {
                     _ = try? await library.importExport(try Data(contentsOf: URL(fileURLWithPath: path)), replace: true)
                 }
                 // Performance runs on a device: -seedPerf 5000 fills an empty library with that many products.
                 let seed = UserDefaults.standard.integer(forKey: "seedPerf")
-                if seed > 0, (try? library.saves().isEmpty) == true {
+                if seed > 0, (try? library.isEmpty()) == true {
                     _ = try? await library.importExport(Self.syntheticExport(seed), replace: true)
                 }
                 #endif
                 finishSaves()
                 await refreshAIReady()
                 await loadDestinations()
-                await decideSync()
+                cloud.decide { (try? library.isEmpty()) ?? true }
             } catch {
                 problem = error.localizedDescription
             }
         }
         do {
             for try await list in library.observeSaves() {
-                saves = list
+                // An in-process write arrives here and from the refresh() after it: the second, unchanged
+                // list would redraw every screen that reads the library for nothing.
+                if list != saves { saves = list }
                 loaded = true
                 glance = nil
                 widgetsChanged()
@@ -239,94 +242,6 @@ final class LibraryModel {
 
     // MARK: iCloud sync
 
-    /// Starts sync if it's on. The first time: on by itself for a new library, asked once for one
-    /// that already has saves. UI tests (a library of their own) never sync.
-    func decideSync() async {
-        guard let library, ProcessInfo.processInfo.environment["KEEPSAKE_DB"] == nil else { return }
-        #if DEBUG
-        if UserDefaults.standard.bool(forKey: "noSync") { return }
-        #endif
-        switch SyncPreference.choice {
-        case nil:
-            if (try? library.saves().isEmpty) ?? true { setSync(true) } else { askToSync = true }
-        case true?:
-            startSync()
-        case false?:
-            break
-        }
-    }
-
-    func setSync(_ on: Bool) {
-        guard let library else { return }
-        SyncPreference.choice = on
-        syncOn = on
-        if on {
-            // Everything goes up (or merges with what iCloud already has) on the first sync. Changes made
-            // while sync was off are dropped first, so a library erased then would not erase iCloud.
-            try? library.database.resetSync()
-            try? library.database.markAllPending()
-            startSync()
-            beginSyncRun()
-        } else {
-            endSyncRun()
-            sync?.stop()
-            sync = nil
-            syncStatus = nil
-            try? library.database.resetSync()
-        }
-    }
-
-    private func startSync() {
-        guard let library, sync == nil else { return }
-        let s = CloudSync(database: library.database, keys: LibraryKeys(store: KeychainLibraryKeys(accessGroup: CloudSync.keychainGroup)))
-        s.onChange = { [weak self] in Task { @MainActor in self?.syncChanged() } }
-        s.onStatus = { [weak self] status in Task { @MainActor in self?.statusChanged(status) } }
-        s.onError = { [weak self] error in Task { @MainActor in self?.syncStatus = .failed(error.localizedDescription) } }
-        s.onPurged = { [weak self] in Task { @MainActor in self?.setSync(false) } }
-        sync = s
-        s.start()
-        Task { await checkAccount() }
-    }
-
-    /// Fetches and sends now (the app coming to the front).
-    func syncNow() {
-        guard let sync else { return }
-        sync.noteLocalChanges()
-        Task.detached { try? await sync.syncNow() }
-        // Back from the Settings app, maybe signed in now.
-        Task { await checkAccount() }
-    }
-
-    /// Whether this device has an iCloud account sync can use (checkAccount).
-    private var iCloudReady = false
-
-    private func checkAccount() async {
-        // It throws when there's no account to ask about (a Simulator with no Apple Account does).
-        let status = (try? await CKContainer(identifier: CloudSync.containerID).accountStatus()) ?? .couldNotDetermine
-        iCloudReady = status == .available
-        if !iCloudReady { syncStatus = .signedOut }
-        else if syncStatus == nil || syncStatus == .signedOut, let sync {
-            // Up-to-date reports dropped before the account was known: sync once more to show one.
-            syncStatus = nil
-            Task.detached { try? await sync.syncNow() }
-        }
-    }
-
-    private func statusChanged(_ status: CloudSync.Status) {
-        // CKSyncEngine reports fetches and sends even when it can't reach iCloud, and a finished send
-        // after one that failed: none of those is syncing or up to date.
-        switch status {
-        case .syncing:
-            if syncStatus == .signedOut { return }
-        case .upToDate:
-            guard iCloudReady else { return }
-            if case .failed? = syncStatus { return }
-        default:
-            break
-        }
-        syncStatus = status
-    }
-
     /// Records from another device landed: lists, collections, AI settings and widgets catch up.
     private func syncChanged() {
         refresh()
@@ -339,16 +254,30 @@ final class LibraryModel {
     /// thread, so a tap that calls it never waits on the whole library.
     func refresh() { Task { await reload() } }
 
-    private var reloads = 0
+    /// One read of the library at a time: calls that land while one runs share a single read after it (an
+    /// AI run or an Undo asks several times in a row), rather than each reading every save again.
+    @ObservationIgnored private var reloading: Task<Void, Never>?
+    @ObservationIgnored private var reloadAgain = false
     func reload() async {
         guard let library else { return }
-        reloads += 1
-        let mine = reloads
-        let list = try? await Task.detached(priority: .userInitiated) { try library.saves() }.value
-        // A newer reload started meanwhile: its read is the fresher one.
-        guard let list, mine == reloads else { return }
-        saves = list
-        await loadDestinations()
+        if let reloading {
+            reloadAgain = true
+            await reloading.value
+            return
+        }
+        let run = Task {
+            repeat {
+                reloadAgain = false
+                let list = try? await Task.detached(priority: .userInitiated) { try library.saves() }.value
+                // Unchanged (the usual case after a write this app made, which observeSaves already showed):
+                // nothing redraws.
+                if let list, list != saves { saves = list }
+                await loadDestinations()
+            } while reloadAgain
+            reloading = nil
+        }
+        reloading = run
+        await run.value
     }
 
     /// The after-save work that's turned on (AI tidy, Lifestyle fill-in), for saves made in the Share

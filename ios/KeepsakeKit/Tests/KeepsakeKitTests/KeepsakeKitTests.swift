@@ -221,6 +221,32 @@ struct CaptureTests {
         return try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
     }
 
+    /// isEmpty asks SQLite instead of reading every save, and a save in the Trash doesn't count.
+    @Test func emptyMeansNothingOutsideTheTrash() async throws {
+        let lib = try library()
+        #expect(try lib.isEmpty())
+        let save = try await lib.capture(url: "https://example.com/trowel", title: "Trowel")
+        #expect(try lib.isEmpty() == false)
+        try await lib.trash([save.id])
+        #expect(try lib.isEmpty())
+    }
+
+    /// Every write to a save moves the revision the shared code's cached list is keyed on, and a search
+    /// after a change sees it.
+    @Test func itemsRevisionMovesOnEveryWrite() async throws {
+        let lib = try library()
+        let start = try lib.database.itemsRevision()
+        let save = try await lib.capture(url: "https://example.com/trowel", title: "Trowel")
+        let added = try lib.database.itemsRevision()
+        #expect(added > start)
+        #expect(try await lib.search("trowel").items.map(\.id) == [save.id])
+        try await lib.update(save.id, ["title": "Garden trowel"])
+        #expect(try lib.database.itemsRevision() > added)
+        #expect(try await lib.search("garden").items.map(\.id) == [save.id])
+        try await lib.trash([save.id])
+        #expect(try await lib.search("trowel").items.isEmpty)
+    }
+
     @Test func bareLinkStaysALink() async throws {
         let r = try await library().capture(product: Library.sharedProduct(url: "https://example.com/", title: "Example Domain", text: nil))
         #expect(r.save?.kind == "link")

@@ -33,11 +33,17 @@ before(async () => {
   const origError = console.error;
   console.error = (...a) => { errors.push(a.map(String).join(' ')); };
   await import('../keepsake/src/dashboard/dashboard.js');
-  await settle();
+  // Boot reads the store before its first render: under a busy full-suite run that takes longer than one settle.
+  await until(() => view()?.textContent.trim());
   console.error = origError;
 });
 
 const settle = () => new Promise((r) => setTimeout(r, 60));
+// Waits (up to 3 s) until check() is truthy, for renders that land later when the machine is busy.
+async function until(check, ms = 3000) {
+  const end = Date.now() + ms;
+  while (!check() && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+}
 // The dashboard re-renders 150 ms after a storage change (debounced); wait past that.
 const afterChange = () => new Promise((r) => setTimeout(r, 400));
 const view = () => window.document.getElementById('view');
@@ -73,7 +79,9 @@ test('sample data appears in the Library and Review', async () => {
   await store.loadSampleData();
   await settle();
   await settle();
-  const all = await go('#all');
+  await go('#all');
+  await until(() => /Two-person ultralight backpacking tent/.test(view().textContent));
+  const all = view().textContent;
   assert.match(all, /Two-person ultralight backpacking tent/);
   const review = await go('#review');
   assert.match(review, /Morning light, kitchen corner/);
