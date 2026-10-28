@@ -193,12 +193,12 @@ final class LibraryModel {
                 try await library.prepare()
                 #if DEBUG
                 // Screenshots and UI tests: -importOnLaunch <path to a Chrome export> fills an empty library.
-                if let path = UserDefaults.standard.string(forKey: "importOnLaunch"), (try? library.saves().isEmpty) == true {
+                if let path = UserDefaults.standard.string(forKey: "importOnLaunch"), (try? library.isEmpty()) == true {
                     _ = try? await library.importExport(try Data(contentsOf: URL(fileURLWithPath: path)), replace: true)
                 }
                 // Performance runs on a device: -seedPerf 5000 fills an empty library with that many products.
                 let seed = UserDefaults.standard.integer(forKey: "seedPerf")
-                if seed > 0, (try? library.saves().isEmpty) == true {
+                if seed > 0, (try? library.isEmpty()) == true {
                     _ = try? await library.importExport(Self.syntheticExport(seed), replace: true)
                 }
                 #endif
@@ -212,7 +212,9 @@ final class LibraryModel {
         }
         do {
             for try await list in library.observeSaves() {
-                saves = list
+                // An in-process write arrives here and from the refresh() after it: the second, unchanged
+                // list would redraw every screen that reads the library for nothing.
+                if list != saves { saves = list }
                 loaded = true
                 glance = nil
                 widgetsChanged()
@@ -248,7 +250,7 @@ final class LibraryModel {
         #endif
         switch SyncPreference.choice {
         case nil:
-            if (try? library.saves().isEmpty) ?? true { setSync(true) } else { askToSync = true }
+            if (try? library.isEmpty()) ?? true { setSync(true) } else { askToSync = true }
         case true?:
             startSync()
         case false?:
@@ -339,16 +341,30 @@ final class LibraryModel {
     /// thread, so a tap that calls it never waits on the whole library.
     func refresh() { Task { await reload() } }
 
-    private var reloads = 0
+    /// One read of the library at a time: calls that land while one runs share a single read after it (an
+    /// AI run or an Undo asks several times in a row), rather than each reading every save again.
+    @ObservationIgnored private var reloading: Task<Void, Never>?
+    @ObservationIgnored private var reloadAgain = false
     func reload() async {
         guard let library else { return }
-        reloads += 1
-        let mine = reloads
-        let list = try? await Task.detached(priority: .userInitiated) { try library.saves() }.value
-        // A newer reload started meanwhile: its read is the fresher one.
-        guard let list, mine == reloads else { return }
-        saves = list
-        await loadDestinations()
+        if let reloading {
+            reloadAgain = true
+            await reloading.value
+            return
+        }
+        let run = Task {
+            repeat {
+                reloadAgain = false
+                let list = try? await Task.detached(priority: .userInitiated) { try library.saves() }.value
+                // Unchanged (the usual case after a write this app made, which observeSaves already showed):
+                // nothing redraws.
+                if let list, list != saves { saves = list }
+                await loadDestinations()
+            } while reloadAgain
+            reloading = nil
+        }
+        reloading = run
+        await run.value
     }
 
     /// The after-save work that's turned on (AI tidy, Lifestyle fill-in), for saves made in the Share

@@ -28,11 +28,18 @@ public final class KeepsakeCore: @unchecked Sendable {
     private var timers: [Int: DispatchWorkItem] = [:]
     private var nextTimer = 1
     private var loadError: String?
+    /// Why the shared code couldn't load: every call then fails with it.
+    private var loadFailure: Error?
 
+    /// Returns at once: the shared code (~500 KB of JavaScript) loads on `queue`, which every call waits
+    /// behind, so the first call finds it ready. Loading it here blocked whoever opened the library (the app's
+    /// launch, the share sheet's first frame) while JavaScriptCore parsed it.
     public init(database: RecordDatabase, transport: NetworkTransport = URLSessionTransport()) throws {
         self.database = database
         self.transport = transport
-        try queue.sync { try load() }
+        queue.async { [self] in
+            do { try load() } catch { loadFailure = error }
+        }
     }
 
     private func load() throws {
@@ -279,6 +286,10 @@ public final class KeepsakeCore: @unchecked Sendable {
     public func callJSON(_ path: String, argsJSON: String = "[]") async throws -> String {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
             queue.async { [self] in
+                guard let context else {
+                    cont.resume(throwing: loadFailure ?? CoreError.loading("Internet Binder's shared code didn't load."))
+                    return
+                }
                 var finished = false
                 let ok: @convention(block) (String) -> Void = { v in
                     guard !finished else { return }

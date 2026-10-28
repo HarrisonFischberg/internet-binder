@@ -623,5 +623,9 @@ struct TrashScreen: View {
         .navigationTitle("Trash")
         .task { await load() }
     }
-    private func load() async { trashed = (try? model.library?.saves(trash: true)) ?? [] }
+    /// Read off the main thread: a full Trash is every save in it, decoded.
+    private func load() async {
+        guard let library = model.library else { trashed = []; return }
+        trashed = (try? await Task.detached(priority: .userInitiated) { try library.saves(trash: true) }.value) ?? []
+    }
 }

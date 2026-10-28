@@ -102,6 +102,11 @@ public final class Library: @unchecked Sendable {
         try database.pool.read { try Self.fetchSaves($0, trash: trash) }
     }
 
+    /// No saves outside the Trash, asked of the column rather than by reading every save.
+    public func isEmpty() throws -> Bool {
+        try database.pool.read { try Bool.fetchOne($0, sql: "SELECT NOT EXISTS (SELECT 1 FROM item WHERE deletedAt IS NULL)") ?? true }
+    }
+
     /// A save's body for lists, without the pictures stored inside it. A picture saved on this device is a
     /// `data:` URL of ~35 KB, kept twice (`image` and `images`), so it was most of every body: reading the
     /// library for a list decoded every picture and held them all in memory. Lists get a marker

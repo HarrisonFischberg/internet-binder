@@ -221,6 +221,16 @@ struct CaptureTests {
         return try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
     }
 
+    /// isEmpty asks SQLite instead of reading every save, and a save in the Trash doesn't count.
+    @Test func emptyMeansNothingOutsideTheTrash() async throws {
+        let lib = try library()
+        #expect(try lib.isEmpty())
+        let save = try await lib.capture(url: "https://example.com/trowel", title: "Trowel")
+        #expect(try lib.isEmpty() == false)
+        try await lib.trash([save.id])
+        #expect(try lib.isEmpty())
+    }
+
     @Test func bareLinkStaysALink() async throws {
         let r = try await library().capture(product: Library.sharedProduct(url: "https://example.com/", title: "Example Domain", text: nil))
         #expect(r.save?.kind == "link")
