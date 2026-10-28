@@ -10,6 +10,7 @@ struct SaveDetailScreen: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dismiss) private var dismiss
     @State private var detail: SaveDetail?
     @State private var checked: Set<Int> = []
@@ -212,7 +213,8 @@ struct SaveDetailScreen: View {
         if let based = detail?.basedOn, let link = URL(string: based.url) {
             let site = based.site.flatMap { $0.isEmpty ? nil : $0 } ?? link.host() ?? "another site"
             Button { openURL(link) } label: {
-                HStack(alignment: .top, spacing: 12) {
+                // Accessibility sizes: the icon sits above the words so they get the card's full width.
+                (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))) {
                     Image(systemName: "link").font(.subheadline.weight(.semibold)).foregroundStyle(KindStyle("recipe").color)
                         .padding(.top, 2).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
@@ -222,9 +224,12 @@ struct SaveDetailScreen: View {
                             .font(.footnote).foregroundStyle(t.inkMuted)
                     }
                     .multilineTextAlignment(.leading)
-                    Spacer(minLength: 0)
-                    Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted).accessibilityHidden(true)
+                    if !typeSize.isAccessibilitySize {
+                        Spacer(minLength: 0)
+                        Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted).accessibilityHidden(true)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .frame(minHeight: 44)
                 .ksSurface()

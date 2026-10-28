@@ -91,6 +91,19 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.buttons["Cooked, done"].waitForExistence(timeout: 5))
     }
 
+    func testWebRecipeSaysWhereItsFrom() {
+        let app = XCUIApplication()
+        app.launchEnvironment["KEEPSAKE_DB"] = "uitest-\(UUID().uuidString)"
+        app.launchArguments += ["-importOnLaunch", URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../demo/keepsake-web-recipe-demo.json").standardized.path]
+        app.launch()
+        open(app, kind: "Recipes", save: "Apple Fritter Coffee Cake")
+        // An Instagram post that never wrote its recipe down: the close one found online names its site.
+        let note = app.buttons["recipe.basedOn"]
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        XCTAssertTrue(note.label.hasPrefix("Based on a recipe from Sally's Baking Addiction"), note.label)
+    }
+
     func testWorkoutGoalAndCheckIn() {
         let app = launch()
         open(app, kind: "Workouts", save: "Push-up ladder")
