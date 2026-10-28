@@ -140,12 +140,8 @@ final class LibraryModel {
     /// Imported saves your provider hasn't read yet (needsAi), newest first.
     var aiBacklog: [Save] { index.aiBacklog }
     let library: Library?
-    /// iCloud sync (Settings → iCloud), running while it's on.
-    private(set) var sync: CloudSync?
-    private(set) var syncOn = SyncPreference.isOn
-    private(set) var syncStatus: CloudSync.Status?
-    /// The one-time question for a device that already has a library when sync arrives.
-    var askToSync = false
+    /// iCloud sync (Settings → iCloud).
+    let cloud: SyncModel
 
     struct Toast: Identifiable, Equatable {
         let id = UUID()
@@ -182,6 +178,9 @@ final class LibraryModel {
             library = nil
             problem = "Internet Binder couldn't open your library. \(error.localizedDescription)"
         }
+        cloud = SyncModel(database: library?.database)
+        cloud.onRemoteChange = { [weak self] in self?.syncChanged() }
+        cloud.onTurned = { [weak self] on in if on { self?.beginSyncRun() } else { self?.endSyncRun() } }
     }
 
     func start() async {
@@ -205,7 +204,7 @@ final class LibraryModel {
                 finishSaves()
                 await refreshAIReady()
                 await loadDestinations()
-                await decideSync()
+                cloud.decide { (try? library.isEmpty()) ?? true }
             } catch {
                 problem = error.localizedDescription
             }
@@ -240,94 +239,6 @@ final class LibraryModel {
     #endif
 
     // MARK: iCloud sync
-
-    /// Starts sync if it's on. The first time: on by itself for a new library, asked once for one
-    /// that already has saves. UI tests (a library of their own) never sync.
-    func decideSync() async {
-        guard let library, ProcessInfo.processInfo.environment["KEEPSAKE_DB"] == nil else { return }
-        #if DEBUG
-        if UserDefaults.standard.bool(forKey: "noSync") { return }
-        #endif
-        switch SyncPreference.choice {
-        case nil:
-            if (try? library.isEmpty()) ?? true { setSync(true) } else { askToSync = true }
-        case true?:
-            startSync()
-        case false?:
-            break
-        }
-    }
-
-    func setSync(_ on: Bool) {
-        guard let library else { return }
-        SyncPreference.choice = on
-        syncOn = on
-        if on {
-            // Everything goes up (or merges with what iCloud already has) on the first sync. Changes made
-            // while sync was off are dropped first, so a library erased then would not erase iCloud.
-            try? library.database.resetSync()
-            try? library.database.markAllPending()
-            startSync()
-            beginSyncRun()
-        } else {
-            endSyncRun()
-            sync?.stop()
-            sync = nil
-            syncStatus = nil
-            try? library.database.resetSync()
-        }
-    }
-
-    private func startSync() {
-        guard let library, sync == nil else { return }
-        let s = CloudSync(database: library.database, keys: LibraryKeys(store: KeychainLibraryKeys(accessGroup: CloudSync.keychainGroup)))
-        s.onChange = { [weak self] in Task { @MainActor in self?.syncChanged() } }
-        s.onStatus = { [weak self] status in Task { @MainActor in self?.statusChanged(status) } }
-        s.onError = { [weak self] error in Task { @MainActor in self?.syncStatus = .failed(error.localizedDescription) } }
-        s.onPurged = { [weak self] in Task { @MainActor in self?.setSync(false) } }
-        sync = s
-        s.start()
-        Task { await checkAccount() }
-    }
-
-    /// Fetches and sends now (the app coming to the front).
-    func syncNow() {
-        guard let sync else { return }
-        sync.noteLocalChanges()
-        Task.detached { try? await sync.syncNow() }
-        // Back from the Settings app, maybe signed in now.
-        Task { await checkAccount() }
-    }
-
-    /// Whether this device has an iCloud account sync can use (checkAccount).
-    private var iCloudReady = false
-
-    private func checkAccount() async {
-        // It throws when there's no account to ask about (a Simulator with no Apple Account does).
-        let status = (try? await CKContainer(identifier: CloudSync.containerID).accountStatus()) ?? .couldNotDetermine
-        iCloudReady = status == .available
-        if !iCloudReady { syncStatus = .signedOut }
-        else if syncStatus == nil || syncStatus == .signedOut, let sync {
-            // Up-to-date reports dropped before the account was known: sync once more to show one.
-            syncStatus = nil
-            Task.detached { try? await sync.syncNow() }
-        }
-    }
-
-    private func statusChanged(_ status: CloudSync.Status) {
-        // CKSyncEngine reports fetches and sends even when it can't reach iCloud, and a finished send
-        // after one that failed: none of those is syncing or up to date.
-        switch status {
-        case .syncing:
-            if syncStatus == .signedOut { return }
-        case .upToDate:
-            guard iCloudReady else { return }
-            if case .failed? = syncStatus { return }
-        default:
-            break
-        }
-        syncStatus = status
-    }
 
     /// Records from another device landed: lists, collections, AI settings and widgets catch up.
     private func syncChanged() {
