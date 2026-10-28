@@ -30,9 +30,12 @@ reads off the main thread, `SaveIndex`, debounced widget snapshot) and the audit
    a full `render()`), debounced 150 ms. Fine at today's sizes (Chrome stores picture URLs, not pictures);
    worth doing with item 5's change counter if libraries grow into the thousands.
 
-Not measured on a device from the cloud. The repo already has the harness: `ios/UITests/PerformanceTests.swift`
-(`KEEPSAKE_PERF=1`, 5,000 saves: launch to usable, scrolling). Before/after numbers go in the PR once run
-on the Mac.
+Measured on an iPhone 17 simulator with 5,000 saves (`testLaunchToUsableLibrary`, 5 launches per number,
+3 rounds each, Release): main 2.75 / 2.88 / 3.30 s, this branch 2.76 / 3.11 / 2.74 s. Launch to a usable
+library is the same within noise (rounds vary by up to 16%): the launch metric waits for more than the shared
+code's load. One earlier run showed `Library(...)` init at 237 ms on main and 32 ms here on first launch,
+measured once per version, so treat it as a hint, not a result. Findings 2 to 5 cut repeated work after
+launch (redraws, re-parsing on search), which this metric doesn't cover.
 
 ## Architecture cards
 
