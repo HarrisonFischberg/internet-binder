@@ -14,6 +14,6 @@
   "devDependencies": {
     "fake-indexeddb": "6.0.0",
     "jsdom": "25.0.1",
-    "maplibre-gl": "4.7.1"
+    "maplibre-gl": "6.4.1"
   }
 }
