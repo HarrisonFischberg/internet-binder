@@ -378,6 +378,10 @@
       await K.fill.fillSave(store, id, { review: true }, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which] });
       return withFact(await store.getItem(id));
     },
+    // You picked one of the places Fix with AI found (shared/placeResolve.js placeChoices).
+    async choosePlace(id, index) {
+      return withFact(await K.placeResolve.choosePlace(store, id, index));
+    },
     async aiLog() { return (await store.getAiLog()).slice().reverse(); },
     // Undo AI changes (shared/aiFix.js undoFixes): newest first, back to each "before"; a collection
     // deleted since sends the save to Review instead.
@@ -427,6 +431,24 @@
           report.checked++;
           if (r.changed) changed.add(it.id);
           if (r.moved) report.filed.push({ id: it.id, collection: K.kinds.kindInfo(r.kind).plural });
+        } else if (K.kinds.kindOf((await store.getItem(it.id)) || it) !== 'product') {
+          // A post or link: which of your collections it's about, with the words of the save that show it,
+          // checked before it moves (shared/filing.js). Not sure: it waits in Review with the reason.
+          if (r && r.changed) changed.add(it.id);
+          let f = null;
+          try {
+            f = await K.filing.fileSave(store, it.id, { runId, deviceOnly, scope: deviceOnly ? 'review' : 'all', items: async () => listItems() });
+          } catch (e) {
+            report.error = String((e && e.message) || e);
+            if (/\((401|403|429)\)|API key|base URL/i.test(report.error)) break;
+            continue;
+          }
+          report.checked++;
+          if (f && f.moved) {
+            changed.add(it.id);
+            const col = (await store.getCollections()).find((c) => c.id === f.filing.collectionId);
+            report.filed.push({ id: it.id, collection: col ? col.name : '' });
+          }
         } else {
           // Something to buy: your provider already named it from its picture and shop page (understandProduct);
           // the check below only files it and confirms a price.

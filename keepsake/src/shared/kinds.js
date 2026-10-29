@@ -120,7 +120,10 @@ export function recipeFromSchema(r) {
 
 const INGREDIENT_HEAD = /^\s*(?:[#*•\-–\s]*)(?:ingredients?|what you(?:'|’)ll need|you(?:'|’)ll need|shopping list)\s*[:：]?\s*$/i;
 const STEP_HEAD = /^\s*(?:[#*•\-–\s]*)(?:method|steps?|instructions?|directions?|how to make(?: it)?|preparation|to make)\s*[:：]?\s*$/i;
-const QUANTITY = /^(?:\d+[\d\s/.,½¼¾⅓⅔-]*|a |an |one |two |three |half |pinch|handful|splash|dash)\s*(?:g|kg|ml|l|oz|lb|lbs|cups?|tbsp|tsp|tablespoons?|teaspoons?|cloves?|cans?|tins?|slices?|sticks?|bunch|pinch|handful|large|small|medium|x)?\b/i;
+const QUANTITY = /^(?:\d+[\d\s/.,½¼¾⅓⅔-]*|a |an |one |two |three |half |pinch|handful|splash|dash)\s*(?:g|kg|ml|l|oz|lb|lbs|T|t|cups?|tbsp|tsp|tablespoons?|teaspoons?|cloves?|cans?|tins?|slices?|sticks?|bunch|pinch|handful|large|small|medium|x)?\b/i;
+
+// A cooking measure, or a word for something people eat or drink (singular stems; plurals match too).
+const FOOD = /(?:^|[^\p{L}])(?:\d+\s*(?:g|kg|mg|ml|l|oz|lb|lbs)\b|cups?|tbsp|tsp|tablespoons?|teaspoons?|cloves?|pinch|handful|dash|splash|sprigs?|slices?|\d+\s*(?:cans?|tins?)|bunch|scoops?|sticks? of|grams?|ounces?|pounds?|litres?|liters?|egg|flour|sugar|butter|oil|salt|pepper|garlic|onion|milk|cream|cheese|parmesan|rice|pasta|spaghetti|noodle|bread|chicken|beef|pork|fish|salmon|tuna|shrimp|prawn|tofu|bean|lentil|chickpea|tomato|potato|carrot|spinach|broccoli|kale|lettuce|pepper|chili|chilli|lemon|lime|apple|banana|berry|berries|strawberry|strawberries|blueberry|blueberries|avocado|mushroom|corn|oat|honey|syrup|vinegar|soy sauce|sauce|broth|yogurt|yoghurt|vanilla|cinnamon|cumin|paprika|ginger|basil|parsley|cilantro|coriander|thyme|rosemary|oregano|nut|almond|peanut|walnut|chocolate|cocoa|coffee|tea|water|wine|juice|protein powder|powder|seed|herb|spice|meat|sausage|bacon|ham|zucchini|courgette|cucumber|pumpkin|squash|coconut|mango|pineapple|orange|grape|peach|pear|cabbage|celery|leek|shallot|scallion|olive|caper|anchovy|anchovies|mayo|mustard|ketchup|dough|yeast|baking (?:soda|powder)|cornstarch|gelatin|tortilla|bun|quinoa|couscous|feta|mozzarella|cheddar|ricotta|mascarpone|matcha|ice)(?:e?s)?(?![\p{L}])/iu;
 
 const NOT_FOOD = /\b(?:reps?|rounds?|sets?|seconds?|secs?|minutes?|mins?|kettlebells?|dumbbells?|barbells?|times|days?|weeks?)\b/i;
 
@@ -146,31 +149,60 @@ export function recipeFromText(text) {
   }
   // No headings: a run of quantity-led lines is an ingredient list.
   if (!ingredients.length) {
-    // "60 seconds non-stop", "1 kettlebell", "10 reps" are a workout's numbers, not ingredients.
-    const run = lines.filter((l) => QUANTITY.test(l.replace(/^[•\-–*·]+\s*/, '')) && l.length < 90 && !NOT_FOOD.test(l));
+    // "60 seconds non-stop", "1 kettlebell", "10 reps" are a workout's numbers, not ingredients; "1. Rewrite
+    // emails" is a numbered list, not one of something.
+    const run = lines.filter((l) => QUANTITY.test(l.replace(/^[•\-–*·]+\s*/, '')) && !/^\d{1,2}[.)]\s/.test(l) && l.length < 90 && !NOT_FOOD.test(l));
     if (run.length >= 3) ingredients.push(...run.map((l) => clean(l.replace(/^[•\-–*·]+\s*/, ''), 200)));
   }
   if (ingredients.length < 2) return null;
+  // Something to eat: at least one line with a cooking measure or a food. "Ingredients: an LLM API key,
+  // a vector database, 3 tools" is a recipe for software.
+  if (!ingredients.some((l) => FOOD.test(l))) return null;
   return { ingredients: ingredients.slice(0, 80), steps: steps.slice(0, 60), yield: '', totalMinutes: null, prepMinutes: null, cookMinutes: null, cuisine: '', category: '', author: '', source: 'caption' };
+}
+
+// Something to eat is named (a food or a cooking measure), anywhere in the text.
+export const mentionsFood = (text) => FOOD.test(String(text || '')) && !/\b(?:ai|llm|gpt|claude|chatgpt|agent|prompt|api|code|coding|software|app)\b[^.\n]{0,40}\brecipe\b|\brecipe\b[^.\n]{0,40}\b(?:ai|llm|agent|prompt|api|code|coding|software|app|success|disaster)\b/i.test(String(text || '')) || recipeFromText(text) !== null;
+
+// A recipe post whose recipe isn't in the caption ("Comment RECIPE and I'll send it", "full recipe on my
+// blog"): it says recipe, or two cooking words, and names something to eat. A Recipe with no ingredients
+// (nothing made up), like a workout whose routine is only in the video.
+const RECIPE_WORD = /(?:^|[^\p{L}])#?(?:recipes?|full recipe)(?![\p{L}])/iu;
+const COOKING = /(?:^|[^\p{L}])(bake[ds]?|baking|oven|preheat|air ?fryer|homemade|from scratch|cook(?:ed|ing)?|simmer|whisk|saut[eé]|roast(?:ed|ing)?|fry|fried|frying|grill(?:ed)?|dessert|ingredients)(?![\p{L}])/giu;
+export function isRecipePost(text) {
+  const t = String(text || '');
+  if (!FOOD.test(t) || isWorkoutPost(t)) return false;
+  const cooking = new Set([...t.matchAll(COOKING)].map((m) => m[1].toLowerCase()));
+  return RECIPE_WORD.test(t) || cooking.size >= 2;
 }
 
 // --- workouts ----------------------------------------------------------------------------------
 
 // Words that say a caption or page is about training. Exercise lines alone aren't enough
 // ("2 x 400 g tins" is a recipe), so a workout needs one of these as well.
-const WORKOUT_WORDS = /\b(?:work[- ]?outs?|exercises?|routine|hiit|wod|amrap|emom|tabata|circuit|reps|sets|leg day|arm day|push day|pull day|full[- ]body|upper body|lower body|core|abs|glutes|strength|training|warm[- ]?up|cool[- ]?down|calisthenics|mobility|stretch(?:es|ing)?|cardio)\b/i;
-export const looksLikeWorkout = (text) => WORKOUT_WORDS.test(String(text || ''));
+const WORKOUT_WORDS = /\b(?:work[- ]?outs?|exercises?|exercices?|routine|hiit|wod|amrap|emom|tabata|circuit|reps|sets|leg day|arm day|push day|pull day|full[- ]body|upper body|lower body|core|abs|glutes|strength|training|warm[- ]?up|cool[- ]?down|calisthenics|mobility|stretch(?:es|ing)?|cardio|squats?|deadlifts?|lunges?|push[- ]?ups?|pull[- ]?ups?|planks?|burpees?|kettlebells?|dumbbells?|barbells?|bench press|rows?)\b/i;
+// "Training a model", "core features", "sets of experiments": training words about software and AI.
+const NOT_EXERCISE_TOPIC = /\b(?:(?:train(?:ing|ed)?|fine[- ]tun(?:e|ing))\s+(?:a|an|the|your|my|our)?\s*(?:own\s+)?(?:ai|ml|llm|language|neural|machine|deep|custom|base)?\s*(?:models?|networks?|llms?|agents?|classifiers?|datasets?)|machine learning|neural net|dataset|gpu|python|notebook|epochs?|benchmark)\b/i;
+export const looksLikeWorkout = (text) => WORKOUT_WORDS.test(String(text || '')) && !(NOT_EXERCISE_TOPIC.test(String(text || '')) && !isWorkoutPost(text));
 
 // Clear signs a post is a workout even when its caption names no exercises (the routine is in the
 // video): "routine", "#homeworkout", "kettlebell", "reps", "yoga"… Two different ones are needed, so a
 // recipe that "sets" overnight or a "morning routine" stays what it is.
-const WORKOUT_SIGNALS = /(?:^|[^\p{L}\p{N}])#?(home ?work ?outs?|work ?outs?|routines?|exercises?|hiit|yoga|pilates|mobility|stretch(?:es|ing)|calisthenics|kettlebells?|dumbbells?|reps|rounds|leg day|arm day|upper[- ]body|lower[- ]body|full[- ]body|home ?gym|home ?training|warm[- ]?up|circuits?|amrap|emom|tabata)(?![\p{L}\p{N}])/giu;
+const WORKOUT_SIGNALS = /(?:^|[^\p{L}\p{N}])#?((?:at ?)?home ?work ?outs?|work ?outs?|routines?|exercises?|hiit|yoga|pilates|mobility|stretch(?:es|ing)|calisthenics|kettlebells?|dumbbells?|reps|rounds|leg day|arm day|upper[- ]body|lower[- ]body|full[- ]body|home ?gym|home ?training|warm[- ]?up|cool[- ]?down|circuits?|amrap|emom|tabata|abs|finisher|burner|couch to 5k|[0-9]+ ?k run|intervals?)(?![\p{L}\p{N}])/giu;
+// "post-workout smoothie", "pre-workout snack": the workout is somewhere else.
+const AROUND_WORKOUT = /\b(?:post|pre|after|before)[- ]?(?:work ?out|training|gym)\b/gi;
 export function workoutSignals(text) {
   const seen = new Set();
-  for (const m of String(text || '').matchAll(WORKOUT_SIGNALS)) seen.add(m[1].toLowerCase().replace(/[\s-]/g, '').replace(/(?:es|s)$/, ''));
+  for (const m of String(text || '').replace(AROUND_WORKOUT, ' ').matchAll(WORKOUT_SIGNALS)) seen.add(m[1].toLowerCase().replace(/[\s-]/g, '').replace(/^at/, '').replace(/(?:es|s)$/, ''));
   return seen.size;
 }
-export const isWorkoutPost = (text) => workoutSignals(text) >= 2;
+// A first line that names a workout ("Simple Beginner's Abs Workout", "Leg day finisher") counts double.
+const WORKOUT_TITLE = /\b(?:work ?outs?|routine|hiit|pilates|yoga flow|leg day|arm day|push day|pull day|abs burner|mobility flow|stretch(?:es|ing)? routine|full[- ]body)\b/i;
+export const isWorkoutPost = (text) => {
+  const t = String(text || '');
+  const first = t.split('\n')[0].replace(AROUND_WORKOUT, ' ');
+  return workoutSignals(t) + (WORKOUT_TITLE.test(first) ? 1 : 0) >= 2;
+};
 
 // Recipe or workout, by one rule for every path (a save, an Instagram import, an old backup). A routine
 // listed with no "Ingredients" heading ("10 Upright Rows", "10 Horn Curls"…) is a workout, not a recipe.
@@ -560,6 +592,8 @@ export function placeFromText(text) {
     let name = addressOnly ? nameFromHandle(handle) : clean(parts[0], 120);
     // Phrases that aren't a place's name ("This spot is closed", "3 Locations").
     if (/^(?:this|that|the)\s+(?:spot|place|restaurant|shop|cafe|location)\b|^\d+\s+locations?\b|^(?:closed|permanently closed|new location)\b/i.test(name)) name = '';
+    // A call to action after a 📌 ("📌 Save this for your next back workout", "📌 Comment PLAN") is no place.
+    if (/^(?:save|saved|comment|follow|share|send|tag|try|tap|click|dm|like|repost|bookmark|pin)\b/i.test(name)) continue;
     if (!name && !addressOnly && !own) continue;
     if (!name && own) name = nameFromHandle(own);
     const rest = addressOnly ? parts : parts.slice(1);
@@ -1026,7 +1060,9 @@ const draftedOf = (kind, details) => {
 };
 const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 // Where looked-up details came from (OpenStreetMap, Wikidata, Open Library, or your AI provider), with a link.
-const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI'];
+const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI', 'Web'];
+// What confirmed a place's address and pin (Fix with AI's place check, placeResolve.js).
+const CONFIRMED_BY = ['post', 'openstreetmap', 'cited-page', 'you'];
 // Where a film or show streams: [{ service, how: 'subscription' | 'free' | 'rent' | 'buy' | '', url }].
 const WATCH_HOW = ['subscription', 'free', 'rent', 'buy'];
 function watchOf(v) {
@@ -1045,7 +1081,9 @@ function cleanLookup(v) {
   if (!v || typeof v !== 'object' || !LOOKUP_SOURCES.includes(v.source)) return undefined;
   const url = typeof v.url === 'string' && /^https:\/\//.test(v.url) ? v.url.slice(0, 300) : '';
   // approximate: the pin is the street's, not the door's (the lookup knew the street but not the number).
-  return { source: v.source, url, ...(v.approximate === true ? { approximate: true } : {}) };
+  const by = Array.isArray(v.verifiedBy) ? [...new Set(v.verifiedBy.filter((x) => CONFIRMED_BY.includes(x)))] : [];
+  const at = typeof v.at === 'string' && !Number.isNaN(Date.parse(v.at)) ? v.at : '';
+  return { source: v.source, url, ...(v.approximate === true ? { approximate: true } : {}), ...(by.length ? { verifiedBy: by } : {}), ...(at ? { at } : {}) };
 }
 
 export function sanitizeDetails(kind, details) {

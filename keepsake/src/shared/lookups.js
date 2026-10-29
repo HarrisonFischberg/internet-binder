@@ -46,7 +46,7 @@ const search = (q) => `https://nominatim.openstreetmap.org/search?format=jsonv2&
 // Directions count either way ("S. Lumpkin St" is "South Lumpkin Street").
 const DIRS = { north: 'n', south: 's', east: 'e', west: 'w', northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw' };
 const dirs = (s) => s.replace(/\b(north|south|east|west|northeast|northwest|southeast|southwest)\b/g, (d) => DIRS[d]);
-function sameStreet(address, a = {}) {
+export function sameStreet(address, a = {}) {
   const m = String(address).match(/^(\d+[a-z]?)\s+(.+)$/i);
   const num = m ? m[1].toLowerCase() : '';
   const street = dirs(norm((m ? m[2] : address).replace(/\b(st|ave|rd|blvd|ln|dr|pl|sq|ct|pkwy)\b\.?/gi, '')));
@@ -58,7 +58,7 @@ function sameStreet(address, a = {}) {
 // The result is in the city or area you saved ("New York" is the City of New York, not Watervliet, NY,
 // which has a 2309 2nd Avenue too). With no city, the state or region has to match.
 const AREA_ALIAS = { nyc: 'new york', ny: 'new york', la: 'los angeles', sf: 'san francisco', dc: 'washington', philly: 'philadelphia' };
-function inArea(locality, region, a = {}) {
+export function inArea(locality, region, a = {}) {
   const loc = AREA_ALIAS[norm(locality)] || locality;
   if (loc) return [a.city, a.town, a.village, a.hamlet, a.municipality, a.suburb, a.borough, a.city_district, a.neighbourhood, a.quarter].some((f) => f && sameName(loc, f));
   if (region) return [a.state, a.province, a.region].some((f) => f && sameName(region, f)) || String(a['ISO3166-2-lvl4'] || '').toLowerCase().endsWith(`-${norm(region)}`);
@@ -66,7 +66,7 @@ function inArea(locality, region, a = {}) {
 }
 // Two matches more than a few hundred metres apart ("Ken's Artisan" is a bakery and a pizzeria) mean the
 // name alone can't tell which one you saved.
-const apart = (x, y) => Math.hypot(Number(x.lat) - Number(y.lat), (Number(x.lon) - Number(y.lon)) * Math.cos((Number(x.lat) * Math.PI) / 180)) > 0.003;
+export const apart = (x, y) => Math.hypot(Number(x.lat) - Number(y.lat), (Number(x.lon) - Number(y.lon)) * Math.cos((Number(x.lat) * Math.PI) / 180)) > 0.003;
 
 // An OpenStreetMap address as a place's fields: the street, the city (or town), and the state as its code
 // ("NY", from ISO 3166-2 "US-NY") so places group by state. Outside the US, the region's name.
@@ -118,6 +118,23 @@ export async function lookupPlace({ name, locality = '', address = '', region = 
     ...(approximate ? { address: String(address).trim() } : {}),
     lookup: { source: 'OpenStreetMap', url: hit.osm_type && hit.osm_id ? `https://www.openstreetmap.org/${hit.osm_type}/${hit.osm_id}` : '', ...(approximate ? { approximate: true } : {}) },
   };
+}
+
+// Every OpenStreetMap result for a name in an area, as place fields (Fix with AI's place check,
+// src/shared/placeResolve.js, compares them; nothing here decides which one is right).
+export async function searchPlaces({ name, locality = '', address = '', region = '' }, fetchFn, waitTurn = async () => {}) {
+  if (!name || (!address && !locality && !region)) return [];
+  await waitTurn();
+  const list = await getJson(fetchFn, search([name, address, locality, region].filter(Boolean).join(', ')));
+  return (Array.isArray(list) ? list : []).map((r) => {
+    const lat = Number(r.lat);
+    const lng = Number(r.lon);
+    return {
+      name: r.name || r.namedetails?.name || String(r.display_name || '').split(',')[0], ...areaOf(r.address || {}),
+      lat: Number.isFinite(lat) ? lat : null, lng: Number.isFinite(lng) ? lng : null, category: String(r.type || '').replace(/_/g, ' '),
+      url: r.osm_type && r.osm_id ? `https://www.openstreetmap.org/${r.osm_type}/${r.osm_id}` : '', raw: r.address || {},
+    };
+  }).filter((c) => c.name);
 }
 
 // A place with a pin but no street address (a shared maps link): the address at that pin.

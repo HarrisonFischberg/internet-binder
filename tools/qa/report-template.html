@@ -1,0 +1,198 @@
+<title>Binder Sorting QA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column of binder "dividers" (tabbed section heads), summary first, every case last. */
+:root {
+  --paper: #f6f8f9; --sheet: #ffffff; --ink: #14232b; --muted: #5b6c75; --rule: #d9e1e5;
+  --accent: #0e6178; --accent-soft: #e2eff3; --good: #1f7a4d; --good-soft: #e3f3ea; --bad: #b3361f; --bad-soft: #f8e6e1; --warn: #94650b; --warn-soft: #f6eedb;
+  --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0f171b; --sheet: #162127; --ink: #e4ecef; --muted: #97a8b0; --rule: #2a3940;
+  --accent: #6cc3d9; --accent-soft: #173640; --good: #6fd19c; --good-soft: #15342a; --bad: #f08a72; --bad-soft: #3d1f19; --warn: #e3b85a; --warn-soft: #3a2f16; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #0f171b; --sheet: #162127; --ink: #e4ecef; --muted: #97a8b0; --rule: #2a3940;
+  --accent: #6cc3d9; --accent-soft: #173640; --good: #6fd19c; --good-soft: #15342a; --bad: #f08a72; --bad-soft: #3d1f19; --warn: #e3b85a; --warn-soft: #3a2f16; color-scheme: dark }
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--body); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 40px }
+h1, h2 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: -0.01em }
+h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 700 }
+h2 { font-size: 22px; font-weight: 700 }
+p { margin: 0; max-width: 68ch }
+.meta { color: var(--muted); font: 13px/1.5 var(--mono) }
+.lede { font-size: 17px }
+section { display: grid; gap: 14px }
+.tab { display: inline-block; align-self: start; justify-self: start; font: 600 11px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 6px 10px; border-radius: 6px 6px 0 0; border-bottom: 2px solid var(--accent) }
+.verdict { background: var(--sheet); border: 1px solid var(--rule); border-left: 4px solid var(--warn); padding: 16px 18px; border-radius: 8px; display: grid; gap: 8px }
+.verdict strong { font-family: var(--display); font-size: 18px }
+.scroll { overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top }
+th { font: 600 12px/1.3 var(--body); color: var(--muted); letter-spacing: .03em; white-space: nowrap }
+tr:last-child td { border-bottom: 0 }
+#sets td:first-child, #mac td:first-child { min-width: 230px }
+.setabout { max-width: 34ch }
+td.num { font-family: var(--mono); font-size: 13px; white-space: nowrap }
+.ba { display: grid; gap: 4px; min-width: 150px }
+.ba .line { display: flex; gap: 8px; align-items: center }
+.ba .bar { height: 6px; border-radius: 3px; background: var(--rule); flex: 1; position: relative; min-width: 60px }
+.ba .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--muted) }
+.ba .after .bar i { background: var(--accent) }
+.ba small { font: 12px var(--mono); color: var(--muted); width: 112px; flex: none }
+.ba .after small { color: var(--ink) }
+.lower .after .bar i { background: var(--good) }
+.setname { font-weight: 600 }
+.setabout { color: var(--muted); font-size: 13px; margin-top: 2px; max-width: 46ch }
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end }
+.filters label { display: grid; gap: 4px; font: 600 12px var(--body); color: var(--muted) }
+select, input[type=search] { font: 14px var(--body); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 9px; min-width: 0 }
+input[type=search] { width: min(280px, 100%) }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.count { color: var(--muted); font-size: 13px }
+.cases { display: grid; gap: 8px }
+.case { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) }
+.case .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.case .id { font: 12px var(--mono); color: var(--muted) }
+.case .cap { color: var(--ink); overflow-wrap: anywhere }
+.case .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; font-size: 13px }
+.case .grid div { display: grid; gap: 2px; min-width: 0 }
+.case .grid b { font: 600 11px var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted) }
+.case .why { color: var(--muted); font-size: 12px; overflow-wrap: anywhere }
+.chip { font: 600 11px/1 var(--body); letter-spacing: .04em; padding: 5px 8px; border-radius: 999px; white-space: nowrap }
+.chip.fixed { color: var(--good); background: var(--good-soft) }
+.chip.regressed { color: var(--bad); background: var(--bad-soft) }
+.chip.still { color: var(--warn); background: var(--warn-soft) }
+.chip.right { color: var(--muted); background: var(--paper); border: 1px solid var(--rule) }
+.chip.wrong { color: var(--bad); background: var(--bad-soft) }
+.ok { color: var(--good) } .no { color: var(--bad) }
+button.more { justify-self: start; font: 600 14px var(--body); color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 6px; padding: 8px 14px; cursor: pointer }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch }
+@media (max-width: 640px) { .case .grid { grid-template-columns: minmax(0, 1fr) } .ba small { width: 96px } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:10px">
+    <h1>Binder Sorting QA</h1>
+    <p class="lede">How Internet Binder decides what a shared post is and which collection it goes in, measured on the same cases before and after this round of fixes.</p>
+    <p class="meta" id="meta"></p>
+  </header>
+
+  <section id="verdict-sec" hidden>
+    <span class="tab">Release call</span>
+    <div class="verdict" id="verdict"></div>
+  </section>
+
+  <section>
+    <span class="tab">First pass on this device</span>
+    <h2>Before and after, no AI</h2>
+    <p>What happens the moment you share a post, using only the rules on the device. “Correct” means the right type and the collection you'd pick. Each figure has its 95% range.</p>
+    <div class="scroll"><table id="sets"></table></div>
+  </section>
+
+  <section id="mac-sec" hidden>
+    <span class="tab">With AI, on your Mac</span>
+    <h2>Claude and Apple Intelligence</h2>
+    <p id="mac-about"></p>
+    <div class="scroll"><table id="mac"></table></div>
+    <ul class="plain" id="mac-notes"></ul>
+  </section>
+
+  <section id="places-sec" hidden>
+    <span class="tab">Fix with AI on a place</span>
+    <h2>Place check</h2>
+    <p>Each place case gives the post plus captured OpenStreetMap and web-search answers. A pass means the right outcome (verified, you choose, or not enough to go on) and no address, pin or link written without a source.</p>
+    <div class="scroll"><table id="places"></table></div>
+  </section>
+
+  <section>
+    <span class="tab">Every case</span>
+    <h2>Cases</h2>
+    <div class="filters">
+      <label for="f-set">Data set<select id="f-set"></select></label>
+      <label for="f-cat">Category<select id="f-cat"></select></label>
+      <label for="f-status">What changed<select id="f-status">
+        <option value="">All</option><option value="fixed">Fixed</option><option value="regressed">Got worse</option><option value="still">Still wrong</option><option value="right">Right both times</option><option value="wrong">Confidently wrong now</option>
+      </select></label>
+      <label for="f-q">Search<input type="search" id="f-q" placeholder="caption, id, collection"></label>
+    </div>
+    <p class="count" id="count"></p>
+    <div class="cases" id="cases"></div>
+    <button class="more" id="more" hidden>Show 100 more</button>
+  </section>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pc = (w) => (w && w.n ? `${Math.round(w.rate * 1000) / 10}%` : '—');
+const ci = (w) => (w && w.n ? `${w.k}/${w.n} · ${Math.round(w.lo * 100)}–${Math.round(w.hi * 100)}%` : '');
+
+$('meta').textContent = `Generated ${DATA.generated.slice(0, 16).replace('T', ' ')} UTC · before: ${DATA.sets[0]?.baseCommit || '?'} (main) · after: ${DATA.sets[0]?.finalCommit || '?'}`;
+
+if (DATA.mac?.verdict) {
+  $('verdict-sec').hidden = false;
+  $('verdict').innerHTML = `<strong>${esc(DATA.mac.verdict.title)}</strong>${DATA.mac.verdict.lines.map((l) => `<p>${esc(l)}</p>`).join('')}`;
+}
+
+function pair(b, a, lowerBetter) {
+  const bar = (w) => `<span class="bar"><i style="width:${w && w.n ? Math.round(w.rate * 100) : 0}%"></i></span>`;
+  return `<div class="ba${lowerBetter ? ' lower' : ''}"><div class="line"><small>was ${pc(b)}</small>${bar(b)}</div><div class="line after"><small>now ${pc(a)}</small>${bar(a)}</div><span class="meta">${esc(ci(a))}</span></div>`;
+}
+const METRICS = [['accuracy', 'Correct', false], ['review', 'Sent to Review', true], ['confidentWrong', 'Confidently wrong', true], ['aiMisroute', 'AI post → Review/Interesting', true], ['workoutAsRecipe', 'Workout → recipe', true]];
+$('sets').innerHTML = `<thead><tr><th>Data set</th>${METRICS.map((m) => `<th>${m[1]}</th>`).join('')}</tr></thead><tbody>${DATA.sets.map((s) => `<tr><td><div class="setname">${esc(s.label)}</div><div class="setabout">${esc(s.about)}</div></td>${METRICS.map(([k, , low]) => `<td>${s.final[k]?.n ? pair(s.base[k], s.final[k], low) : '<span class="meta">—</span>'}</td>`).join('')}</tr>`).join('')}</tbody>`;
+
+if (DATA.mac) {
+  $('mac-sec').hidden = false;
+  $('mac-about').textContent = DATA.mac.about;
+  const cols = ['correct', 'type', 'review', 'confidentWrong', 'aiMisroute', 'postAsProduct', 'network', 'cost'];
+  const head = { correct: 'Correct', type: 'Content type', review: 'Review', confidentWrong: 'Confidently wrong', aiMisroute: 'AI post → Review/Interesting', postAsProduct: 'Post read as a product', network: 'Network', cost: 'Cost' };
+  $('mac').innerHTML = `<thead><tr><th>Run</th>${cols.map((c) => `<th>${head[c]}</th>`).join('')}</tr></thead><tbody>${DATA.mac.runs.map((r) => `<tr><td><div class="setname">${esc(r.name)}</div><div class="setabout">${esc(r.about || '')}</div></td>${cols.map((c) => `<td class="num">${esc(r[c] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  $('mac-notes').innerHTML = (DATA.mac.notes || []).map((n) => `<li>${esc(n)}</li>`).join('');
+}
+
+if (DATA.places) {
+  $('places-sec').hidden = false;
+  const P = DATA.places;
+  $('places').innerHTML = `<thead><tr><th>Case</th><th>Before</th><th>Now</th><th>Outcome now</th><th>Notes</th></tr></thead><tbody>${P.rows.map((r) => `<tr><td>${esc(r.note)}<div class="meta">${esc(r.id)}</div></td><td>${r.beforeOk === null ? '—' : r.beforeOk ? '<span class="ok">pass</span>' : '<span class="no">fail</span>'}</td><td>${r.ok ? '<span class="ok">pass</span>' : '<span class="no">fail</span>'}</td><td class="num">${esc(r.outcome)}${r.choices ? ` · ${r.choices} choices` : ''}</td><td class="meta">${esc(r.address || r.fails.join('; '))}</td></tr>`).join('')}<tr><td><b>Total</b></td><td class="num">${pc(P.base?.correct)} pass, ${P.base?.wrongFact?.k ?? '?'} unsourced fact</td><td class="num">${pc(P.final.correct)} pass, ${P.final.wrongFact.k} unsourced fact</td><td></td><td></td></tr></tbody>`;
+}
+
+const rows = DATA.sets.flatMap((s) => s.rows.map((r) => ({ ...r, setLabel: s.label })));
+const status = (r) => (r.afterOk && !r.beforeOk ? 'fixed' : !r.afterOk && r.beforeOk ? 'regressed' : !r.afterOk ? 'still' : 'right');
+const LABEL = { fixed: 'Fixed', regressed: 'Got worse', still: 'Still wrong', right: 'Right both times' };
+const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
+$('f-set').innerHTML = opt('', 'All') + DATA.sets.map((s) => opt(s.key, `${s.label} (${s.rows.length})`)).join('');
+function cats() {
+  const set = $('f-set').value;
+  const list = [...new Set(rows.filter((r) => !set || r.set === set).map((r) => r.category).filter(Boolean))].sort();
+  const keep = $('f-cat').value;
+  $('f-cat').innerHTML = opt('', 'All') + list.map((c) => opt(c, c)).join('');
+  if (list.includes(keep)) $('f-cat').value = keep;
+}
+let shown = 100;
+function render() {
+  const set = $('f-set').value, cat = $('f-cat').value, st = $('f-status').value, q = $('f-q').value.trim().toLowerCase();
+  const list = rows.filter((r) => (!set || r.set === set) && (!cat || r.category === cat) && (!st || (st === 'wrong' ? r.confidentWrong : status(r) === st)) && (!q || `${r.id} ${r.caption} ${r.expected} ${r.after} ${r.before}`.toLowerCase().includes(q)));
+  const counts = list.reduce((m, r) => ({ ...m, [status(r)]: (m[status(r)] || 0) + 1 }), {});
+  $('count').textContent = `${list.length} cases · ${counts.fixed || 0} fixed · ${counts.regressed || 0} got worse · ${counts.still || 0} still wrong · ${counts.right || 0} right both times`;
+  $('cases').innerHTML = list.slice(0, shown).map((r) => {
+    const s = status(r);
+    return `<article class="case"><div class="top"><span class="chip ${s}">${LABEL[s]}</span>${r.confidentWrong ? '<span class="chip wrong">Confidently wrong</span>' : ''}<span class="id">${esc(r.id)} · ${esc(r.setLabel)}${r.category ? ` · ${esc(r.category)}` : ''}</span></div>
+      <p class="cap">${esc(r.caption || '(no caption)')}</p>
+      <div class="grid"><div><b>Answer</b>${esc(r.expected)}</div><div><b>Before</b><span class="${r.beforeOk ? 'ok' : 'no'}">${esc(r.before)}</span><span class="why">${esc(r.beforeWhy)}</span></div><div><b>Now</b><span class="${r.afterOk ? 'ok' : 'no'}">${esc(r.after)}</span><span class="why">${esc(r.afterWhy)}</span></div></div></article>`;
+  }).join('');
+  $('more').hidden = list.length <= shown;
+}
+for (const id of ['f-set', 'f-cat', 'f-status']) $(id).addEventListener('change', () => { shown = 100; if (id === 'f-set') cats(); render(); });
+$('f-q').addEventListener('input', () => { shown = 100; render(); });
+$('more').addEventListener('click', () => { shown += 100; render(); });
+cats();
+render();
+</script>

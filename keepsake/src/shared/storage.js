@@ -294,6 +294,14 @@ export function makeItem(input = {}) {
     categorizationReason: sanitizeText(input.categorizationReason, 300),
     needsReview: !!input.needsReview,
     previousCollections: uniqStrings(input.previousCollections, 20),
+    // Kept only when there's something to keep, so older saves and exports stay as they were:
+    // filingConfirmed: its filing was learned from once (a confirmed collection teaches once, not on
+    // every save); filing: what the AI said when it filed the save (src/shared/filing.js); placeResolution
+    // and placeChoices: Fix with AI's place check (src/shared/placeResolve.js) and the places to choose from.
+    ...(input.filingConfirmed ? { filingConfirmed: true } : {}),
+    ...optional('filing', sanitizeFiling(input.filing)),
+    ...optional('placeResolution', sanitizePlaceResolution(input.placeResolution)),
+    ...optional('placeChoices', (Array.isArray(input.placeChoices) ? input.placeChoices : []).slice(0, 3).map(sanitizePlaceChoice).filter(Boolean)),
     instagram: input.instagram && typeof input.instagram === 'object' ? sanitizeInstagram(input.instagram, now) : null,
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,
     relatedItemId: typeof input.relatedItemId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(input.relatedItemId) ? input.relatedItemId : null,
@@ -310,6 +318,39 @@ export function makeItem(input = {}) {
     deletedAt: typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt)) ? input.deletedAt : null,
     createdAt: input.createdAt || now,
     updatedAt: now,
+  };
+}
+
+const optional = (key, v) => (v === null || (Array.isArray(v) && !v.length) ? {} : { [key]: v });
+
+function sanitizePlaceResolution(r) {
+  if (!r || typeof r !== 'object') return null;
+  return {
+    version: sanitizeText(r.version, 20), at: typeof r.at === 'string' && !Number.isNaN(Date.parse(r.at)) ? r.at : null,
+    outcome: ['verified', 'review', 'insufficient', 'chosen'].includes(r.outcome) ? r.outcome : '', reason: sanitizeText(r.reason, 200),
+    sources: uniqStrings(Array.isArray(r.sources) ? r.sources : [], 4).map((x) => sanitizeText(x, 40)).filter(Boolean),
+  };
+}
+
+function sanitizePlaceChoice(c) {
+  if (!c || typeof c !== 'object' || !c.name) return null;
+  const coord = (v, max) => (v !== null && v !== '' && Number.isFinite(Number(v)) && Math.abs(Number(v)) <= max ? Number(v) : null);
+  return {
+    name: sanitizeText(c.name, 120), address: sanitizeText(c.address, 200), locality: sanitizeText(c.locality, 80), region: sanitizeText(c.region, 60),
+    url: sanitizeUrl(c.url) || '', lat: coord(c.lat, 90), lng: coord(c.lng, 180), source: c.source === 'openstreetmap' ? 'openstreetmap' : 'web',
+    confirmedBy: uniqStrings(Array.isArray(c.confirmedBy) ? c.confirmedBy : [], 3).filter((x) => ['post', 'openstreetmap', 'cited-page'].includes(x)), why: sanitizeText(c.why, 120),
+  };
+}
+
+function sanitizeFiling(f) {
+  if (!f || typeof f !== 'object') return null;
+  const words = (list, n, len) => uniqStrings(Array.isArray(list) ? list : [], n).map((x) => sanitizeText(x, len)).filter(Boolean);
+  return {
+    version: sanitizeText(f.version, 20), by: sanitizeText(f.by, 20), model: sanitizeText(f.model, 60),
+    at: typeof f.at === 'string' && !Number.isNaN(Date.parse(f.at)) ? f.at : null,
+    type: sanitizeText(f.type, 40), topic: sanitizeText(f.topic, 60), secondary: words(f.secondary, 4, 40),
+    evidence: words(f.evidence, 4, 120), alsoFits: words(f.alsoFits, 3, 64), uncertainty: sanitizeText(f.uncertainty, 200),
+    outcome: ['filed', 'review', 'kept'].includes(f.outcome) ? f.outcome : '', collectionId: typeof f.collectionId === 'string' ? sanitizeText(f.collectionId, 64) : null,
   };
 }
 
