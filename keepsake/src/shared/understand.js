@@ -30,6 +30,7 @@
 // card, labelled "Based on a recipe from <site>" with its link, so it is never taken for the creator's own.
 
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
+import { isSocialHost } from './categorizer.js';
 import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI, supportsWebLookup, keyFor, aiAvailable } from '../ai/provider.js';
@@ -137,7 +138,10 @@ export function planUnderstanding(item, ai, sourceText = '') {
   const mine = new Set(item.userFields || []);
   const handFiled = item.categorizationSource === 'manual' || mine.has('collectionId') || mine.has('kind');
   let kind = current;
-  if (ai.kind !== current && hasOwnView(ai.kind) && !handFiled) {
+  // Every reel is a video and every carousel reads like an article: on a social post that's its format,
+  // not what it's about, so it stays where its topic puts it (AI tips stay with AI).
+  const formatOnly = (ai.kind === 'video' || ai.kind === 'article') && (item.type === 'instagram' || isSocialHost(item.host || hostOf(item.url)));
+  if (ai.kind !== current && hasOwnView(ai.kind) && !handFiled && !formatOnly) {
     if (ai.confidence >= (hasOwnView(current) ? REKIND_CONFIDENCE : UNDERSTAND_CONFIDENCE)) kind = ai.kind;
   }
   if (!hasOwnView(kind)) return { patch: {}, changes: [], kind };

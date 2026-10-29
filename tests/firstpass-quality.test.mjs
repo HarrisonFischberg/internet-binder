@@ -61,3 +61,16 @@ test('moves on Instagram saves never teach "everything from instagram.com goes h
   assert.deepEqual(prefs.retailerPrefs['instagram.com'] || {}, {});
   assert.notEqual(fileOf('Our 6 week roadtrip through Utah and Arizona. Zion, Bryce, Sedona.', prefs).collectionId, 'int');
 });
+
+test('a post’s title is its first line, without the next one run on', async () => {
+  const { titleFromCaption } = await import('../keepsake/src/instagram/post.js');
+  assert.equal(titleFromCaption('🍏APPLE FRITTER COFFEE CAKE🍏\n\n🍂My most popular fall recipe!!'), 'APPLE FRITTER COFFEE CAKE');
+  assert.equal(titleFromCaption('#ad\nBest pasta ever. Try it'), 'Best pasta ever.');
+});
+
+test('the AI calling a reel "a video" doesn’t pull an AI post out of your collections', async () => {
+  const { planUnderstanding } = await import('../keepsake/src/shared/understand.js');
+  const item = { id: 'r', kind: 'link', type: 'instagram', host: 'www.instagram.com', collectionId: 'ai', title: 'Claude Code tips', details: {} };
+  assert.equal(planUnderstanding(item, { kind: 'video', confidence: 0.95, title: '', details: {} }).kind, 'link');
+  assert.equal(planUnderstanding(item, { kind: 'recipe', confidence: 0.95, title: '', details: {} }).kind, 'recipe');
+});

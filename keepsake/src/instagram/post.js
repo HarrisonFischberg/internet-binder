@@ -250,10 +250,12 @@ export function parsePostHtml(html, url) {
 
 // A short, human title from a caption: first sentence, no leading emoji/hashtags.
 export function titleFromCaption(caption, creator, type = 'post') {
-  let c = sanitizeText(caption, 600);
-  c = c.replace(/^(?:[#@][\w.]+[\s,]*)+/u, '').replace(/^[\s\p{Extended_Pictographic}\p{P}\uFE0F\u200D]+/u, '').trim();
-  const first = c.split(/\n|(?<=[.!?…])\s+|\s+[|•·]\s+|\s+-\s+/)[0] || '';
-  let t = first.replace(/\s*#[\w]+\s*$/g, '').trim();
+  // The first line that says something (sanitizeText joins lines, so they're split first): "APPLE
+  // FRITTER COFFEE CAKE" alone, not with the caption's second line run on.
+  const lines = String(caption || '').slice(0, 2000).split(/\r?\n/).map((l) => sanitizeText(l, 600).replace(/^(?:[#@][\w.]+[\s,]*)+/u, '').replace(/^[\s\p{Extended_Pictographic}\p{P}\uFE0F\u200D]+/u, '').trim());
+  const c = lines.find((l) => l.replace(/[#@\s\p{P}]/gu, '').length >= 4) || '';
+  const first = c.split(/(?<=[.!?…])\s+|\s+[|•·]\s+|\s+-\s+/)[0] || '';
+  let t = first.replace(/\s*#[\w]+\s*$/g, '').replace(/[\s\p{Extended_Pictographic}\uFE0F\u200D]+$/u, '').trim();
   if (t.length > 80) t = t.slice(0, 79).replace(/\s+\S*$/, '') + '…';
   if (t.replace(/[#@\s\p{P}]/gu, '').length >= 4) return t;
   if (creator) return `${type === 'reel' ? 'Reel' : 'Post'} by @${creator}`;

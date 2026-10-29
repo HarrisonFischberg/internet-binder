@@ -11,6 +11,7 @@ import { lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } fro
 import { FILLED_KINDS } from './capture.js';
 import { cleanupWithAI, identifyForKind, keyFor, aiAvailable } from '../ai/provider.js';
 import { understandItem } from './understand.js';
+import { fileSave } from './filing.js';
 
 // What a Lifestyle save is still missing, for Check with AI to read it again.
 function incompleteDetails(kind, d = {}) {
@@ -129,6 +130,18 @@ export async function tidySave(store, id, deps = {}) {
   if (!read || read.deletedAt) return null;
   if (hasOwnView(kindOf(read))) {
     await store.updateItem(id, { captureState: 'complete', captureError: '' }, { by: 'machine' });
+    return { kind: kindOf(read) };
+  }
+  // A post or link (not something to buy): which of your collections it's about, with the words of the save
+  // that show it, checked before it moves (filing.js). Products keep the shopper's tidy below.
+  if (kindOf(read) !== 'product') {
+    try {
+      // The device's model only files what's waiting in Review; your provider may also move a first guess.
+      await fileSave(store, id, { runId: `save-${id}`, deviceOnly: !!deps.deviceOnly, scope: deps.deviceOnly ? 'review' : 'all' });
+      await store.updateItem(id, { captureState: 'complete', captureError: '' }, { by: 'machine' });
+    } catch (e) {
+      await store.updateItem(id, { captureState: 'complete', captureError: sanitizeText(`AI filing skipped: ${(e && e.message) || e}`, 200) }, { by: 'machine' }).catch(() => {});
+    }
     return { kind: kindOf(read) };
   }
   let ai = null;

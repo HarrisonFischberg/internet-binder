@@ -294,6 +294,10 @@ export function makeItem(input = {}) {
     categorizationReason: sanitizeText(input.categorizationReason, 300),
     needsReview: !!input.needsReview,
     previousCollections: uniqStrings(input.previousCollections, 20),
+    // Its filing was learned from once (a confirmed collection teaches once, never again on every save).
+    filingConfirmed: !!input.filingConfirmed,
+    // What the AI said when it filed the save (src/shared/filing.js): the card's "why it's here".
+    filing: sanitizeFiling(input.filing),
     instagram: input.instagram && typeof input.instagram === 'object' ? sanitizeInstagram(input.instagram, now) : null,
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,
     relatedItemId: typeof input.relatedItemId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(input.relatedItemId) ? input.relatedItemId : null,
@@ -310,6 +314,18 @@ export function makeItem(input = {}) {
     deletedAt: typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt)) ? input.deletedAt : null,
     createdAt: input.createdAt || now,
     updatedAt: now,
+  };
+}
+
+function sanitizeFiling(f) {
+  if (!f || typeof f !== 'object') return null;
+  const words = (list, n, len) => uniqStrings(Array.isArray(list) ? list : [], n).map((x) => sanitizeText(x, len)).filter(Boolean);
+  return {
+    version: sanitizeText(f.version, 20), by: sanitizeText(f.by, 20), model: sanitizeText(f.model, 60),
+    at: typeof f.at === 'string' && !Number.isNaN(Date.parse(f.at)) ? f.at : null,
+    type: sanitizeText(f.type, 40), topic: sanitizeText(f.topic, 60), secondary: words(f.secondary, 4, 40),
+    evidence: words(f.evidence, 4, 120), alsoFits: words(f.alsoFits, 3, 64), uncertainty: sanitizeText(f.uncertainty, 200),
+    outcome: ['filed', 'review', 'kept'].includes(f.outcome) ? f.outcome : '', collectionId: typeof f.collectionId === 'string' ? sanitizeText(f.collectionId, 64) : null,
   };
 }
 

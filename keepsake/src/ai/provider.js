@@ -479,9 +479,11 @@ export async function fileWithAI(input, collections, settings, apiKey) {
     if (c.examples?.length) out.examples = c.examples.slice(0, 3).map((t) => cut(t, 80));
     return out;
   });
+  // The device's model reads 6000 characters: a long list keeps every collection and drops the examples.
+  let cols = JSON.stringify(list);
+  if (cols.length > 3200) cols = JSON.stringify(list.map(({ examples, ...c }) => c));
+  if (cols.length > 3200) cols = JSON.stringify(list.map(({ ref, name }) => ({ ref, name })));
   const text = [
-    `Collections: ${JSON.stringify(list)}`,
-    '',
     'The save:',
     `Title: ${cut(input.title, 200)}`,
     input.kind ? `Read so far as: ${input.kind}` : '',
@@ -492,8 +494,9 @@ export async function fileWithAI(input, collections, settings, apiKey) {
     input.note ? `What the person wrote when saving it: ${cut(input.note, 300)}` : '',
     input.site ? `From: ${cut(input.site, 80)}` : '',
     ...(input.pages || []).slice(0, 2).map((pg) => `Linked page ${cut(pg.url, 200)}: ${cut(pg.text, 1500)}`),
-  ].filter(Boolean).join('\n');
-  return withReader(cfg, apiKey, async (ask) => filingAnswer(parseJsonBlock(await ask({ system: FILING_SYSTEM, deviceNote: FILING_DEVICE_NOTE, userText: text, maxTokens: 500, cache: true })), refs, cfg));
+  ].filter(Boolean).join('\n').slice(0, 2700);
+  const userText = `${text}\n\nCollections: ${cols}`;
+  return withReader(cfg, apiKey, async (ask) => filingAnswer(parseJsonBlock(await ask({ system: FILING_SYSTEM, deviceNote: FILING_DEVICE_NOTE, userText, maxTokens: 500, cache: true })), refs, cfg));
 }
 
 function filingAnswer(parsed, refs, cfg) {

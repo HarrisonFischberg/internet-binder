@@ -14,6 +14,7 @@ import * as UI from './ui.js';
 import { MSG } from '../shared/messages.js';
 import { needsCollection, hasOwnView, kindOf, kindInfo } from '../shared/kinds.js';
 import { planFixes, applyFix, undoFixes, REFILE_CONFIDENCE } from '../shared/aiFix.js';
+import { fileSave } from '../shared/filing.js';
 import { understandItem } from '../shared/understand.js';
 import { fetchPage, loadImage } from '../ai/pages.js';
 
@@ -174,6 +175,7 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
       break;
     }
     const batch = [];
+    const posts = [];
     for (const item of all) {
       const r = read.get(item.id);
       if (r && !r.error && hasOwnView(r.kind)) {
@@ -183,7 +185,25 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
           if (kindOf(item) !== r.kind) report.lifestyle[r.kind] = (report.lifestyle[r.kind] || 0) + 1;
           else report.details++;
         }
-      } else batch.push((await ctx.store.getItem(item.id)) || item);
+      } else {
+        const now = (await ctx.store.getItem(item.id)) || item;
+        if (kindOf(now) === 'product') batch.push(now);
+        else posts.push(now);
+      }
+    }
+    // A post or link: which of your collections it's about, with the words of the save that show it,
+    // checked before it moves (shared/filing.js). Not sure: it waits in Review with the reason.
+    for (const post of posts) {
+      if (stopped) break;
+      try {
+        const f = await fileSave(ctx.store, post.id, { runId, scope, items: async () => ctx.state.items });
+        report.checked++;
+        if (f?.moved) { report.changed++; report.moved++; }
+      } catch (e) {
+        report.failed++;
+        const msg = String((e && e.message) || e);
+        if (fatal(msg)) { report.error = msg; stopped = true; }
+      }
     }
     update();
     if (!batch.length || stopped) continue;
