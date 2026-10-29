@@ -75,3 +75,41 @@ export function accepted(c, o) {
 
 // The type the case expects, when it names one (for the confusion matrix).
 export const expectedKinds = (c) => [...new Set(c.expected.accept.map((a) => a.kind || (a.collection ? 'link' : '')).filter(Boolean))];
+
+// The person's current library (an export, or the items and collections dumped from the app's database):
+// only saves whose place the person chose themselves are cases (they moved it, filed it from Review,
+// or changed its kind). Their choice is the label; what the engine did first is what is being scored.
+const OWN_VIEW = new Set(['recipe', 'workout', 'place', 'media', 'book', 'video', 'article']);
+export function loadLibrary(path) {
+  const d = JSON.parse(readFileSync(path, 'utf8'));
+  const cols = Array.isArray(d.collections) ? d.collections : Object.values(d.collections || {});
+  const items = Array.isArray(d.items) ? d.items : Object.values(d.items || {});
+  const library = { collections: cols.map((c) => ({ id: c.id, name: c.name, keywords: c.keywords || [], aliases: c.aliases || [], taxonomyKey: c.taxonomyKey || null })) };
+  const out = [];
+  for (const i of items) {
+    if (i.deletedAt) continue;
+    const mine = new Set(i.userFields || []);
+    const movedByYou = i.categorizationSource === 'manual' || mine.has('collectionId');
+    const kindByYou = mine.has('kind');
+    if (!movedByYou && !kindByYou) continue;
+    const col = cols.find((c) => c.id === i.collectionId);
+    const accept = OWN_VIEW.has(i.kind) ? [{ kind: i.kind }] : col ? [{ collection: col.name }] : [];
+    if (!accept.length) continue;
+    const ig = i.instagram || {};
+    out.push({
+      id: `lib-${String(i.id).slice(0, 8)}`,
+      origin: 'real-correction',
+      suite: 'firstpass',
+      split: splitOf(ig.creator || i.host || i.id),
+      source: ig.caption !== undefined || /instagram\.com/.test(i.url || '') ? 'instagram' : i.host || 'web',
+      category: col ? col.name : i.kind,
+      tags: /\bai\b/i.test(col?.name || '') ? ['ai'] : [],
+      evidence: { url: i.url, caption: ig.caption || '', creator: ig.creator || '', hashtags: ig.hashtags || [], location: ig.location || '', title: i.originalTitle || i.title, description: i.description || '' },
+      expected: { accept, reviewOk: false },
+      firstPass: { from: (i.previousCollections || []).map((id) => cols.find((c) => c.id === id)?.name || '(deleted)').slice(-1)[0] || null },
+      labelBy: 'Harold (moved or filed it himself in the app)',
+      library,
+    });
+  }
+  return out;
+}

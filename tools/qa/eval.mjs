@@ -12,7 +12,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { loadChallenge, loadExport } from './lib/cases.mjs';
+import { loadChallenge, loadExport, loadLibrary } from './lib/cases.mjs';
 import { runFirstPass } from './lib/firstpass.mjs';
 import { judge, summarize, pct } from './lib/metrics.mjs';
 import { loadQaEnv, redact } from './lib/env.mjs';
@@ -36,7 +36,8 @@ if (args.source === 'real' || args.source === 'all') {
   if (!args.export) throw new Error('--export <library export .json> is needed for real cases');
   cases.push(...loadExport(args.export));
 }
-if (!args.source || args.source === 'challenge' || args.source === 'all') cases.push(...loadChallenge('firstpass-challenge.json'));
+if (args.library) cases.push(...loadLibrary(args.library));
+if ((!args.source && !args.library) || args.source === 'challenge' || args.source === 'all') cases.push(...loadChallenge('firstpass-challenge.json'));
 if (split !== 'all') cases = cases.filter((c) => (c.split || 'dev') === split);
 if (args.category) cases = cases.filter((c) => c.category === args.category);
 if (args.tag) cases = cases.filter((c) => (c.tags || []).includes(args.tag));
@@ -57,7 +58,7 @@ if (live) {
   const name = provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
   console.log(`credentials: file ${env.status.found ? 'found' : 'missing'}, private ${env.status.private}, names [${env.status.names.join(', ')}]`);
   if (!keys[name]) { console.log(`BLOCKED: no ${name} in the credentials file`); process.exit(2); }
-  ai = { key: keys[name], settings: { ai: { on: true, provider, model: args.model || '', effort: args.effort || 'low' } } };
+  ai = { key: keys[name], settings: { ai: { on: true, provider, model: args.model || '', effort: args.effort || 'medium' } } };
 }
 if (args.mock) {
   // A scripted device model, to prove the plumbing only. Its results are labelled mock and never scored as Apple.
