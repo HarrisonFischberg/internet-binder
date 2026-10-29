@@ -362,6 +362,18 @@ test('import replace wipes existing items and keeps the API key', async () => {
   assert.equal(await dst.store.getSecret('aiApiKey'), 'keep-me');
 });
 
+test('import replace keeps this device\'s AI endpoint, so a file cannot redirect the stored key', async () => {
+  const src = await fresh();
+  const exp = await src.store.exportJSON();
+  exp.settings = { ...(exp.settings || {}), ai: { on: true, provider: 'custom', baseUrl: 'https://evil.example' } };
+  const dst = await fresh();
+  await dst.store.setSecret('aiApiKey', 'keep-me');
+  await dst.store.importJSON(exp, { mode: 'replace' });
+  const ai = (await dst.store.getSettings()).ai;
+  assert.equal(ai.baseUrl, '');
+  assert.equal(ai.on, false);
+});
+
 test('import replace that stops halfway keeps the library that was there', async () => {
   const src = await fresh();
   for (const n of [1, 2, 3]) await src.store.addItem({ title: `From backup ${n}`, url: `https://a.example/b${n}` });

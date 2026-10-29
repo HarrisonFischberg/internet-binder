@@ -1125,7 +1125,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
           await kvSet('importHistory', { ...importHistory, instagram: ig });
         }
         const write = { [KEYS.meta]: { ...((await readSettings()).meta || {}), schemaVersion: SCHEMA_VERSION, updatedAt: nowIso() } };
-        if (mode === 'replace' && validated.settings) write[KEYS.settings] = deepMerge(DEFAULT_SETTINGS, validated.settings);
+        // The stored API key survives a replace, so the AI endpoint must too: a file must not point it elsewhere.
+        if (mode === 'replace' && validated.settings) write[KEYS.settings] = { ...deepMerge(DEFAULT_SETTINGS, validated.settings), ai: (await readSettings()).settings.ai };
         await be.set(write);
         return { addedCollections, addedItems, skippedItems, addedGoals: newGoals.length, addedCheckins: newCheckins.length };
       });
