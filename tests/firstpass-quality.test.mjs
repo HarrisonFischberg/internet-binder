@@ -74,3 +74,12 @@ test('the AI calling a reel "a video" doesn’t pull an AI post out of your coll
   assert.equal(planUnderstanding(item, { kind: 'video', confidence: 0.95, title: '', details: {} }).kind, 'link');
   assert.equal(planUnderstanding(item, { kind: 'recipe', confidence: 0.95, title: '', details: {} }).kind, 'recipe');
 });
+
+test('the AI can’t make a post about AI a recipe, a workout or a product', async () => {
+  const { planUnderstanding, isShopping } = await import('../keepsake/src/shared/understand.js');
+  const item = { id: 'r', kind: 'link', type: 'instagram', host: 'www.instagram.com', collectionId: 'ai', title: 'The recipe for a Claude Code agent', instagram: { caption: 'The recipe for a Claude Code agent: prompts, an LLM API key and 3 tools. #ai #aiagents' }, details: {} };
+  assert.equal(planUnderstanding(item, { kind: 'recipe', confidence: 0.95, title: '', details: {} }).kind, 'link');
+  assert.equal(isShopping(item, { kind: 'product', confidence: 0.95 }), false);
+  // A post of something to buy still is one.
+  assert.equal(isShopping({ ...item, collectionId: null, title: 'This shower caddy', instagram: { caption: 'This shower caddy changed my bathroom' } }, { kind: 'product', confidence: 0.9 }), true);
+});

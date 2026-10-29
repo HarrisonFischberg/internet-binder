@@ -113,6 +113,7 @@ const s = summary.settled;
 console.log(`${name}: ${cases.length} cases × ${repeat}, provider ${provider}${meta.model ? ` ${meta.model}` : ''}, capture ${capture}`);
 console.log(`  correct (type + collection) ${pct(s.accuracy)}`);
 console.log(`  content type               ${pct(s.kind)}`);
+console.log(`  post read as a product     ${pct(s.postAsProduct)}`);
 console.log(`  Review                     ${pct(s.review)}  (unnecessary ${pct(s.unnecessaryReview)})`);
 console.log(`  confidently wrong          ${pct(s.confidentWrong)}`);
 console.log(`  AI post → Review/Interesting ${pct(s.aiMisroute)}`);

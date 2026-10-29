@@ -31,7 +31,8 @@
 
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
 import { isSocialHost } from './categorizer.js';
-import { kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
+import { guessTopics } from './topics.js';
+import { mentionsFood, isWorkoutPost, kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI, supportsWebLookup, keyFor, aiAvailable } from '../ai/provider.js';
 
@@ -141,7 +142,11 @@ export function planUnderstanding(item, ai, sourceText = '') {
   // Every reel is a video and every carousel reads like an article: on a social post that's its format,
   // not what it's about, so it stays where its topic puts it (AI tips stay with AI).
   const formatOnly = (ai.kind === 'video' || ai.kind === 'article') && (item.type === 'instagram' || isSocialHost(item.host || hostOf(item.url)));
-  if (ai.kind !== current && hasOwnView(ai.kind) && !handFiled && !formatOnly) {
+  // A recipe needs something to eat and a workout something to do, in the save's own words: "a recipe for
+  // an AI agent" and "training a model" stay what they are whatever the model says.
+  const said = textOf(item);
+  const unsupported = ['recipe', 'workout', 'product'].includes(ai.kind) && techTopic(said) && !(ai.kind === 'recipe' && mentionsFood(said)) && !(ai.kind === 'workout' && isWorkoutPost(said));
+  if (ai.kind !== current && hasOwnView(ai.kind) && !handFiled && !formatOnly && !unsupported) {
     if (ai.confidence >= (hasOwnView(current) ? REKIND_CONFIDENCE : UNDERSTAND_CONFIDENCE)) kind = ai.kind;
   }
   if (!hasOwnView(kind)) return { patch: {}, changes: [], kind };
@@ -465,11 +470,17 @@ export function productFromHtml(html, baseUrl = '') {
 
 // Shopping saves the provider reads as a product: anything already a product, a post or link saved into
 // a collection (collections are for shopping), or a post the first read says is one thing to buy.
+// A post about AI or code (by its own words) is about a topic: not one thing to buy, a dish or a workout,
+// whatever the model says ("a recipe for an AI agent", "training a model", "10 Claude plugins").
+const techTopic = (text) => guessTopics({ description: text }).some((t) => t === 'AI' || t === 'Programming');
+const textOf = (item) => `${item.title || ''}\n${item.instagram?.caption || ''}\n${item.description || ''}`;
 export function isShopping(item, ai = null) {
   const kind = kindOf(item);
   if (kind === 'product') return true;
   if (hasOwnView(kind)) return false;
-  if (item.collectionId) return true;
+  const social = item.type === 'instagram' || isSocialHost(item.host || hostOf(item.url));
+  if (social && techTopic(textOf(item))) return false;
+  if (item.collectionId && !social) return true;
   return !!ai && ai.kind === 'product' && ai.confidence >= UNDERSTAND_CONFIDENCE;
 }
 

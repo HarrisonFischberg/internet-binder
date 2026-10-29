@@ -23,6 +23,8 @@ export function judge(c, o) {
     lost: !o || !!o.lost,
     pending: !!o?.pending,
     kindOk,
+    // A post about a topic (expected: a link in a collection) read as one thing to buy.
+    postAsProduct: !!o && !o.lost && o.kind === 'product' && kinds.includes('link') && !kinds.includes('product') && /instagram\.com/.test(c.evidence?.url || ''),
     ok,
     review: !!o?.review,
     unnecessaryReview: !!o?.review && !c.expected.reviewOk,
@@ -43,6 +45,7 @@ export function summarize(results, phase = 'settled') {
     n,
     accuracy: wilson(count('ok'), n),
     kind: wilson(count('kindOk'), n),
+    postAsProduct: wilson(count('postAsProduct'), n),
     review: wilson(count('review'), n),
     unnecessaryReview: wilson(count('unnecessaryReview'), n),
     confidentWrong: wilson(count('confidentWrong'), n),

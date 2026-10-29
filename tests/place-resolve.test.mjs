@@ -23,6 +23,6 @@ test('choosing one of the places applies it as yours and clears the choices', as
   const saved = await choosePlace(store, item.id, 0);
   assert.equal(saved.details.address, '7 Carmine Street');
   assert.deepEqual(saved.details.lookup.verifiedBy, ['openstreetmap', 'you']);
-  assert.deepEqual(saved.placeChoices, []);
+  assert.equal((saved.placeChoices || []).length, 0);
   assert.equal(saved.placeResolution.outcome, 'chosen');
 });

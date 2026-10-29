@@ -161,6 +161,9 @@ export function recipeFromText(text) {
   return { ingredients: ingredients.slice(0, 80), steps: steps.slice(0, 60), yield: '', totalMinutes: null, prepMinutes: null, cookMinutes: null, cuisine: '', category: '', author: '', source: 'caption' };
 }
 
+// Something to eat is named (a food or a cooking measure), anywhere in the text.
+export const mentionsFood = (text) => FOOD.test(String(text || '')) && !/\b(?:ai|llm|gpt|claude|chatgpt|agent|prompt|api|code|coding|software|app)\b[^.\n]{0,40}\brecipe\b|\brecipe\b[^.\n]{0,40}\b(?:ai|llm|agent|prompt|api|code|coding|software|app|success|disaster)\b/i.test(String(text || '')) || recipeFromText(text) !== null;
+
 // A recipe post whose recipe isn't in the caption ("Comment RECIPE and I'll send it", "full recipe on my
 // blog"): it says recipe, or two cooking words, and names something to eat. A Recipe with no ingredients
 // (nothing made up), like a workout whose routine is only in the video.

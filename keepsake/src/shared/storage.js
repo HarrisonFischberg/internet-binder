@@ -294,14 +294,14 @@ export function makeItem(input = {}) {
     categorizationReason: sanitizeText(input.categorizationReason, 300),
     needsReview: !!input.needsReview,
     previousCollections: uniqStrings(input.previousCollections, 20),
-    // Its filing was learned from once (a confirmed collection teaches once, never again on every save).
-    filingConfirmed: !!input.filingConfirmed,
-    // What the AI said when it filed the save (src/shared/filing.js): the card's "why it's here".
-    filing: sanitizeFiling(input.filing),
-    // Fix with AI's place check (src/shared/placeResolve.js): what it decided, and the places to choose
-    // from when it couldn't be sure.
-    placeResolution: sanitizePlaceResolution(input.placeResolution),
-    placeChoices: (Array.isArray(input.placeChoices) ? input.placeChoices : []).slice(0, 3).map(sanitizePlaceChoice).filter(Boolean),
+    // Kept only when there's something to keep, so older saves and exports stay as they were:
+    // filingConfirmed: its filing was learned from once (a confirmed collection teaches once, not on
+    // every save); filing: what the AI said when it filed the save (src/shared/filing.js); placeResolution
+    // and placeChoices: Fix with AI's place check (src/shared/placeResolve.js) and the places to choose from.
+    ...(input.filingConfirmed ? { filingConfirmed: true } : {}),
+    ...optional('filing', sanitizeFiling(input.filing)),
+    ...optional('placeResolution', sanitizePlaceResolution(input.placeResolution)),
+    ...optional('placeChoices', (Array.isArray(input.placeChoices) ? input.placeChoices : []).slice(0, 3).map(sanitizePlaceChoice).filter(Boolean)),
     instagram: input.instagram && typeof input.instagram === 'object' ? sanitizeInstagram(input.instagram, now) : null,
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,
     relatedItemId: typeof input.relatedItemId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(input.relatedItemId) ? input.relatedItemId : null,
@@ -320,6 +320,8 @@ export function makeItem(input = {}) {
     updatedAt: now,
   };
 }
+
+const optional = (key, v) => (v === null || (Array.isArray(v) && !v.length) ? {} : { [key]: v });
 
 function sanitizePlaceResolution(r) {
   if (!r || typeof r !== 'object') return null;

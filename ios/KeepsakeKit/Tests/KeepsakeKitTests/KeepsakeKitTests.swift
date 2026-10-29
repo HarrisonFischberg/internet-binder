@@ -320,7 +320,8 @@ struct CaptureTests {
         #expect(r.save?.title.contains("Brown butter pasta") == true)
     }
 
-    /// Your AI provider, faked: it files every save it's asked about in Home Decor. The save's own page
+    /// Your AI provider, faked: it files every save it's asked about in Home Decor (the shopping check's
+    /// answer, or the filing answer for a link). The save's own page
     /// (read first, without cookies) isn't there.
     struct FakeProvider: NetworkTransport {
         func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
@@ -328,7 +329,13 @@ struct CaptureTests {
                 #expect(request.httpMethod == "GET" && request.value(forHTTPHeaderField: "Cookie") == nil)
                 return (404, Data())
             }
-            let answer = #"{"items":[{"ref":"i0","collection":"Home Decor","confidence":0.92,"reason":"cushions for a sofa"}]}"#
+            var answer = #"{"items":[{"ref":"i0","collection":"Home Decor","confidence":0.92,"reason":"cushions for a sofa"}]}"#
+            // Filing a link (shared/filing.js): the collection by its ref, and words of the save as evidence.
+            let sent = (String(data: request.httpBody ?? Data(), encoding: .utf8) ?? "").replacingOccurrences(of: "\\\"", with: "\"")
+            if sent.contains("THEIR OWN collections") {
+                let ref = sent.firstMatch(of: #/"ref":"(c\d+)","name":"Home Decor"/#).map { String($0.1) } ?? "c1"
+                answer = #"{"type":"link","topic":"home decor","collection":"\#(ref)","evidence":["Linen thing"],"needsReview":false}"#
+            }
             let body: [String: Any] = ["choices": [["message": ["content": answer]]], "output_text": answer]
             return (200, try JSONSerialization.data(withJSONObject: body))
         }

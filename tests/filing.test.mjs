@@ -77,3 +77,8 @@ test('fileSave on the device: reads, checks, files and logs with Undo', async ()
     setLocalModel(null);
   }
 });
+
+test('a stand-in title ("Reel by @someone") is not evidence', () => {
+  const plan = planFiling(post({ title: 'Reel by @someone', instagram: { caption: '' }, collectionId: null, needsReview: true }), answer({ evidence: ['Reel by @someone'] }), cols);
+  assert.equal(plan.accepted, false);
+});

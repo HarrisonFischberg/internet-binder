@@ -15,7 +15,7 @@
 // so the card can say why it went where it did.
 
 import { uid, nowIso } from './util.js';
-import { kindOf, hasOwnView } from './kinds.js';
+import { kindOf, hasOwnView, genericTitle } from './kinds.js';
 import { fileWithAI, keyFor, aiAvailable } from '../ai/provider.js';
 
 // Letters and digits only, lower case: "Claude prompts 🧠" and "claude prompts" are the same words.
@@ -35,9 +35,11 @@ export function verifiedEvidence(evidence, sourceText) {
 }
 
 // The text a filing may quote: what the save itself says (never the model's answer).
+// A stand-in title ("Reel by @someone", "Instagram post") is ours, not the save's, so it isn't evidence.
+const standIn = (t) => !t || genericTitle(t) || /^(?:reel|post|video) by @|^instagram (?:post|reel)$/i.test(String(t).trim());
 export function filingSource(item) {
   const ig = item.instagram || {};
-  return [item.title, item.originalTitle, ig.caption, item.description, (ig.hashtags || []).map((h) => `#${h}`).join(' '), item.note].filter(Boolean).join('\n');
+  return [item.title, item.originalTitle].filter((t) => !standIn(t)).concat([ig.caption, item.description, (ig.hashtags || []).map((h) => `#${h}`).join(' '), item.note]).filter(Boolean).join('\n');
 }
 
 const filedByYou = (item) => item.categorizationSource === 'manual' || (item.userFields || []).includes('collectionId');

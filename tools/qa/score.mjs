@@ -16,5 +16,5 @@ const name = arg('name', `native-${Date.now()}`);
 writeFileSync(new URL(`./out/${name}.json`, import.meta.url), JSON.stringify({ meta: raw.meta, summary, results }, null, 1));
 const s = summary.settled;
 console.log(`${name}: ${results.length} cases, ${raw.meta.provider} on ${raw.meta.platform} (Apple Intelligence: ${raw.meta.appleStatus})`);
-for (const [label, w] of [['correct', s.accuracy], ['content type', s.kind], ['Review', s.review], ['confidently wrong', s.confidentWrong], ['AI → Review/Interesting', s.aiMisroute], ['workout → recipe', s.workoutAsRecipe], ['lost or pending', s.lostOrPending]]) console.log(`  ${label.padEnd(24)} ${pct(w)}`);
+for (const [label, w] of [['correct', s.accuracy], ['content type', s.kind], ['post read as a product', s.postAsProduct], ['Review', s.review], ['confidently wrong', s.confidentWrong], ['AI → Review/Interesting', s.aiMisroute], ['workout → recipe', s.workoutAsRecipe], ['lost or pending', s.lostOrPending]]) console.log(`  ${label.padEnd(24)} ${pct(w)}`);
 console.log(`  network attempts: ${JSON.stringify(raw.meta.network || {})}`);
