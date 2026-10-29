@@ -13,8 +13,8 @@ const NEEDED = 3;
 // [name, phrases]. Phrases are matched as whole words, case-insensitive, except the ones written
 // in capitals (like "AI"), which must match in capitals so "ai" inside other words never counts.
 export const TOPICS = [
-  ['AI', ['AI', 'A.I.', 'artificial intelligence', 'machine learning', 'deep learning', 'neural network', 'LLM', 'LLMs', 'GPT', 'ChatGPT', 'OpenAI', 'Anthropic', 'Claude', 'Gemini', 'Copilot', 'Midjourney', 'Stable Diffusion', 'prompt', 'prompts', 'prompting', 'AI agent', 'AI agents', 'vibe coding', 'generative']],
-  ['Programming', ['programming', 'coding', 'developer', 'developers', 'software engineer', 'JavaScript', 'TypeScript', 'Python', 'Rust', 'Golang', 'React', 'Node.js', 'API', 'APIs', 'database', 'SQL', 'Kubernetes', 'Docker', 'DevOps', 'Linux', 'git', 'GitHub', 'open source', 'backend', 'frontend', 'web dev', 'Better Stack', 'Fireship', 'freeCodeCamp']],
+  ['AI', ['AI', 'A.I.', 'artificial intelligence', 'machine learning', 'deep learning', 'neural network', 'LLM', 'LLMs', 'GPT', 'GPTs', 'ChatGPT', 'OpenAI', 'Anthropic', 'Claude', 'Claude Code', 'Gemini', 'Copilot', 'Cursor', 'NotebookLM', 'Perplexity', 'Midjourney', 'Stable Diffusion', 'Sora', 'prompt', 'prompts', 'prompting', 'prompt engineering', 'AI agent', 'AI agents', 'AI tool', 'AI tools', 'vibe coding', 'generative', 'n8n', 'aitools', 'aiagents', 'chatgpt', 'vibecoding', 'machinelearning', 'artificialintelligence', 'generativeai', 'promptengineering', 'llms']],
+  ['Programming', ['programming', 'coding', 'developer', 'developers', 'software engineer', 'JavaScript', 'TypeScript', 'Python', 'Rust', 'Golang', 'React', 'Node.js', 'API', 'APIs', 'database', 'SQL', 'Kubernetes', 'Docker', 'DevOps', 'Linux', 'git', 'GitHub', 'repo', 'repos', 'MCP', 'open source', 'open-source', 'backend', 'frontend', 'web dev', 'Better Stack', 'Fireship', 'freeCodeCamp']],
   ['Tech', ['tech', 'technology', 'iPhone', 'Android', 'smartphone', 'laptop', 'MacBook', 'iPad', 'gadget', 'gadgets', 'unboxing', 'Apple', 'Samsung', 'Google Pixel', 'PC build', 'GPU', 'CPU', 'Nvidia', 'headphones', 'Marques Brownlee', 'MKBHD', 'Linus Tech Tips']],
   ['Video games', ['video game', 'video games', 'gaming', 'gamer', 'gameplay', 'playthrough', 'walkthrough', 'speedrun', 'let\'s play', 'GTA', 'GTA 5', 'GTA V', 'GTA 6', 'Minecraft', 'Fortnite', 'Call of Duty', 'Black Ops', 'Warzone', 'Zelda', 'Pokémon', 'Pokemon', 'Mario', 'Nintendo', 'Switch 2', 'PlayStation', 'PS5', 'Xbox', 'Steam', 'Elden Ring', 'Roblox', 'Valorant', 'League of Legends', 'Overwatch', 'Halo', 'Skyrim', 'Cyberpunk 2077', 'indie game', 'game dev', 'esports']],
   ['Shoes', ['shoe', 'shoes', 'sneaker', 'sneakers', 'trainers', 'boots', 'running shoes', 'Air Jordan', 'Jordans', 'Air Max', 'Air Force 1', 'Yeezy', 'New Balance', 'Adidas Samba', 'Dunk', 'Dunks', 'loafers', 'heels', 'sandals', 'on feet']],
@@ -47,6 +47,19 @@ export const TOPICS = [
   ['Learning', ['tutorial', 'explained', 'how to', 'learn', 'lesson', 'course', 'beginner', 'beginners', 'crash course', 'lecture', 'study', 'language learning']],
   ['Books', ['book', 'books', 'reading', 'novel', 'author', 'book review', 'BookTok', 'library']],
 ];
+
+// Names a person might give a collection for a topic, besides the topic's own ("Funny" for Comedy).
+export const TOPIC_ALIASES = {
+  AI: ['A.I.', 'AI tools', 'AI stuff', 'AI skills', 'Artificial intelligence', 'Machine learning', 'ChatGPT', 'Prompts'],
+  Comedy: ['Funny', 'Memes', 'Jokes', 'Humor', 'Humour', 'LOL'],
+  'Food & cooking': ['Food', 'Cooking', 'Recipes', 'Eats'],
+  Fitness: ['Workout', 'Workouts', 'Gym', 'Training', 'Exercise'],
+  Business: ['Business ideas', 'Side hustles', 'Side hustle', 'Entrepreneurship', 'Startups'],
+  'Art & design': ['Art', 'Design', 'Drawing'],
+  Programming: ['Coding', 'Code', 'Dev', 'Software'],
+  Money: ['Finance', 'Investing', 'Personal finance'],
+  Travel: ['Trips', 'Roadtrip', 'Road trip', 'Places to go'],
+};
 
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Whole-word match that also works next to accented letters and punctuation.

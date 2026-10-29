@@ -7,7 +7,7 @@
 import { classify, learnFromCorrection, AUTO_FILE_CONFIDENCE } from './categorizer.js';
 import { parsePrice, sanitizeText } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
-import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
+import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, isRecipePost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
 import { guessTopics } from './topics.js';
 import { aiAvailable, usableKey } from '../ai/provider.js';
 
@@ -104,6 +104,10 @@ export function placeOf(product) {
   return title ? { ...details, name: title } : details;
 }
 
+// A post about AI or code, with nothing about eating, staying or visiting.
+const VISIT_WORDS = /\b(?:restaurants?|caf[eé]s?|bars?|bakery|hotel|museum|park|beach|trail|hike|visit|menu|brunch|dinner|eat|drinks?|stay|open (?:daily|until)|hours)\b/i;
+const offTopicForPlace = (text) => guessTopics({ description: text }).some((t) => t === 'AI' || t === 'Programming') && !VISIT_WORDS.test(text);
+
 // What a capture is: what the page says about itself first (structured data), then what we can tell.
 export function kindOfCapture(product) {
   if (isKind(product.kind)) return product.kind;
@@ -123,11 +127,16 @@ export function kindOfCapture(product) {
   if (product.isInstagram) {
     const found = recipeOrWorkout(product.description, workoutOf(product));
     if (found) return found.kind;
-    if (product.igLocation?.name || placeFromText(product.description) || placeFromText(product.title)) return 'place';
+    const about = `${product.title || ''}\n${product.description || ''}`;
+    // A location tag is where it was posted from; on a post about AI or code it says nothing about a place.
+    if (product.igLocation?.name && !offTopicForPlace(about)) return 'place';
+    // A workout whose routine is only in the video: a Workout with no exercises listed (nothing made up).
+    if (isWorkoutPost(about)) return 'workout';
+    if (placeFromText(product.description) || placeFromText(product.title)) return 'place';
     // A business's profile (an address, or "Donuts · Open 24/7" in its bio).
     if (placeFromProfile(product.profile)) return 'place';
-    // A workout whose routine is only in the video: a Workout with no exercises listed (nothing made up).
-    if (isWorkoutPost(`${product.title || ''}\n${product.description || ''}`)) return 'workout';
+    // A recipe whose recipe is a comment away: a Recipe with no ingredients listed.
+    if (isRecipePost(about)) return 'recipe';
     return 'link';
   }
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
@@ -195,7 +204,9 @@ export function captureFacts(product) {
 // Where a capture goes. Collections are for shopping: the local categorizer files products and links.
 // Everything else (recipes, places, videos…) lives in its Lifestyle view and never gets a collection.
 export function classifyCapture(product, kind, details, ctx) {
-  const classification = classify(product, ctx);
+  // Only something to buy may start one of the built-in shopping collections ("Home Decor", "Technology"):
+  // a post about a couch-to-5K plan once made a new Home Decor collection for itself.
+  const classification = classify(product, kind === 'product' ? ctx : { ...ctx, settings: { ...(ctx.settings || {}), autoCreateCollections: false }, prefs: { ...(ctx.prefs || {}), autoCreateCollections: false } });
   if (hasOwnView(kind)) {
     return { collectionId: null, collectionName: kindInfo(kind).plural, isNew: false, isInbox: false, shelf: kind, confidence: 0.9, alternatives: classification.alternatives || [],
       reason: (KIND_REASON[kind] || (() => kindInfo(kind).label))(details), kind };

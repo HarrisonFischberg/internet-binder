@@ -13,7 +13,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { loadChallenge, loadExport, loadLibrary } from './lib/cases.mjs';
-import { runFirstPass } from './lib/firstpass.mjs';
+import { runFirstPass, sharedProduct } from './lib/firstpass.mjs';
+import { learnFromSaves, emptyPrefs } from '../../keepsake/src/shared/categorizer.js';
 import { judge, summarize, pct } from './lib/metrics.mjs';
 import { loadQaEnv, redact } from './lib/env.mjs';
 import { recordNetwork } from './lib/network.mjs';
@@ -38,6 +39,15 @@ if (args.source === 'real' || args.source === 'all') {
 }
 if (args.library) cases.push(...loadLibrary(args.library));
 if ((!args.source && !args.library) || args.source === 'challenge' || args.source === 'all') cases.push(...loadChallenge('firstpass-challenge.json'));
+// --warm: the library already holds the dev split's saves, filed where the person filed them, and the
+// sorter has learned from them (store.learnFromLibrary does this once per library). Scored on held-out.
+if (args.warm) {
+  const dev = cases.filter((c) => c.split === 'dev' && c.expected.accept[0]?.collection);
+  const saves = dev.map((c) => ({ ...sharedProduct(c.evidence, 'page'), host: 'www.instagram.com', collectionId: c.library.collections.find((x) => x.name === c.expected.accept[0].collection)?.id })).filter((s) => s.collectionId);
+  const prefs = learnFromSaves(saves, emptyPrefs());
+  cases = cases.map((c) => (c.split === 'heldout' ? { ...c, library: { ...c.library, prefs } } : c));
+  console.log(`warm library: learned from ${saves.length} filed dev saves`);
+}
 if (split !== 'all') cases = cases.filter((c) => (c.split || 'dev') === split);
 if (args.category) cases = cases.filter((c) => c.category === args.category);
 if (args.tag) cases = cases.filter((c) => (c.tags || []).includes(args.tag));

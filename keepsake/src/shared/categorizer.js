@@ -26,6 +26,24 @@
 // An optional AI provider (src/ai/provider.js) can be layered on top by callers.
 
 import { DEFAULT_TAXONOMY, STOPWORDS } from './taxonomy.js';
+import { TOPICS, TOPIC_ALIASES } from './topics.js';
+
+// Social sites: everything from them shares one host, so where you file Instagram posts says nothing
+// about the next one ("you usually file items from instagram.com in Interesting" turned every post into Interesting).
+const SOCIAL_HOST = /(^|\.)(instagram\.com|tiktok\.com|youtube\.com|youtu\.be|facebook\.com|fb\.watch|x\.com|twitter\.com|threads\.net|pinterest\.[a-z.]+|reddit\.com|linkedin\.com)$/i;
+export const isSocialHost = (host) => SOCIAL_HOST.test(String(host || '').toLowerCase());
+
+// A collection named for a topic ("AI", "Funny", "Business ideas") takes that topic's words
+// (src/shared/topics.js), so a post about Claude prompts finds an "AI" collection with no keywords typed.
+// Only an exact name or a listed alias counts: "Ai art" is not "AI".
+function topicWordsFor(collection) {
+  const names = [collection.name, ...(collection.aliases || [])].map(normalizeName).filter(Boolean);
+  for (const [topic, phrases] of TOPICS) {
+    const all = [topic, ...(TOPIC_ALIASES[topic] || [])].map(normalizeName);
+    if (names.some((n) => all.includes(n))) return phrases.map((p) => p.toLowerCase()).filter((p) => p.length >= 2);
+  }
+  return [];
+}
 
 const FIELD_WEIGHTS = {
   title: 3,
@@ -51,7 +69,7 @@ const NAME_FIELDS = new Set(['title', 'productType', 'schemaCategory', 'breadcru
 const ROOT_CRUMBS = /^(home|homepage|home page|shop|shop all|store|all|all products|products|catalog|catalogue|collections|new|sale|en|us|en-us)$/i;
 const KW_WEIGHT = { strong: 3, regular: 1, user: 5, name: 3 };
 const MAX_LEARNED_WEIGHT = 6;
-const BUILT_IN_KINDS = new Set(['strong', 'regular', 'name']);
+const BUILT_IN_KINDS = new Set(['strong', 'regular', 'name', 'topic']);
 
 // --- text helpers ------------------------------------------------------------
 
@@ -291,12 +309,14 @@ function buildCandidates(collections, prefs, settings) {
   for (const c of collections) {
     const tax = taxonomyFor(c, collections);
     if (tax) covered.add(tax.key);
+    const topic = topicWordsFor(c);
     candidates.push({
       id: c.id,
       name: c.name,
       taxonomyKey: tax ? tax.key : null,
       virtual: false,
-      strong: tax ? tax.strong : [],
+      strong: [...(tax ? tax.strong : []), ...topic],
+      topic: new Set(topic),
       regular: tax ? tax.keywords : [],
       user: c.keywords || [],
       nameTokens: [c.name, ...(c.aliases || [])].map(normalizeName).filter((t) => t && (!ownNames.has(t) || ownNames.get(t) === c.id)),
@@ -348,7 +368,7 @@ function collectMatches(candidate, candidateIndex, fields, prefs) {
     if (field === 'retailer') continue; // handled by retailer preferences
     for (const kw of candidate.strong) {
       const m = matchKeyword(kw, text);
-      if (m) add(field, kw, m, KW_WEIGHT.strong, 'strong');
+      if (m) add(field, kw, m, KW_WEIGHT.strong, candidate.topic?.has(kw) ? 'topic' : 'strong');
     }
     for (const kw of candidate.regular) {
       const m = matchKeyword(kw, text);
@@ -386,13 +406,14 @@ function collectMatches(candidate, candidateIndex, fields, prefs) {
 
 // Longer phrase matches dominate shorter ones in the same field ("camp chair" beats "chair").
 function applyDominance(matches) {
-  const dominable = new Set(['strong', 'regular', 'name']);
+  const dominable = new Set(['strong', 'regular', 'name', 'topic']);
   return matches.filter((m) => {
     if (m.kind === 'learned') return true;
     for (const n of matches) {
       if (n === m || n.field !== m.field) continue;
       if (n.matched.length <= m.matched.length) continue;
-      if (n.candidateIndex === m.candidateIndex && n.kind === m.kind) continue;
+      const asStrong = (k) => (k === 'topic' ? 'strong' : k);
+      if (n.candidateIndex === m.candidateIndex && asStrong(n.kind) === asStrong(m.kind)) continue;
       // Built-in words give way to any longer match. The user's own keywords only give
       // way to a longer keyword of theirs: "coffee cup" (Kitchen) beats "coffee" (Food).
       if (!dominable.has(m.kind) && n.kind !== 'user') continue;
@@ -429,6 +450,15 @@ export function classify(product, context = {}) {
     all = all.concat(collectMatches(cand, i, fields, prefs));
   });
   all = applyDominance(all);
+  // A collection named for a topic owns that topic's words: "Claude" says your AI collection, not
+  // Technology's built-in idea of AI. Your own keywords and what you've taught it still count.
+  const owned = new Map(all.filter((m) => m.kind === 'topic').map((m) => [`${m.field}|${m.matched.toLowerCase()}`, m.candidateIndex]));
+  if (owned.size) {
+    all = all.filter((m) => {
+      const owner = owned.get(`${m.field}|${m.matched.toLowerCase()}`);
+      return !BUILT_IN_KINDS.has(m.kind) || owner === undefined || owner === m.candidateIndex;
+    });
+  }
 
   const scores = candidates.map(() => 0);
   const explain = candidates.map(() => []);
@@ -437,6 +467,8 @@ export function classify(product, context = {}) {
   const identified = candidates.map(() => false);
   // Points from the user's own keywords, kept apart to spot a tie between two of them.
   const userScores = candidates.map(() => 0);
+  // The different phrases of a collection's topic that matched ("Claude Code", "AI agent" for AI).
+  const topicHits = candidates.map(() => new Set());
   const seen = new Set();
   const tally = (m) => {
     const key = `${m.candidateIndex}|${m.field}|${m.keyword}`;
@@ -445,6 +477,7 @@ export function classify(product, context = {}) {
     const fw = FIELD_WEIGHTS[m.field] || 1;
     scores[m.candidateIndex] += fw * m.weight;
     if (m.kind === 'user') userScores[m.candidateIndex] += fw * m.weight;
+    if (m.kind === 'topic') topicHits[m.candidateIndex].add(m.keyword);
     if (IDENTITY_FIELDS.has(m.field) || IDENTITY_KINDS.has(m.kind)) identified[m.candidateIndex] = true;
     if (explain[m.candidateIndex].length < 4) explain[m.candidateIndex].push(m);
   };
@@ -458,7 +491,7 @@ export function classify(product, context = {}) {
 
   // 3. Retailer preferences learned from past behaviour.
   const host = product?.host || product?.retailerHost || '';
-  const retailerPrefs = (prefs.retailerPrefs || {})[host] || null;
+  const retailerPrefs = isSocialHost(host) ? null : (prefs.retailerPrefs || {})[host] || null;
   if (retailerPrefs) {
     const total = Object.values(retailerPrefs).reduce((sum, n) => sum + (n > 0 ? n : 0), 0);
     candidates.forEach((cand, i) => {
@@ -474,7 +507,7 @@ export function classify(product, context = {}) {
   }
 
   const ranked = candidates
-    .map((cand, i) => ({ cand, score: scores[i], why: explain[i], identified: identified[i], userScore: userScores[i] }))
+    .map((cand, i) => ({ cand, score: scores[i], why: explain[i], identified: identified[i], userScore: userScores[i], topicHits: topicHits[i].size }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || (a.cand.virtual === b.cand.virtual ? 0 : a.cand.virtual ? 1 : -1));
 
@@ -518,6 +551,9 @@ export function classify(product, context = {}) {
   if (top.score < 3) confidence = Math.min(confidence, 0.35);
   // A collection's keywords are the user's own words: when one matched the winner, trust it.
   if (top.userScore > 0) confidence = Math.max(confidence, 0.85);
+  // A collection named for a topic ("AI", "Food") is your own word too: three different phrases of that
+  // topic ("Claude Code", "AI agent", "prompts"), with no close rival, say what the save is about.
+  else if (top.topicHits >= 3 && rivalry <= top.score * 0.25) confidence = Math.max(confidence, 0.8);
 
   const reason = describeWhy(top.why);
   if (confidence < threshold) {
@@ -614,7 +650,7 @@ function teach(next, product, fromId, toId, options) {
     next.learnedKeywords[term] = entry;
   }
   const host = product?.host || '';
-  if (host) {
+  if (host && !isSocialHost(host)) {
     const hp = { ...(next.retailerPrefs[host] || {}) };
     // One save from a shop is one save from it, however sure you were about its words.
     const shop = options.confirm ? LESSON.confirm : LESSON.light;
