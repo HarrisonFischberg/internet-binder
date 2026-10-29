@@ -172,21 +172,18 @@ function renderPlacesReview(view, items, all = items) {
   view.append(box);
 }
 
+// MapLibre GL 6 ships as ES modules only. Its worker can't find itself from an extension URL (it only
+// auto-detects http(s)), so it's pointed at the vendored worker file: same origin, so no blob: worker.
+let maplibregl = null;
 let maplibreLoading = null;
 function loadMapLibre() {
-  if (globalThis.maplibregl) return Promise.resolve(globalThis.maplibregl);
+  if (maplibregl) return Promise.resolve(maplibregl);
   if (!maplibreLoading) {
-    maplibreLoading = new Promise((resolve, reject) => {
-      const css = el('link', { rel: 'stylesheet', href: '../../vendor/maplibre/maplibre-gl.css' });
-      document.head.append(css);
-      const s = el('script', { src: '../../vendor/maplibre/maplibre-gl-csp.js' });
-      s.onload = () => {
-        globalThis.maplibregl.setWorkerUrl(chrome.runtime.getURL('vendor/maplibre/maplibre-gl-csp-worker.js'));
-        resolve(globalThis.maplibregl);
-      };
-      s.onerror = () => { maplibreLoading = null; reject(new Error('The map didn’t load.')); };
-      document.head.append(s);
-    });
+    document.head.append(el('link', { rel: 'stylesheet', href: '../../vendor/maplibre/maplibre-gl.css' }));
+    maplibreLoading = import('../../vendor/maplibre/maplibre-gl.js').then((m) => {
+      m.setWorkerUrl(chrome.runtime.getURL('vendor/maplibre/maplibre-gl-worker.js'));
+      return (maplibregl = m);
+    }, () => { maplibreLoading = null; throw new Error('The map didn’t load.'); });
   }
   return maplibreLoading;
 }
@@ -280,8 +277,7 @@ function renderPlacesMap(view, items) {
     const note = placesMapNote(unpinned);
     box.append(mapEl, note);
     placesMap = { box, mapEl, note, map: null, style: '', markers: new Map(), moved: false };
-    let maplibregl;
-    try { maplibregl = await loadMapLibre(); } catch (e) { mapEl.replaceWith(el('p', { class: 'help help-error' }, [e.message])); placesMap = null; return; }
+    try { await loadMapLibre(); } catch (e) { mapEl.replaceWith(el('p', { class: 'help help-error' }, [e.message])); placesMap = null; return; }
     const map = new maplibregl.Map({ container: mapEl, style: placesMapStyle(), center: [0, 20], zoom: 1.4, attributionControl: { compact: true }, cooperativeGestures: false });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     // Once you pan or zoom, newly found pins don't move the map out from under you.
@@ -304,7 +300,6 @@ function placesMapStyle() {
 // you've moved it yourself.
 function syncPlacePins(pinned) {
   const pm = placesMap;
-  const maplibregl = globalThis.maplibregl;
   if (!pm?.map || !maplibregl) return;
   const { map, markers } = pm;
   pm.mapEl.setAttribute('aria-label', `Map of ${pluralize(pinned.length, 'place', 'places')}`);
@@ -346,7 +341,7 @@ function placeMarker(item) {
       links ? el('a', { class: 'btn btn-sm', href: links.apple, target: '_blank', rel: 'noopener noreferrer' }, ['Apple Maps']) : null,
     ]),
   ]);
-  return new globalThis.maplibregl.Marker({ element: dot }).setLngLat([d.lng, d.lat]).setPopup(new globalThis.maplibregl.Popup({ offset: 14, closeButton: true }).setDOMContent(pop));
+  return new maplibregl.Marker({ element: dot }).setLngLat([d.lng, d.lat]).setPopup(new maplibregl.Popup({ offset: 14, closeButton: true }).setDOMContent(pop));
 }
 
 function renderPlaceList(view, items, waiting = 0) {

@@ -65,19 +65,24 @@ test('every JS file parses', () => {
 test('no HTML-string or eval APIs (one reviewed constant SVG allowed)', () => {
   const allowed = new Set([
     'src/dashboard/dashboard.js:insertAdjacentHTML',
-    // MapLibre GL 4.7.1 (vendored CSP build, BSD-3): innerHTML for its attribution line (the map style's
-    // "© OpenStreetMap" credit), the scale control and Popup.setHTML. Internet Binder uses neither of the last two
-    // (popups use setDOMContent), and the extension CSP (script-src 'self', no inline) stops any script in
-    // that markup from running. Reviewed 2026-10-13; no eval or new Function in this build.
-    'vendor/maplibre/maplibre-gl-csp.js:innerHTML',
+    // MapLibre GL 6.4.1 (vendored ES module build, BSD-3; tools/vendor-maplibre.mjs): innerHTML for its
+    // attribution line (the map style's "© OpenStreetMap" credit, run through its sanitizer, which 6.4.1
+    // fixes for GHSA-jrc7-96c5-q579), the scale control, the popup close button's "×" and Popup.setHTML.
+    // Internet Binder uses neither the scale control nor setHTML (popups use setDOMContent), and the
+    // extension CSP (script-src 'self', no inline) stops any script in that markup from running.
+    // Reviewed 2026-10-29; no new Function in this build.
+    'vendor/maplibre/maplibre-gl.js:innerHTML',
   ]);
+  const evalAllowed = new Set(['vendor/maplibre/maplibre-gl-worker.js']);
   for (const f of js) {
     const src = readFileSync(f, 'utf8');
     for (const api of ['innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write', 'new Function']) {
       const code = src.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
       if (code.includes(api)) assert.ok(allowed.has(`${relative(ROOT, f)}:${api}`), `${relative(ROOT, f)} uses ${api}`);
     }
-    assert.doesNotMatch(src, /\beval\(/, `${relative(ROOT, f)} uses eval`);
+    // MapLibre's worker evals a script passed to importScriptInWorkers() (not .mjs); Internet Binder never
+    // calls it, and the CSP (no unsafe-eval) would block it anyway.
+    if (!evalAllowed.has(relative(ROOT, f))) assert.doesNotMatch(src, /\beval\(/, `${relative(ROOT, f)} uses eval`);
   }
 });
 
