@@ -12,7 +12,7 @@ import SafariServices
 import SwiftUI
 import CoreText
 
-let extensionBundleIdentifier = "com.harrisonfischberg.keepsake.Extension"
+let extensionBundleIdentifier = "com.harrisonfischberg.keepsake.safari-extension"
 
 class ViewController: NSViewController {
     override func loadView() {
