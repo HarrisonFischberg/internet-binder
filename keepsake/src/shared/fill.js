@@ -12,6 +12,7 @@ import { FILLED_KINDS } from './capture.js';
 import { cleanupWithAI, identifyForKind, keyFor, aiAvailable } from '../ai/provider.js';
 import { understandItem } from './understand.js';
 import { fileSave } from './filing.js';
+import { resolvePlaceSave } from './placeResolve.js';
 
 // What a Lifestyle save is still missing, for Check with AI to read it again.
 function incompleteDetails(kind, d = {}) {
@@ -84,7 +85,9 @@ export async function fillSave(store, id, { review = false, verify = false, forc
     try {
       let patch = null;
       const r = await identifyForKind(kind, item, settings, key);
-      if (r && kind === 'place') patch = { title: placeNamed(item) && !genericTitle(item.title) ? item.title : r.name, details: { ...d, locality: d.locality || r.locality, address: d.address || r.address || '', region: d.region || stateCode(r.state) || r.state || '' } };
+      // A street only when the post itself says it (the model's own memory of an address isn't a source).
+      const said = (v) => !!v && String(item.instagram?.caption || item.description || '').toLowerCase().replace(/\s+/g, ' ').includes(String(v).toLowerCase().replace(/\s+/g, ' '));
+      if (r && kind === 'place') patch = { title: placeNamed(item) && !genericTitle(item.title) ? item.title : r.name, details: { ...d, locality: d.locality || r.locality, address: d.address || (said(r.address) ? r.address : ''), region: d.region || stateCode(r.state) || r.state || '' } };
       else if (r && kind === 'media') patch = { title: r.title, details: { ...d, year: d.year || r.year, format: r.format || d.format } };
       else if (r && kind === 'book') patch = { title: r.title, details: { ...d, author: d.author || r.author } };
       else if (r && kind === 'workout') patch = { details: { ...d, exercises: r.exercises, durationMinutes: d.durationMinutes || r.durationMinutes, source: 'ai' } };
@@ -102,6 +105,18 @@ export async function fillSave(store, id, { review = false, verify = false, forc
     } catch {
       /* the provider didn't answer: the save stays as it was */
     }
+  }
+  // Places review and Check with AI (you asked): the place check (placeResolve.js) compares what the post
+  // says with OpenStreetMap and, with your key and web lookups on, a web search, and only writes what one
+  // of them confirms; when it can't be sure, the places it found wait on the save for you to choose.
+  if ((review || verify) && kindOf(item) === 'place' && item.details?.lat == null) {
+    try {
+      const r = await resolvePlaceSave(store, id, { fetchFn, allowed, waitTurn, deviceOnly });
+      if (r && r.outcome !== 'insufficient') return;
+    } catch {
+      /* offline or the service didn't answer: the plain lookup below tries */
+    }
+    item = (await store.getItem(id)) || item;
   }
   await lookupSave(store, item, settings, { fetchFn, allowed, waitTurn });
 }

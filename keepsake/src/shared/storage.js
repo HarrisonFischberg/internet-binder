@@ -298,6 +298,10 @@ export function makeItem(input = {}) {
     filingConfirmed: !!input.filingConfirmed,
     // What the AI said when it filed the save (src/shared/filing.js): the card's "why it's here".
     filing: sanitizeFiling(input.filing),
+    // Fix with AI's place check (src/shared/placeResolve.js): what it decided, and the places to choose
+    // from when it couldn't be sure.
+    placeResolution: sanitizePlaceResolution(input.placeResolution),
+    placeChoices: (Array.isArray(input.placeChoices) ? input.placeChoices : []).slice(0, 3).map(sanitizePlaceChoice).filter(Boolean),
     instagram: input.instagram && typeof input.instagram === 'object' ? sanitizeInstagram(input.instagram, now) : null,
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,
     relatedItemId: typeof input.relatedItemId === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(input.relatedItemId) ? input.relatedItemId : null,
@@ -314,6 +318,25 @@ export function makeItem(input = {}) {
     deletedAt: typeof input.deletedAt === 'string' && !Number.isNaN(Date.parse(input.deletedAt)) ? input.deletedAt : null,
     createdAt: input.createdAt || now,
     updatedAt: now,
+  };
+}
+
+function sanitizePlaceResolution(r) {
+  if (!r || typeof r !== 'object') return null;
+  return {
+    version: sanitizeText(r.version, 20), at: typeof r.at === 'string' && !Number.isNaN(Date.parse(r.at)) ? r.at : null,
+    outcome: ['verified', 'review', 'insufficient', 'chosen'].includes(r.outcome) ? r.outcome : '', reason: sanitizeText(r.reason, 200),
+    sources: uniqStrings(Array.isArray(r.sources) ? r.sources : [], 4).map((x) => sanitizeText(x, 40)).filter(Boolean),
+  };
+}
+
+function sanitizePlaceChoice(c) {
+  if (!c || typeof c !== 'object' || !c.name) return null;
+  const coord = (v, max) => (v !== null && v !== '' && Number.isFinite(Number(v)) && Math.abs(Number(v)) <= max ? Number(v) : null);
+  return {
+    name: sanitizeText(c.name, 120), address: sanitizeText(c.address, 200), locality: sanitizeText(c.locality, 80), region: sanitizeText(c.region, 60),
+    url: sanitizeUrl(c.url) || '', lat: coord(c.lat, 90), lng: coord(c.lng, 180), source: c.source === 'openstreetmap' ? 'openstreetmap' : 'web',
+    confirmedBy: uniqStrings(Array.isArray(c.confirmedBy) ? c.confirmedBy : [], 3).filter((x) => ['post', 'openstreetmap', 'cited-page'].includes(x)), why: sanitizeText(c.why, 120),
   };
 }
 

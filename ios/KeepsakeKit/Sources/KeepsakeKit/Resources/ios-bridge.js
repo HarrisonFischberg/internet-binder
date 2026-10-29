@@ -378,6 +378,10 @@
       await K.fill.fillSave(store, id, { review: true }, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which] });
       return withFact(await store.getItem(id));
     },
+    // You picked one of the places Fix with AI found (shared/placeResolve.js placeChoices).
+    async choosePlace(id, index) {
+      return withFact(await K.placeResolve.choosePlace(store, id, index));
+    },
     async aiLog() { return (await store.getAiLog()).slice().reverse(); },
     // Undo AI changes (shared/aiFix.js undoFixes): newest first, back to each "before"; a collection
     // deleted since sends the save to Review instead.

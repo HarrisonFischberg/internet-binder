@@ -591,7 +591,8 @@ test('Places review: the caption is read again first; then your AI provider name
   const ra = await S.getItem(a.id);
   assert.deepEqual([ra.details.address, ra.details.locality, ra.details.region, ra.details.postalCode], ['16051 dessau rd suite f', 'Pflugerville', 'TX', '78660']);
   assert.equal(calls, 0, 'nothing sent');
-  // Fix with AI: a titled post that names no place gets the place, its city and its state.
+  // Fix with AI: a titled post that names no place gets the place, its city and its state. The street the
+  // model gave isn't in the post, so it isn't written (an address needs a source).
   await aiOn();
   globalThis.fetch = aiReply({ name: 'Example Tavern', address: '54 Pearl St', city: 'New York', state: 'New York' });
   const b = await S.addItem({ type: 'instagram', kind: 'place', title: 'Tucked into Manhattan is a place', url: 'https://www.instagram.com/p/REVIEW2/', details: { source: 'page' },
@@ -599,7 +600,7 @@ test('Places review: the caption is read again first; then your AI provider name
   await F.send({ type: MSG.FILL_ITEM, itemId: b.id, review: true }, popup);
   for (let i = 0; i < 60 && (await S.getItem(b.id)).title !== 'Example Tavern'; i++) await new Promise((r) => setTimeout(r, 50));
   const rb = await S.getItem(b.id);
-  assert.deepEqual([rb.title, rb.details.address, rb.details.locality, rb.details.region], ['Example Tavern', '54 Pearl St', 'New York', 'NY']);
+  assert.deepEqual([rb.title, rb.details.address, rb.details.locality, rb.details.region], ['Example Tavern', '', 'New York', 'NY']);
 });
 
 test('a fill-in batch runs one save at a time, keeps its progress in session storage, counts places that leave review, and stops', async () => {

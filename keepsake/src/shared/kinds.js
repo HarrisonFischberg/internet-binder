@@ -1057,7 +1057,9 @@ const draftedOf = (kind, details) => {
 };
 const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 // Where looked-up details came from (OpenStreetMap, Wikidata, Open Library, or your AI provider), with a link.
-const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI'];
+const LOOKUP_SOURCES = ['OpenStreetMap', 'Wikidata', 'Open Library', 'AI', 'Web'];
+// What confirmed a place's address and pin (Fix with AI's place check, placeResolve.js).
+const CONFIRMED_BY = ['post', 'openstreetmap', 'cited-page', 'you'];
 // Where a film or show streams: [{ service, how: 'subscription' | 'free' | 'rent' | 'buy' | '', url }].
 const WATCH_HOW = ['subscription', 'free', 'rent', 'buy'];
 function watchOf(v) {
@@ -1076,7 +1078,9 @@ function cleanLookup(v) {
   if (!v || typeof v !== 'object' || !LOOKUP_SOURCES.includes(v.source)) return undefined;
   const url = typeof v.url === 'string' && /^https:\/\//.test(v.url) ? v.url.slice(0, 300) : '';
   // approximate: the pin is the street's, not the door's (the lookup knew the street but not the number).
-  return { source: v.source, url, ...(v.approximate === true ? { approximate: true } : {}) };
+  const by = Array.isArray(v.verifiedBy) ? [...new Set(v.verifiedBy.filter((x) => CONFIRMED_BY.includes(x)))] : [];
+  const at = typeof v.at === 'string' && !Number.isNaN(Date.parse(v.at)) ? v.at : '';
+  return { source: v.source, url, ...(v.approximate === true ? { approximate: true } : {}), ...(by.length ? { verifiedBy: by } : {}), ...(at ? { at } : {}) };
 }
 
 export function sanitizeDetails(kind, details) {
