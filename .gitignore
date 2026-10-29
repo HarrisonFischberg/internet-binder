@@ -6,3 +6,9 @@ replica/m3/screens/
 impeccable-review/before/
 impeccable-review/after/
 impeccable-review/img/
+
+# QA credentials (tools/qa): the real file stays local; .env.qa.example is the template.
+.env.qa.local
+.env*.local
+# QA run output (reports, raw provider answers) stays out of git.
+tools/qa/out/
