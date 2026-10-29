@@ -64,7 +64,7 @@ const places = ['base', 'final'].map((w) => {
 const mac = args.mac && existsSync(args.mac) ? read(args.mac) : null;
 const data = { generated: new Date().toISOString(), sets, places: places[1] ? { base: places[0]?.summary, final: places[1].summary, rows: places[1].results.map((r) => ({ id: r.id, note: r.note, outcome: r.outcome, ok: r.verdict.ok, fails: r.verdict.fails, beforeOk: places[0]?.results.find((x) => x.id === r.id)?.verdict.ok ?? null, address: r.address, choices: r.choices.length })) } : null, mac };
 
-const html = readFileSync(join(here, 'report-template.html'), 'utf8').replace('/*DATA*/null', JSON.stringify(data).replace(/</g, '\\u003c'));
+const html = readFileSync(join(here, 'report-template.html'), 'utf8').replace('/*DATA*/null', JSON.stringify(data).replace(/</g, '\\u003c').replace(/\uFFFD/g, ''));
 const out = args.out || join(here, 'out/report.html');
 writeFileSync(out, html);
 console.log(`report: ${sets.length} data sets, ${sets.reduce((n, s) => n + s.rows.length, 0)} cases → ${out}`);
