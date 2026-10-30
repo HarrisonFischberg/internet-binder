@@ -64,8 +64,58 @@ struct LifestyleScreen: View {
 /// The grid both pages and the Library use: two stacks across on iPhone, more on iPad.
 let groupColumns = [GridItem(.adaptive(minimum: 150), spacing: 16)]
 
-/// Each Lifestyle view with saves, as a stack linking to its view: most saves first (a tie A–Z), until
-/// you drag them into your own order (kept on this iPhone). "Sort by most saves" goes back.
+/// How the Collections and Lifestyle stacks are ordered (Chrome's Collections sort, same names).
+/// Dragging a stack puts them in your own order instead, until you pick a sort again.
+enum GroupSort: String, CaseIterable, Identifiable {
+    case size, recent, name
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .size: "Most saves"
+        case .recent: "Recently saved to"
+        case .name: "A–Z"
+        }
+    }
+
+    /// These groups in this order. `saves` gives a group's saves, `name` its name.
+    func apply<T>(_ groups: [T], saves: (T) -> [Save], name: (T) -> String) -> [T] {
+        switch self {
+        case .size: return groups.mostFirst(count: { saves($0).count }, name: name)
+        case .name: return groups.sorted { name($0).localizedStandardCompare(name($1)) == .orderedAscending }
+        case .recent:
+            let latest = groups.map { g in (g, saves(g).compactMap(\.createdAt).max() ?? "") }
+            return latest.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : name($0.0).localizedStandardCompare(name($1.0)) == .orderedAscending }.map(\.0)
+        }
+    }
+}
+
+/// The Sort menu over a row of stacks: a tick beside the sort in use, or "Your order" after a drag.
+struct GroupSortMenu: View {
+    let sort: GroupSort
+    let manual: Bool
+    let pick: (GroupSort) -> Void
+    @Environment(\.ks) private var t
+
+    var body: some View {
+        Menu {
+            ForEach(GroupSort.allCases) { s in
+                Button { Haptic.detent(); pick(s) } label: {
+                    if s == sort && !manual { Label(s.label, systemImage: "checkmark") } else { Text(s.label) }
+                }
+            }
+        } label: {
+            Label("Sort: \(manual ? "Your order" : sort.label)", systemImage: "arrow.up.arrow.down")
+                .font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted)
+                .frame(minHeight: 44)
+        }
+        .accessibilityLabel("Sort")
+        .accessibilityValue(manual ? "Your order" : sort.label)
+        .accessibilityIdentifier("groupSortMenu")
+    }
+}
+
+/// Each Lifestyle view with saves, as a stack linking to its view: most saves first (a tie A–Z), or the
+/// sort you pick, until you drag them into your own order (kept on this iPhone).
 struct LifestyleTiles: View {
     /// Select mode: a tap ticks a view instead of opening it.
     var selection: Binding<Set<String>>?
@@ -76,16 +126,24 @@ struct LifestyleTiles: View {
     @State private var order: [String] = []
     @State private var dragging: String?
     @State private var manual = !SavedOrder.get(Self.key).isEmpty
+    @AppStorage("lifestyleSort") private var sort = GroupSort.size
     static let key = "lifestyleOrder"
 
-    private var counts: [String: Int] { model.index.byKind.mapValues(\.count) }
     private var present: [String] {
-        let counts = counts
-        return KindStyle.lifestyle.filter { counts[$0] != nil }.mostFirst(count: { counts[$0] ?? 0 }, name: { KindStyle($0).plural })
+        let index = model.index
+        return sort.apply(KindStyle.lifestyle.filter { index.byKind[$0] != nil }, saves: { index.kind($0) }, name: { KindStyle($0).plural })
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if order.count > 1 && selection == nil {
+                GroupSortMenu(sort: sort, manual: manual) { picked in
+                    SavedOrder.set(Self.key, [])
+                    manual = false
+                    sort = picked
+                    withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = present }
+                }
+            }
             LazyVGrid(columns: groupColumns, spacing: 20) {
                 ForEach(Array(order.enumerated()), id: \.element) { i, kind in
                     let items = model.index.kind(kind)
@@ -113,21 +171,15 @@ struct LifestyleTiles: View {
                     }
                 }
             }
-            if manual && selection == nil {
-                SortByMostButton {
-                    SavedOrder.set(Self.key, [])
-                    manual = false
-                    withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = present }
-                }
-            }
         }
         .onChange(of: present, initial: true) { _, kinds in order = manual ? kinds.arranged(by: SavedOrder.get(Self.key)) { $0 } : kinds }
     }
 }
 
 /// Each collection as a stack with one of its pictures on top, linking to the collection. Pinned
-/// collections come first, then the rest with the most saves first (a tie A–Z). Drag them and your
-/// order is kept instead (Chrome's order, which dragging here changes), until "Sort by most saves".
+/// collections come first, then the rest with the most saves first (a tie A–Z) or the sort you pick.
+/// Drag them and your order is kept instead (Chrome's order, which dragging here changes), until you
+/// pick a sort again.
 struct CollectionTiles: View {
     let collections: [SaveCollection]
     var onNew: (() -> Void)?
@@ -141,17 +193,18 @@ struct CollectionTiles: View {
     @State private var order: [String] = []
     @State private var dragging: String?
     @State private var manual = !SavedOrder.get(Self.key).isEmpty
-    /// Set once you drag a collection: Internet Binder stops sorting them by size on this iPhone.
+    @AppStorage("collectionSort") private var sort = GroupSort.size
+    /// Set once you drag a collection: Internet Binder stops sorting them on this iPhone.
     static let key = "collectionOrderManual"
 
     private var counts: [String: Int] { model.index.byCollection.mapValues(\.count) }
 
-    /// Pinned first, then by size; once you've dragged, the stored order as it is.
+    /// Pinned first, then in the chosen sort; once you've dragged, the stored order as it is.
     private func arranged(manual: Bool) -> [String] {
         guard !manual else { return collections.map(\.id) }
-        let counts = counts
+        let index = model.index
         let pinned = collections.filter { $0.pinned == true }
-        let rest = collections.filter { $0.pinned != true }.mostFirst(count: { counts[$0.id] ?? 0 }, name: \.name)
+        let rest = sort.apply(collections.filter { $0.pinned != true }, saves: { index.collection($0.id) }, name: \.name)
         return (pinned + rest).map(\.id)
     }
 
@@ -163,6 +216,14 @@ struct CollectionTiles: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if collections.count > 1 && selection == nil {
+                GroupSortMenu(sort: sort, manual: manual) { picked in
+                    SavedOrder.set(Self.key, [])
+                    manual = false
+                    sort = picked
+                    withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = arranged(manual: false) }
+                }
+            }
             LazyVGrid(columns: groupColumns, spacing: 20) {
                 ForEach(Array(order.compactMap { id in collections.first { $0.id == id } }.enumerated()), id: \.element.id) { i, c in
                     let items = model.index.collection(c.id)
@@ -201,30 +262,8 @@ struct CollectionTiles: View {
                         .buttonStyle(PressStyle())
                 }
             }
-            if manual && collections.count > 1 && selection == nil {
-                SortByMostButton {
-                    SavedOrder.set(Self.key, [])
-                    manual = false
-                    withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = arranged(manual: false) }
-                }
-            }
         }
         .onChange(of: signature, initial: true) { order = arranged(manual: manual) }
-    }
-}
-
-/// Puts a row of stacks you dragged into your own order back to most saves first.
-struct SortByMostButton: View {
-    let action: () -> Void
-    @Environment(\.ks) private var t
-
-    var body: some View {
-        Button(action: action) {
-            Label("Sort by most saves", systemImage: "arrow.up.arrow.down")
-                .font(.footnote.weight(.semibold)).foregroundStyle(t.inkMuted)
-                .frame(minHeight: 44)
-        }
-        .buttonStyle(.plain)
     }
 }
 
