@@ -2,6 +2,7 @@
 // Internet Binder first-pass evaluation. Runs cases through the shipped capture engine and scores them.
 //
 //   node tools/qa/eval.mjs                                    challenge cases, no AI (deterministic; CI)
+//   node tools/qa/eval.mjs --source wide                      the wider synthetic set (fixtures/firstpass-wide.json)
 //   node tools/qa/eval.mjs --source real --export <file>      the person's own export (labels: their collections)
 //   node tools/qa/eval.mjs --capture url-only                 as if Instagram's page were a login wall
 //   node tools/qa/eval.mjs --provider anthropic --env <file>  LIVE: your provider reads each save after it is saved
@@ -12,6 +13,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { loadChallenge, loadExport, loadLibrary } from './lib/cases.mjs';
 import { runFirstPass, sharedProduct } from './lib/firstpass.mjs';
 import { learnFromSaves, emptyPrefs } from '../../keepsake/src/shared/categorizer.js';
@@ -39,8 +41,16 @@ if (args.source === 'real' || args.source === 'all') {
 }
 if (args.library) cases.push(...loadLibrary(args.library));
 if ((!args.source && !args.library) || args.source === 'challenge' || args.source === 'all') cases.push(...loadChallenge('firstpass-challenge.json'));
+// --source wide: the 174 wider synthetic cases (platforms, languages, places, products…); see fixtures/LABELING.md.
+if (args.source === 'wide' || args.source === 'all') cases.push(...loadChallenge('firstpass-wide.json'));
 // --warm: the library already holds the dev split's saves, filed where the person filed them, and the
 // sorter has learned from them (store.learnFromLibrary does this once per library). Scored on held-out.
+// --warm cv: the same, inside the dev split only (learn from four fifths, score the other fifth), for
+// tuning learning without looking at a held-out fold.
+if (args.warm === 'cv') {
+  const cv = (c) => parseInt(createHash('sha256').update(`cv:${c.id}`).digest('hex').slice(0, 8), 16) % 5 === 0;
+  cases = cases.filter((c) => c.split === 'dev').map((c) => ({ ...c, split: cv(c) ? 'heldout' : 'dev' }));
+}
 if (args.warm) {
   const dev = cases.filter((c) => c.split === 'dev' && c.expected.accept[0]?.collection);
   const saves = dev.map((c) => ({ ...sharedProduct(c.evidence, 'page'), host: 'www.instagram.com', collectionId: c.library.collections.find((x) => x.name === c.expected.accept[0].collection)?.id })).filter((s) => s.collectionId);
@@ -49,6 +59,7 @@ if (args.warm) {
   console.log(`warm library: learned from ${saves.length} filed dev saves`);
 }
 if (split !== 'all') cases = cases.filter((c) => (c.split || 'dev') === split);
+if (args.fold) cases = cases.filter((c) => String(args.fold).includes(c.fold));
 if (args.category) cases = cases.filter((c) => c.category === args.category);
 if (args.tag) cases = cases.filter((c) => (c.tags || []).includes(args.tag));
 if (args.sample && Number.isFinite(limit)) {
@@ -100,14 +111,14 @@ let commit = '';
 try { commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim(); } catch { /* not a checkout */ }
 const meta = {
   at: new Date().toISOString(), commit, provider, model: ai ? ai.settings.ai.model || '(adapter default)' : '', effort: ai ? ai.settings.ai.effort : '',
-  platform: args.platform || `node ${process.version} (shared engine, as on iPhone via JavaScriptCore)`, capture, split, cases: cases.length, repeat,
+  platform: args.platform || `node ${process.version} (shared engine, as on iPhone via JavaScriptCore)`, capture, split, fold: args.fold || '', cases: cases.length, repeat,
   sources: [...new Set(cases.map((c) => c.origin))], label: args.label || '', stopped, network: net.summary(),
 };
 const summary = { immediate: summarize(results, 'immediate'), settled: summarize(results, 'settled') };
 mkdirSync(new URL('./out/', import.meta.url), { recursive: true });
 const name = args.name || `firstpass-${provider}-${capture}-${Date.now()}`;
 const file = new URL(`./out/${name}.json`, import.meta.url);
-writeFileSync(file, JSON.stringify({ meta, summary, results: results.map(({ case: c, ...r }) => ({ case: { id: c.id, origin: c.origin, category: c.category, tags: c.tags, split: c.split, expected: c.expected, evidence: c.evidence, labelBy: c.labelBy, uncertain: c.uncertain, note: c.note }, ...r })) }, null, 1));
+writeFileSync(file, JSON.stringify({ meta, summary, results: results.map(({ case: c, ...r }) => ({ case: { id: c.id, origin: c.origin, category: c.category, tags: c.tags, split: c.split, fold: c.fold, expected: c.expected, evidence: c.evidence, labelBy: c.labelBy, uncertain: c.uncertain, note: c.note }, ...r })) }, null, 1));
 
 const s = summary.settled;
 console.log(`${name}: ${cases.length} cases × ${repeat}, provider ${provider}${meta.model ? ` ${meta.model}` : ''}, capture ${capture}`);

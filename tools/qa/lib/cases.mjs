@@ -18,6 +18,10 @@ export function loadChallenge(name) {
 
 // Held out by creator (a stable hash), so posts by the same account never sit on both sides.
 export const splitOf = (key) => (parseInt(createHash('sha256').update(String(key || '')).digest('hex').slice(0, 8), 16) % 5 === 0 ? 'heldout' : 'dev');
+// The held-out side cut into three folds, frozen on 2026-10-30 before any tuning: A scores Phase 2, B the
+// providers in Phase 3, C the final runs. A fold is burned once its phase has looked at it. Instagram's
+// export has no creator for almost every post, so the key falls back to the save id (not creator-disjoint).
+export const foldOf = (key) => 'ABC'[parseInt(createHash('sha256').update(`fold-2026-10-30:${key || ''}`).digest('hex').slice(0, 8), 16) % 3];
 
 // What the person's Instagram collection says a save should become. Lifestyle collections (Workout,
 // Restaurants, Movies) say the kind; the rest name the binder collection they made from it. Some
@@ -51,6 +55,7 @@ export function loadExport(path, { limit = Infinity } = {}) {
       origin: 'real',
       suite: 'firstpass',
       split: splitOf(ig.creator || i.id),
+      fold: splitOf(ig.creator || i.id) === 'heldout' ? foldOf(ig.creator || i.id) : undefined,
       source: 'instagram',
       category: name,
       evidence: { url: i.url, caption: ig.caption, creator: ig.creator || '', hashtags: ig.hashtags || [], location: ig.location || '' },
