@@ -27,6 +27,13 @@ def bump_build(platform)
   UI.success("Build #{n}")
 end
 
+# Where the build went. The App Store link works once Apple approves the version.
+def links(store: false)
+  id = Spaceship::ConnectAPI::App.find(CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)).id
+  UI.success("TestFlight: https://appstoreconnect.apple.com/apps/#{id}/testflight")
+  UI.success("App Store: https://apps.apple.com/app/id#{id}") if store
+end
+
 platform :ios do
   def build_ios
     build_app(project: PROJECTS[0], scheme: "Keepsake", export_method: "app-store",
@@ -44,6 +51,7 @@ platform :ios do
     bump_build("ios")
     build_ios
     upload_to_testflight(skip_waiting_for_build_processing: true)
+    links
   end
 
   desc "Bump the build, archive, upload with listing and screenshots, submit for review"
@@ -60,6 +68,7 @@ platform :ios do
       precheck_include_in_app_purchases: false,
       submission_information: { add_id_info_uses_idfa: false }
     )
+    links(store: true)
   end
 end
 
@@ -81,5 +90,6 @@ platform :mac do
     bump_build("osx")
     build_mac
     upload_to_testflight(app_platform: "osx", skip_waiting_for_build_processing: true)
+    links
   end
 end

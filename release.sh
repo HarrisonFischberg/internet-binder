@@ -45,6 +45,7 @@ chrome() {
   say "chrome: upload and publish"
   CLIENT_ID=$CWS_CLIENT_ID CLIENT_SECRET=$CWS_CLIENT_SECRET REFRESH_TOKEN=$CWS_REFRESH_TOKEN PUBLISHER_ID=$CWS_PUBLISHER_ID \
     npx --yes chrome-webstore-upload-cli@4.0.2 --source "$zip" --extension-id "$CWS_EXTENSION_ID"
+  echo "Chrome Web Store (live once review passes): https://chromewebstore.google.com/detail/$CWS_EXTENSION_ID"
 }
 
 skip() { echo "$1: not shipped from this repo ($2), nothing to do"; }

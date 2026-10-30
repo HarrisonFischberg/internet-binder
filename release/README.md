@@ -10,6 +10,8 @@ One command, from the repo root:
 | Mac Safari app build to TestFlight | `./release.sh mac --live` |
 | Chrome Web Store upload and publish | `./release.sh chrome --live` |
 
+Each `--live` run ends by printing where it went: the TestFlight page, the App Store link (works once Apple approves) or the Chrome Web Store page.
+
 Without `--live` nothing leaves the machine except App Store Connect's validation check of the build.
 `ios` and `mac` need a Mac with Xcode signed in to team KTV2G3Z883. `chrome` runs anywhere with Node 20+.
 `android` and `firefox` are accepted and do nothing: this repo has no Android app, and the Firefox build is on hold.
