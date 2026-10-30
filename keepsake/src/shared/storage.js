@@ -810,7 +810,8 @@ export function createStore(kv, db = memoryRecordBackend()) {
       const [next] = await db.update('items', [id], (existing) => {
         if (!existing) return undefined;
         // A patch may add to them (kindChangePatch for a kind you picked); it never takes any away.
-        const userFields = new Set([...(existing.userFields || []), ...(Array.isArray(patch.userFields) ? patch.userFields : [])]);
+        // by 'undo': putting a save back as it was (Undo on a place you picked), its userFields included.
+        const userFields = by === 'undo' && Array.isArray(patch.userFields) ? new Set(patch.userFields) : new Set([...(existing.userFields || []), ...(Array.isArray(patch.userFields) ? patch.userFields : [])]);
         if (by === 'user') for (const f of USER_FIELDS) if (f in patch && patch[f] !== existing[f]) userFields.add(f);
         // A kind you picked is read again by your AI provider, for that kind's details.
         const rekinded = by === 'user' && 'kind' in patch && patch.kind !== existing.kind;

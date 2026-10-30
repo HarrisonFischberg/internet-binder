@@ -173,6 +173,7 @@
   // What the screens list, decided by Chrome's own functions (the dashboard does the same).
   const K = KeepsakeCore;
   const withFact = (i) => ({ ...i, fact: factOf(i) });
+  const placeUndo = new Map();
   globalThis.views = {
     // Review: saves that need a collection and aren't bought (dashboard.js: needsCollection && isActive).
     async review() {
@@ -379,12 +380,22 @@
       return withFact(await store.getItem(id));
     },
     // You picked one of the places Fix with AI found (shared/placeResolve.js placeChoices).
+    // Each keeps the save as it was first, for Undo (undoPlace).
     async choosePlace(id, index) {
+      const before = await store.getItem(id);
+      if (before) placeUndo.set(id, K.placeResolve.placeSnapshot(before));
       return withFact(await K.placeResolve.choosePlace(store, id, index));
     },
     // None of them is the place: the choices are cleared, the save is left as it was.
     async dismissPlaceChoices(id) {
+      const before = await store.getItem(id);
+      if (before) placeUndo.set(id, K.placeResolve.placeSnapshot(before));
       return withFact(await K.placeResolve.dismissPlaceChoices(store, id));
+    },
+    async undoPlace(id) {
+      const snap = placeUndo.get(id);
+      placeUndo.delete(id);
+      return snap ? withFact(await K.placeResolve.restorePlace(store, snap)) : null;
     },
     async aiLog() { return (await store.getAiLog()).slice().reverse(); },
     // Undo AI changes (shared/aiFix.js undoFixes): newest first, back to each "before"; a collection

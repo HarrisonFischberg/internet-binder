@@ -3458,10 +3458,11 @@ button.home-attention {
   display: grid;
   gap: var(--s-2);
   padding: var(--s-3) var(--s-4);
-  border: 1px solid var(--c-kind-place-soft);
+  margin-top: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--c-kind-place) 35%, transparent);
   border-left: 3px solid var(--c-kind-place);
   border-radius: 10px;
-  background: var(--c-kind-place-fill);
+  background: var(--c-kind-place-soft);
   justify-items: start;
 }
 
@@ -3496,8 +3497,8 @@ button.home-attention {
   color: var(--c-text-muted);
 }
 
-.place-choice .btn {
-  min-height: 36px;
+.place-choices .btn {
+  min-height: 44px;
   flex: none;
 }
 

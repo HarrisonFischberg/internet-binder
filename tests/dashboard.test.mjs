@@ -335,16 +335,26 @@ test('a place Fix with AI could not tell apart: the place view lists the choices
   assert.match(box.textContent, /Which place is it\?/);
   assert.match(box.textContent, /7 Carmine Street, New York, NY/);
   assert.match(box.textContent, /OpenStreetMap/);
+  assert.match(box.textContent, /Now: New York/);
   const picks = [...box.querySelectorAll('button')].filter((b) => b.textContent === 'This one');
   assert.equal(picks.length, 2);
   assert.match(picks[1].getAttribute('aria-label'), /1435 Broadway/);
   picks[1].click();
-  await until(async () => !(await store.getItem(a.id)).placeChoices?.length);
+  for (let i = 0; i < 100 && (await store.getItem(a.id)).placeChoices?.length; i++) await new Promise((r) => setTimeout(r, 30));
   await afterChange();
   const saved = await store.getItem(a.id);
   assert.equal(saved.details.address, '1435 Broadway');
   assert.deepEqual(saved.details.lookup.verifiedBy, ['openstreetmap', 'you']);
   assert.ok(!window.document.querySelector('.modal-place .place-choices'), 'the place view opens again without the choices');
+  // Undo puts the save and its choices back, your fields included.
+  const undo = [...window.document.querySelectorAll('.toast-action')].find((x) => x.textContent === 'Undo');
+  assert.ok(undo, 'Undo on the toast');
+  undo.click();
+  for (let i = 0; i < 100 && (await store.getItem(a.id)).placeChoices?.length !== 2; i++) await new Promise((r) => setTimeout(r, 30));
+  const back = await store.getItem(a.id);
+  assert.equal(back.details.address || '', '');
+  assert.ok(!(back.userFields || []).includes('details'), 'undo leaves nothing marked as yours');
+  window.document.querySelectorAll('.toast').forEach((x) => x.remove());
   window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
   await afterChange();
 

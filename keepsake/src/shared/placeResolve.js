@@ -236,3 +236,11 @@ export async function dismissPlaceChoices(store, id) {
   if (!item?.placeChoices?.length) return item || null;
   return store.updateItem(id, { placeChoices: [], placeResolution: { ...(item.placeResolution || {}), outcome: 'dismissed', at: nowIso() } }, { by: 'user' });
 }
+
+// What choosePlace and dismissPlaceChoices change, kept before they run, so Undo can put it back.
+export const placeSnapshot = (item) => ({ id: item.id, title: item.title, details: item.details || {}, placeChoices: item.placeChoices || [], placeResolution: item.placeResolution || null, userFields: item.userFields || [] });
+export async function restorePlace(store, snapshot) {
+  if (!snapshot?.id || !(await store.getItem(snapshot.id))) return null;
+  const { id, ...before } = snapshot;
+  return store.updateItem(id, before, { by: 'undo' });
+}
