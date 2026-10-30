@@ -1,12 +1,21 @@
 # App Store and TestFlight from the command line. Run through ./release.sh (see release/README.md).
 # Signs in with an App Store Connect API key from ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH.
-# Listing text, age rating, review notes and screenshots live in store/ios.
-# The iPhone/iPad app and the Mac Safari app share one App Store record and one build number.
+# Listing text, review notes and screenshots live in store/ios and store/mac; the age rating in store/ios.
+# The iPhone/iPad app and the Mac Safari app share one App Store record (universal purchase) and one build number.
 
 default_platform(:ios)
 
 ROOT = File.expand_path("..") # the Fastfile is read from inside fastlane/
-LISTING = { metadata_path: "#{ROOT}/store/ios/metadata", screenshots_path: "#{ROOT}/store/ios/screenshots" }
+def listing(dir) = { metadata_path: "#{ROOT}/store/#{dir}/metadata", screenshots_path: "#{ROOT}/store/#{dir}/screenshots" }
+SUBMIT = {
+  app_rating_config_path: "#{ROOT}/store/ios/age-rating.json",
+  overwrite_screenshots: true,
+  submit_for_review: true,
+  automatic_release: true,
+  force: true,
+  precheck_include_in_app_purchases: false,
+  submission_information: { add_id_info_uses_idfa: false }
+}
 PROJECTS = ["#{ROOT}/ios/Keepsake.xcodeproj", "#{ROOT}/safari/Keepsake/Keepsake.xcodeproj"]
 
 before_all do
@@ -43,7 +52,7 @@ platform :ios do
   desc "Dry run: build and have App Store Connect validate the app, upload nothing"
   lane :check do
     build_ios
-    deliver(**LISTING, verify_only: true, force: true)
+    deliver(**listing("ios"), verify_only: true, force: true)
   end
 
   desc "Bump the build, archive, upload to TestFlight"
@@ -59,14 +68,8 @@ platform :ios do
     bump_build("ios")
     build_ios
     deliver(
-      **LISTING,
-      app_rating_config_path: "#{ROOT}/store/ios/age-rating.json",
-      overwrite_screenshots: true,
-      submit_for_review: true,
-      automatic_release: true,
-      force: true,
-      precheck_include_in_app_purchases: false,
-      submission_information: { add_id_info_uses_idfa: false }
+      **listing("ios"),
+      **SUBMIT
     )
     links(store: true)
   end
@@ -82,7 +85,7 @@ platform :mac do
   desc "Dry run: build and have App Store Connect validate the Mac app, upload nothing"
   lane :check do
     build_mac
-    deliver(**LISTING, platform: "osx", verify_only: true, force: true)
+    deliver(**listing("mac"), platform: "osx", verify_only: true, force: true)
   end
 
   desc "Bump the build, archive, upload the Mac Safari app to TestFlight"
@@ -91,5 +94,13 @@ platform :mac do
     build_mac
     upload_to_testflight(app_platform: "osx", skip_waiting_for_build_processing: true)
     links
+  end
+
+  desc "Bump the build, archive, upload with the Mac listing and screenshots, submit for review"
+  lane :release do
+    bump_build("osx")
+    build_mac
+    deliver(**listing("mac"), platform: "osx", **SUBMIT)
+    links(store: true)
   end
 end

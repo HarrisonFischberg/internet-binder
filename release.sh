@@ -25,8 +25,7 @@ apple() { # $1 = fastlane platform (ios or mac)
   [ "$(uname)" = Darwin ] || { echo "$1 builds need a Mac with Xcode" >&2; exit 1; }
   if [ $live = 0 ]; then say "$1: dry run (build + App Store Connect validation, nothing uploaded)"; fastlane "$1" check
   elif [ "$track" = production ]; then
-    [ "$1" = ios ] || { echo "mac: no App Store listing yet, so it stays on TestFlight; skipped"; return; }
-    say "$1: upload, listing and screenshots, submit for review"; fastlane ios release
+    say "$1: upload, listing and screenshots, submit for review"; fastlane "$1" release
   else say "$1: upload to TestFlight"; fastlane "$1" beta
   fi
 }

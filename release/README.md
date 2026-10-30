@@ -8,6 +8,8 @@ One command, from the repo root:
 | iPhone/iPad build to TestFlight | `./release.sh ios --live` |
 | iPhone/iPad to App Store review (build, listing, screenshots, age rating, submit) | `./release.sh ios --live --track production` |
 | Mac Safari app build to TestFlight | `./release.sh mac --live` |
+| Mac Safari app to App Store review | `./release.sh mac --live --track production` |
+| Everything at once (iPhone/iPad, Mac, Chrome) | `./release.sh all --live --track production` |
 | Chrome Web Store upload and publish | `./release.sh chrome --live` |
 
 Each `--live` run ends by printing where it went: the TestFlight page, the App Store link (works once Apple approves) or the Chrome Web Store page.
@@ -26,12 +28,13 @@ the dashboard first. Pushing a `v*.*.*` tag still publishes Chrome through `.git
 
 ## Where things live
 
-- `fastlane/` – Appfile (bundle id, team) and Fastfile (lanes `check`, `beta`, `release` for iOS; `check`, `beta` for Mac).
+- `fastlane/` – Appfile (bundle id, team) and Fastfile (lanes `check`, `beta`, `release` for iOS and for Mac).
 - `store/ios/metadata/` – App Store text: name, subtitle, description, keywords, promo text, URLs, categories,
   copyright, App Review contact and notes. Add `en-US/release_notes.txt` for every version after the first.
 - `store/ios/age-rating.json` – age rating answers (all "none", result 4+).
 - `store/ios/screenshots/en-US/` – iPhone 6.9" (1320×2868), iPhone 6.3" (1206×2622) and iPad 13" (2064×2752).
   fastlane sorts them by size; the number prefix sets the order.
+- `store/mac/` – the Mac App Store text (Safari-specific description, review notes) and 2880×1800 screenshots. Name, subtitle, categories and age rating are shared with iOS.
 - `store/chrome/` – what the Chrome listing needs (edited by hand, see its README).
 
 ## Secrets (env vars, never committed)
@@ -67,5 +70,4 @@ Put these in `~/.zshrc` (or a file you `source` that is not in the repo).
 - **App Review phone number**: App → version page → App Review Information → phone. Kept out of git on purpose; fastlane leaves it alone.
 - **Content Rights**: App Information → "Yes, it contains, shows or accesses third-party content" and that you have the rights to use it (it reads the pages people share to it).
 - **Price and availability**: Free, all countries (first time only).
-- **Mac App Store page**: the Mac app only goes to TestFlight here; give it a listing before adding a Mac `release` lane.
 - **Chrome listing**: description and screenshots in the developer dashboard (see `store/chrome/README.md`). The $5 developer fee is already paid.
