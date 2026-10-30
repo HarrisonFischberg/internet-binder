@@ -228,3 +228,11 @@ export async function choosePlace(store, id, index) {
   if (!(item.userFields || []).includes('title')) patch.title = c.name;
   return store.updateItem(id, patch, { by: 'user' });
 }
+
+// None of the choices is the place: they're cleared and nothing on the save changes. Fix with AI can
+// look again later.
+export async function dismissPlaceChoices(store, id) {
+  const item = await store.getItem(id);
+  if (!item?.placeChoices?.length) return item || null;
+  return store.updateItem(id, { placeChoices: [], placeResolution: { ...(item.placeResolution || {}), outcome: 'dismissed', at: nowIso() } }, { by: 'user' });
+}

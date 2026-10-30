@@ -327,7 +327,7 @@ function sanitizePlaceResolution(r) {
   if (!r || typeof r !== 'object') return null;
   return {
     version: sanitizeText(r.version, 20), at: typeof r.at === 'string' && !Number.isNaN(Date.parse(r.at)) ? r.at : null,
-    outcome: ['verified', 'review', 'insufficient', 'chosen'].includes(r.outcome) ? r.outcome : '', reason: sanitizeText(r.reason, 200),
+    outcome: ['verified', 'review', 'insufficient', 'chosen', 'dismissed'].includes(r.outcome) ? r.outcome : '', reason: sanitizeText(r.reason, 200),
     sources: uniqStrings(Array.isArray(r.sources) ? r.sources : [], 4).map((x) => sanitizeText(x, 40)).filter(Boolean),
   };
 }

@@ -9,6 +9,7 @@ import { openableUrl } from '../shared/url.js';
 import { placeReviewReasons, placeState } from '../shared/places.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
 import { MSG } from '../shared/messages.js';
+import { choosePlace, dismissPlaceChoices } from '../shared/placeResolve.js';
 
 // dashboard.js's own state and helpers, handed over once at boot.
 let D;
@@ -68,9 +69,13 @@ export async function openPlace(id) {
       ]),
     ]),
   ]);
+  const choices = placeChoicesSection(item, () => { closeView?.(false); openPlace(item.id); });
+  if (choices) body.querySelector('.recipe-hero-text').insertBefore(choices, body.querySelector('.place-address, .recipe-hero-text > .help'));
   const been = item.status === 'done';
   const maps = mapsLinks(item.title, d);
+  let closeView = null;
   await UI.openModal({
+    onOpen: ({ close }) => { closeView = close; },
     title: item.title,
     body,
     wide: true,
@@ -374,4 +379,55 @@ function renderPlaceList(view, items, waiting = 0) {
     box.append(section);
   }
   view.append(box);
+}
+
+// "OpenStreetMap · checked by a cited page": where a choice came from and what agreed with it.
+export function placeChoiceSource(c) {
+  let host = '';
+  try { host = c.url ? new URL(c.url).hostname.replace(/^www\./, '') : ''; } catch { /* not a URL */ }
+  const origin = c.source === 'openstreetmap' ? 'OpenStreetMap' : host ? `Web search · ${host}` : 'Web search';
+  const names = { openstreetmap: 'OpenStreetMap', 'cited-page': 'a cited page', post: 'the post' };
+  const checks = (c.confirmedBy || []).filter((x) => !(x === 'openstreetmap' && c.source === 'openstreetmap')).map((x) => names[x] || x);
+  return checks.length ? `${origin} · checked by ${checks.join(' and ')}` : origin;
+}
+
+// Fix with AI found places it couldn't tell apart (or one it couldn't confirm): pick one or dismiss them.
+// Nothing on the save changes until you do (shared/placeResolve.js choosePlace).
+function placeChoicesSection(item, reopen) {
+  const choices = item.placeChoices || [];
+  if (!choices.length) return null;
+  const run = async (btn, work, done) => {
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    try {
+      await work();
+      UI.toast(done, { duration: 2200 });
+      reopen();
+    } catch {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+      UI.toast('Couldn’t save that. Try again.', { kind: 'danger' });
+    }
+  };
+  const one = choices.length === 1;
+  return el('section', { class: 'place-choices', 'aria-labelledby': 'place-choices-title' }, [
+    el('h3', { class: 'recipe-sub', id: 'place-choices-title' }, [one ? 'Is this the place?' : 'Which place is it?']),
+    el('p', { class: 'help' }, [one ? 'Fix with AI found this but couldn’t confirm it. Nothing changes until you choose.' : `Fix with AI found ${choices.length} places that match the post. Nothing changes until you choose.`]),
+    el('ul', { class: 'place-choice-list' }, choices.map((c, i) => {
+      const where = [c.address, c.locality, c.region].filter(Boolean).join(', ');
+      const pick = el('button', { type: 'button', class: 'btn btn-sm btn-primary', 'aria-label': `Choose ${c.name}${where ? `, ${where}` : ''}`, onClick: () => run(pick, () => choosePlace(D.store, item.id, i), `Saved as ${c.name}.`) }, ['This one']);
+      return el('li', { class: 'place-choice' }, [
+        el('div', { class: 'place-choice-text' }, [
+          el('strong', {}, [c.name]),
+          el('span', { class: where ? '' : 'muted' }, [where || 'No address confirmed']),
+          el('span', { class: 'place-choice-from' }, [placeChoiceSource(c), c.url ? [' · ', el('a', { href: openableUrl(c.url), target: '_blank', rel: 'noopener' }, ['Open'])] : null]),
+        ]),
+        pick,
+      ]);
+    })),
+    (() => {
+      const none = el('button', { type: 'button', class: 'btn btn-sm btn-quiet', onClick: () => run(none, () => dismissPlaceChoices(D.store, item.id), 'Choices cleared. The place is as it was.') }, ['None of these']);
+      return none;
+    })(),
+  ]);
 }

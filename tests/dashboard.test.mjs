@@ -319,6 +319,53 @@ test('places: a list by state (or country) and city, Places review for the rest,
   assert.equal(saved.details.source, 'you');
 });
 
+test('a place Fix with AI could not tell apart: the place view lists the choices with their sources; This one applies it, None of these clears them', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const { openPlace } = await import('../keepsake/src/dashboard/places.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const choices = [
+    { name: "Joe's Pizza", address: '7 Carmine Street', locality: 'New York', region: 'NY', lat: 40.73, lng: -74.0, url: 'https://www.openstreetmap.org/node/103', source: 'openstreetmap', confirmedBy: ['openstreetmap'], why: 'same name, same area' },
+    { name: "Joe's Pizza", address: '1435 Broadway', locality: 'New York', region: 'NY', lat: 40.75, lng: -73.98, url: 'https://www.openstreetmap.org/node/104', source: 'openstreetmap', confirmedBy: ['openstreetmap'], why: 'same name, same area' },
+  ];
+  const a = await store.addItem({ title: "Joe's Pizza", url: 'https://www.instagram.com/p/joe1/', type: 'instagram', kind: 'place', details: { locality: 'New York', source: 'page' }, placeChoices: choices });
+  await afterChange();
+  openPlace(a.id);
+  await until(() => window.document.querySelector('.modal-place .place-choices'));
+  const box = window.document.querySelector('.modal-place .place-choices');
+  assert.match(box.textContent, /Which place is it\?/);
+  assert.match(box.textContent, /7 Carmine Street, New York, NY/);
+  assert.match(box.textContent, /OpenStreetMap/);
+  const picks = [...box.querySelectorAll('button')].filter((b) => b.textContent === 'This one');
+  assert.equal(picks.length, 2);
+  assert.match(picks[1].getAttribute('aria-label'), /1435 Broadway/);
+  picks[1].click();
+  await until(async () => !(await store.getItem(a.id)).placeChoices?.length);
+  await afterChange();
+  const saved = await store.getItem(a.id);
+  assert.equal(saved.details.address, '1435 Broadway');
+  assert.deepEqual(saved.details.lookup.verifiedBy, ['openstreetmap', 'you']);
+  assert.ok(!window.document.querySelector('.modal-place .place-choices'), 'the place view opens again without the choices');
+  window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+  await afterChange();
+
+  const b = await store.addItem({ title: 'Nobu Malibu', url: 'https://www.instagram.com/p/nobu1/', type: 'instagram', kind: 'place', details: { source: 'page' },
+    placeChoices: [{ name: 'Nobu Malibu', address: '', locality: 'Malibu', region: 'CA', url: 'https://www.noburestaurants.com/malibu', source: 'web', confirmedBy: [], why: 'named like the post' }] });
+  await afterChange();
+  openPlace(b.id);
+  await until(() => window.document.querySelector('.modal-place .place-choices'));
+  const one = window.document.querySelector('.modal-place .place-choices');
+  assert.match(one.textContent, /Is this the place\?/);
+  assert.match(one.textContent, /Web search · noburestaurants\.com/);
+  [...one.querySelectorAll('button')].find((x) => x.textContent === 'None of these').click();
+  await afterChange();
+  const left = await store.getItem(b.id);
+  assert.equal((left.placeChoices || []).length, 0);
+  assert.equal(left.details.address || '', '', 'dismissing writes nothing');
+  assert.equal(left.placeResolution.outcome, 'dismissed');
+  window.document.querySelectorAll('.modal-close').forEach((x) => x.click());
+  await afterChange();
+});
+
 test('videos open into a view with their length and a Watch link; editing the length is checked', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());

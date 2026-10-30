@@ -382,6 +382,10 @@
     async choosePlace(id, index) {
       return withFact(await K.placeResolve.choosePlace(store, id, index));
     },
+    // None of them is the place: the choices are cleared, the save is left as it was.
+    async dismissPlaceChoices(id) {
+      return withFact(await K.placeResolve.dismissPlaceChoices(store, id));
+    },
     async aiLog() { return (await store.getAiLog()).slice().reverse(); },
     // Undo AI changes (shared/aiFix.js undoFixes): newest first, back to each "before"; a collection
     // deleted since sends the save to Review instead.

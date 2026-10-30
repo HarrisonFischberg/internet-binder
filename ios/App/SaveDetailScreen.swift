@@ -188,7 +188,7 @@ struct SaveDetailScreen: View {
 
     @ViewBuilder private var panel: some View {
         switch current.kind {
-        case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placePanel }
+        case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placeChoicesCard; placePanel }
         case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; recipePanel }
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         case "product": productPanel
@@ -396,6 +396,56 @@ struct SaveDetailScreen: View {
     }
 
     private func isDrafted(_ field: String) -> Bool { detail?.drafted?.contains(field) ?? false }
+
+    /// Fix with AI found more than one place it couldn't tell apart (or one it couldn't confirm): each with
+    /// where it came from, to pick or dismiss. Nothing was written to the save until you pick.
+    @ViewBuilder private var placeChoicesCard: some View {
+        if let choices = current.placeChoices, !choices.isEmpty {
+            card(choices.count == 1 ? "Is this the place?" : "Which place is it?") {
+                Text(choices.count == 1 ? "Fix with AI found this but couldn't confirm it. Nothing changes until you choose." : "Fix with AI found \(choices.count) places that match the post. Nothing changes until you choose.")
+                    .font(.footnote).foregroundStyle(t.inkMuted).padding(.bottom, 4)
+                ForEach(Array(choices.enumerated()), id: \.offset) { i, c in placeChoiceRow(c, index: i) }
+                Button("None of these") { Task { await act { try await $0.dismissPlaceChoices(current.id) } } }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(t.inkMuted)
+                    .frame(minHeight: 44)
+                    .accessibilityHint("Clears these choices. The save stays as it is.")
+            }
+        }
+    }
+
+    private func placeChoiceRow(_ c: Save.PlaceChoice, index: Int) -> some View {
+        let address = [c.address, c.locality, c.region].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        let from = Self.placeSource(c)
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(c.name).font(.body.weight(.semibold)).foregroundStyle(t.ink)
+                Text(address.isEmpty ? "No address confirmed" : address).font(.subheadline).foregroundStyle(address.isEmpty ? t.inkMuted : t.ink)
+                Text(from).font(.caption).foregroundStyle(t.inkMuted)
+            }
+            Spacer(minLength: 8)
+            Button("This one") { Task { await act { try await $0.choosePlace(current.id, index: index) } } }
+                .buttonStyle(.bordered).tint(KindStyle("place").color)
+                .frame(minHeight: 44)
+                .accessibilityLabel("Choose \(c.name)")
+        }
+        .padding(.vertical, 10)
+        .overlay(alignment: .bottom) { rule }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// "OpenStreetMap · checked by a cited page": where a choice came from and what agreed with it.
+    static func placeSource(_ c: Save.PlaceChoice) -> String {
+        var host = ""
+        if let u = c.url, let h = URL(string: u)?.host() { host = h.replacingOccurrences(of: "www.", with: "") }
+        let origin = c.source == "openstreetmap" ? "OpenStreetMap" : host.isEmpty ? "Web search" : "Web search · \(host)"
+        let checks = (c.confirmedBy ?? []).filter { $0 != "openstreetmap" || c.source != "openstreetmap" }.map { ["openstreetmap": "OpenStreetMap", "cited-page": "a cited page", "post": "the post"][$0] ?? $0 }
+        return checks.isEmpty ? origin : "\(origin) · checked by \(checks.joined(separator: " and "))"
+    }
+
+    private func act(_ run: @escaping (Library) async throws -> Save) async {
+        guard let lib = model.library else { return }
+        do { _ = try await run(lib); Haptic.settled(); await model.reload() } catch { Haptic.refused() }
+    }
 
     private var placePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
