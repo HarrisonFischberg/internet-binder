@@ -28,7 +28,7 @@ export function sharedProduct(evidence, capture = 'page') {
     p.sparse = false;
     if (!p.title) p.title = titleFromCaption(caption, evidence.creator || '', type);
     if (caption && (!p.description || p.description.length < caption.length)) p.description = caption;
-    p.instagram = { caption, creator: evidence.creator || '', location: evidence.location || '', hashtags: evidence.hashtags || hashtagsOf(caption), postedAt: '', links: [], products: [] };
+    p.instagram = { caption, creator: evidence.creator || '', location: evidence.location || '', hashtags: evidence.hashtags?.length ? evidence.hashtags : hashtagsOf(caption), postedAt: '', links: [], products: [] };
     if (evidence.location) p.igLocation = { name: evidence.location };
   } else if (capture === 'page') {
     // A web page read by Safari's page reader: what the case recorded about it.

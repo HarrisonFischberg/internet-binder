@@ -179,3 +179,59 @@ test('your keyword beats a collection you do not have yet', async () => {
   // With no keyword of yours in play, a new Kitchen is still suggested.
   assert.equal(classify({ title: 'Gooseneck kettle' }, { collections: [kept], prefs: emptyPrefs() }).collectionName, 'Kitchen');
 });
+
+// --- learning kinds and skipping everyday words (QA 2026-10-30) ---------------------------------
+import { learnedKindOf, learnKindFromCorrection, salientTerms } from '../keepsake/src/shared/categorizer.js';
+
+const igPost = (caption, extra = {}) => ({ isInstagram: true, host: 'www.instagram.com', url: 'https://www.instagram.com/reel/x/', title: caption.split('\n')[0], description: caption, instagram: { caption, hashtags: [...caption.matchAll(/#(\w+)/g)].map((m) => m[1].toLowerCase()) }, ...extra });
+
+test('everyday words and post boilerplate are never learned; hashtags are', () => {
+  const terms = salientTerms(igPost('What do you think of this reel? Comment below #vanlife #roadtrip'));
+  for (const w of ['what', 'you', 'think', 'reel', 'comment']) assert.ok(!terms.includes(w), w);
+  assert.ok(terms.includes('vanlife') && terms.includes('roadtrip'));
+});
+
+test('posts you keep as Workouts teach the kind; a new post like them becomes one, others stay links', () => {
+  const saves = [
+    'Ankle stability drill most people fail #mobility #fascia', 'Fix your posture with this fascia release #mobility',
+    'Hip mobility for desk workers #mobility #fascia', 'Your fascia and tendons lose their spring #mobility',
+  ].map((c) => ({ ...igPost(c), kind: 'workout' }));
+  const links = ['Funniest dog compilation #dogs', 'My dog hates the vacuum #dogs'].map((c) => ({ ...igPost(c), kind: 'link', collectionId: 'funny' }));
+  const prefs = learnFromSaves([...saves, ...links], emptyPrefs());
+  assert.equal(learnedKindOf(igPost('Knee pain when skiing? It starts in your fascia #mobility'), prefs)?.kind, 'workout');
+  assert.equal(learnedKindOf(igPost('My dog learned to open the fridge #dogs'), prefs), null);
+  // A web page says what it is: never re-kinded from posts.
+  assert.equal(learnedKindOf({ title: 'Fascia and mobility explained', url: 'https://example.com/a', host: 'example.com' }, prefs), null);
+});
+
+test('a kind you change teaches it; changing it back unteaches it', () => {
+  const p = igPost('Pecking House fried chicken, NYC #nycfood #friedchicken');
+  let prefs = learnKindFromCorrection(p, 'link', 'place', emptyPrefs());
+  assert.equal(learnedKindOf(igPost('Best fried chicken in NYC #nycfood #friedchicken'), prefs)?.kind, 'place');
+  prefs = learnKindFromCorrection(p, 'place', 'link', learnKindFromCorrection(p, 'place', 'link', prefs));
+  assert.equal(learnedKindOf(igPost('Best fried chicken in NYC #nycfood #friedchicken'), prefs), null);
+});
+
+test('saving a post: the learned kind files it, a recipe the rules read is never overridden', async () => {
+  const store = createStore(memoryBackend(), memoryRecordBackend());
+  await store.init();
+  const prefs = learnFromSaves(['Ankle stability drill #mobility #fascia', 'Fascia release for posture #mobility #fascia', 'Hip mobility flow #mobility #fascia'].map((c) => ({ ...igPost(c), kind: 'workout' })), await store.getPrefs());
+  await store.setPrefs(prefs);
+  const a = await saveCapture(store, igPost('Why your fascia is tight in the morning #mobility'), { source: 'share-sheet', instant: true });
+  assert.equal(a.item.kind, 'workout');
+  assert.match(a.item.categorizationReason, /learned/);
+  const b = await saveCapture(store, igPost('Fascia-friendly smoothie #mobility\nIngredients:\n1 banana\n1 cup oat milk\n1 tbsp chia seeds\nBlend.', { url: 'https://www.instagram.com/reel/y/' }), { source: 'share-sheet', instant: true });
+  assert.equal(b.item.kind, 'recipe');
+});
+
+test('updateItem with a new kind teaches the sorter; learnFromLibrary learns kinds once, even after collections', async () => {
+  const store = createStore(memoryBackend(), memoryRecordBackend());
+  await store.init();
+  const r = await saveCapture(store, igPost('Pecking House fried chicken #nycfood #friedchicken'), { source: 'share-sheet', instant: true });
+  await store.updateItem(r.item.id, { kind: 'place' });
+  assert.equal(learnedKindOf(igPost('Fried chicken spot #nycfood #friedchicken'), await store.getPrefs())?.kind, 'place');
+  await store.setPrefs({ ...(await store.getPrefs()), learnedKinds: {}, libraryLearnedAt: '2026-10-01T00:00:00Z' });
+  assert.ok((await store.learnFromLibrary()) > 0);
+  assert.equal(learnedKindOf(igPost('Fried chicken spot #nycfood #friedchicken'), await store.getPrefs())?.kind, 'place');
+  assert.equal(await store.learnFromLibrary(), 0);
+});

@@ -48,12 +48,17 @@ if (args.source === 'wide' || args.source === 'all') cases.push(...loadChallenge
 // --warm cv: the same, inside the dev split only (learn from four fifths, score the other fifth), for
 // tuning learning without looking at a held-out fold.
 if (args.warm === 'cv') {
-  const cv = (c) => parseInt(createHash('sha256').update(`cv:${c.id}`).digest('hex').slice(0, 8), 16) % 5 === 0;
+  const cv = (c) => parseInt(createHash('sha256').update(`cv:${c.id}`).digest('hex').slice(0, 8), 16) % 5 === Number(args['cv-fold'] || 0);
   cases = cases.filter((c) => c.split === 'dev').map((c) => ({ ...c, split: cv(c) ? 'heldout' : 'dev' }));
 }
 if (args.warm) {
-  const dev = cases.filter((c) => c.split === 'dev' && c.expected.accept[0]?.collection);
-  const saves = dev.map((c) => ({ ...sharedProduct(c.evidence, 'page'), host: 'www.instagram.com', collectionId: c.library.collections.find((x) => x.name === c.expected.accept[0].collection)?.id })).filter((s) => s.collectionId);
+  // Lifestyle collections (Workout, Restaurants, Movies) are saves of that kind with no collection.
+  const dev = cases.filter((c) => c.split === 'dev' && (c.expected.accept[0]?.collection || c.expected.accept.length === 1));
+  const saves = dev.map((c) => {
+    const a = c.expected.accept[0];
+    const collectionId = a.collection ? c.library.collections.find((x) => x.name === a.collection)?.id : null;
+    return { ...sharedProduct(c.evidence, 'page'), host: 'www.instagram.com', collectionId, kind: a.kind || 'link' };
+  }).filter((s) => s.collectionId || s.kind !== 'link');
   const prefs = learnFromSaves(saves, emptyPrefs());
   cases = cases.map((c) => (c.split === 'heldout' ? { ...c, library: { ...c.library, prefs } } : c));
   console.log(`warm library: learned from ${saves.length} filed dev saves`);
@@ -118,6 +123,7 @@ const summary = { immediate: summarize(results, 'immediate'), settled: summarize
 mkdirSync(new URL('./out/', import.meta.url), { recursive: true });
 const name = args.name || `firstpass-${provider}-${capture}-${Date.now()}`;
 const file = new URL(`./out/${name}.json`, import.meta.url);
+mkdirSync(new URL('.', file), { recursive: true });
 writeFileSync(file, JSON.stringify({ meta, summary, results: results.map(({ case: c, ...r }) => ({ case: { id: c.id, origin: c.origin, category: c.category, tags: c.tags, split: c.split, fold: c.fold, expected: c.expected, evidence: c.evidence, labelBy: c.labelBy, uncertain: c.uncertain, note: c.note }, ...r })) }, null, 1));
 
 const s = summary.settled;

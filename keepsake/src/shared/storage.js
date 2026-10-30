@@ -18,7 +18,7 @@
 import { uid, nowIso, sanitizeText, sanitizeMultiline, sanitizeUrl, deepMerge, hostnameOf, prettyRetailer, decodeEntities, hasEntities } from './util.js';
 import { normalizeUrl, cleanUrl } from './url.js';
 import { DEFAULT_TAXONOMY } from './taxonomy.js';
-import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, learnFromConfirmation, learnFromSaves, forgetCollection } from './categorizer.js';
+import { emptyPrefs, findSimilarCollection, normalizeName, learnFromCorrection, learnFromConfirmation, learnFromSaves, learnKindFromCorrection, forgetCollection } from './categorizer.js';
 import { memoryRecordBackend, STORES } from './db.js';
 import { isKind, kindOf, sanitizeDetails, recipeOrWorkout, needsCollection, STATUSES } from './kinds.js';
 import { makeGoal, makeCheckin } from './goals.js';
@@ -806,6 +806,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
 
     // by: 'user' records hand-edited fields in userFields, so AI and enrichment never overwrite them.
     async updateItem(id, patch, { by = 'user' } = {}) {
+      let rekindedFrom;
       const [next] = await db.update('items', [id], (existing) => {
         if (!existing) return undefined;
         // A patch may add to them (kindChangePatch for a kind you picked); it never takes any away.
@@ -813,9 +814,12 @@ export function createStore(kv, db = memoryRecordBackend()) {
         if (by === 'user') for (const f of USER_FIELDS) if (f in patch && patch[f] !== existing[f]) userFields.add(f);
         // A kind you picked is read again by your AI provider, for that kind's details.
         const rekinded = by === 'user' && 'kind' in patch && patch.kind !== existing.kind;
+        if (rekinded) rekindedFrom = existing.kind;
         return makeItem({ ...existing, ...patch, id, createdAt: existing.createdAt, userFields: [...userFields], ...(rekinded ? { understoodAt: null } : {}) });
       });
       if (!next) throw new Error('Item not found');
+      // A post you gave another kind teaches the sorter what posts like it are (categorizer.learnedKindOf).
+      if (rekindedFrom !== undefined) await kvUpdate('prefs', emptyPrefs(), (prefs) => learnKindFromCorrection(next, rekindedFrom, next.kind, { ...emptyPrefs(), ...prefs }));
       return next;
     },
 
@@ -925,11 +929,18 @@ export function createStore(kv, db = memoryRecordBackend()) {
     // suggestion), so it knows your collections from the start rather than only from new choices.
     // Saves you moved taught it when you moved them; samples aren't yours. `items` lets iOS pass its
     // picture-free list (reading every save whole is more memory than it has to spare).
+    // Kinds are learned once too (libraryKindsLearnedAt), so a library that learned its collections
+    // before kinds were learned still teaches them: its posts in Workouts, Places… and in collections.
     async learnFromLibrary(items = null) {
       const prefs = { ...emptyPrefs(), ...((await kvGet('prefs', null)) || {}) };
-      if (prefs.libraryLearnedAt) return 0;
-      const saves = (items || (await db.all('items'))).filter((i) => live(i) && i.collectionId && i.title && !i.needsReview && !i.filingConfirmed && !['manual', 'sample'].includes(i.categorizationSource));
-      await kvUpdate('prefs', emptyPrefs(), (p) => ({ ...learnFromSaves(saves, { ...emptyPrefs(), ...p }), libraryLearnedAt: nowIso() }));
+      if (prefs.libraryLearnedAt && prefs.libraryKindsLearnedAt) return 0;
+      const all = (items || (await db.all('items'))).filter((i) => live(i) && i.title && !['sample'].includes(i.categorizationSource));
+      const filed = all.filter((i) => i.collectionId && !i.needsReview && !i.filingConfirmed && i.categorizationSource !== 'manual');
+      const kinds = all.filter((i) => !i.collectionId && !i.needsReview && i.kind && i.kind !== 'link' && i.kind !== 'product');
+      // Only what this library has not learned yet: collections once, kinds once.
+      const saves = prefs.libraryLearnedAt ? kinds.map((i) => ({ ...i, collectionId: null })).concat(filed.map((i) => ({ ...i, collectionId: null })))
+        : [...filed, ...kinds];
+      await kvUpdate('prefs', emptyPrefs(), (p) => ({ ...learnFromSaves(saves, { ...emptyPrefs(), ...p }), libraryLearnedAt: p.libraryLearnedAt || nowIso(), libraryKindsLearnedAt: nowIso() }));
       return saves.length;
     },
 
