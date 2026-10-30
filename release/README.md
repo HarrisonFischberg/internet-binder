@@ -60,7 +60,7 @@ Put these in `~/.zshrc` (or a file you `source` that is not in the repo).
 ## Steps that can't be automated (once, in App Store Connect)
 
 - **Agreements**: Business → accept the latest Apple Developer Program License Agreement (and Paid Apps only if you ever charge).
-- **EU trader status**: Business → Digital Services Act. Declare trader (Rare Creatures LLC, with a public address, phone and email) or non-trader. Without it the app can't be offered in the EU.
+- **EU trader status**: Business → Digital Services Act → **trader**, as Rare Creatures LLC. Apple verifies, then shows the address, phone and email you give on the App Store page in the EU. Without it the app can't be offered there.
 - **App Privacy**: App → App Privacy → "No, we do not collect data from this app", then Publish. The API can't set it; it carries over between versions.
 - **App Review phone number**: App → version page → App Review Information → phone. Kept out of git on purpose; fastlane leaves it alone.
 - **Content Rights**: App Information → "Yes, it contains, shows or accesses third-party content" and that you have the rights to use it (it reads the pages people share to it).
