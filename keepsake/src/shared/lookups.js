@@ -57,10 +57,14 @@ export function sameStreet(address, a = {}) {
 
 // The result is in the city or area you saved ("New York" is the City of New York, not Watervliet, NY,
 // which has a 2309 2nd Avenue too). With no city, the state or region has to match.
-const AREA_ALIAS = { nyc: 'new york', ny: 'new york', la: 'los angeles', sf: 'san francisco', dc: 'washington', philly: 'philadelphia' };
+// Cities OpenStreetMap names in their own language ("Napoli" for Naples): either name matches.
+const AREA_ALIAS = { nyc: 'new york', ny: 'new york', la: 'los angeles', sf: 'san francisco', dc: 'washington', philly: 'philadelphia',
+  naples: 'napoli', rome: 'roma', florence: 'firenze', milan: 'milano', venice: 'venezia', turin: 'torino', genoa: 'genova', munich: 'munchen',
+  cologne: 'koln', vienna: 'wien', lisbon: 'lisboa', prague: 'praha', 'mexico city': 'ciudad de mexico', copenhagen: 'kobenhavn', seville: 'sevilla',
+  geneva: 'geneve', brussels: 'bruxelles', 'the hague': 'den haag', warsaw: 'warszawa', athens: 'athina', kyiv: 'kyiv' };
 export function inArea(locality, region, a = {}) {
-  const loc = AREA_ALIAS[norm(locality)] || locality;
-  if (loc) return [a.city, a.town, a.village, a.hamlet, a.municipality, a.suburb, a.borough, a.city_district, a.neighbourhood, a.quarter].some((f) => f && sameName(loc, f));
+  const locs = locality ? [locality, AREA_ALIAS[norm(locality)]].filter(Boolean) : [];
+  if (locs.length) return [a.city, a.town, a.village, a.hamlet, a.municipality, a.suburb, a.borough, a.city_district, a.neighbourhood, a.quarter].some((f) => f && locs.some((loc) => sameName(loc, f)));
   if (region) return [a.state, a.province, a.region].some((f) => f && sameName(region, f)) || String(a['ISO3166-2-lvl4'] || '').toLowerCase().endsWith(`-${norm(region)}`);
   return true;
 }

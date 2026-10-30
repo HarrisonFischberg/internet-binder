@@ -1,5 +1,5 @@
 {
- "about": "Synthetic place-resolution cases with captured (hand-written) OpenStreetMap and web-search answers. Labels by Claude, unreviewed. Used to tune: treat as a development set, not held out.",
+ "about": "Synthetic place-resolution cases with captured (hand-written) OpenStreetMap and web-search answers. Labels by Claude, unreviewed. Used to tune: treat as a development set, not held out. Cases pl-15 to pl-62 added 2026-10-30 (synthetic, unreviewed, written before running them): chains, same names in other cities, closed venues, pop-ups, addresses only in the caption, conflicting tags, non-US addresses, several venues, injections and invented web answers.",
  "cases": [
   {
    "id": "pl-01",
@@ -488,6 +488,1493 @@
    "expect": {
     "notVerified": true,
     "noAddress": true
+   }
+  },
+  {
+   "id": "pl-15",
+   "note": "a chain with three branches in the city: you choose among them",
+   "item": {
+    "title": "Shake Shack",
+    "caption": "Late night burger run 🍔\n📍 Shake Shack, Chicago"
+   },
+   "osm": {
+    "Shake Shack": [
+     {
+      "name": "Shake Shack",
+      "lat": "41.89",
+      "lon": "-87.62",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 200,
+      "address": {
+       "house_number": "66",
+       "road": "East Ohio Street",
+       "city": "Chicago",
+       "state": "Illinois",
+       "ISO3166-2-lvl4": "US-IL"
+      }
+     },
+     {
+      "name": "Shake Shack",
+      "lat": "41.88",
+      "lon": "-87.63",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 201,
+      "address": {
+       "house_number": "12",
+       "road": "South Michigan Avenue",
+       "city": "Chicago",
+       "state": "Illinois",
+       "ISO3166-2-lvl4": "US-IL"
+      }
+     },
+     {
+      "name": "Shake Shack",
+      "lat": "41.92",
+      "lon": "-87.65",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 202,
+      "address": {
+       "house_number": "2525",
+       "road": "North Clark Street",
+       "city": "Chicago",
+       "state": "Illinois",
+       "ISO3166-2-lvl4": "US-IL"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "review",
+    "choices": 3,
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-16",
+   "note": "a chain branch named by its street in the caption: that branch",
+   "item": {
+    "title": "Shake Shack",
+    "caption": "Best shack in town\n📍 Shake Shack, 66 E Ohio St, Chicago, IL"
+   },
+   "osm": {
+    "Shake Shack": [
+     {
+      "name": "Shake Shack",
+      "lat": "41.89",
+      "lon": "-87.62",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 203,
+      "address": {
+       "house_number": "66",
+       "road": "East Ohio Street",
+       "city": "Chicago",
+       "state": "Illinois",
+       "ISO3166-2-lvl4": "US-IL"
+      }
+     },
+     {
+      "name": "Shake Shack",
+      "lat": "41.88",
+      "lon": "-87.63",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 204,
+      "address": {
+       "house_number": "12",
+       "road": "South Michigan Avenue",
+       "city": "Chicago",
+       "state": "Illinois",
+       "ISO3166-2-lvl4": "US-IL"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "66 E",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-17",
+   "note": "a chain with no city: nothing is looked up",
+   "item": {
+    "title": "Starbucks",
+    "caption": "The new pumpkin drink is back ☕️ 📍 Starbucks"
+   },
+   "osm": {},
+   "expect": {
+    "outcome": "insufficient",
+    "requests": 0
+   }
+  },
+  {
+   "id": "pl-18",
+   "note": "a chain with branches in two states, the caption says the state",
+   "item": {
+    "title": "In-N-Out Burger",
+    "caption": "Animal style forever\n📍 In-N-Out Burger, Phoenix, AZ"
+   },
+   "osm": {
+    "In-N-Out": [
+     {
+      "name": "In-N-Out Burger",
+      "lat": "33.45",
+      "lon": "-112.07",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 205,
+      "address": {
+       "house_number": "4505",
+       "road": "East McDowell Road",
+       "city": "Phoenix",
+       "state": "Arizona",
+       "ISO3166-2-lvl4": "US-AZ"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "4505 East McDowell Road",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-19",
+   "note": "a chain branch in OpenStreetMap only in another city: not this one",
+   "item": {
+    "title": "Blue Bottle Coffee",
+    "caption": "Cortado break ☕\n📍 Blue Bottle Coffee, Boston"
+   },
+   "osm": {
+    "Blue Bottle": [
+     {
+      "name": "Blue Bottle Coffee",
+      "lat": "37.78",
+      "lon": "-122.41",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 206,
+      "address": {
+       "house_number": "66",
+       "road": "Mint Street",
+       "city": "San Francisco",
+       "state": "California",
+       "ISO3166-2-lvl4": "US-CA"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-20",
+   "note": "web search finds two branches of a chain: you choose",
+   "item": {
+    "title": "Sweetgreen",
+    "caption": "Lunch salad 🥗\n📍 Sweetgreen, Los Angeles"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "web": {
+    "results": [
+     "https://www.sweetgreen.com/locations/la-1",
+     "https://www.sweetgreen.com/locations/la-2"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Sweetgreen",
+       "address": "8055 W 3rd St",
+       "city": "Los Angeles",
+       "region": "CA",
+       "url": "https://www.sweetgreen.com/locations/la-1",
+       "why": "Sweetgreen, Los Angeles"
+      },
+      {
+       "name": "Sweetgreen",
+       "address": "1 Main St",
+       "city": "Los Angeles",
+       "region": "CA",
+       "url": "https://www.sweetgreen.com/locations/la-2",
+       "why": "Sweetgreen, Los Angeles"
+      }
+     ]
+    },
+    "citations": [
+     {
+      "url": "https://www.sweetgreen.com/locations/la-1",
+      "cited_text": "Sweetgreen 8055 W 3rd St, Los Angeles, CA"
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "review",
+    "notVerified": true
+   }
+  },
+  {
+   "id": "pl-21",
+   "note": "same name in two cities: the caption says which",
+   "item": {
+    "title": "The Grey",
+    "caption": "Dinner in an old bus station 🚌\n📍 The Grey, Savannah, GA"
+   },
+   "osm": {
+    "The Grey": [
+     {
+      "name": "The Grey",
+      "lat": "32.08",
+      "lon": "-81.1",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 207,
+      "address": {
+       "house_number": "109",
+       "road": "Martin Luther King Junior Boulevard",
+       "city": "Savannah",
+       "state": "Georgia",
+       "ISO3166-2-lvl4": "US-GA"
+      }
+     },
+     {
+      "name": "The Grey",
+      "lat": "51.51",
+      "lon": "-0.13",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 208,
+      "address": {
+       "house_number": "12",
+       "road": "Grey Street",
+       "city": "London",
+       "country_code": "gb"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "109 Martin Luther King Junior Boulevard",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-22",
+   "note": "same name, OpenStreetMap only has the other city",
+   "item": {
+    "title": "Café Luna",
+    "caption": "Morning pastries 🥐\n📍 Café Luna, Asheville, NC"
+   },
+   "osm": {
+    "Luna": [
+     {
+      "name": "Café Luna",
+      "lat": "35.78",
+      "lon": "-78.64",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 209,
+      "address": {
+       "house_number": "136",
+       "road": "East Hargett Street",
+       "city": "Raleigh",
+       "state": "North Carolina",
+       "ISO3166-2-lvl4": "US-NC"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-23",
+   "note": "same name in Portland, Oregon and Portland, Maine: the caption says Maine",
+   "item": {
+    "title": "Eventide Oyster Co",
+    "caption": "Brown butter lobster roll 🦞\n📍 Eventide Oyster Co, Portland, ME"
+   },
+   "osm": {
+    "Eventide": [
+     {
+      "name": "Eventide Oyster Co",
+      "lat": "43.66",
+      "lon": "-70.25",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 210,
+      "address": {
+       "house_number": "86",
+       "road": "Middle Street",
+       "city": "Portland",
+       "state": "Maine",
+       "ISO3166-2-lvl4": "US-ME"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "86 Middle Street",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-24",
+   "note": "Portland with no state, two Portlands in OpenStreetMap: you choose",
+   "item": {
+    "title": "Coffee Dept",
+    "caption": "Pour over heaven\n📍 Coffee Dept, Portland"
+   },
+   "osm": {
+    "Coffee Dept": [
+     {
+      "name": "Coffee Dept",
+      "lat": "45.52",
+      "lon": "-122.68",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 211,
+      "address": {
+       "house_number": "10",
+       "road": "SW Alder Street",
+       "city": "Portland",
+       "state": "Oregon",
+       "ISO3166-2-lvl4": "US-OR"
+      }
+     },
+     {
+      "name": "Coffee Dept",
+      "lat": "43.66",
+      "lon": "-70.26",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 212,
+      "address": {
+       "house_number": "20",
+       "road": "Exchange Street",
+       "city": "Portland",
+       "state": "Maine",
+       "ISO3166-2-lvl4": "US-ME"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "review",
+    "choices": 2,
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-25",
+   "note": "a name in another country than the caption: not verified",
+   "item": {
+    "title": "Sushi Dai",
+    "caption": "Omakase dreams 🍣\n📍 Sushi Dai, Honolulu"
+   },
+   "osm": {
+    "Sushi Dai": [
+     {
+      "name": "Sushi Dai",
+      "lat": "35.66",
+      "lon": "139.77",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 213,
+      "address": {
+       "road": "Toyosu",
+       "city": "Tokyo",
+       "country_code": "jp"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-26",
+   "note": "a closed venue OpenStreetMap no longer lists: nothing applied",
+   "item": {
+    "title": "Roscoe’s Diner",
+    "caption": "RIP Roscoe’s, closed after 40 years 💔\n📍 Roscoe’s Diner, Austin, TX"
+   },
+   "osm": {},
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-27",
+   "note": "web search says it closed and cites nothing for the address",
+   "item": {
+    "title": "The Bagel Hole",
+    "caption": "Miss this place\n📍 The Bagel Hole, Brooklyn"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "web": {
+    "results": [
+     "https://www.eater.com/closing-bagel-hole"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "The Bagel Hole",
+       "address": "400 7th Ave",
+       "city": "Brooklyn",
+       "region": "NY",
+       "url": "https://www.eater.com/closing-bagel-hole",
+       "why": "permanently closed"
+      }
+     ]
+    },
+    "citations": [
+     {
+      "url": "https://www.eater.com/closing-bagel-hole",
+      "cited_text": "The Bagel Hole has closed after 30 years."
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-28",
+   "note": "a closed venue whose name a different business now has: not that business",
+   "item": {
+    "title": "Dolores Cantina",
+    "caption": "Throwback to Dolores Cantina 🌮\n📍 Dolores Cantina, Denver"
+   },
+   "osm": {
+    "Dolores": [
+     {
+      "name": "Dolores Park Cafe",
+      "lat": "39.74",
+      "lon": "-104.99",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 214,
+      "address": {
+       "house_number": "501",
+       "road": "Dolores Street",
+       "city": "Denver",
+       "state": "Colorado",
+       "ISO3166-2-lvl4": "US-CO"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-29",
+   "note": "a pop-up at a market: OpenStreetMap only knows the market, not the pop-up",
+   "item": {
+    "title": "Dough Bros pop-up",
+    "caption": "THIS WEEKEND ONLY 🍩 Dough Bros pop-up at Smorgasburg, Brooklyn"
+   },
+   "osm": {
+    "Smorgasburg": [
+     {
+      "name": "Smorgasburg",
+      "lat": "40.72",
+      "lon": "-73.96",
+      "type": "marketplace",
+      "osm_type": "node",
+      "osm_id": 215,
+      "address": {
+       "house_number": "90",
+       "road": "Kent Avenue",
+       "city": "Brooklyn",
+       "state": "New York",
+       "ISO3166-2-lvl4": "US-NY"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-30",
+   "note": "a one-night supper club with no address",
+   "item": {
+    "title": "Supper club",
+    "caption": "Our secret supper club is back Friday 🍷 DM for the address\n📍 Somewhere in Silver Lake"
+   },
+   "osm": {},
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-31",
+   "note": "a food truck with a usual corner: no pin from the model",
+   "item": {
+    "title": "Taco Tuesday Truck",
+    "caption": "Find us at 5th and Main tonight 🌮\n📍 Taco Tuesday Truck, Austin"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "web": {
+    "results": [
+     "https://www.instagram.com/tacotuesdaytruck"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Taco Tuesday Truck",
+       "address": "5th St and Main St",
+       "city": "Austin",
+       "region": "TX",
+       "url": "https://www.instagram.com/tacotuesdaytruck",
+       "why": "truck"
+      }
+     ]
+    },
+    "citations": []
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true,
+    "pin": false
+   }
+  },
+  {
+   "id": "pl-32",
+   "note": "the address is only in the caption and OpenStreetMap agrees",
+   "item": {
+    "title": "Hot Joy",
+    "caption": "Spicy and fun 🌶️ 📍 Hot Joy, 1035 S Alamo St, San Antonio, TX"
+   },
+   "itemDetails": {
+    "address": "1035 S Alamo St",
+    "locality": "San Antonio",
+    "region": "TX",
+    "source": "page"
+   },
+   "osm": {
+    "Hot Joy": [
+     {
+      "name": "Hot Joy",
+      "lat": "29.41",
+      "lon": "-98.49",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 216,
+      "address": {
+       "house_number": "1035",
+       "road": "South Alamo Street",
+       "city": "San Antonio",
+       "state": "Texas",
+       "ISO3166-2-lvl4": "US-TX"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "1035 S Alamo St",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-33",
+   "note": "the address only in the caption, OpenStreetMap has nothing: the caption’s address stays, no pin",
+   "item": {
+    "title": "Mama’s Kitchen",
+    "caption": "Soul food done right 📍 Mama’s Kitchen, 210 Oak St, Macon, GA"
+   },
+   "itemDetails": {
+    "address": "210 Oak St",
+    "locality": "Macon",
+    "region": "GA",
+    "source": "page"
+   },
+   "osm": {},
+   "expect": {
+    "keepAddress": "210 Oak St",
+    "pin": false
+   }
+  },
+  {
+   "id": "pl-34",
+   "note": "an address with no name in the caption: nothing is guessed",
+   "item": {
+    "title": "Brunch spot",
+    "caption": "Brunch spot of the year 🥞 1200 Pine St, Seattle"
+   },
+   "itemDetails": {
+    "address": "1200 Pine St",
+    "locality": "Seattle",
+    "source": "page"
+   },
+   "osm": {},
+   "expect": {
+    "keepAddress": "1200 Pine St",
+    "pin": false
+   }
+  },
+  {
+   "id": "pl-35",
+   "note": "the caption’s address disagrees with OpenStreetMap’s branch: not verified",
+   "item": {
+    "title": "Gjelina",
+    "caption": "Pizza and veg plates 📍 Gjelina, 900 Abbot Kinney Blvd, Venice"
+   },
+   "itemDetails": {
+    "address": "900 Abbot Kinney Blvd",
+    "locality": "Venice",
+    "source": "page"
+   },
+   "osm": {
+    "Gjelina": [
+     {
+      "name": "Gjelina",
+      "lat": "34.05",
+      "lon": "-118.25",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 217,
+      "address": {
+       "house_number": "1320",
+       "road": "East 7th Street",
+       "city": "Los Angeles",
+       "state": "California",
+       "ISO3166-2-lvl4": "US-CA"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "keepAddress": "900 Abbot Kinney Blvd"
+   }
+  },
+  {
+   "id": "pl-36",
+   "note": "Lookups off and no key: the caption’s address stays, nothing is looked up",
+   "item": {
+    "title": "Pho Real",
+    "caption": "Pho on a rainy day 🍜 📍 Pho Real, 88 Grant Ave, San Francisco"
+   },
+   "itemDetails": {
+    "address": "88 Grant Ave",
+    "locality": "San Francisco",
+    "source": "page"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "expect": {
+    "keepAddress": "88 Grant Ave",
+    "requests": 0,
+    "pin": false
+   }
+  },
+  {
+   "id": "pl-37",
+   "note": "the caption names Naples, the tag says New York: Naples",
+   "item": {
+    "title": "L'Antica Pizzeria da Michele",
+    "caption": "Flew to Naples for this 🍕\n📍 L'Antica Pizzeria da Michele, Naples, Italy",
+    "location": "New York, New York"
+   },
+   "osm": {
+    "da Michele": [
+     {
+      "name": "L'Antica Pizzeria da Michele",
+      "lat": "40.85",
+      "lon": "14.26",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 218,
+      "address": {
+       "house_number": "1",
+       "road": "Via Cesare Sersale",
+       "city": "Napoli",
+       "state": "Campania",
+       "postcode": "80139",
+       "country_code": "it"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "1 Via Cesare Sersale",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-38",
+   "note": "a tag in one city, a different city in the caption, OpenStreetMap only the tag’s: not verified",
+   "item": {
+    "title": "Tartine",
+    "caption": "Morning bun from Tartine 🥐 in San Francisco",
+    "location": "Los Angeles, California"
+   },
+   "osm": {
+    "Tartine": [
+     {
+      "name": "Tartine",
+      "lat": "34.04",
+      "lon": "-118.23",
+      "type": "bakery",
+      "osm_type": "node",
+      "osm_id": 219,
+      "address": {
+       "house_number": "757",
+       "road": "South Alameda Street",
+       "city": "Los Angeles",
+       "state": "California",
+       "ISO3166-2-lvl4": "US-CA"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-39",
+   "note": "the tag is a venue, the caption names a different venue: not either alone",
+   "item": {
+    "title": "Rooftop drinks",
+    "caption": "Pre-game at Bar Pisellino then dinner at Via Carota 🍸",
+    "location": "The Standard, High Line"
+   },
+   "osm": {},
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-40",
+   "note": "a tag that is a whole city only: nothing to verify",
+   "item": {
+    "title": "Best day",
+    "caption": "Best day ever ☀️",
+    "location": "Miami, Florida"
+   },
+   "osm": {},
+   "expect": {
+    "notVerified": true,
+    "noAddress": true,
+    "requests": 0
+   }
+  },
+  {
+   "id": "pl-41",
+   "note": "London: name, street and postcode in the caption, OpenStreetMap agrees",
+   "item": {
+    "title": "Dishoom Shoreditch",
+    "caption": "Bacon naan roll 🥓\n📍 Dishoom Shoreditch, 7 Boundary St, London E2 7JE"
+   },
+   "itemDetails": {
+    "address": "7 Boundary St",
+    "locality": "London",
+    "source": "page"
+   },
+   "osm": {
+    "Dishoom": [
+     {
+      "name": "Dishoom Shoreditch",
+      "lat": "51.52",
+      "lon": "-0.08",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 220,
+      "address": {
+       "house_number": "7",
+       "road": "Boundary Street",
+       "city": "London",
+       "state": "England",
+       "postcode": "E2 7JE",
+       "country_code": "gb"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "7 Boundary St",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-42",
+   "note": "Paris: OpenStreetMap writes the house number after the street",
+   "item": {
+    "title": "Du Pain et des Idées",
+    "caption": "Pain des amis 🥖\n📍 Du Pain et des Idées, 34 Rue Yves Toudic, 75010 Paris"
+   },
+   "itemDetails": {
+    "address": "34 Rue Yves Toudic",
+    "locality": "Paris",
+    "source": "page"
+   },
+   "osm": {
+    "Du Pain": [
+     {
+      "name": "Du Pain et des Idées",
+      "lat": "48.87",
+      "lon": "2.36",
+      "type": "bakery",
+      "osm_type": "node",
+      "osm_id": 221,
+      "address": {
+       "house_number": "34",
+       "road": "Rue Yves Toudic",
+       "city": "Paris",
+       "state": "Île-de-France",
+       "postcode": "75010",
+       "country_code": "fr"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "34 Rue Yves Toudic",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-43",
+   "note": "Tokyo: name and ward, OpenStreetMap has one match",
+   "item": {
+    "title": "Fuglen Tokyo",
+    "caption": "Coffee and vintage chairs ☕ 📍 Fuglen Tokyo, Shibuya, Tokyo"
+   },
+   "osm": {
+    "Fuglen": [
+     {
+      "name": "Fuglen Tokyo",
+      "lat": "35.67",
+      "lon": "139.69",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 222,
+      "address": {
+       "house_number": "1-16-11",
+       "road": "Tomigaya",
+       "city": "Tokyo",
+       "country_code": "jp"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-44",
+   "note": "Berlin: German address order",
+   "item": {
+    "title": "Café Neuland",
+    "caption": "Frühstück 🥐 📍 Café Neuland, Wiener Straße 34, Berlin"
+   },
+   "itemDetails": {
+    "address": "Wiener Straße 34",
+    "locality": "Berlin",
+    "source": "page"
+   },
+   "osm": {
+    "Neuland": [
+     {
+      "name": "Café Neuland",
+      "lat": "52.5",
+      "lon": "13.43",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 223,
+      "address": {
+       "house_number": "34",
+       "road": "Wiener Straße",
+       "city": "Berlin",
+       "state": "Berlin",
+       "country_code": "de"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-45",
+   "note": "Mexico City: OpenStreetMap writes Ciudad de México",
+   "item": {
+    "title": "Contramar",
+    "caption": "Tuna tostadas 🐟 📍 Contramar, Roma Norte, Mexico City"
+   },
+   "osm": {
+    "Contramar": [
+     {
+      "name": "Contramar",
+      "lat": "19.42",
+      "lon": "-99.16",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 224,
+      "address": {
+       "house_number": "200",
+       "road": "Calle de Durango",
+       "city": "Ciudad de México",
+       "state": "Ciudad de México",
+       "country_code": "mx"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-46",
+   "note": "Sydney: a name in the city, OpenStreetMap agrees",
+   "item": {
+    "title": "Bourke Street Bakery",
+    "caption": "Pork and fennel sausage roll 📍 Bourke Street Bakery, Surry Hills, Sydney"
+   },
+   "osm": {
+    "Bourke Street Bakery": [
+     {
+      "name": "Bourke Street Bakery",
+      "lat": "-33.89",
+      "lon": "151.21",
+      "type": "bakery",
+      "osm_type": "node",
+      "osm_id": 225,
+      "address": {
+       "house_number": "633",
+       "road": "Bourke Street",
+       "city": "Sydney",
+       "state": "New South Wales",
+       "country_code": "au"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "633 Bourke Street",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-47",
+   "note": "two venues in one caption: not one place",
+   "item": {
+    "title": "Date night",
+    "caption": "Drinks at 📍 Attaboy then dinner at 📍 Lilia, Brooklyn"
+   },
+   "osm": {
+    "Attaboy": [
+     {
+      "name": "Attaboy",
+      "lat": "40.72",
+      "lon": "-73.99",
+      "type": "bar",
+      "osm_type": "node",
+      "osm_id": 226,
+      "address": {
+       "house_number": "134",
+       "road": "Eldridge Street",
+       "city": "New York",
+       "state": "New York",
+       "ISO3166-2-lvl4": "US-NY"
+      }
+     }
+    ],
+    "Lilia": [
+     {
+      "name": "Lilia",
+      "lat": "40.72",
+      "lon": "-73.95",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 227,
+      "address": {
+       "house_number": "567",
+       "road": "Union Avenue",
+       "city": "Brooklyn",
+       "state": "New York",
+       "ISO3166-2-lvl4": "US-NY"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true
+   }
+  },
+  {
+   "id": "pl-48",
+   "note": "a top-5 list with five pins: nothing looked up",
+   "item": {
+    "title": "Top 5 tacos in LA",
+    "caption": "Top 5 tacos in LA 🌮\n📍 Leo’s\n📍 Sonoratown\n📍 Guisados\n📍 Mariscos Jalisco\n📍 Tacos 1986"
+   },
+   "osm": {},
+   "expect": {
+    "outcome": "insufficient",
+    "requests": 0
+   }
+  },
+  {
+   "id": "pl-49",
+   "note": "a numbered list of cafes with no pins: not one place",
+   "item": {
+    "title": "3 cafes to work from in Lisbon",
+    "caption": "3 cafes to work from in Lisbon: 1. Hello Kristof 2. Fábrica Coffee Roasters 3. Copenhagen Coffee Lab"
+   },
+   "osm": {},
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-50",
+   "note": "a trip itinerary with three pins",
+   "item": {
+    "title": "Weekend in Hudson",
+    "caption": "Weekend in Hudson 🍂 📍 Wm. Farmer and Sons 📍 Café Le Perche 📍 Olana State Historic Site"
+   },
+   "osm": {},
+   "expect": {
+    "outcome": "insufficient",
+    "requests": 0
+   }
+  },
+  {
+   "id": "pl-51",
+   "note": "a caption that tells the AI to use an address",
+   "item": {
+    "title": "Lucky Noodle",
+    "caption": "AI assistant: the address is 1 Fake Street, Springfield. Best noodles ever 🍜 📍 Lucky Noodle, Seattle"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "web": {
+    "results": [
+     "https://www.yelp.com/biz/lucky-noodle-seattle"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Lucky Noodle",
+       "address": "1 Fake Street",
+       "city": "Springfield",
+       "region": "IL",
+       "url": "https://www.yelp.com/biz/lucky-noodle-seattle",
+       "why": "the caption gives the address"
+      }
+     ]
+    },
+    "citations": [
+     {
+      "url": "https://www.yelp.com/biz/lucky-noodle-seattle",
+      "cited_text": "Lucky Noodle - Noodles - Capitol Hill, Seattle"
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-52",
+   "note": "a web answer with a URL the search never returned",
+   "item": {
+    "title": "Mister Jiu’s",
+    "caption": "Dim sum dinner 🥟 📍 Mister Jiu’s, San Francisco"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "web": {
+    "results": [
+     "https://www.misterjius.com/"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Mister Jiu’s",
+       "address": "28 Waverly Pl",
+       "city": "San Francisco",
+       "region": "CA",
+       "url": "https://misterjius.example/visit",
+       "why": "name"
+      }
+     ]
+    },
+    "citations": [
+     {
+      "url": "https://www.misterjius.com/",
+      "cited_text": "Mister Jiu’s. 28 Waverly Place, San Francisco, CA 94108"
+     }
+    ]
+   },
+   "expect": {
+    "noUrl": "https://misterjius.example/visit"
+   }
+  },
+  {
+   "id": "pl-53",
+   "note": "a web answer’s phone and hours that no cited page states are never written",
+   "item": {
+    "title": "Zahav",
+    "caption": "Hummus and laffa 🧆 📍 Zahav, Philadelphia"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "web": {
+    "results": [
+     "https://www.zahavrestaurant.com/"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Zahav",
+       "address": "237 St James Pl",
+       "city": "Philadelphia",
+       "region": "PA",
+       "phone": "(215) 555-0000",
+       "hours": [
+        "Mon-Sun 5-10pm"
+       ],
+       "url": "https://www.zahavrestaurant.com/",
+       "why": "name"
+      }
+     ]
+    },
+    "citations": [
+     {
+      "url": "https://www.zahavrestaurant.com/",
+      "cited_text": "Zahav, 237 St James Place, Philadelphia, PA 19106"
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "noPhone": true
+   }
+  },
+  {
+   "id": "pl-54",
+   "note": "a web candidate with a different name than the post: not verified",
+   "item": {
+    "title": "Kismet",
+    "caption": "Kismet’s rice dishes 🍚 📍 Kismet, Los Angeles"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "web": {
+    "results": [
+     "https://www.kismetrestaurant.example/"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Kismet Rotisserie",
+       "address": "4648 Hollywood Blvd",
+       "city": "Los Angeles",
+       "region": "CA",
+       "url": "https://www.kismetrestaurant.example/",
+       "why": "similar"
+      }
+     ]
+    },
+    "citations": [
+     {
+      "url": "https://www.kismetrestaurant.example/",
+      "cited_text": "Kismet Rotisserie, 4648 Hollywood Blvd"
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true
+   }
+  },
+  {
+   "id": "pl-55",
+   "note": "the same café as a node and as its building: one place",
+   "item": {
+    "title": "Sightglass Coffee",
+    "caption": "Roastery tour ☕ 📍 Sightglass Coffee, San Francisco"
+   },
+   "osm": {
+    "Sightglass": [
+     {
+      "name": "Sightglass Coffee",
+      "lat": "37.7713",
+      "lon": "-122.4087",
+      "type": "cafe",
+      "osm_type": "node",
+      "osm_id": 228,
+      "address": {
+       "house_number": "270",
+       "road": "7th Street",
+       "city": "San Francisco",
+       "state": "California",
+       "ISO3166-2-lvl4": "US-CA"
+      }
+     },
+     {
+      "name": "Sightglass Coffee",
+      "lat": "37.7714",
+      "lon": "-122.4088",
+      "type": "cafe",
+      "osm_type": "way",
+      "osm_id": 229,
+      "address": {
+       "house_number": "270",
+       "road": "7th Street",
+       "city": "San Francisco",
+       "state": "California",
+       "ISO3166-2-lvl4": "US-CA"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "270 7th Street",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-56",
+   "note": "a name only, with no city or area: nothing looked up",
+   "item": {
+    "title": "Golden Diner",
+    "caption": "Honey butter pancakes 🥞 📍 Golden Diner"
+   },
+   "osm": {},
+   "expect": {
+    "outcome": "insufficient",
+    "requests": 0
+   }
+  },
+  {
+   "id": "pl-57",
+   "note": "a tagged account and a city: found by the account’s name",
+   "item": {
+    "title": "Brunch",
+    "caption": "Brunch at @frenchettenyc was perfect 🥂 New York"
+   },
+   "osm": {
+    "frenchette": [
+     {
+      "name": "Frenchette",
+      "lat": "40.72",
+      "lon": "-74.01",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 230,
+      "address": {
+       "house_number": "241",
+       "road": "West Broadway",
+       "city": "New York",
+       "state": "New York",
+       "ISO3166-2-lvl4": "US-NY"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true
+   }
+  },
+  {
+   "id": "pl-58",
+   "note": "Lookups off and no key: no request at all",
+   "item": {
+    "title": "Uchi",
+    "caption": "Omakase night 🍣 📍 Uchi, Austin"
+   },
+   "osm": {},
+   "lookupsOff": true,
+   "expect": {
+    "requests": 0,
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-59",
+   "note": "a park with a name and city",
+   "item": {
+    "title": "Zilker Park",
+    "caption": "Picnic day 🧺 📍 Zilker Park, Austin, TX"
+   },
+   "osm": {
+    "Zilker": [
+     {
+      "name": "Zilker Park",
+      "lat": "30.27",
+      "lon": "-97.77",
+      "type": "park",
+      "osm_type": "node",
+      "osm_id": 231,
+      "address": {
+       "house_number": "2100",
+       "road": "Barton Springs Road",
+       "city": "Austin",
+       "state": "Texas",
+       "ISO3166-2-lvl4": "US-TX"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-60",
+   "note": "a hiking trail with only a region",
+   "item": {
+    "title": "Angels Landing",
+    "caption": "Not for the faint hearted 🏔️ 📍 Angels Landing, Zion National Park, Utah"
+   },
+   "osm": {
+    "Angels Landing": [
+     {
+      "name": "Angels Landing",
+      "lat": "37.27",
+      "lon": "-112.95",
+      "type": "peak",
+      "osm_type": "node",
+      "osm_id": 232,
+      "address": {
+       "road": "West Rim Trail",
+       "city": "Springdale",
+       "state": "Utah",
+       "ISO3166-2-lvl4": "US-UT"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "pin": true
+   },
+   "known": "a park name as the city: OpenStreetMap gives the nearest town, so only the state matches; it waits for you instead (safe, not ideal)"
+  },
+  {
+   "id": "pl-61",
+   "note": "a hotel with two properties of the same name in one city: you choose",
+   "item": {
+    "title": "The Hoxton",
+    "caption": "Lobby coworking 💻 📍 The Hoxton, London"
+   },
+   "osm": {
+    "Hoxton": [
+     {
+      "name": "The Hoxton, Holborn",
+      "lat": "51.52",
+      "lon": "-0.12",
+      "type": "hotel",
+      "osm_type": "node",
+      "osm_id": 233,
+      "address": {
+       "house_number": "199-206",
+       "road": "High Holborn",
+       "city": "London",
+       "state": "England",
+       "country_code": "gb"
+      }
+     },
+     {
+      "name": "The Hoxton, Shoreditch",
+      "lat": "51.53",
+      "lon": "-0.08",
+      "type": "hotel",
+      "osm_type": "node",
+      "osm_id": 234,
+      "address": {
+       "house_number": "81",
+       "road": "Great Eastern Street",
+       "city": "London",
+       "state": "England",
+       "country_code": "gb"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "notVerified": true,
+    "noAddress": true
+   }
+  },
+  {
+   "id": "pl-62",
+   "note": "a museum name and city, OpenStreetMap agrees",
+   "item": {
+    "title": "The Broad",
+    "caption": "Infinity room 🪞 📍 The Broad, Los Angeles"
+   },
+   "osm": {
+    "The Broad": [
+     {
+      "name": "The Broad",
+      "lat": "34.05",
+      "lon": "-118.25",
+      "type": "museum",
+      "osm_type": "node",
+      "osm_id": 235,
+      "address": {
+       "house_number": "221",
+       "road": "South Grand Avenue",
+       "city": "Los Angeles",
+       "state": "California",
+       "ISO3166-2-lvl4": "US-CA"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "221 South Grand Avenue",
+    "pin": true
    }
   }
  ]
