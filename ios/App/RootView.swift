@@ -300,7 +300,7 @@ struct SaveSorts: RawRepresentable, Equatable {
     var rawValue: String {
         (try? JSONEncoder().encode(byView)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
     }
-    subscript(view: String) -> SaveSort {
+    subscript(view view: String) -> SaveSort {
         get { byView[view].flatMap(SaveSort.init(rawValue:)) ?? .newest }
         set { byView[view] = newValue == .newest ? nil : newValue.rawValue }
     }
