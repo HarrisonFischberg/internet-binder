@@ -3502,6 +3502,10 @@ button.home-attention {
   flex: none;
 }
 
+.place-choices > .btn-quiet {
+  margin-left: calc(-1 * var(--s-3));
+}
+
 .place-hours ul {
   list-style: none;
   margin: 4px 0;

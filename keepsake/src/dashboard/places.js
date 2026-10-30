@@ -425,7 +425,7 @@ function placeChoicesSection(item, reopen) {
         el('div', { class: 'place-choice-text' }, [
           el('strong', {}, [c.name]),
           el('span', { class: where ? '' : 'muted' }, [where || 'No address confirmed']),
-          el('span', { class: 'place-choice-from' }, [placeChoiceSource(c), c.url ? [' · ', el('a', { href: openableUrl(c.url), target: '_blank', rel: 'noopener', 'aria-label': `Open the source for ${c.name}` }, ['Source'])] : null]),
+          el('span', { class: 'place-choice-from' }, [placeChoiceSource(c), ...(c.url ? [' · ', el('a', { href: openableUrl(c.url), target: '_blank', rel: 'noopener', 'aria-label': `Open the source for ${c.name}` }, ['Source'])] : [])]),
         ]),
         pick,
       ]);

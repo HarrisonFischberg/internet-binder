@@ -336,6 +336,8 @@ test('a place Fix with AI could not tell apart: the place view lists the choices
   assert.match(box.textContent, /7 Carmine Street, New York, NY/);
   assert.match(box.textContent, /OpenStreetMap/);
   assert.match(box.textContent, /Now: New York/);
+  assert.doesNotMatch(box.textContent, /,https?:/, 'the source is a link, not its address');
+  assert.equal(box.querySelectorAll('.place-choice-from a').length, 2);
   const picks = [...box.querySelectorAll('button')].filter((b) => b.textContent === 'This one');
   assert.equal(picks.length, 2);
   assert.match(picks[1].getAttribute('aria-label'), /1435 Broadway/);
