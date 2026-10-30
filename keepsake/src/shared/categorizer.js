@@ -260,6 +260,7 @@ function withoutUsage(text) {
 // phrases from an AI answer's evidence.)
 const INSTRUCTION_SENTENCE = /[^.!?\n]*\b(?:ignore (?:all |any |the |your )?(?:previous|prior|above|earlier) (?:instructions?|prompts?)|system\s*:|assistant\s*[,:]|(?:file|put|move|sort|classify|categori[sz]e|mark|label|tag) (?:this|it|me)\b|belongs? (?:in|to) (?:the |your )?[\p{L}\p{N} &'-]{1,40} (?:collection|folder|category)|(?:category|collection|confidence)\s*[:=])[^.!?\n]*/giu;
 const withoutInstructions = (text) => String(text || '').replace(INSTRUCTION_SENTENCE, ' ');
+export const instructionsIn = (text) => String(text || '').match(INSTRUCTION_SENTENCE) || [];
 
 function fieldsOf(product) {
   const p = product || {};

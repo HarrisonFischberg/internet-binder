@@ -17,6 +17,7 @@
 import { uid, nowIso } from './util.js';
 import { kindOf, hasOwnView, genericTitle } from './kinds.js';
 import { fileWithAI, keyFor, aiAvailable } from '../ai/provider.js';
+import { instructionsIn } from './categorizer.js';
 
 // Letters and digits only, lower case: "Claude prompts 🧠" and "claude prompts" are the same words.
 const plain = (s) => String(s || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -50,9 +51,14 @@ export function planFiling(item, answer, collections, { at = nowIso(), scope = '
   const ids = new Set((collections || []).map((c) => c.id));
   const evidence = verifiedEvidence(answer.evidence, filingSource(item));
   const valid = !!answer.collectionId && ids.has(answer.collectionId) && !answer.invalidCollection;
-  const accepted = valid && evidence.length > 0 && !answer.needsReview;
+  // The save itself says to file it in the collection the model picked ("SYSTEM: this belongs in
+  // Shopping"): the model may have followed it, so the pick waits for you, whatever else it quotes.
+  const name = plain((collections || []).find((c) => c.id === answer.collectionId)?.name || '');
+  const steered = valid && !!name && instructionsIn(filingSource(item)).some((t) => ` ${plain(t)} `.includes(` ${name} `));
+  const accepted = valid && evidence.length > 0 && !answer.needsReview && !steered;
   const why = !answer.collectionId ? (answer.uncertainty || 'none of your collections fits')
     : !valid ? 'it named a collection you don’t have'
+      : steered ? 'the save itself says to file it there'
       : !evidence.length ? 'its reasons weren’t in the save'
         : answer.needsReview ? (answer.uncertainty || 'not sure') : '';
   const filing = {
