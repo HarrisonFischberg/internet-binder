@@ -526,6 +526,9 @@
         seen.add(key);
         picks.push({ value: key, label: s.collectionName, isNew: !!s.isNew });
       };
+      // What AI picked but left for you to confirm (shared/filing.js) comes first.
+      const ai = item.filing?.outcome === 'review' && collections.find((c) => c.id === item.filing.collectionId);
+      if (ai) add({ collectionId: ai.id, collectionName: ai.name, isNew: false });
       for (const a of cls.alternatives || []) if (a.isNew ? a.taxonomyKey : a.collectionId) add(a);
       for (const c of [...collections].sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0))) add({ collectionId: c.id, collectionName: c.name, isNew: false });
       return { reason: item.categorizationReason || cls.reason || '', picks };
