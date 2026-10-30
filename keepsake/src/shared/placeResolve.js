@@ -103,8 +103,9 @@ export function resolvePlace(clues, { osm = [], web = null } = {}) {
   // The same place from both sources is one candidate (the confirmed one kept).
   const merged = [];
   for (const c of all) {
-    // Two branches on different streets are two places, pin or no pin.
-    const otherStreet = (m) => m.address && c.address && !sameStreet(m.address, { road: String(c.address).replace(/^\d+[a-z]?\s+/i, ''), house_number: (String(c.address).match(/^(\d+[a-z]?)\s/i) || [])[1] || '' });
+    // Two branches on different streets are two places. With both pins, the pins decide ("200 Calle Durango"
+    // and "Durango 200, Roma Norte" are one door); the street's words only when a pin is missing.
+    const otherStreet = (m) => !(m.check.pin && c.check.pin) && m.address && c.address && !sameStreet(m.address, { road: String(c.address).replace(/^\d+[a-z]?\s+/i, ''), house_number: (String(c.address).match(/^(\d+[a-z]?)\s/i) || [])[1] || '' });
     const twin = merged.find((m) => sameName(m.name, c.name) && !otherStreet(m) && (m.check.pin && c.check.pin ? !apart({ lat: m.check.pin.lat, lon: m.check.pin.lng }, { lat: c.check.pin.lat, lon: c.check.pin.lng }) : sameName(m.locality, c.locality)));
     if (!twin) { merged.push(c); continue; }
     twin.check.confirmedBy = [...new Set([...twin.check.confirmedBy, ...c.check.confirmedBy])];

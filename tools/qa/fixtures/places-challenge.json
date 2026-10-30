@@ -1976,6 +1976,107 @@
     "address": "221 South Grand Avenue",
     "pin": true
    }
+  },
+  {
+   "id": "pl-63",
+   "note": "OpenStreetMap and the web find the same restaurant under two names and two spellings of the street (live run, 2026-10-30): one place",
+   "item": {
+    "title": "Dishoom",
+    "caption": "Bacon naan roll 🥓\n📍 Dishoom, 7 Boundary St, London"
+   },
+   "osm": {
+    "Dishoom": [
+     {
+      "name": "Dishoom",
+      "lat": "51.5244991",
+      "lon": "-0.0768246",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 962,
+      "address": {
+       "house_number": "7",
+       "road": "Boundary Street",
+       "city": "Greater London",
+       "state": "England",
+       "postcode": "E2 7JE",
+       "country_code": "gb"
+      }
+     }
+    ]
+   },
+   "web": {
+    "results": [
+     "https://www.dishoom.com/shoreditch/"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Dishoom Shoreditch",
+       "address": "7 Boundary Street, London E2 7JE",
+       "city": "London",
+       "region": "Greater London",
+       "url": "https://www.dishoom.com/shoreditch/",
+       "why": "address"
+      }
+     ]
+    },
+    "citations": []
+   },
+   "expect": {
+    "outcome": "verified",
+    "address": "7 Boundary",
+    "pin": true
+   }
+  },
+  {
+   "id": "pl-64",
+   "note": "the web writes the street the local way ('Durango 200'), OpenStreetMap '200 Calle Durango' (live run, 2026-10-30): one place",
+   "item": {
+    "title": "Contramar",
+    "caption": "Tuna tostadas 🐟\n📍 Contramar, Mexico City"
+   },
+   "osm": {
+    "Contramar": [
+     {
+      "name": "Contramar",
+      "lat": "19.419611",
+      "lon": "-99.1672259",
+      "type": "restaurant",
+      "osm_type": "node",
+      "osm_id": 963,
+      "address": {
+       "house_number": "200",
+       "road": "Calle Durango",
+       "city": "Ciudad de México",
+       "state": "Ciudad de México",
+       "postcode": "06700",
+       "country_code": "mx"
+      }
+     }
+    ]
+   },
+   "web": {
+    "results": [
+     "https://en.wikipedia.org/wiki/Contramar"
+    ],
+    "answer": {
+     "candidates": [
+      {
+       "name": "Contramar",
+       "address": "Durango 200, Roma Norte, Cuauhtémoc, 06700",
+       "city": "Mexico City",
+       "region": "CDMX",
+       "url": "https://en.wikipedia.org/wiki/Contramar",
+       "why": "name"
+      }
+     ]
+    },
+    "citations": []
+   },
+   "expect": {
+    "outcome": "verified",
+    "pin": true
+   }
   }
  ]
 }
