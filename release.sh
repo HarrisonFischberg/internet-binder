@@ -5,6 +5,7 @@
 # iOS and Mac go to TestFlight with --live, and to App Store review with --live --track production.
 set -euo pipefail
 cd "$(dirname "$0")"
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 # fastlane needs a UTF-8 locale for the listing text
 : "${CWS_EXTENSION_ID:=akekjlfpdbkghhopdkgnfnkcibonaiom}" # this repo's Chrome Web Store item
 
 target=${1:-all}; shift || true
