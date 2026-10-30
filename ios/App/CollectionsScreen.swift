@@ -95,9 +95,11 @@ struct CollectionScreen: View {
     @State private var editing = false
     @State private var selecting = false
     @State private var selected: Set<String> = []
+    @AppStorage("saveSorts") private var sorts = SaveSorts()
     private var saves: [Save] { model.index.collection(id) }
 
     var body: some View {
+        let saves = sorts[view: "c:\(id)"].apply(self.saves)
         let toBuy = saves.filter { $0.purchased != true }
         let bought = saves.filter { $0.purchased == true }
         ZStack(alignment: .bottom) {
@@ -124,6 +126,9 @@ struct CollectionScreen: View {
         .toolbar {
             if !selecting {
                 ToolbarItem(placement: .primaryAction) { Button("Edit") { editing = true } }
+            }
+            if saves.count > 1 && !selecting {
+                ToolbarItem(placement: .primaryAction) { SortMenu(sort: $sorts[view: "c:\(id)"], options: SaveSort.offered(for: saves)) }
             }
             if model.aiReady && !saves.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) in \(name)") }

@@ -120,7 +120,10 @@ export function renderPlaces(view, items) {
   findPlacesOnMap();
   if (current === 'map') renderPlacesMap(view, ready);
   else if (current === 'review') renderPlacesReview(view, review, items);
-  else renderPlaceList(view, ready, review.length);
+  else {
+    if (ready.length) view.append(D.sortBar());
+    renderPlaceList(view, ready, review.length);
+  }
 }
 
 // One row of a place list: its picture, name, what it is and where, and Open in Maps.
@@ -356,14 +359,15 @@ function renderPlaceList(view, items, waiting = 0) {
   }
   const box = el('div', { class: 'place-list' });
   if (!items.length) box.append(UI.emptyState({ title: 'No places on your list yet', message: waiting ? `${pluralize(waiting, 'place is', 'places are')} waiting in Places review for a name or a state.` : 'Save a restaurant, café or anywhere you want to go and it shows up here, by state and city.' }));
-  const byName = (a, b) => (a.status === 'done') - (b.status === 'done') || a.title.localeCompare(b.title);
+  // Within a city: still to go first, each part in the chosen sort (the order items come in).
+  const toGoFirst = (a, b) => (a.status === 'done') - (b.status === 'done');
   for (const st of [...states.keys()].sort((a, b) => a.localeCompare(b))) {
     const cities = states.get(st);
     const total = [...cities.values()].reduce((n, l) => n + l.length, 0);
     const section = el('section', { class: 'place-group', 'aria-label': st }, [el('h2', { class: 'place-city' }, [st, el('span', { class: 'count' }, [String(total)])])]);
     // Cities A to Z; places with no city last, under the state itself.
     for (const city of [...cities.keys()].sort((a, b) => (!a) - (!b) || a.localeCompare(b))) {
-      const list = cities.get(city).sort(byName);
+      const list = cities.get(city).sort(toGoFirst);
       if (cities.size > 1 || city) section.append(el('h3', { class: 'place-subcity' }, [city || `Elsewhere in ${st}`, el('span', { class: 'count' }, [String(list.length)])]));
       section.append(el('ul', { class: 'place-rows', role: 'list' }, list.map((item) => placeRow(item))));
     }

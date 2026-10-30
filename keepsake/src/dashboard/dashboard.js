@@ -41,11 +41,10 @@ const state = {
   settings: null,
   importHistory: null,
   search: '',
-  sort: 'newest',
   retailer: '',
   sourceType: '',
   colSearch: '',
-  colSort: 'size',
+  colSort: (() => { try { return localStorage.getItem('keepsake.colSort') || 'size'; } catch { return 'size'; } })(),
   topic: '',
   kinds: new Set(),
   status: '',
@@ -86,7 +85,7 @@ const ctx = {
   applyTheme: () => applyTheme(),
 };
 useLifestyleViews({ openItem, state, store });
-usePlaces({ bindContextMenu, exitSelection, fixPlaces, itemMenu, lookupLink, openItem, openMenu, openSave, renderToolbar, renderView, selectBox, send, state, store, toggleBox });
+usePlaces({ bindContextMenu, exitSelection, fixPlaces, itemMenu, lookupLink, openItem, openMenu, openSave, renderToolbar, renderView, selectBox, send, sortBar, state, store, toggleBox });
 
 // --- boot ------------------------------------------------------------------------
 
@@ -910,11 +909,12 @@ function currentGridItems() {
     if (bp === null) return -1;
     return dir * (ap - bp);
   };
-  if (ranked && state.sort === 'newest') return list;
-  if (state.sort === 'oldest') list = [...list].sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
-  else if (state.sort === 'az') list = [...list].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }));
-  else if (state.sort === 'price-asc') list = [...list].sort(byPrice(1));
-  else if (state.sort === 'price-desc') list = [...list].sort(byPrice(-1));
+  const sort = sortChoice();
+  if (ranked && sort === 'newest') return list;
+  if (sort === 'oldest') list = [...list].sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1));
+  else if (sort === 'az') list = [...list].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', numeric: true }));
+  else if (sort === 'price-asc') list = [...list].sort(byPrice(1));
+  else if (sort === 'price-desc') list = [...list].sort(byPrice(-1));
   return list;
 }
 
@@ -928,10 +928,12 @@ function renderGrid(view) {
     }
     view.append(collectionHero(col));
   }
-  // The places list sorts itself (by city, then name), so the sort and retailer filters don't apply.
+  // The places, films and books lists group themselves, so only Sort applies there (within each group).
   if (r.name === 'all') view.append(libraryTabs('saves'));
   const listView = r.name === 'kind' && ['place', 'media', 'book'].includes(r.id);
   if (baseItems().length && !listView) view.append(filterBar());
+  // Places shows Sort under its List, Map and Review tabs, on the list only.
+  else if (baseItems().length && r.id !== 'place') view.append(sortBar());
   const chips = topicChips();
   if (chips) view.append(chips);
   if (r.name === 'c' || r.name === 'kind') {
@@ -1020,10 +1022,7 @@ function filterBar() {
   const sites = [...new Set(base.map((i) => i.retailer).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   if (!sites.includes(state.retailer)) state.retailer = '';
   if (sites.length > 1) controls.append(select('Site or shop', state.retailer, [['', 'Any site or shop'], ...sites.map((x) => [x, x])], (v) => { state.retailer = v; }));
-  const sorts = [['newest', 'Newest'], ['oldest', 'Oldest'], ['az', 'A–Z']];
-  if (base.some((i) => i.price !== null && i.price !== undefined)) sorts.push(['price-asc', 'Price: low to high'], ['price-desc', 'Price: high to low']);
-  if (!sorts.some(([v]) => v === state.sort)) state.sort = 'newest';
-  controls.append(select('Sort', state.sort, sorts, (v) => { state.sort = v; }));
+  controls.append(sortSelect(base, rerender));
   const layoutBtn = (value, label, path) => el('button', { type: 'button', class: `seg ${state.layout === value ? 'on' : ''}`, 'aria-pressed': state.layout === value ? 'true' : 'false', 'aria-label': label, title: label, onClick: () => {
     state.layout = value;
     try { localStorage.setItem('keepsake.layout', value); } catch { /* this page only */ }
@@ -1049,6 +1048,49 @@ function filterBar() {
     ]));
   }
   return bar;
+}
+
+// Each collection and Lifestyle view keeps its own sort (in this browser), newest saved first until
+// you pick another. Other grids (Library, Favorites…) share one.
+const SORT_KEY = 'keepsake.sorts';
+function sortView() {
+  const r = state.route;
+  return r.name === 'c' || r.name === 'kind' ? `${r.name}:${r.id}` : 'grid';
+}
+let sorts = null;
+function savedSorts() {
+  if (!sorts) {
+    try { sorts = JSON.parse(localStorage.getItem(SORT_KEY) || '{}') || {}; } catch { sorts = {}; }
+  }
+  return sorts;
+}
+function sortChoice() {
+  return savedSorts()[sortView()] || 'newest';
+}
+function setSortChoice(value) {
+  const all = savedSorts();
+  if (value === 'newest') delete all[sortView()];
+  else all[sortView()] = value;
+  try { localStorage.setItem(SORT_KEY, JSON.stringify(all)); } catch { /* this page only */ }
+}
+
+// Sort: newest, oldest, A–Z, and by price where saves have one.
+function sortSelect(base, rerender) {
+  const options = [['newest', 'Newest first'], ['oldest', 'Oldest first'], ['az', 'Title A–Z']];
+  if (base.some((i) => i.price !== null && i.price !== undefined)) options.push(['price-asc', 'Price: low to high'], ['price-desc', 'Price: high to low']);
+  const sel = el('select', { class: 'select select-sm', 'aria-label': 'Sort' }, options.map(([v, t]) => el('option', { value: v, text: t })));
+  const current = sortChoice();
+  sel.value = options.some(([v]) => v === current) ? current : 'newest';
+  sel.addEventListener('change', () => { setSortChoice(sel.value); rerender(); });
+  return sel;
+}
+
+// The list views (Places, Films & shows, Books) skip the filter bar, so they get Sort on its own.
+function sortBar() {
+  const rerender = () => { state.shown = 120; renderView(); };
+  return el('div', { class: 'filter-bar', role: 'toolbar', 'aria-label': 'Sort' }, [
+    el('div', { class: 'filter-controls' }, [sortSelect(baseItems(), rerender)]),
+  ]);
 }
 
 function svgIcon(d) {
@@ -2899,9 +2941,10 @@ function renderCollections(view) {
   }, 100));
   const sort = el('select', { class: 'select select-sm', 'aria-label': 'Sort collections' },
     Object.entries(COLLECTION_SORTS).map(([value, text]) => el('option', { value, text })));
-  sort.value = state.colSort;
+  sort.value = COLLECTION_SORTS[state.colSort] ? state.colSort : 'size';
   sort.addEventListener('change', () => {
     state.colSort = sort.value;
+    try { localStorage.setItem('keepsake.colSort', sort.value); } catch { /* this page only */ }
     fill();
   });
   page.append(el('div', { class: 'collections-controls' }, [

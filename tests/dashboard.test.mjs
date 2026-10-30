@@ -423,6 +423,52 @@ test('films and books: a list to scroll, to-watch first; tick to move; the view 
   await afterChange();
 });
 
+test('Sort: every collection and Lifestyle view opens newest first, and each keeps its own choice', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const [c1, c2] = await store.getCollections();
+  await store.addItem({ title: 'Zebra mug', url: 'https://sort.example/z', collectionId: c1.id });
+  await new Promise((r) => setTimeout(r, 5));
+  await store.addItem({ title: 'Apple crate', url: 'https://sort.example/a', collectionId: c1.id });
+  await store.addItem({ title: 'Zulu book', url: 'https://sort.example/zb', kind: 'book', details: { source: 'page' } });
+  await new Promise((r) => setTimeout(r, 5));
+  await store.addItem({ title: 'Alpha book', url: 'https://sort.example/ab', kind: 'book', details: { source: 'page' } });
+  await afterChange();
+  const sortBox = () => view().querySelector('select[aria-label="Sort"]');
+  const cards = () => [...view().querySelectorAll('.card-title')].map((t) => t.textContent);
+  await go(`#c/${c1.id}`);
+  assert.equal(sortBox().value, 'newest', 'a collection opens newest first');
+  assert.ok(cards().indexOf('Apple crate') < cards().indexOf('Zebra mug'));
+  sortBox().value = 'oldest';
+  sortBox().dispatchEvent(new window.Event('change'));
+  await settle();
+  assert.ok(cards().indexOf('Zebra mug') < cards().indexOf('Apple crate'));
+  if (c2) {
+    await go(`#c/${c2.id}`);
+    if (sortBox()) assert.equal(sortBox().value, 'newest', 'another collection keeps its own sort');
+  }
+  await go(`#c/${c1.id}`);
+  assert.equal(sortBox().value, 'oldest', 'the collection remembers its sort');
+
+  // A list view (Books) has Sort too, and sorts within To read.
+  await go('#kind/book');
+  assert.equal(sortBox().value, 'newest');
+  const rows = () => [...view().querySelectorAll('.shelf-row .place-row-title')].map((t) => t.textContent);
+  assert.ok(rows().indexOf('Alpha book') < rows().indexOf('Zulu book'));
+  sortBox().value = 'az';
+  sortBox().dispatchEvent(new window.Event('change'));
+  await settle();
+  const az = rows().filter((t) => t.endsWith(' book'));
+  assert.deepEqual(az, [...az].sort((a, b) => a.localeCompare(b)));
+  sortBox().value = 'newest';
+  sortBox().dispatchEvent(new window.Event('change'));
+  await settle();
+  await go(`#c/${c1.id}`);
+  sortBox().value = 'newest';
+  sortBox().dispatchEvent(new window.Event('change'));
+  await settle();
+});
+
 test('redesign: card anatomy, kind and status filters with removable chips, list layout', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());

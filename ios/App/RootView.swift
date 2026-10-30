@@ -257,6 +257,73 @@ struct ScreenHeader: View {
     }
 }
 
+/// How a collection or Lifestyle view orders its saves (Chrome's Sort, same names). Newest saved first
+/// until you pick another; each view keeps its own choice on this device.
+enum SaveSort: String, CaseIterable, Identifiable {
+    case newest, oldest, az, priceLow = "price-asc", priceHigh = "price-desc"
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .newest: "Newest first"
+        case .oldest: "Oldest first"
+        case .az: "Title A–Z"
+        case .priceLow: "Price: low to high"
+        case .priceHigh: "Price: high to low"
+        }
+    }
+
+    /// The price sorts only where a save has a price.
+    static func offered(for saves: [Save]) -> [SaveSort] {
+        saves.contains { $0.price != nil } ? allCases : [.newest, .oldest, .az]
+    }
+
+    func apply(_ saves: [Save]) -> [Save] {
+        switch self {
+        case .newest: saves.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+        case .oldest: saves.sorted { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
+        case .az: saves.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        // Saves without a price go last either way.
+        case .priceLow: saves.sorted { ($0.price ?? Double.infinity) < ($1.price ?? Double.infinity) }
+        case .priceHigh: saves.sorted { ($0.price ?? -Double.infinity) > ($1.price ?? -Double.infinity) }
+        }
+    }
+}
+
+/// Each view's sort ("c:<id>", "kind:<kind>", as Chrome keys them), kept in one UserDefaults string.
+struct SaveSorts: RawRepresentable, Equatable {
+    var byView: [String: String] = [:]
+    init() {}
+    init?(rawValue: String) {
+        byView = (try? JSONDecoder().decode([String: String].self, from: Data(rawValue.utf8))) ?? [:]
+    }
+    var rawValue: String {
+        (try? JSONEncoder().encode(byView)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    }
+    subscript(view view: String) -> SaveSort {
+        get { byView[view].flatMap(SaveSort.init(rawValue:)) ?? .newest }
+        set { byView[view] = newValue == .newest ? nil : newValue.rawValue }
+    }
+}
+
+/// The toolbar's Sort menu: a tick beside the order in use.
+struct SortMenu: View {
+    @Binding var sort: SaveSort
+    let options: [SaveSort]
+    var body: some View {
+        Menu {
+            Picker("Sort", selection: $sort) {
+                ForEach(options) { Text($0.label).tag($0) }
+            }
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .accessibilityValue(sort.label)
+        .accessibilityIdentifier("sortMenu")
+        .onChange(of: sort) { Haptic.detent() }
+    }
+}
+
 /// Saves as objects, linking to their screens. With a selection, Select mode: a tap ticks a save instead,
 /// and a long press offers Select to start it.
 struct SaveGrid: View {

@@ -16,13 +16,16 @@ struct KindScreen: View {
     @State private var selecting = false
     @State private var selected: Set<String> = []
 
+    @AppStorage("saveSorts") private var sorts = SaveSorts()
+
     private var saves: [Save] { model.index.kind(kind) }
     private var onMap: Bool { kind == "place" && showMap && !saves.isEmpty }
-    private var todo: [Save] { saves.filter { $0.status != "done" } }
-    private var done: [Save] { saves.filter { $0.status == "done" } }
 
     var body: some View {
         let k = KindStyle(kind)
+        let sorted = sorts[view: "kind:\(kind)"].apply(saves)
+        let todo = sorted.filter { $0.status != "done" }
+        let done = sorted.filter { $0.status == "done" }
         ZStack(alignment: .bottom) {
             TableBackground()
             if onMap {
@@ -56,6 +59,10 @@ struct KindScreen: View {
         .animation(KSMotion.settle, value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Sort orders the cards, so like Select it steps aside while the map is showing.
+            if saves.count > 1 && !onMap && !selecting {
+                ToolbarItem(placement: .primaryAction) { SortMenu(sort: $sorts[view: "kind:\(kind)"], options: SaveSort.offered(for: saves)) }
+            }
             if model.aiReady && !saves.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: saves, what: "all \(saves.count) \(k.plural.lowercased())") }
             }
