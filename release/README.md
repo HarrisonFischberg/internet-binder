@@ -50,7 +50,7 @@ Put these in `~/.zshrc` (or a file you `source` that is not in the repo).
 | `CWS_CLIENT_SECRET` | chrome | Same OAuth client |
 | `CWS_REFRESH_TOKEN` | chrome | Made once from that client; guide: https://github.com/fregante/chrome-webstore-upload-keys |
 | `CWS_PUBLISHER_ID` | chrome | Chrome Web Store developer dashboard → Account |
-| `CWS_EXTENSION_ID` | chrome | `akekjlfpdbkghhopdkgnfnkcibonaiom` |
+| `CWS_EXTENSION_ID` | chrome | Already set in `release.sh` (`akekjlfpdbkghhopdkgnfnkcibonaiom`) |
 
 ## One-time setup
 
