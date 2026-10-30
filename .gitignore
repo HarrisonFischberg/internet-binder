@@ -12,3 +12,9 @@ impeccable-review/img/
 .env*.local
 # QA run output (reports, raw provider answers) stays out of git.
 tools/qa/out/
+# Release output (./release.sh, fastlane). fastlane rewrites its own README; the real one is release/README.md.
+build/
+fastlane/report.xml
+fastlane/README.md
+fastlane/test_output/
+*.p8

@@ -1,0 +1,85 @@
+# App Store and TestFlight from the command line. Run through ./release.sh (see release/README.md).
+# Signs in with an App Store Connect API key from ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_PATH.
+# Listing text, age rating, review notes and screenshots live in store/ios.
+# The iPhone/iPad app and the Mac Safari app share one App Store record and one build number.
+
+default_platform(:ios)
+
+ROOT = File.expand_path("..") # the Fastfile is read from inside fastlane/
+LISTING = { metadata_path: "#{ROOT}/store/ios/metadata", screenshots_path: "#{ROOT}/store/ios/screenshots" }
+PROJECTS = ["#{ROOT}/ios/Keepsake.xcodeproj", "#{ROOT}/safari/Keepsake/Keepsake.xcodeproj"]
+
+before_all do
+  app_store_connect_api_key(
+    key_id: ENV.fetch("ASC_KEY_ID"),
+    issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+    key_filepath: File.expand_path(ENV.fetch("ASC_KEY_PATH"))
+  )
+end
+
+# Next build number: one above both the projects and the newest TestFlight upload, written into both projects.
+def bump_build(platform)
+  pbx = PROJECTS.map { |p| "#{p}/project.pbxproj" }
+  current = File.read(pbx[0])[/CURRENT_PROJECT_VERSION = (\d+)/, 1].to_i
+  uploaded = latest_testflight_build_number(platform: platform, initial_build_number: 0).to_i
+  n = [current, uploaded].max + 1
+  pbx.each { |f| File.write(f, File.read(f).gsub(/CURRENT_PROJECT_VERSION = \d+/, "CURRENT_PROJECT_VERSION = #{n}")) }
+  UI.success("Build #{n}")
+end
+
+platform :ios do
+  def build_ios
+    build_app(project: PROJECTS[0], scheme: "Keepsake", export_method: "app-store",
+              output_directory: "#{ROOT}/build", xcargs: "-allowProvisioningUpdates")
+  end
+
+  desc "Dry run: build and have App Store Connect validate the app, upload nothing"
+  lane :check do
+    build_ios
+    deliver(**LISTING, verify_only: true, force: true)
+  end
+
+  desc "Bump the build, archive, upload to TestFlight"
+  lane :beta do
+    bump_build("ios")
+    build_ios
+    upload_to_testflight(skip_waiting_for_build_processing: true)
+  end
+
+  desc "Bump the build, archive, upload with listing and screenshots, submit for review"
+  lane :release do
+    bump_build("ios")
+    build_ios
+    deliver(
+      **LISTING,
+      app_rating_config_path: "#{ROOT}/store/ios/age-rating.json",
+      overwrite_screenshots: true,
+      submit_for_review: true,
+      automatic_release: true,
+      force: true,
+      precheck_include_in_app_purchases: false,
+      submission_information: { add_id_info_uses_idfa: false }
+    )
+  end
+end
+
+platform :mac do
+  def build_mac
+    sh("node", "#{ROOT}/safari/build.mjs")
+    build_app(project: PROJECTS[1], scheme: "Keepsake", export_method: "app-store",
+              output_directory: "#{ROOT}/build", xcargs: "-allowProvisioningUpdates")
+  end
+
+  desc "Dry run: build and have App Store Connect validate the Mac app, upload nothing"
+  lane :check do
+    build_mac
+    deliver(**LISTING, platform: "osx", verify_only: true, force: true)
+  end
+
+  desc "Bump the build, archive, upload the Mac Safari app to TestFlight"
+  lane :beta do
+    bump_build("osx")
+    build_mac
+    upload_to_testflight(app_platform: "osx", skip_waiting_for_build_processing: true)
+  end
+end

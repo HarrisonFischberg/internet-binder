@@ -1,0 +1,30 @@
+Internet Binder is one place for the things you find online and mean to come back to: a recipe for the weekend, a café a friend recommended, a lamp you're saving up for, a workout you want to try.
+
+SAVE FROM THE SHARE SHEET
+• In the app you're reading, tap Share, then Binder.
+• Internet Binder picks up the page's title, picture and details where the page provides them, and suggests where the save belongs.
+• Anything it isn't sure about waits in Review, ready to file with one tap.
+
+SORTED BY WHAT IT IS
+• Saves are grouped as products, places, recipes, workouts, videos, articles, films and shows, books and links.
+• Products go into collections like Home or Kitchen. Move one, and Internet Binder learns from it.
+• Lifestyle gives each kind its own page.
+
+PUT IT TO USE
+• Cooking mode takes a recipe one step at a time, with that step's ingredients beside it and optional music.
+• Places are grouped by city and shown on a map, with directions a tap away.
+• Turn a workout into a goal, like 3 times a week for 4 weeks, and tap Done today to keep count.
+• Stamps like Cooked, Been, Read and Watched mark what you've done.
+• Favorites, a Purchased list, search, and Select to move or delete many saves at once, with Undo.
+• Home brings back recent saves and ones you haven't opened in a while.
+• Home Screen widgets.
+
+MAKE IT YOURS
+• Three looks: Nocturne, Paper & Ink and Chromatic, each with its own softly moving background.
+• Four app icons to choose from.
+• Works on iPhone and iPad.
+
+PRIVATE BY DESIGN
+• No account, no ads, no tracking. Your library stays on your devices and, with iCloud sync, in your own iCloud, end-to-end encrypted. Only you can read it.
+• Optional AI can tidy titles and fill in recipe, place and product details. It's off until you turn it on, and it uses your own API key with the provider you choose.
+• Export your library to a file at any time, and import it on another device.
