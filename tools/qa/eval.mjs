@@ -59,8 +59,13 @@ if (args.warm) {
     const collectionId = a.collection ? c.library.collections.find((x) => x.name === a.collection)?.id : null;
     return { ...sharedProduct(c.evidence, 'page'), host: 'www.instagram.com', collectionId, kind: a.kind || 'link' };
   }).filter((s) => s.collectionId || s.kind !== 'link');
+  const c0 = dev[0];
   const prefs = learnFromSaves(saves, emptyPrefs());
-  cases = cases.map((c) => (c.split === 'heldout' ? { ...c, library: { ...c.library, prefs } } : c));
+  // The same saves sit in the library too, with the Instagram collection they came from, as an
+  // imported library has them: what your provider sees as each collection's examples.
+  const items = saves.filter((x) => x.collectionId).map((x, n) => ({ ...x, id: `warm-${n}`, type: 'instagram', url: `${x.url}#warm${n}`, canonicalUrl: `${x.url}#warm${n}`,
+    instagram: { ...x.instagram, collectionName: c0.library.collections.find((k) => k.id === x.collectionId)?.name || '' } }));
+  cases = cases.map((c) => (c.split === 'heldout' ? { ...c, library: { ...c.library, prefs, items } } : c));
   console.log(`warm library: learned from ${saves.length} filed dev saves`);
 }
 if (split !== 'all') cases = cases.filter((c) => (c.split || 'dev') === split);

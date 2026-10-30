@@ -88,12 +88,16 @@ export function planFiling(item, answer, collections, { at = nowIso(), scope = '
   return { patch, changes, accepted, filing };
 }
 
-// Up to three saves you filed yourself in each collection, as examples of what goes there.
+// Up to three saves you filed yourself in each collection, as examples of what goes there. A post you had
+// in an Instagram collection of the same name is one you filed (the import kept the name), so a library
+// brought in from Instagram has examples from the start.
+const sameCollection = (i, c) => !!c && plain(i.instagram?.collectionName) !== '' && plain(i.instagram?.collectionName) === plain(c.name);
 export function collectionExamples(collections, items) {
   const by = new Map(collections.map((c) => [c.id, []]));
+  const byId = new Map(collections.map((c) => [c.id, c]));
   for (const i of items || []) {
     if (i.deletedAt || !i.collectionId || !by.has(i.collectionId) || !i.title) continue;
-    if (!(filedByYou(i) || i.filingConfirmed)) continue;
+    if (!(filedByYou(i) || i.filingConfirmed || sameCollection(i, byId.get(i.collectionId)))) continue;
     const list = by.get(i.collectionId);
     if (list.length < 3) list.push(i.title);
   }
