@@ -243,7 +243,7 @@ struct WorkScreen: View {
 
     private var title: String {
         switch phase {
-        case .ai: model.aiRun?.imported == true ? "Reading your imports" : model.aiRun?.total == model.saves.count ? "Fixing your library" : "Fixing with AI"
+        case .ai: model.aiRun?.mapping == true ? "Finding your places" : model.aiRun?.imported == true ? "Reading your imports" : model.aiRun?.total == model.saves.count ? "Fixing your library" : "Fixing with AI"
         case .sync: "Copying to iCloud"
         case .finished: model.workEnd?.title ?? "All done"
         }
@@ -256,6 +256,7 @@ struct WorkScreen: View {
             if run.stopping { return run.cutOff ? "iOS paused it. Open the app to carry on." : "Stopping after this one…" }
             if run.waitingUntil != nil { return "Your AI asked to slow down. Waiting a moment…" }
             let names = run.current.compactMap { id in model.saves.first { $0.id == id }?.title }
+            if run.mapping { return names.isEmpty ? "Looking on the map…" : "Looking for " + names.map { "“\($0)”" }.formatted(.list(type: .and)) }
             return names.isEmpty ? "Your AI is reading…" : "Reading " + names.map { "“\($0)”" }.formatted(.list(type: .and))
         case .sync:
             return "Encrypted on this iPhone first, so Apple stores it but can't read it."
@@ -384,7 +385,7 @@ struct WorkScreen: View {
     private var note: String {
         switch phase {
         case .sync: "Keeps going if you leave the app. If iOS pauses it, the rest goes up next time you open Internet Binder."
-        default: model.aiRun?.imported == true
+        default: model.aiRun?.imported == true || model.aiRun?.mapping == true
             ? "Keeps going if you leave the app. If iOS pauses it, the rest stay waiting: run it again to carry on."
             : "Keeps going if you leave the app. If iOS pauses it, Home offers to finish the rest."
         }

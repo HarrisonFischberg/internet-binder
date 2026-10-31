@@ -62,6 +62,33 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.buttons["List"].exists)
     }
 
+    /// Find on the map: the button counts the places with no pin, asks first (turning on OpenStreetMap
+    /// when it's off), says what came of it, and doesn't offer the same places again.
+    func testFindPlacesOnTheMap() {
+        let app = launch()
+        app.tabBars.buttons["Places"].tap()
+        app.buttons["Map"].tap()
+        let find = app.buttons["findOnMap"]
+        XCTAssertTrue(find.waitForExistence(timeout: 5))
+        XCTAssertEqual(find.label, "Find 1 place on the map", "Ramen Kiri has no pin")
+        if let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("find-on-map-button.png"))
+        }
+        find.tap()
+        let go = app.buttons["Turn on OpenStreetMap and find"]
+        XCTAssertTrue(go.waitForExistence(timeout: 3), "Lookups are off in the fixture: the dialog turns them on")
+        if let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("find-on-map-ask.png"))
+        }
+        go.tap()
+        let done = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Pinned' OR label BEGINSWITH 'No new pins'")).firstMatch
+        XCTAssertTrue(done.waitForExistence(timeout: 90), "the run says what came of it")
+        if let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("find-on-map-done.png"))
+        }
+        XCTAssertFalse(app.buttons["findOnMap"].waitForExistence(timeout: 2), "a place already looked for isn't offered again")
+    }
+
     func testCookingStepByStep() {
         let app = launch()
         open(app, kind: "Recipes", save: "Brown butter pasta")

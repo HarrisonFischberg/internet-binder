@@ -44,9 +44,12 @@ public struct PlacesView: Decodable, Sendable {
     public struct StateGroup: Decodable, Sendable, Hashable { public let state: String; public let cities: [City] }
     public struct Waiting: Decodable, Sendable, Hashable {
         public let item: Save
-        /// "no place name", "no state" (places.js placeReviewReasons).
+        /// "no place name", "no state" (places.js placeReviewReasons), "choose place" (choices below).
         public let reasons: [String]
+        /// The places the place check found it could be, for you to pick (placeResolve.js placeChoices).
+        public let choices: [Choice]?
     }
+    public struct Choice: Decodable, Sendable, Hashable { public let name: String; public let area: String; public let why: String; public let lat: Double?; public let lng: Double? }
     public let groups: [StateGroup]
     public let review: [Waiting]
 }
@@ -326,6 +329,17 @@ extension Library {
     public func dismissPlaceChoices(_ id: String) async throws -> Save { try await core.call("views.dismissPlaceChoices", [id], as: Save.self) }
     /// Undo the last pick or dismiss on this save: it goes back to how it was, choices and all.
     public func undoPlace(_ id: String) async throws { try await core.call("views.undoPlace", [id]) }
+    /// Find on the map: the places with no pin that haven't been looked for with what they say now, and
+    /// whether Lookups → Places (OpenStreetMap) is on.
+    public func placesToMap() async throws -> (ids: [String], lookupsOn: Bool) {
+        try await prepare()
+        let r = (try await core.call("views.placesToMap") as? [String: Any]) ?? [:]
+        return (r["ids"] as? [String] ?? [], r["lookupsOn"] as? Bool ?? false)
+    }
+    /// One place for Find on the map: "pinned", "choose" (several it could be) or "unclear".
+    public func mapPlace(_ id: String) async throws -> String {
+        ((try await core.call("views.mapPlace", [id]) as? [String: Any])?["outcome"] as? String) ?? "unclear"
+    }
     public func aiLog() async throws -> [AIChange] { try await prepare(); return try await core.call("views.aiLog", as: [AIChange].self) }
     @discardableResult public func undoAI(_ ids: [String]) async throws -> Int { try await core.call("views.undoAi", [ids], as: Int.self) }
     /// Optional AI is on and a key is set.

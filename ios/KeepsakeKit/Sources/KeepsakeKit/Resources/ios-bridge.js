@@ -67,6 +67,8 @@
   // Work that runs by itself (after a save, when the app opens) stays on the device while Apple
   // Intelligence is there; your key is only used when you ask (provider.js keyFor).
   const autoDeps = { ...aiDeps, deviceOnly: true };
+  // Find on the map's Lookups, kept between places so the 1.1 s pace holds across the run.
+  let mapDeps = null;
   // How many unread saves Apple Intelligence reads each time the app opens or a save finishes.
   const DEVICE_SWEEP = 12;
 
@@ -234,7 +236,13 @@
       const states = new Map();
       for (const item of all) {
         const reasons = K.places.placeReviewReasons(item);
-        if (reasons.length) { review.push({ item: withFact(item), reasons }); continue; }
+        // The place check found more than one it could be (placeResolve.js placeChoices): you pick.
+        const choices = item.details?.lat == null && Array.isArray(item.placeChoices) ? item.placeChoices : [];
+        if (choices.length) reasons.push('choose place');
+        if (reasons.length) {
+          review.push({ item: withFact(item), reasons, choices: choices.map((c) => ({ name: c.name, area: [c.address, c.locality, c.region].filter(Boolean).join(', '), why: c.why || '', lat: c.lat ?? null, lng: c.lng ?? null })) });
+          continue;
+        }
         const st = K.places.placeState(item)?.name || 'Somewhere';
         const city = String(item.details?.locality || '').trim();
         if (!states.has(st)) states.set(st, new Map());
@@ -378,6 +386,25 @@
     async fixPlace(id) {
       await K.fill.fillSave(store, id, { review: true }, { fetchFn: fetch, allowed: async (s, which) => !!s.lookups?.[which] });
       return withFact(await store.getItem(id));
+    },
+    // Find on the map (Places → Map, fill.js placesToMap): the places with no pin that haven't been looked
+    // for with what they say now. lookupsOn: Lookups → Places, which the search needs.
+    async placesToMap() {
+      const raw = await store.backend.get(['keepsake_ios_map_tried']);
+      const ids = K.fill.placesToMap(listItems(), raw.keepsake_ios_map_tried || {}).map((i) => i.id);
+      return { ids, lookupsOn: !!(await store.getSettings()).lookups?.places };
+    },
+    // One place for Find on the map (fill.js mapPlace), on the device's AI (your key only stands in when
+    // Apple Intelligence isn't there), at OpenStreetMap's pace across the whole run.
+    async mapPlace(id) {
+      mapDeps ||= { ...fillDeps(), deviceOnly: true };
+      const r = await K.fill.mapPlace(store, id, mapDeps);
+      if (!r) return { outcome: 'unclear', title: '' };
+      const raw = await store.backend.get(['keepsake_ios_map_tried']);
+      const tried = raw.keepsake_ios_map_tried || {};
+      tried[id] = r.key;
+      await store.backend.set({ keepsake_ios_map_tried: tried });
+      return { outcome: r.outcome, title: r.title };
     },
     // You picked one of the places Fix with AI found (shared/placeResolve.js placeChoices).
     // Each keeps the save as it was first, for Undo (undoPlace).

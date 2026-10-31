@@ -457,6 +457,7 @@ struct AIRunBar: View {
                             ProgressView(value: Double(run.done), total: Double(max(run.total, 1)))
                                 .progressViewStyle(.circular).controlSize(.small).tint(t.ink)
                             Text(run.stopping ? "Stopping…" : run.waitingUntil != nil ? "Your AI asked to slow down. Waiting…" : run.total == 1 ? "Asking your AI…"
+                                 : run.mapping ? "Finding \(min(run.done + 1, run.total)) of \(run.total) on the map"
                                  : "\(run.imported ? "Reading" : "Fixing") \(min(run.done + 1, run.total)) of \(run.total) with AI")
                                 .font(.subheadline.weight(.medium)).foregroundStyle(t.ink).monospacedDigit()
                         }
