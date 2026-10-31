@@ -377,7 +377,7 @@ struct PlacesScreen: View {
     private func choose(_ index: Int, _ c: PlacesView.Choice, place: Save) {
         reading = place.id
         Task {
-            try? await model.library?.choosePlace(place.id, index)
+            _ = try? await model.library?.choosePlace(place.id, index: index)
             model.refresh()
             view = try? await model.library?.places()
             reading = nil

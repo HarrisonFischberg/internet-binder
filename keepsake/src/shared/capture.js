@@ -4,7 +4,7 @@
 // Pure apart from the store passed in; the after-save work (AI tidy, Lifestyle fill-in) is the caller's,
 // through the enrich/fill hooks.
 
-import { classify, learnFromCorrection, AUTO_FILE_CONFIDENCE } from './categorizer.js';
+import { classify, learnFromCorrection, learnedKindOf, isSocialHost, AUTO_FILE_CONFIDENCE } from './categorizer.js';
 import { parsePrice, sanitizeText } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
 import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, isRecipePost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
@@ -161,6 +161,8 @@ export function kindOfCapture(product) {
   if (!fromTypes && (videoPlatform(product.url) || /^video\./.test(og))) return 'video';
   if (!fromTypes && og === 'article') return 'article';
   if (fromTypes === 'product' || product.price !== null || product.priceText) return 'product';
+  // A post on X, Reddit, Pinterest, Threads… with no price and no product data is a post, not a product.
+  if (isSocialHost(host)) return 'link';
   return product.sparse ? 'link' : 'product';
 }
 
@@ -229,8 +231,18 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
     }
   }
   const [collections, prefs, settings] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings()]);
-  const { kind, details } = captureFacts(product);
+  let { kind, details } = captureFacts(product);
+  // A post the rules found nothing in: the kind you give posts like it (a mobility tip → Workouts).
+  const taught = kind === 'link' && !collectionId ? learnedKindOf(product, prefs) : null;
+  if (taught) ({ kind, details } = captureFacts({ ...product, kind: taught.kind }));
   let classification = given || classifyCapture(product, kind, details, { collections, prefs, settings });
+  // Only the link came through (Instagram showed its login page): Review, named for what it is, and
+  // saying why, rather than a guess from an address. (QA: 0 of 214 link-only shares can be filed right.)
+  if (product.isInstagram && kind === 'link' && !product.description && !product.instagram?.caption && !given) {
+    if (!product.title) product.title = /\/reels?\//.test(product.url || '') ? 'Instagram reel' : 'Instagram post';
+    if (classification.isInbox) classification = { ...classification, reason: 'Only the link came through (Instagram showed a sign-in page), so there was nothing to sort by' };
+  }
+  if (taught && !given) classification = { ...classification, reason: `You file posts like this in ${kindInfo(kind).plural} (${taught.words.map((w) => `“${w}”`).join(', ')}, learned)` };
 
   // With AI on, the save is stored first with the local result and marked "finishing details"; your
   // provider then works out what it is (a product may turn out to be a recipe) and tidies it (tidySave).

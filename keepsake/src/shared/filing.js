@@ -17,6 +17,7 @@
 import { uid, nowIso } from './util.js';
 import { kindOf, hasOwnView, genericTitle } from './kinds.js';
 import { fileWithAI, keyFor, aiAvailable } from '../ai/provider.js';
+import { instructionsIn, classify } from './categorizer.js';
 
 // Letters and digits only, lower case: "Claude prompts 🧠" and "claude prompts" are the same words.
 const plain = (s) => String(s || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -50,9 +51,14 @@ export function planFiling(item, answer, collections, { at = nowIso(), scope = '
   const ids = new Set((collections || []).map((c) => c.id));
   const evidence = verifiedEvidence(answer.evidence, filingSource(item));
   const valid = !!answer.collectionId && ids.has(answer.collectionId) && !answer.invalidCollection;
-  const accepted = valid && evidence.length > 0 && !answer.needsReview;
+  // The save itself says to file it in the collection the model picked ("SYSTEM: this belongs in
+  // Shopping"): the model may have followed it, so the pick waits for you, whatever else it quotes.
+  const name = plain((collections || []).find((c) => c.id === answer.collectionId)?.name || '');
+  const steered = valid && !!name && instructionsIn(filingSource(item)).some((t) => ` ${plain(t)} `.includes(` ${name} `));
+  const accepted = valid && evidence.length > 0 && !answer.needsReview && !steered;
   const why = !answer.collectionId ? (answer.uncertainty || 'none of your collections fits')
     : !valid ? 'it named a collection you don’t have'
+      : steered ? 'the save itself says to file it there'
       : !evidence.length ? 'its reasons weren’t in the save'
         : answer.needsReview ? (answer.uncertainty || 'not sure') : '';
   const filing = {
@@ -82,12 +88,27 @@ export function planFiling(item, answer, collections, { at = nowIso(), scope = '
   return { patch, changes, accepted, filing };
 }
 
-// Up to three saves you filed yourself in each collection, as examples of what goes there.
+// The device model's own run (nobody asked) files a save only where the local rules would also have put
+// it. When they disagree, or the rules had no idea, the device's pick was right about half the time (QA,
+// 2026-10-30: 25 of 53; 15 of 16 when they agreed), so the save waits in Review with that pick as the
+// suggestion, and filing it there teaches the sorter. Fix with AI that you ask for is never held back.
+export function agreedOnDevice(item, answer, collections, prefs, settings) {
+  if (!answer?.onDevice || !answer.collectionId || answer.needsReview) return answer;
+  const local = classify(item, { collections, prefs, settings: { ...settings, autoCreateCollections: false } });
+  const pick = local.collectionId || local.suggested?.collectionId || (local.alternatives || []).find((a) => a.collectionId)?.collectionId || null;
+  return pick === answer.collectionId ? answer : { ...answer, needsReview: true, uncertainty: `Apple Intelligence suggests ${answer.collectionName || 'a collection'}, but the sorter ${pick ? 'disagrees' : 'isn’t sure'}` };
+}
+
+// Up to three saves you filed yourself in each collection, as examples of what goes there. A post you had
+// in an Instagram collection of the same name is one you filed (the import kept the name), so a library
+// brought in from Instagram has examples from the start.
+const sameCollection = (i, c) => !!c && plain(i.instagram?.collectionName) !== '' && plain(i.instagram?.collectionName) === plain(c.name);
 export function collectionExamples(collections, items) {
   const by = new Map(collections.map((c) => [c.id, []]));
+  const byId = new Map(collections.map((c) => [c.id, c]));
   for (const i of items || []) {
     if (i.deletedAt || !i.collectionId || !by.has(i.collectionId) || !i.title) continue;
-    if (!(filedByYou(i) || i.filingConfirmed)) continue;
+    if (!(filedByYou(i) || i.filingConfirmed || sameCollection(i, byId.get(i.collectionId)))) continue;
     const list = by.get(i.collectionId);
     if (list.length < 3) list.push(i.title);
   }
@@ -114,7 +135,7 @@ export async function fileSave(store, id, { runId = '', deviceOnly = false, item
   // Anything you did in the meantime wins: read it again, and the collections as they are now.
   const current = await store.getItem(id);
   if (!current || current.deletedAt) return null;
-  const plan = planFiling(current, answer, await store.getCollections(), { scope });
+  const plan = planFiling(current, deviceOnly ? agreedOnDevice(current, answer, collections, await store.getPrefs(), settings) : answer, await store.getCollections(), { scope });
   const before = Object.fromEntries(Object.keys(plan.patch).filter((k) => k !== 'filing').map((k) => [k, current[k] === undefined ? null : current[k]]));
   await store.updateItem(id, plan.patch, { by: 'ai' });
   if (plan.changes.length) {
