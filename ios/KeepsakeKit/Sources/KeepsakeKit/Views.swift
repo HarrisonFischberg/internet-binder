@@ -49,7 +49,7 @@ public struct PlacesView: Decodable, Sendable {
         /// The places the place check found it could be, for you to pick (placeResolve.js placeChoices).
         public let choices: [Choice]?
     }
-    public struct Choice: Decodable, Sendable, Hashable { public let name: String; public let area: String; public let why: String }
+    public struct Choice: Decodable, Sendable, Hashable { public let name: String; public let area: String; public let why: String; public let lat: Double?; public let lng: Double? }
     public let groups: [StateGroup]
     public let review: [Waiting]
 }

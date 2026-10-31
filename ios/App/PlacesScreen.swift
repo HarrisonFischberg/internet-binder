@@ -226,7 +226,7 @@ struct PlacesScreen: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
-                                Text(w.reasons.map(Self.why).joined(separator: " · ")).font(.footnote).foregroundStyle(t.stamp)
+                                Text(Self.reasonLine(w)).font(.footnote).foregroundStyle(t.stamp)
                             }
                             .padding(14).padding(.trailing, 44).frame(maxWidth: .infinity, alignment: .leading).ksSurface()
                             .selectionCheck(on, alignment: .trailing)
@@ -268,6 +268,8 @@ struct PlacesScreen: View {
             }
             .buttonStyle(PressStyle())
             .accessibilityHint("Opens the save")
+            // The places it could be come first: picking one is what this card is waiting for.
+            if let choices = w.choices, !choices.isEmpty { choiceList(choices, place: w.item) }
             // On one line while it fits; stacked at large text sizes.
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) { reviewActions(w, save: save) }
@@ -276,7 +278,6 @@ struct PlacesScreen: View {
             // The buttons keep their usual size, like the save's own action row; a long press shows them large.
             .dynamicTypeSize(...DynamicTypeSize.large)
             .accessibilityShowsLargeContentViewer()
-            if let choices = w.choices, !choices.isEmpty { choiceList(choices, place: w.item) }
         }
         .padding(14).ksSurface()
         .contextMenu { SaveMenu(save: save) { startSelecting(w.item.id) } }
@@ -299,7 +300,7 @@ struct PlacesScreen: View {
             Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink)
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                 .multilineTextAlignment(.leading)
-            Text(w.reasons.map(Self.why).joined(separator: " · ")).font(.footnote).foregroundStyle(t.stamp)
+            Text(Self.reasonLine(w)).font(.footnote).foregroundStyle(t.stamp)
         }
     }
 
@@ -328,30 +329,49 @@ struct PlacesScreen: View {
     }
 
     /// The places Find on the map or Read again found it could be: tap the right one and it's pinned.
+    /// Each says why it was found, and Show in Maps looks at it first when the names alone don't settle it.
     private func choiceList(_ choices: [PlacesView.Choice], place: Save) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Which one is it?").font(KSFont.label).foregroundStyle(t.inkMuted).accessibilityAddTraits(.isHeader)
+            Text("Which one is it?").font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
             ForEach(Array(choices.enumerated()), id: \.offset) { i, c in
-                Button { choose(i, c, place: place) } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "mappin.circle").font(.title3).foregroundStyle(t.accent).accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
-                            if !c.area.isEmpty { Text(c.area).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading) }
+                HStack(spacing: 0) {
+                    Button { choose(i, c, place: place) } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "mappin.and.ellipse").font(.body.weight(.semibold)).foregroundStyle(t.accent).frame(width: 24).accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                                let detail = [c.area, c.why].filter { !$0.isEmpty }.joined(separator: " · ")
+                                if !detail.isEmpty { Text(detail).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading) }
+                            }
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
+                        .padding(.leading, 12).padding(.vertical, 8).frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 8).frame(minHeight: 44)
-                    .background(t.well, in: RoundedRectangle(cornerRadius: min(t.radius, 12), style: .continuous))
-                    .contentShape(Rectangle())
+                    .buttonStyle(PressStyle())
+                    .disabled(reading != nil)
+                    .accessibilityLabel([c.name, c.area].filter { !$0.isEmpty }.joined(separator: ", "))
+                    .accessibilityHint("Uses this place for \(place.title)")
+                    if let url = Self.mapsLink(c) {
+                        Button { openURL(url) } label: {
+                            Image(systemName: "map").font(.body).foregroundStyle(t.inkMuted)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(PressStyle())
+                        .accessibilityLabel("Show \(c.name) in Maps")
+                    }
                 }
-                .buttonStyle(PressStyle())
-                .disabled(reading != nil)
-                .accessibilityLabel([c.name, c.area].filter { !$0.isEmpty }.joined(separator: ", "))
-                .accessibilityHint("Uses this place for \(place.title)")
+                .padding(.trailing, 4)
+                .background(t.well, in: RoundedRectangle(cornerRadius: min(t.radius, 12), style: .continuous))
             }
         }
         .padding(.top, 2)
+    }
+
+    static func mapsLink(_ c: PlacesView.Choice) -> URL? {
+        guard let lat = c.lat, let lng = c.lng, var link = URLComponents(string: "https://maps.apple.com/") else { return nil }
+        link.queryItems = [URLQueryItem(name: "ll", value: "\(lat),\(lng)"), URLQueryItem(name: "q", value: c.name)]
+        return link.url
     }
 
     private func choose(_ index: Int, _ c: PlacesView.Choice, place: Save) {
@@ -385,6 +405,12 @@ struct PlacesScreen: View {
                 model.show(state.map { "\(place.title) is now under \($0)" } ?? "\(place.title) is on your list now")
             }
         }
+    }
+
+    /// With places to pick from, that's the one thing to do: picking also fills in its state.
+    static func reasonLine(_ w: PlacesView.Waiting) -> String {
+        if let n = w.choices?.count, n > 0 { return "Could be one of \(n) places" }
+        return w.reasons.map(why).joined(separator: " · ")
     }
 
     static func why(_ reason: String) -> String {
@@ -764,13 +790,11 @@ struct FindOnMapButton: View {
     }
 
     private var message: String {
-        let reads = model.appleAI == .ready && !model.aiBackup
-            ? "Apple Intelligence reads each post on this iPhone for the place's name and city, then OpenStreetMap looks it up."
-            : model.aiReady ? "Your AI reads each post for the place's name and city, then OpenStreetMap looks it up."
-            : "Each post is read for the place's name and city, then OpenStreetMap looks it up."
+        let reads = model.appleAI == .ready && !model.aiBackup ? "Apple Intelligence reads each post on this iPhone"
+            : model.aiReady ? "Your AI reads each post" : "Each post is read"
         let minutes = max(1, Int((Double(ids.count) * 4 / 60).rounded()))
-        return reads + " Only a place OpenStreetMap confirms gets a pin. If it could be more than one, they wait in Review for you to pick."
-            + (lookupsOn ? "" : " This turns on Lookups → Places in Settings.")
+        return reads + " for a name and city, then OpenStreetMap looks it up. Only places it confirms get a pin; if one could be several, you pick in Review."
+            + (lookupsOn ? "" : " Turns on OpenStreetMap in Settings.")
             + " About \(minutes) min."
     }
 

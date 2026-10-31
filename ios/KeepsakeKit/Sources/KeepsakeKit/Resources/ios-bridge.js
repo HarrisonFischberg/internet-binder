@@ -239,7 +239,7 @@
         const choices = item.details?.lat == null && Array.isArray(item.placeChoices) ? item.placeChoices : [];
         if (choices.length) reasons.push('choose place');
         if (reasons.length) {
-          review.push({ item: withFact(item), reasons, choices: choices.map((c) => ({ name: c.name, area: [c.address, c.locality, c.region].filter(Boolean).join(', '), why: c.why || '' })) });
+          review.push({ item: withFact(item), reasons, choices: choices.map((c) => ({ name: c.name, area: [c.address, c.locality, c.region].filter(Boolean).join(', '), why: c.why || '', lat: c.lat ?? null, lng: c.lng ?? null })) });
           continue;
         }
         const st = K.places.placeState(item)?.name || 'Somewhere';
