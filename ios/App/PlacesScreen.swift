@@ -443,27 +443,43 @@ struct PlacesMap: View {
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var position: MapCameraPosition = .automatic
-    @State private var region: MKCoordinateRegion?
+    /// The zoom, in steps that double (log2 of the span), so clusters only regroup when the zoom really
+    /// changes. Pins regrouping on every camera move, while the camera was fitting the pins, kept the
+    /// map redrawing them until iOS closed the app.
+    @State private var zoomStep: ZoomStep?
     @State private var chosen: String?
+
+    struct ZoomStep: Equatable {
+        let lat: Int, lng: Int
+        init(_ span: MKCoordinateSpan) {
+            lat = Int(log2(max(span.latitudeDelta, 0.00001)).rounded())
+            lng = Int(log2(max(span.longitudeDelta, 0.00001)).rounded())
+        }
+        var latitudeDelta: Double { pow(2, Double(lat)) }
+    }
 
     private var pinned: [(Save, CLLocationCoordinate2D)] {
         places.compactMap { s in
-            guard let lat = s.details?["lat"]?.number, let lng = s.details?["lng"]?.number else { return nil }
+            guard let lat = s.details?["lat"]?.number, let lng = s.details?["lng"]?.number,
+                  (-90...90).contains(lat), (-180...180).contains(lng) else { return nil }
             return (s, CLLocationCoordinate2D(latitude: lat, longitude: lng))
         }
     }
 
-    /// Fits every pin; a lone pin opens on its neighbourhood rather than the street.
-    private var start: MapCameraPosition {
-        guard pinned.count == 1, let pin = pinned.first?.1 else { return .automatic }
-        return .region(MKCoordinateRegion(center: pin, span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)))
+    /// Fits every pin; a lone pin opens on its neighbourhood rather than the street. A fixed region, not
+    /// .automatic: .automatic refits whenever the pins change, and the pins regroup when the camera moves.
+    private func fit(_ coords: [CLLocationCoordinate2D]) -> MapCameraPosition {
+        guard let minLat = coords.map(\.latitude).min(), let maxLat = coords.map(\.latitude).max(),
+              let minLng = coords.map(\.longitude).min(), let maxLng = coords.map(\.longitude).max() else { return .automatic }
+        let span = MKCoordinateSpan(latitudeDelta: min(max((maxLat - minLat) * 1.3, 0.02), 170),
+                                    longitudeDelta: min(max((maxLng - minLng) * 1.3, 0.02), 355))
+        return .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2), span: span))
     }
 
     /// Pins that sit close together on screen at this zoom, as one cluster each.
-    private var clusters: [PinCluster] {
-        let pins = pinned
-        guard let region, pins.count > 1 else { return pins.map { PinCluster(members: [$0.0], centre: $0.1) } }
-        let cellLat = max(region.span.latitudeDelta / 8, 0.00001), cellLng = max(region.span.longitudeDelta / 6, 0.00001)
+    private func clusters(_ pins: [(Save, CLLocationCoordinate2D)]) -> [PinCluster] {
+        guard let zoomStep, pins.count > 1 else { return pins.map { PinCluster(id: $0.0.id, members: [$0.0], centre: $0.1) } }
+        let cellLat = pow(2, Double(zoomStep.lat)) / 8, cellLng = pow(2, Double(zoomStep.lng)) / 6
         var cells: [String: [(Save, CLLocationCoordinate2D)]] = [:]
         var keys: [String] = []
         for p in pins {
@@ -474,15 +490,16 @@ struct PlacesMap: View {
         return keys.map { k in
             let m = cells[k]!
             let lat = m.map(\.1.latitude).reduce(0, +) / Double(m.count), lng = m.map(\.1.longitude).reduce(0, +) / Double(m.count)
-            return PinCluster(members: m.map(\.0), centre: CLLocationCoordinate2D(latitude: lat, longitude: lng))
+            return PinCluster(id: m.count == 1 ? m[0].0.id : "cell:\(k)", members: m.map(\.0), centre: CLLocationCoordinate2D(latitude: lat, longitude: lng))
         }
     }
 
     private var selectedSave: Save? { chosen.flatMap { id in pinned.first { $0.0.id == id }?.0 } }
 
     var body: some View {
+        let pinned = self.pinned
         Map(position: $position) {
-            ForEach(clusters) { c in
+            ForEach(clusters(pinned)) { c in
                 Annotation(c.members.count == 1 ? c.members[0].title : "\(c.members.count) places", coordinate: c.centre) {
                     if c.members.count == 1 { pin(c.members[0]) } else { cluster(c) }
                 }
@@ -491,8 +508,11 @@ struct PlacesMap: View {
         }
         .mapStyle(.standard(emphasis: .muted, pointsOfInterest: .excludingAll))
         .mapControls { MapScaleView() }
-        .onMapCameraChange(frequency: .onEnd) { region = $0.region }
-        .onAppear { position = start }
+        .onMapCameraChange(frequency: .onEnd) { ctx in
+            let step = ZoomStep(ctx.region.span)
+            if step != zoomStep { zoomStep = step }
+        }
+        .onAppear { position = fit(pinned.map(\.1)) }
         // The selected place's card sits above the tab bar; the map's own logo and Legal link move up
         // above it rather than under it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -572,9 +592,9 @@ struct PlacesMap: View {
         let coords = pinned.filter { p in c.members.contains { $0.id == p.0.id } }.map(\.1)
         guard let minLat = coords.map(\.latitude).min(), let maxLat = coords.map(\.latitude).max(),
               let minLng = coords.map(\.longitude).min(), let maxLng = coords.map(\.longitude).max() else { return }
-        let span = MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.8, 0.004), longitudeDelta: max((maxLng - minLng) * 1.8, 0.004))
+        let span = MKCoordinateSpan(latitudeDelta: min(max((maxLat - minLat) * 1.8, 0.004), 170), longitudeDelta: min(max((maxLng - minLng) * 1.8, 0.004), 355))
         // Already as close as it goes (the same spot): pick the first, so its card answers the tap.
-        if let region, region.span.latitudeDelta <= 0.006 { chosen = c.members.first?.id; return }
+        if let zoomStep, zoomStep.latitudeDelta <= 0.006 { chosen = c.members.first?.id; return }
         withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) {
             position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2), span: span))
         }
@@ -583,7 +603,7 @@ struct PlacesMap: View {
     private func showAll() {
         Haptic.detent()
         chosen = nil
-        withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { position = pinned.count == 1 ? start : .automatic }
+        withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { position = fit(pinned.map(\.1)) }
     }
 
     /// The chosen place: picture, name, where it is, Open, and a close button.
@@ -644,7 +664,8 @@ struct PlacesMap: View {
 
 /// Pins drawn as one marker at this zoom.
 struct PinCluster: Identifiable {
+    /// The save's id for a lone pin, its grid cell for a cluster: the same pins keep the same marker.
+    let id: String
     let members: [Save]
     let centre: CLLocationCoordinate2D
-    var id: String { members.map(\.id).joined(separator: ",") }
 }
