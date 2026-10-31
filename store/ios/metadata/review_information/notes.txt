@@ -1,0 +1,1 @@
+No account or sign-in. To try it: open any recipe or shop page in a browser, tap Share, then Binder. The save appears on Home. Optional AI needs your own API key and isn't required to use the app.

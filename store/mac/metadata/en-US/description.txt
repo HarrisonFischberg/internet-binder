@@ -1,0 +1,28 @@
+Internet Binder is one place for the things you find online and mean to come back to: a recipe for the weekend, a café a friend recommended, a lamp you're saving up for, a workout you want to try. On the Mac it lives in Safari.
+
+SAVE FROM SAFARI
+• Click the Internet Binder button in Safari's toolbar, or right-click a page, link or picture and choose Save to Internet Binder.
+• Internet Binder picks up the page's title, picture and details where the page provides them, and suggests where the save belongs.
+• Anything it isn't sure about waits in Review, ready to file with one click.
+
+SORTED BY WHAT IT IS
+• Saves are grouped as products, places, recipes, workouts, videos, articles, films and shows, books and links.
+• Products go into collections like Home or Kitchen. Move one, and Internet Binder learns from it.
+• Lifestyle gives each kind its own page.
+
+PUT IT TO USE
+• Recipes show ingredients and method together, with each step's ingredients beside it.
+• Places are grouped by city, with directions a click away.
+• Turn a workout into a goal, like 3 times a week for 4 weeks, and click Done today to keep count.
+• Stamps like Cooked, Been, Read and Watched mark what you've done.
+• Favorites, a Purchased list, search, and Select to move or delete many saves at once, with Undo.
+
+MAKE IT YOURS
+• Three looks: Nocturne, Paper & Ink and Chromatic, each with its own softly moving background.
+
+PRIVATE BY DESIGN
+• No account, no ads, no tracking. Your library stays on your Mac and, with iCloud sync, in your own iCloud, end-to-end encrypted. Only you can read it.
+• Optional AI can tidy titles and fill in recipe, place and product details. It's off until you turn it on, and it uses your own API key with the provider you choose.
+• Export your library to a file at any time, and import it on another device.
+
+After installing, open Internet Binder once and turn it on in Safari Settings, Extensions.
