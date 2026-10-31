@@ -3454,6 +3454,58 @@ button.home-attention {
   user-select: text;
 }
 
+.place-choices {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  margin-top: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--c-kind-place) 35%, transparent);
+  border-left: 3px solid var(--c-kind-place);
+  border-radius: 10px;
+  background: var(--c-kind-place-soft);
+  justify-items: start;
+}
+
+.place-choice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  width: 100%;
+}
+
+.place-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--c-line);
+}
+
+.place-choice-text {
+  display: grid;
+  gap: 2px;
+  font: var(--t-body-web);
+  color: var(--c-text);
+  min-width: 0;
+}
+
+.place-choice-text .muted,
+.place-choice-from {
+  font: var(--t-footnote);
+  color: var(--c-text-muted);
+}
+
+.place-choices .btn {
+  min-height: 44px;
+  flex: none;
+}
+
+.place-choices > .btn-quiet {
+  margin-left: calc(-1 * var(--s-3));
+}
+
 .place-hours ul {
   list-style: none;
   margin: 4px 0;

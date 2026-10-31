@@ -118,12 +118,18 @@ export function recipeFromSchema(r) {
   return out.ingredients.length || out.steps.length ? out : null;
 }
 
-const INGREDIENT_HEAD = /^\s*(?:[#*•\-–\s]*)(?:ingredients?|what you(?:'|’)ll need|you(?:'|’)ll need|shopping list)\s*[:：]?\s*$/i;
-const STEP_HEAD = /^\s*(?:[#*•\-–\s]*)(?:method|steps?|instructions?|directions?|how to make(?: it)?|preparation|to make)\s*[:：]?\s*$/i;
+const INGREDIENT_HEAD = /^\s*(?:[#*•\-–\s]*)(?:ingredients?|what you(?:'|’)ll need|you(?:'|’)ll need|shopping list|ingredientes|ingrédients|zutaten|ingredienti|材料|재료|सामग्री)\s*[:：]?\s*$/iu;
+const STEP_HEAD = /^\s*(?:[#*•\-–\s]*)(?:method|steps?|instructions?|directions?|how to make(?: it)?|preparation|to make|preparación|elaboración|préparation|zubereitung|modo de preparo|preparazione|作り方|만드는 법|विधि)\s*[:：]?\s*$/iu;
+// "鶏もも肉 150g", "卵 2個", "めんつゆ 大さじ3": Japanese and Korean put the amount after the food.
+const TRAILING_QUANTITY = /\S\s+(?:\d+[\d/.]*\s*(?:g|kg|ml|個|本|枚|片|cc|개|g)|(?:大さじ|小さじ|큰술|작은술|カップ|컵)\s*\d+[\d/.]*)\s*$/u;
 const QUANTITY = /^(?:\d+[\d\s/.,½¼¾⅓⅔-]*|a |an |one |two |three |half |pinch|handful|splash|dash)\s*(?:g|kg|ml|l|oz|lb|lbs|T|t|cups?|tbsp|tsp|tablespoons?|teaspoons?|cloves?|cans?|tins?|slices?|sticks?|bunch|pinch|handful|large|small|medium|x)?\b/i;
 
 // A cooking measure, or a word for something people eat or drink (singular stems; plurals match too).
 const FOOD = /(?:^|[^\p{L}])(?:\d+\s*(?:g|kg|mg|ml|l|oz|lb|lbs)\b|cups?|tbsp|tsp|tablespoons?|teaspoons?|cloves?|pinch|handful|dash|splash|sprigs?|slices?|\d+\s*(?:cans?|tins?)|bunch|scoops?|sticks? of|grams?|ounces?|pounds?|litres?|liters?|egg|flour|sugar|butter|oil|salt|pepper|garlic|onion|milk|cream|cheese|parmesan|rice|pasta|spaghetti|noodle|bread|chicken|beef|pork|fish|salmon|tuna|shrimp|prawn|tofu|bean|lentil|chickpea|tomato|potato|carrot|spinach|broccoli|kale|lettuce|pepper|chili|chilli|lemon|lime|apple|banana|berry|berries|strawberry|strawberries|blueberry|blueberries|avocado|mushroom|corn|oat|honey|syrup|vinegar|soy sauce|sauce|broth|yogurt|yoghurt|vanilla|cinnamon|cumin|paprika|ginger|basil|parsley|cilantro|coriander|thyme|rosemary|oregano|nut|almond|peanut|walnut|chocolate|cocoa|coffee|tea|water|wine|juice|protein powder|powder|seed|herb|spice|meat|sausage|bacon|ham|zucchini|courgette|cucumber|pumpkin|squash|coconut|mango|pineapple|orange|grape|peach|pear|cabbage|celery|leek|shallot|scallion|olive|caper|anchovy|anchovies|mayo|mustard|ketchup|dough|yeast|baking (?:soda|powder)|cornstarch|gelatin|tortilla|bun|quinoa|couscous|feta|mozzarella|cheddar|ricotta|mascarpone|matcha|ice)(?:e?s)?(?![\p{L}])/iu;
+
+// The same in other languages people save recipes in (es, fr, de, pt, it), and Japanese, Korean and
+// Hindi measures and staples, which have no spaces around them so they match anywhere in a line.
+const FOOD_INTL = /(?:^|[^\p{L}])(?:cucharadas?|cucharaditas?|tazas?|cuillères?|c\. à (?:soupe|café)|esslöffel|teelöffel|el|tl|xícaras?|colher(?:es)?|cucchia(?:i|io|ini)|huevos?|patatas?|papas|cebollas?|ajos?|aceite|harina|azúcar|leche|queso|pollo|arroz|tomates?|œufs?|oeufs?|beurre|sucre|farine|lait|fromage|poulet|eier|mehl|zucker|milch|käse|hähnchen|kartoffeln|zwiebeln?|ovos?|leite|queijo|polvilho|frango|feijão|cebola|uova|tuorli|farina|zucchero|latte|formaggio|guanciale|pecorino|pomodori)(?![\p{L}])|大さじ|小さじ|卵|鶏|豚|玉ねぎ|醤油|味噌|めんつゆ|큰술|작은술|두부|돼지고기|김치|고춧가루|간장|कप|दाल|प्याज|टमाटर|घी|जीरा/iu;
 
 const NOT_FOOD = /\b(?:reps?|rounds?|sets?|seconds?|secs?|minutes?|mins?|kettlebells?|dumbbells?|barbells?|times|days?|weeks?)\b/i;
 
@@ -151,27 +157,27 @@ export function recipeFromText(text) {
   if (!ingredients.length) {
     // "60 seconds non-stop", "1 kettlebell", "10 reps" are a workout's numbers, not ingredients; "1. Rewrite
     // emails" is a numbered list, not one of something.
-    const run = lines.filter((l) => QUANTITY.test(l.replace(/^[•\-–*·]+\s*/, '')) && !/^\d{1,2}[.)]\s/.test(l) && l.length < 90 && !NOT_FOOD.test(l));
+    const run = lines.filter((l) => (QUANTITY.test(l.replace(/^[•\-–*·]+\s*/, '')) || TRAILING_QUANTITY.test(l)) && !/^\d{1,2}[.)]\s/.test(l) && l.length < 90 && !NOT_FOOD.test(l));
     if (run.length >= 3) ingredients.push(...run.map((l) => clean(l.replace(/^[•\-–*·]+\s*/, ''), 200)));
   }
   if (ingredients.length < 2) return null;
   // Something to eat: at least one line with a cooking measure or a food. "Ingredients: an LLM API key,
   // a vector database, 3 tools" is a recipe for software.
-  if (!ingredients.some((l) => FOOD.test(l))) return null;
+  if (!ingredients.some((l) => FOOD.test(l) || FOOD_INTL.test(l))) return null;
   return { ingredients: ingredients.slice(0, 80), steps: steps.slice(0, 60), yield: '', totalMinutes: null, prepMinutes: null, cookMinutes: null, cuisine: '', category: '', author: '', source: 'caption' };
 }
 
 // Something to eat is named (a food or a cooking measure), anywhere in the text.
-export const mentionsFood = (text) => FOOD.test(String(text || '')) && !/\b(?:ai|llm|gpt|claude|chatgpt|agent|prompt|api|code|coding|software|app)\b[^.\n]{0,40}\brecipe\b|\brecipe\b[^.\n]{0,40}\b(?:ai|llm|agent|prompt|api|code|coding|software|app|success|disaster)\b/i.test(String(text || '')) || recipeFromText(text) !== null;
+export const mentionsFood = (text) => (FOOD.test(String(text || '')) || FOOD_INTL.test(String(text || ''))) && !/\b(?:ai|llm|gpt|claude|chatgpt|agent|prompt|api|code|coding|software|app)\b[^.\n]{0,40}\brecipe\b|\brecipe\b[^.\n]{0,40}\b(?:ai|llm|agent|prompt|api|code|coding|software|app|success|disaster)\b/i.test(String(text || '')) || recipeFromText(text) !== null;
 
 // A recipe post whose recipe isn't in the caption ("Comment RECIPE and I'll send it", "full recipe on my
 // blog"): it says recipe, or two cooking words, and names something to eat. A Recipe with no ingredients
 // (nothing made up), like a workout whose routine is only in the video.
-const RECIPE_WORD = /(?:^|[^\p{L}])#?(?:recipes?|full recipe)(?![\p{L}])/iu;
-const COOKING = /(?:^|[^\p{L}])(bake[ds]?|baking|oven|preheat|air ?fryer|homemade|from scratch|cook(?:ed|ing)?|simmer|whisk|saut[eé]|roast(?:ed|ing)?|fry|fried|frying|grill(?:ed)?|dessert|ingredients)(?![\p{L}])/giu;
+const RECIPE_WORD = /(?:^|[^\p{L}])#?(?:recipes?|full recipe|recetas?|recettes?|rezept(?:e)?|receitas?|ricett[ae])(?![\p{L}])|レシピ|레시피|रेसिपी/iu;
+const COOKING = /(?:^|[^\p{L}])(bake[ds]?|baking|oven|preheat|air ?fryer|homemade|from scratch|cook(?:ed|ing)?|simmer|whisk|saut[eé]|roast(?:ed|ing)?|fry|fried|frying|grill(?:ed)?|dessert|ingredients|horno|hornear|fr[ií]e|fre[ií]r|cocinar|four|cuire|cuisson|ofen|backen|kochen|forno|assar|cozinhar|cuocere|ingredientes|ingrédients|zutaten)(?![\p{L}])/giu;
 export function isRecipePost(text) {
   const t = String(text || '');
-  if (!FOOD.test(t) || isWorkoutPost(t)) return false;
+  if (!(FOOD.test(t) || FOOD_INTL.test(t)) || isWorkoutPost(t)) return false;
   const cooking = new Set([...t.matchAll(COOKING)].map((m) => m[1].toLowerCase()));
   return RECIPE_WORD.test(t) || cooking.size >= 2;
 }
@@ -180,7 +186,7 @@ export function isRecipePost(text) {
 
 // Words that say a caption or page is about training. Exercise lines alone aren't enough
 // ("2 x 400 g tins" is a recipe), so a workout needs one of these as well.
-const WORKOUT_WORDS = /\b(?:work[- ]?outs?|exercises?|exercices?|routine|hiit|wod|amrap|emom|tabata|circuit|reps|sets|leg day|arm day|push day|pull day|full[- ]body|upper body|lower body|core|abs|glutes|strength|training|warm[- ]?up|cool[- ]?down|calisthenics|mobility|stretch(?:es|ing)?|cardio|squats?|deadlifts?|lunges?|push[- ]?ups?|pull[- ]?ups?|planks?|burpees?|kettlebells?|dumbbells?|barbells?|bench press|rows?)\b/i;
+const WORKOUT_WORDS = /\b(?:work[- ]?outs?|exercises?|exercices?|routine|hiit|wod|amrap|emom|tabata|circuit|reps|sets|leg day|arm day|push day|pull day|full[- ]body|upper body|lower body|core|abs|glutes|strength|training|warm[- ]?up|cool[- ]?down|calisthenics|mobility|stretch(?:es|ing)?|cardio|squats?|deadlifts?|lunges?|push[- ]?ups?|pull[- ]?ups?|planks?|burpees?|kettlebells?|dumbbells?|barbells?|bench press|rows?)\b|(?:^|[^\p{L}])(?:rutina|entrenamiento|ejercicios?|series|repeticiones|sentadillas?|zancadas?|plancha|entra[iî]nement|exercices|musculation|pompes|gainage|übungen|runden|liegestütze|kniebeugen|ganzkörper|treino|exercícios|agachamentos?|allenamento|esercizi)(?![\p{L}])/iu;
 // "Training a model", "core features", "sets of experiments": training words about software and AI.
 const NOT_EXERCISE_TOPIC = /\b(?:(?:train(?:ing|ed)?|fine[- ]tun(?:e|ing))\s+(?:a|an|the|your|my|our)?\s*(?:own\s+)?(?:ai|ml|llm|language|neural|machine|deep|custom|base)?\s*(?:models?|networks?|llms?|agents?|classifiers?|datasets?)|machine learning|neural net|dataset|gpu|python|notebook|epochs?|benchmark)\b/i;
 export const looksLikeWorkout = (text) => WORKOUT_WORDS.test(String(text || '')) && !(NOT_EXERCISE_TOPIC.test(String(text || '')) && !isWorkoutPost(text));
@@ -188,7 +194,7 @@ export const looksLikeWorkout = (text) => WORKOUT_WORDS.test(String(text || ''))
 // Clear signs a post is a workout even when its caption names no exercises (the routine is in the
 // video): "routine", "#homeworkout", "kettlebell", "reps", "yoga"… Two different ones are needed, so a
 // recipe that "sets" overnight or a "morning routine" stays what it is.
-const WORKOUT_SIGNALS = /(?:^|[^\p{L}\p{N}])#?((?:at ?)?home ?work ?outs?|work ?outs?|routines?|exercises?|hiit|yoga|pilates|mobility|stretch(?:es|ing)|calisthenics|kettlebells?|dumbbells?|reps|rounds|leg day|arm day|upper[- ]body|lower[- ]body|full[- ]body|home ?gym|home ?training|warm[- ]?up|cool[- ]?down|circuits?|amrap|emom|tabata|abs|finisher|burner|couch to 5k|[0-9]+ ?k run|intervals?)(?![\p{L}\p{N}])/giu;
+const WORKOUT_SIGNALS = /(?:^|[^\p{L}\p{N}])#?((?:at ?)?home ?work ?outs?|work ?outs?|routines?|exercises?|hiit|yoga|pilates|mobility|stretch(?:es|ing)|calisthenics|kettlebells?|dumbbells?|reps|rounds|leg day|arm day|upper[- ]body|lower[- ]body|full[- ]body|home ?gym|home ?training|warm[- ]?up|cool[- ]?down|circuits?|amrap|emom|tabata|abs|finisher|burner|couch to 5k|[0-9]+ ?k run|intervals?|long run|easy run|tempo run|rutina|entrenamiento|series|sentadillas|zancadas|entraînement|übungen|runden|liegestütze|kniebeugen|ganzkörper|treino|allenamento)(?![\p{L}\p{N}])/giu;
 // "post-workout smoothie", "pre-workout snack": the workout is somewhere else.
 const AROUND_WORKOUT = /\b(?:post|pre|after|before)[- ]?(?:work ?out|training|gym)\b/gi;
 export function workoutSignals(text) {

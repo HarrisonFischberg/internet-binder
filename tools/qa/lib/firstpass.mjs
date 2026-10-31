@@ -10,7 +10,7 @@ import { saveCapture } from '../../../keepsake/src/shared/capture.js';
 import { tidySave, fillSave } from '../../../keepsake/src/shared/fill.js';
 import { titleFromCaption } from '../../../keepsake/src/instagram/post.js';
 import { kindOf, hasOwnView } from '../../../keepsake/src/shared/kinds.js';
-import { makeCollection } from '../../../keepsake/src/shared/storage.js';
+import { makeCollection, makeItem } from '../../../keepsake/src/shared/storage.js';
 
 // The product the Share Extension hands to capture for an Instagram share, built from the evidence the
 // case says was available. capture 'page': the public post page was read (caption, creator, hashtags);
@@ -28,7 +28,7 @@ export function sharedProduct(evidence, capture = 'page') {
     p.sparse = false;
     if (!p.title) p.title = titleFromCaption(caption, evidence.creator || '', type);
     if (caption && (!p.description || p.description.length < caption.length)) p.description = caption;
-    p.instagram = { caption, creator: evidence.creator || '', location: evidence.location || '', hashtags: evidence.hashtags || hashtagsOf(caption), postedAt: '', links: [], products: [] };
+    p.instagram = { caption, creator: evidence.creator || '', location: evidence.location || '', hashtags: evidence.hashtags?.length ? evidence.hashtags : hashtagsOf(caption), postedAt: '', links: [], products: [] };
     if (evidence.location) p.igLocation = { name: evidence.location };
   } else if (capture === 'page') {
     // A web page read by Safari's page reader: what the case recorded about it.
@@ -40,10 +40,11 @@ export function sharedProduct(evidence, capture = 'page') {
 const hashtagsOf = (caption) => [...new Set([...String(caption).matchAll(/#([\p{L}\p{N}_]+)/gu)].map((m) => m[1].toLowerCase()))].slice(0, 30);
 
 // A fresh library holding the case's collections (stable ids), settings and any learned preferences.
-export async function libraryFor({ collections = [], prefs = null, settings = {}, secret = '' } = {}) {
+export async function libraryFor({ collections = [], prefs = null, settings = {}, secret = '', items = [] } = {}) {
   const kv = memoryBackend();
   const db = memoryRecordBackend();
   await db.put('collections', collections.map((c, i) => makeCollection({ ...c, sortOrder: i + 1 })));
+  if (items.length) await db.put('items', items.map((i) => makeItem(i)));
   const store = createStore(kv, db);
   await store.init();
   if (prefs) await store.setPrefs(prefs);
@@ -80,7 +81,7 @@ export async function outcomeOf(store, id) {
 // Returns the immediate result (what the Share sheet card shows) and the settled one after the app's
 // after-save work, both read back from a reopened store.
 export async function runFirstPass(c, { capture = 'page', ai = null, deps = {} } = {}) {
-  const { store, reopen } = await libraryFor({ collections: c.library.collections, prefs: c.library.prefs, settings: ai?.settings || {}, secret: ai?.key || '' });
+  const { store, reopen } = await libraryFor({ collections: c.library.collections, prefs: c.library.prefs, items: c.library.items || [], settings: ai?.settings || {}, secret: ai?.key || '' });
   const product = sharedProduct(c.evidence, capture);
   const pending = [];
   const fills = [];

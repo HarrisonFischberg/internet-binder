@@ -500,8 +500,14 @@ export async function fileWithAI(input, collections, settings, apiKey) {
     input.site ? `From: ${cut(input.site, 80)}` : '',
     ...(input.pages || []).slice(0, 2).map((pg) => `Linked page ${cut(pg.url, 200)}: ${cut(pg.text, 1500)}`),
   ].filter(Boolean).join('\n').slice(0, 2700);
-  const userText = `${text}\n\nCollections: ${cols}`;
-  return withReader(cfg, apiKey, async (ask) => filingAnswer(parseJsonBlock(await ask({ system: FILING_SYSTEM, deviceNote: FILING_DEVICE_NOTE, userText, maxTokens: 500, cache: true })), refs, cfg));
+  // The device reads LOCAL_TEXT characters: the save's text gives way so the list arrives whole.
+  const room = LOCAL_TEXT - cols.length - 16;
+  const userText = `${room < text.length ? text.slice(0, Math.max(800, room)) : text}\n\nCollections: ${cols}`;
+  // Some collections were never shown (over 60, or a list longer than the device reads): the model may
+  // have picked the best of the ones it saw, so its pick waits for you rather than filing.
+  const unseen = (onDevice) => collections.length > refs.length || (onDevice && userText.length > LOCAL_TEXT);
+  const answer = await withReader(cfg, apiKey, async (ask) => filingAnswer(parseJsonBlock(await ask({ system: FILING_SYSTEM, deviceNote: FILING_DEVICE_NOTE, userText, maxTokens: 500, cache: true })), refs, cfg));
+  return unseen(!!answer.onDevice) && answer.collectionId ? { ...answer, needsReview: true, uncertainty: 'not all of your collections fit in what the model could read' } : answer;
 }
 
 function filingAnswer(parsed, refs, cfg) {

@@ -47,6 +47,9 @@ export function placeClues(item = {}) {
     locality: d.locality || fromText?.locality || fromPost?.details?.locality || ig.place?.city || '',
     region: d.region || fromText?.region || fromPost?.details?.region || '',
     location: ig.location || ig.place?.name || '',
+    // The only city is the location tag's, and the tag is a city, not the venue: where it was posted from.
+    tagOnly: !d.locality && !d.region && !fromText?.locality && !fromText?.region && !!(fromPost?.details?.locality || fromPost?.details?.region)
+      && !names.some((n) => sameName(n, String(ig.location || '').split(',')[0])),
     // Three or more pins: a round-up of places, not one place.
     roundup: pins >= 3,
     text,
@@ -61,9 +64,12 @@ export function cluesEnough(clues) {
   return '';
 }
 
+// "237 St James Pl" is "237 St James Place": street words compared in one spelling.
+const STREET_WORDS = { street: 'st', avenue: 'ave', road: 'rd', boulevard: 'blvd', lane: 'ln', drive: 'dr', place: 'pl', square: 'sq', court: 'ct', parkway: 'pkwy', highway: 'hwy', east: 'e', west: 'w', north: 'n', south: 's' };
+const streetForm = (s) => norm(s).split(' ').map((w) => STREET_WORDS[w] || w).join(' ');
 const statedIn = (fact, texts) => {
-  const f = norm(fact);
-  return f.length >= 6 && texts.some((t) => ` ${norm(t)} `.includes(` ${f} `));
+  const f = streetForm(fact);
+  return f.length >= 6 && texts.some((t) => ` ${streetForm(t)} `.includes(` ${f} `));
 };
 
 // 3. One candidate checked against the clues. Pure.
@@ -82,7 +88,8 @@ export function checkCandidate(c, clues, { osm = [] } = {}) {
     if (c.address && statedIn(c.address, c.quotes || [])) confirmedBy.push('cited-page');
   }
   if (c.address && clues.address && streetOk) confirmedBy.push('post');
-  return { nameOk, areaOk, streetOk, confirmedBy: [...new Set(confirmedBy)], pin, sourced: c.source === 'openstreetmap' || !!c.url };
+  const exact = clues.names.some((n) => norm(n) === norm(c.name)) || clues.handles.some((h) => norm(nameFromHandle(h)) === norm(c.name));
+  return { nameOk, exact, areaOk, streetOk, confirmedBy: [...new Set(confirmedBy)], pin, sourced: c.source === 'openstreetmap' || !!c.url };
 }
 
 // 2–4. Candidates from both sources, checked and decided. Pure: tested with captured answers.
@@ -96,7 +103,10 @@ export function resolvePlace(clues, { osm = [], web = null } = {}) {
   // The same place from both sources is one candidate (the confirmed one kept).
   const merged = [];
   for (const c of all) {
-    const twin = merged.find((m) => sameName(m.name, c.name) && (m.check.pin && c.check.pin ? !apart({ lat: m.check.pin.lat, lon: m.check.pin.lng }, { lat: c.check.pin.lat, lon: c.check.pin.lng }) : sameName(m.locality, c.locality)));
+    // Two branches on different streets are two places. With both pins, the pins decide ("200 Calle Durango"
+    // and "Durango 200, Roma Norte" are one door); the street's words only when a pin is missing.
+    const otherStreet = (m) => !(m.check.pin && c.check.pin) && m.address && c.address && !sameStreet(m.address, { road: String(c.address).replace(/^\d+[a-z]?\s+/i, ''), house_number: (String(c.address).match(/^(\d+[a-z]?)\s/i) || [])[1] || '' });
+    const twin = merged.find((m) => sameName(m.name, c.name) && !otherStreet(m) && (m.check.pin && c.check.pin ? !apart({ lat: m.check.pin.lat, lon: m.check.pin.lng }, { lat: c.check.pin.lat, lon: c.check.pin.lng }) : sameName(m.locality, c.locality)));
     if (!twin) { merged.push(c); continue; }
     twin.check.confirmedBy = [...new Set([...twin.check.confirmedBy, ...c.check.confirmedBy])];
     twin.check.areaOk ||= c.check.areaOk;
@@ -105,13 +115,20 @@ export function resolvePlace(clues, { osm = [], web = null } = {}) {
     if (!twin.url && c.url) twin.url = c.url;
     if (!twin.address && c.address && c.check.confirmedBy.length) twin.address = c.address;
   }
-  const passes = (c) => c.check.nameOk && (c.check.areaOk || c.check.streetOk) && c.check.confirmedBy.length > 0;
+  // A name that only contains the post's ("Kismet Rotisserie" for "Kismet") needs a map or the street to agree.
+  // A city that only the location tag gives isn't enough without the street either.
+  const passes = (c) => c.check.nameOk && (c.check.exact || c.check.streetOk || c.check.confirmedBy.includes('openstreetmap'))
+    && (c.check.streetOk || (c.check.areaOk && !clues.tagOnly)) && c.check.confirmedBy.length > 0;
   const ranked = merged
     .map((c) => ({ ...c, score: (c.check.nameOk ? 4 : 0) + (c.check.streetOk ? 3 : 0) + (c.check.areaOk ? 2 : 0) + c.check.confirmedBy.length + (c.check.sourced ? 1 : 0) }))
     .sort((a, b) => b.score - a.score);
-  const good = ranked.filter(passes);
+  let good = ranked.filter(passes);
+  // The post gives the street: the branch on it is the one, the chain's others aren't rivals.
+  const onStreet = clues.address ? good.filter((c) => c.check.streetOk) : [];
+  if (onStreet.length === 1) good = onStreet;
+  const rival = (c) => c !== good[0] && c.check.nameOk && c.check.areaOk && !(onStreet.length === 1 && !c.check.streetOk);
   const choices = ranked.filter((c) => c.check.nameOk || c.check.streetOk || (c.source === 'web' && c.url)).slice(0, 3);
-  if (good.length === 1 && !ranked.some((c) => c !== good[0] && c.check.nameOk && c.check.areaOk)) {
+  if (good.length === 1 && !ranked.some(rival)) {
     return { outcome: 'verified', chosen: good[0], candidates: ranked.slice(0, 3), reason: `${good[0].name}: ${describe(good[0].check)}` };
   }
   if (!choices.length) return { outcome: 'insufficient', reason: short || 'nothing found matches the post', candidates: [] };
@@ -211,4 +228,20 @@ export async function choosePlace(store, id, index) {
   const patch = { details, placeChoices: [], placeResolution: { ...(item.placeResolution || {}), outcome: 'chosen', at: nowIso() } };
   if (!(item.userFields || []).includes('title')) patch.title = c.name;
   return store.updateItem(id, patch, { by: 'user' });
+}
+
+// None of the choices is the place: they're cleared and nothing on the save changes. Fix with AI can
+// look again later.
+export async function dismissPlaceChoices(store, id) {
+  const item = await store.getItem(id);
+  if (!item?.placeChoices?.length) return item || null;
+  return store.updateItem(id, { placeChoices: [], placeResolution: { ...(item.placeResolution || {}), outcome: 'dismissed', at: nowIso() } }, { by: 'user' });
+}
+
+// What choosePlace and dismissPlaceChoices change, kept before they run, so Undo can put it back.
+export const placeSnapshot = (item) => ({ id: item.id, title: item.title, details: item.details || {}, placeChoices: item.placeChoices || [], placeResolution: item.placeResolution || null, userFields: item.userFields || [] });
+export async function restorePlace(store, snapshot) {
+  if (!snapshot?.id || !(await store.getItem(snapshot.id))) return null;
+  const { id, ...before } = snapshot;
+  return store.updateItem(id, before, { by: 'undo' });
 }

@@ -320,6 +320,12 @@ extension Library {
     /// Runs the after-save work that is turned on (AI tidy, fill-in with AI and Lookups).
     public func finishSaves() async throws { try await prepare(); try await core.call("views.finishSaves") }
     public func fixPlace(_ id: String) async throws -> Save { try await core.call("views.fixPlace", [id], as: Save.self) }
+    /// You picked one of the places Fix with AI found; it's applied as yours.
+    public func choosePlace(_ id: String, index: Int) async throws -> Save { try await core.call("views.choosePlace", [id, index], as: Save.self) }
+    /// None of the places Fix with AI found is it: the choices go, the save stays as it was.
+    public func dismissPlaceChoices(_ id: String) async throws -> Save { try await core.call("views.dismissPlaceChoices", [id], as: Save.self) }
+    /// Undo the last pick or dismiss on this save: it goes back to how it was, choices and all.
+    public func undoPlace(_ id: String) async throws { try await core.call("views.undoPlace", [id]) }
     public func aiLog() async throws -> [AIChange] { try await prepare(); return try await core.call("views.aiLog", as: [AIChange].self) }
     @discardableResult public func undoAI(_ ids: [String]) async throws -> Int { try await core.call("views.undoAi", [ids], as: Int.self) }
     /// Optional AI is on and a key is set.

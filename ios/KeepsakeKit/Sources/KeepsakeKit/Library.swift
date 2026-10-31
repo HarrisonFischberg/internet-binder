@@ -38,6 +38,20 @@ public struct Save: Identifiable, Hashable, Sendable, Decodable {
     }
     /// The one fact that matters for this kind ("9 ingredients · 25 min"), from Chrome's keyFact.
     public var fact: String?
+    /// Places Fix with AI found but couldn't tell apart (placeResolve.js placeChoices): you pick one.
+    public let placeChoices: [PlaceChoice]?
+    public struct PlaceChoice: Hashable, Sendable, Decodable {
+        public let name: String
+        public let address: String?
+        public let locality: String?
+        public let region: String?
+        public let url: String?
+        /// "openstreetmap" or "web".
+        public let source: String?
+        /// What agreed with it: "openstreetmap", "cited-page", "post".
+        public let confirmedBy: [String]?
+        public let why: String?
+    }
 
     public var isFinishing: Bool { captureState == "pending" }
 

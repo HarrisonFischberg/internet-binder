@@ -66,26 +66,35 @@ export async function runPlaceCase(c, { path = 'resolve' } = {}) {
   const d = saved.details || {};
   return {
     outcome: r ? r.outcome : d.lat != null || (d.address && d.address !== (c.itemDetails || {}).address) ? 'applied' : 'unchanged',
-    title: saved.title, address: d.address || '', locality: d.locality || '', region: d.region || '', pin: d.lat != null, lookup: d.lookup || null,
+    title: saved.title, address: d.address || '', locality: d.locality || '', region: d.region || '', pin: d.lat != null, phone: d.phone || '', hours: d.hours || [], lookup: d.lookup || null,
     choices: saved.placeChoices || [], requests: log,
   };
 }
 
 // Pass or fail against the case's expectations, with the reason. A wrong fact written is the worst
 // failure, so it's counted on its own.
+// "66 East Ohio Street" is "66 E Ohio St".
+const SW = { street: 'st', avenue: 'ave', road: 'rd', boulevard: 'blvd', place: 'pl', east: 'e', west: 'w', north: 'n', south: 's' };
+const streetForm = (a) => String(a || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').map((w) => SW[w] || w).join(' ');
+
 export function judgePlace(c, o) {
   const e = c.expect || {};
   const fails = [];
   const verified = o.outcome === 'verified' || o.outcome === 'applied';
   // The old path has no outcome of its own: applied counts as verified, unchanged as insufficient.
   if (e.outcome && e.outcome !== o.outcome && !(e.outcome === 'verified' && o.outcome === 'applied') && !(e.outcome === 'insufficient' && o.outcome === 'unchanged')) fails.push(`outcome ${o.outcome}, expected ${e.outcome}`);
-  if (e.address && !o.address.toLowerCase().startsWith(e.address.toLowerCase())) fails.push(`address “${o.address}”, expected “${e.address}”`);
+  if (e.address && !streetForm(o.address).startsWith(streetForm(e.address))) fails.push(`address “${o.address}”, expected “${e.address}”`);
   if (e.pin === true && !o.pin) fails.push('no pin');
   if (e.pin === false && o.pin) fails.push('a pin with no map source');
   if (e.choices && o.choices.length !== e.choices) fails.push(`${o.choices.length} choices, expected ${e.choices}`);
   if (e.requests === 0 && o.requests.length) fails.push(`${o.requests.length} lookups for a save that says too little`);
   if (e.notVerified && verified) fails.push('applied a place it couldn’t verify');
-  const wrongFact = (e.noAddress && o.address && o.address !== (c.itemDetails || {}).address) || (e.keepAddress && o.address !== e.keepAddress) || (e.noUrl && JSON.stringify(o).includes(e.noUrl));
+  // Every fact the check wrote (an address that wasn't there, a pin, a phone) must say what confirmed it.
+  const before = c.itemDetails || {};
+  const wrote = (o.address && o.address !== before.address) || o.pin || (o.phone && o.phone !== before.phone);
+  const unsourced = !!wrote && !(o.lookup?.verifiedBy?.length);
+  if (unsourced) fails.push('wrote a fact with no source in details.lookup.verifiedBy');
+  const wrongFact = unsourced || (e.noAddress && o.address && o.address !== before.address) || (e.keepAddress && o.address !== e.keepAddress) || (e.noUrl && JSON.stringify(o).includes(e.noUrl)) || (e.noPhone && !!o.phone) || (e.pin === false && o.pin);
   if (wrongFact) fails.push(`wrote an unverified fact (${o.address || 'url'})`);
   return { ok: !fails.length, fails, wrongFact: !!wrongFact, wrongApplied: !!(e.notVerified && verified) };
 }

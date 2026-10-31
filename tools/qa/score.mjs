@@ -13,6 +13,7 @@ const results = raw.results.map((r) => ({ ...r, verdict: { immediate: judge(r.ca
 const summary = { immediate: summarize(results, 'immediate'), settled: summarize(results, 'settled') };
 mkdirSync(new URL('./out/', import.meta.url), { recursive: true });
 const name = arg('name', `native-${Date.now()}`);
+mkdirSync(new URL(`./out/${name}.json/..`, import.meta.url), { recursive: true });
 writeFileSync(new URL(`./out/${name}.json`, import.meta.url), JSON.stringify({ meta: raw.meta, summary, results }, null, 1));
 const s = summary.settled;
 console.log(`${name}: ${results.length} cases, ${raw.meta.provider} on ${raw.meta.platform} (Apple Intelligence: ${raw.meta.appleStatus})`);

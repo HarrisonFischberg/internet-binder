@@ -82,3 +82,36 @@ test('a stand-in title ("Reel by @someone") is not evidence', () => {
   const plan = planFiling(post({ title: 'Reel by @someone', instagram: { caption: '' }, collectionId: null, needsReview: true }), answer({ evidence: ['Reel by @someone'] }), cols);
   assert.equal(plan.accepted, false);
 });
+
+// QA 2026-10-30: the device model's own runs file only where the sorter agrees; otherwise Review, with
+// the model's pick kept as the suggestion. A Fix with AI you ask for is never held back.
+test('Apple Intelligence on its own files only where the sorter agrees', async () => {
+  const run = async (collection, { deviceOnly }) => {
+    const store = createStore(memoryBackend(), memoryRecordBackend());
+    await store.init();
+    for (const c of await store.getCollections()) await store.deleteCollection(c.id);
+    const made = async (name) => { const c = await store.createCollection({ name }); return { id: c?.collection?.id || c?.id || c }; };
+    const ai = await made('AI');
+    const fun = await made('Funny');
+    const item = await store.addItem({ type: 'instagram', kind: 'link', title: 'Claude Code prompts for AI agents', url: 'https://www.instagram.com/p/dev1/', instagram: { caption: 'Claude Code prompts for AI agents' }, collectionId: null, needsReview: true });
+    const ref = collection === 'AI' ? 'c1' : 'c2';
+    setLocalModel({ ready: () => true, respond: async ({ userText }) => {
+      const list = JSON.parse(userText.slice(userText.indexOf('Collections: ') + 13));
+      return JSON.stringify({ type: 'link', topic: 'x', collection: list.find((c) => c.name === collection)?.ref || ref, evidence: ['Claude Code prompts'], needsReview: false });
+    } });
+    try {
+      await store.updateSettings({ ai: { on: true, provider: 'apple' } });
+      await fileSave(store, item.id, { deviceOnly, scope: deviceOnly ? 'review' : 'all' });
+      return { saved: await store.getItem(item.id), ai, fun };
+    } finally { setLocalModel(null); }
+  };
+  const agree = await run('AI', { deviceOnly: true });
+  assert.equal(agree.saved.collectionId, agree.ai.id);
+  const disagree = await run('Funny', { deviceOnly: true });
+  assert.equal(disagree.saved.collectionId, null);
+  assert.equal(disagree.saved.needsReview, true);
+  assert.equal(disagree.saved.filing.collectionId, disagree.fun.id, 'the model’s pick is kept as the suggestion');
+  assert.match(disagree.saved.categorizationReason, /Apple Intelligence suggests Funny/);
+  const asked = await run('Funny', { deviceOnly: false });
+  assert.equal(asked.saved.collectionId, asked.fun.id, 'Fix with AI you ask for is not held back');
+});

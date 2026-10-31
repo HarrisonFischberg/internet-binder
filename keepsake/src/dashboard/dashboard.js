@@ -2981,7 +2981,7 @@ function renderReview(view) {
   for (const i of state.items) if (i.collectionId) counts.set(i.collectionId, (counts.get(i.collectionId) || 0) + 1);
   for (const item of items) {
     const cls = classify(item, { collections: state.collections, prefs: state.prefs, settings: state.settings });
-    const suggestions = topSuggestions(cls, regular, counts);
+    const suggestions = topSuggestions(cls, regular, counts, item.filing);
     const select = UI.selectInput({
       value: '',
       options: [
@@ -3036,7 +3036,7 @@ function renderReview(view) {
 // The three most likely collections for an item: best keyword matches first
 // (including default categories not created yet), then padded with the
 // collections the user files into most so there are always three to pick from.
-function topSuggestions(cls, collections, counts) {
+function topSuggestions(cls, collections, counts, filing = null) {
   const picks = [];
   const seen = new Set();
   const add = (s) => {
@@ -3045,6 +3045,9 @@ function topSuggestions(cls, collections, counts) {
     seen.add(key);
     picks.push(s);
   };
+  // What AI picked but left for you to confirm (shared/filing.js) comes first.
+  const ai = filing?.outcome === 'review' && collections.find((c) => c.id === filing.collectionId);
+  if (ai) add({ collectionId: ai.id, collectionName: ai.name, isNew: false });
   for (const a of cls.alternatives || []) {
     if (a.isNew ? a.taxonomyKey : a.collectionId) add(a);
   }

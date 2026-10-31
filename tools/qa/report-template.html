@@ -73,14 +73,19 @@ select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px s
 .ok { color: var(--good) } .no { color: var(--bad) }
 button.more { justify-self: start; font: 600 14px var(--body); color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 6px; padding: 8px 14px; cursor: pointer }
 ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch }
+.prov { font: 600 11px/1 var(--body); letter-spacing: .04em; color: var(--accent); background: var(--accent-soft); padding: 4px 7px; border-radius: 4px; white-space: nowrap }
+.spread { display: block; font: 11px var(--mono); color: var(--muted); margin-top: 2px }
+details.ids { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 10px 14px }
+details.ids summary { cursor: pointer; font-weight: 600 }
+details.ids p { font: 12px/1.6 var(--mono); color: var(--muted); overflow-wrap: anywhere; max-width: none; margin-top: 8px }
 @media (max-width: 640px) { .case .grid { grid-template-columns: minmax(0, 1fr) } .ba small { width: 96px } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important } }
 </style>
 
 <div class="wrap">
   <header style="display:grid;gap:10px">
-    <h1>Binder Sorting QA</h1>
-    <p class="lede">How Internet Binder decides what a shared post is and which collection it goes in, measured on the same cases before and after this round of fixes.</p>
+    <h1 id="title">Binder Sorting QA</h1>
+    <p class="lede" id="lede"></p>
     <p class="meta" id="meta"></p>
   </header>
 
@@ -90,25 +95,33 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72
   </section>
 
   <section>
-    <span class="tab">First pass on this device</span>
-    <h2>Before and after, no AI</h2>
-    <p>What happens the moment you share a post, using only the rules on the device. “Correct” means the right type and the collection you'd pick. Each figure has its 95% range.</p>
+    <span class="tab">Before and after</span>
+    <h2>Every data set, every provider</h2>
+    <p>The same cases on the build-35 engine (before) and this branch (after). “Correct” means the right type and the collection you'd pick. Each figure is pooled over its runs, with its 95% range; repeated runs show their spread underneath. The provider is who reads a save after it's shared.</p>
+    <div class="filters"><label for="f-prov-sets">Provider<select id="f-prov-sets"></select></label></div>
     <div class="scroll"><table id="sets"></table></div>
+    <ul class="plain" id="notes"></ul>
   </section>
 
-  <section id="mac-sec" hidden>
-    <span class="tab">With AI, on your Mac</span>
-    <h2>Claude and Apple Intelligence</h2>
-    <p id="mac-about"></p>
-    <div class="scroll"><table id="mac"></table></div>
-    <ul class="plain" id="mac-notes"></ul>
+  <section id="cost-sec">
+    <span class="tab">Cost and speed</span>
+    <h2>Cost, latency and requests</h2>
+    <p>Latency is from the share to the settled save (the device's read included), per case. Cost is what the provider's usage says, estimated from tokens; Apple and local rules cost nothing.</p>
+    <div class="scroll"><table id="cost"></table></div>
   </section>
 
   <section id="places-sec" hidden>
     <span class="tab">Fix with AI on a place</span>
     <h2>Place check</h2>
-    <p>Each place case gives the post plus captured OpenStreetMap and web-search answers. A pass means the right outcome (verified, you choose, or not enough to go on) and no address, pin or link written without a source.</p>
+    <p>Each place case gives the post plus captured OpenStreetMap and web-search answers. A pass means the right outcome (verified, you choose, or not enough to go on) and no address, pin, phone or link written without a source in details.lookup.verifiedBy.</p>
     <div class="scroll"><table id="places"></table></div>
+  </section>
+
+  <section id="net-sec" hidden>
+    <span class="tab">Privacy</span>
+    <h2>Network hosts by mode</h2>
+    <p>Every request recorded during a share and a Fix with AI, by setting. Anything not listed never happened.</p>
+    <div class="scroll"><table id="net"></table></div>
   </section>
 
   <section>
@@ -116,15 +129,31 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72
     <h2>Cases</h2>
     <div class="filters">
       <label for="f-set">Data set<select id="f-set"></select></label>
+      <label for="f-prov">Provider<select id="f-prov"></select></label>
       <label for="f-cat">Category<select id="f-cat"></select></label>
+      <label for="f-out">Outcome now<select id="f-out"><option value="">All</option><option value="ok">Right</option><option value="review">Review</option><option value="wrongnow">Wrong</option></select></label>
       <label for="f-status">What changed<select id="f-status">
-        <option value="">All</option><option value="fixed">Fixed</option><option value="regressed">Got worse</option><option value="still">Still wrong</option><option value="right">Right both times</option><option value="wrong">Confidently wrong now</option>
+        <option value="">All</option><option value="changed">Changed</option><option value="unchanged">Unchanged</option><option value="fixed">Fixed</option><option value="regressed">Got worse</option><option value="still">Still wrong</option><option value="right">Right both times</option><option value="wrong">Confidently wrong now</option>
       </select></label>
       <label for="f-q">Search<input type="search" id="f-q" placeholder="caption, id, collection"></label>
     </div>
     <p class="count" id="count"></p>
     <div class="cases" id="cases"></div>
     <button class="more" id="more" hidden>Show 100 more</button>
+  </section>
+
+  <section id="held-sec" hidden>
+    <span class="tab">Measurement</span>
+    <h2>Held-out sets and labels</h2>
+    <p id="held-about"></p>
+    <div id="held"></div>
+    <p id="labels"></p>
+  </section>
+
+  <section id="gaps-sec" hidden>
+    <span class="tab">Still open</span>
+    <h2>Known gaps</h2>
+    <ul class="plain" id="gaps"></ul>
   </section>
 </div>
 
@@ -134,41 +163,52 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pc = (w) => (w && w.n ? `${Math.round(w.rate * 1000) / 10}%` : '—');
 const ci = (w) => (w && w.n ? `${w.k}/${w.n} · ${Math.round(w.lo * 100)}–${Math.round(w.hi * 100)}%` : '');
+const spread = (w) => (w && w.runs > 1 ? `<span class="spread">${w.runs} runs: ${Math.round(w.min * 100)}–${Math.round(w.max * 100)}%</span>` : '');
+const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
 
-$('meta').textContent = `Generated ${DATA.generated.slice(0, 16).replace('T', ' ')} UTC · before: ${DATA.sets[0]?.baseCommit || '?'} (main) · after: ${DATA.sets[0]?.finalCommit || '?'}`;
-
-if (DATA.mac?.verdict) {
+if (DATA.title) $('title').textContent = DATA.title;
+$('lede').textContent = DATA.lede || '';
+$('meta').textContent = `Generated ${DATA.generated.slice(0, 16).replace('T', ' ')} UTC · before: ${DATA.sets[0]?.base?.commit || '?'} · after: ${DATA.sets[0]?.final?.commit || '?'}`;
+if (DATA.verdict) {
   $('verdict-sec').hidden = false;
-  $('verdict').innerHTML = `<strong>${esc(DATA.mac.verdict.title)}</strong>${DATA.mac.verdict.lines.map((l) => `<p>${esc(l)}</p>`).join('')}`;
+  $('verdict').innerHTML = `<strong>${esc(DATA.verdict.title)}</strong>${DATA.verdict.lines.map((l) => `<p>${esc(l)}</p>`).join('')}`;
 }
+$('notes').innerHTML = DATA.notes.map((n) => `<li>${esc(n)}</li>`).join('');
 
 function pair(b, a, lowerBetter) {
   const bar = (w) => `<span class="bar"><i style="width:${w && w.n ? Math.round(w.rate * 100) : 0}%"></i></span>`;
-  return `<div class="ba${lowerBetter ? ' lower' : ''}"><div class="line"><small>was ${pc(b)}</small>${bar(b)}</div><div class="line after"><small>now ${pc(a)}</small>${bar(a)}</div><span class="meta">${esc(ci(a))}</span></div>`;
+  return `<div class="ba${lowerBetter ? ' lower' : ''}"><div class="line"><small>was ${pc(b)}</small>${bar(b)}</div><div class="line after"><small>now ${pc(a)}</small>${bar(a)}</div><span class="meta">${esc(ci(a))}</span>${spread(a)}</div>`;
 }
-const METRICS = [['accuracy', 'Correct', false], ['review', 'Sent to Review', true], ['confidentWrong', 'Confidently wrong', true], ['aiMisroute', 'AI post → Review/Interesting', true], ['workoutAsRecipe', 'Workout → recipe', true]];
-$('sets').innerHTML = `<thead><tr><th>Data set</th>${METRICS.map((m) => `<th>${m[1]}</th>`).join('')}</tr></thead><tbody>${DATA.sets.map((s) => `<tr><td><div class="setname">${esc(s.label)}</div><div class="setabout">${esc(s.about)}</div></td>${METRICS.map(([k, , low]) => `<td>${s.final[k]?.n ? pair(s.base[k], s.final[k], low) : '<span class="meta">—</span>'}</td>`).join('')}</tr>`).join('')}</tbody>`;
+const METRICS = [['accuracy', 'Correct', false], ['kind', 'Content type', false], ['confidentWrong', 'Confidently wrong', true], ['review', 'Sent to Review', true], ['aiMisroute', 'AI post → Review/Interesting', true], ['workoutAsRecipe', 'Workout → recipe', true], ['postAsProduct', 'Post read as a product', true], ['lostOrPending', 'Lost or pending', true]];
+const providers = [...new Set(DATA.sets.map((s) => s.provider))];
+$('f-prov-sets').innerHTML = opt('', 'All') + providers.map((p) => opt(p, p)).join('');
+function renderSets() {
+  const p = $('f-prov-sets').value;
+  const list = DATA.sets.filter((s) => !p || s.provider === p);
+  $('sets').innerHTML = `<thead><tr><th>Data set</th>${METRICS.map((m) => `<th>${m[1]}</th>`).join('')}</tr></thead><tbody>${list.map((s) => `<tr><td><div class="setname">${esc(s.label)} <span class="prov">${esc(s.provider)}</span></div><div class="setabout">${esc(s.about)}</div></td>${METRICS.map(([k, , low]) => `<td>${s.final.agg[k]?.n ? pair(s.base?.agg[k], s.final.agg[k], low) : '<span class="meta">—</span>'}</td>`).join('')}</tr>`).join('')}</tbody>`;
+}
+$('f-prov-sets').addEventListener('change', renderSets);
+renderSets();
 
-if (DATA.mac) {
-  $('mac-sec').hidden = false;
-  $('mac-about').textContent = DATA.mac.about;
-  const cols = ['correct', 'type', 'review', 'confidentWrong', 'aiMisroute', 'postAsProduct', 'network', 'cost'];
-  const head = { correct: 'Correct', type: 'Content type', review: 'Review', confidentWrong: 'Confidently wrong', aiMisroute: 'AI post → Review/Interesting', postAsProduct: 'Post read as a product', network: 'Network', cost: 'Cost' };
-  $('mac').innerHTML = `<thead><tr><th>Run</th>${cols.map((c) => `<th>${head[c]}</th>`).join('')}</tr></thead><tbody>${DATA.mac.runs.map((r) => `<tr><td><div class="setname">${esc(r.name)}</div><div class="setabout">${esc(r.about || '')}</div></td>${cols.map((c) => `<td class="num">${esc(r[c] ?? '—')}</td>`).join('')}</tr>`).join('')}</tbody>`;
-  $('mac-notes').innerHTML = (DATA.mac.notes || []).map((n) => `<li>${esc(n)}</li>`).join('');
-}
+const ms = (v) => (v == null ? '—' : v >= 1000 ? `${(v / 1000).toFixed(1)} s` : `${v} ms`);
+$('cost').innerHTML = `<thead><tr><th>Data set</th><th>Provider</th><th>Runs × cases</th><th>Median</th><th>90th pct</th><th>Requests</th><th>Cost</th><th>Per 100 saves</th></tr></thead><tbody>${DATA.sets.flatMap((s) => [['before', s.base], ['after', s.final]].filter(([, x]) => x).map(([w, x]) => `<tr><td>${esc(s.label)} <span class="meta">${w}</span></td><td>${esc(s.provider)}</td><td class="num">${x.runs} × ${Math.round(x.cases / x.runs)}</td><td class="num">${ms(x.p50)}</td><td class="num">${ms(x.p90)}</td><td class="num">${x.calls || 0}</td><td class="num">$${x.usd.toFixed(3)}</td><td class="num">$${x.per100.toFixed(3)}</td></tr>`)).join('')}</tbody>`;
 
 if (DATA.places) {
   $('places-sec').hidden = false;
   const P = DATA.places;
-  $('places').innerHTML = `<thead><tr><th>Case</th><th>Before</th><th>Now</th><th>Outcome now</th><th>Notes</th></tr></thead><tbody>${P.rows.map((r) => `<tr><td>${esc(r.note)}<div class="meta">${esc(r.id)}</div></td><td>${r.beforeOk === null ? '—' : r.beforeOk ? '<span class="ok">pass</span>' : '<span class="no">fail</span>'}</td><td>${r.ok ? '<span class="ok">pass</span>' : '<span class="no">fail</span>'}</td><td class="num">${esc(r.outcome)}${r.choices ? ` · ${r.choices} choices` : ''}</td><td class="meta">${esc(r.address || r.fails.join('; '))}</td></tr>`).join('')}<tr><td><b>Total</b></td><td class="num">${pc(P.base?.correct)} pass, ${P.base?.wrongFact?.k ?? '?'} unsourced fact</td><td class="num">${pc(P.final.correct)} pass, ${P.final.wrongFact.k} unsourced fact</td><td></td><td></td></tr></tbody>`;
+  $('places').innerHTML = `<thead><tr><th>Case</th><th>Before</th><th>Now</th><th>Outcome now</th><th>Source of what was written</th></tr></thead><tbody>${P.rows.map((r) => `<tr><td>${esc(r.note)}<div class="meta">${esc(r.id)}</div></td><td>${r.beforeOk === null ? '—' : r.beforeOk ? '<span class="ok">pass</span>' : '<span class="no">fail</span>'}</td><td>${r.ok ? '<span class="ok">pass</span>' : '<span class="no">fail</span>'}</td><td class="num">${esc(r.outcome)}${r.choices ? ` · ${r.choices} choices` : ''}</td><td class="meta">${esc(r.ok ? [r.address, r.verifiedBy.join(', ')].filter(Boolean).join(' · ') || '—' : r.fails.join('; '))}</td></tr>`).join('')}<tr><td><b>Total</b></td><td class="num">${pc(P.base?.correct)} pass · ${P.base?.wrongFact?.k ?? '?'} unsourced</td><td class="num">${pc(P.final.correct)} pass · ${P.final.wrongFact.k} unsourced</td><td></td><td></td></tr></tbody>`;
+}
+
+if (DATA.network.length) {
+  $('net-sec').hidden = false;
+  $('net').innerHTML = `<thead><tr><th>Mode</th><th>Hosts reached</th><th>Notes</th></tr></thead><tbody>${DATA.network.map((n) => `<tr><td>${esc(n.mode)}</td><td class="num">${esc(n.hosts || 'none')}</td><td class="meta">${esc(n.note || '')}</td></tr>`).join('')}</tbody>`;
 }
 
 const rows = DATA.sets.flatMap((s) => s.rows.map((r) => ({ ...r, setLabel: s.label })));
 const status = (r) => (r.afterOk && !r.beforeOk ? 'fixed' : !r.afterOk && r.beforeOk ? 'regressed' : !r.afterOk ? 'still' : 'right');
 const LABEL = { fixed: 'Fixed', regressed: 'Got worse', still: 'Still wrong', right: 'Right both times' };
-const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
-$('f-set').innerHTML = opt('', 'All') + DATA.sets.map((s) => opt(s.key, `${s.label} (${s.rows.length})`)).join('');
+$('f-set').innerHTML = opt('', 'All') + DATA.sets.map((s) => opt(s.key, `${s.label} · ${s.provider} (${s.rows.length})`)).join('');
+$('f-prov').innerHTML = opt('', 'All') + providers.map((p) => opt(p, p)).join('');
 function cats() {
   const set = $('f-set').value;
   const list = [...new Set(rows.filter((r) => !set || r.set === set).map((r) => r.category).filter(Boolean))].sort();
@@ -177,22 +217,43 @@ function cats() {
   if (list.includes(keep)) $('f-cat').value = keep;
 }
 let shown = 100;
+function matchStatus(r, st) {
+  if (!st) return true;
+  if (st === 'wrong') return r.confidentWrong;
+  if (st === 'changed') return r.before !== r.after;
+  if (st === 'unchanged') return r.before === r.after;
+  return status(r) === st;
+}
+function matchOut(r, o) { return !o || (o === 'ok' ? r.afterOk : o === 'review' ? /Review$/.test(r.after) : !r.afterOk && !/Review$/.test(r.after)); }
 function render() {
-  const set = $('f-set').value, cat = $('f-cat').value, st = $('f-status').value, q = $('f-q').value.trim().toLowerCase();
-  const list = rows.filter((r) => (!set || r.set === set) && (!cat || r.category === cat) && (!st || (st === 'wrong' ? r.confidentWrong : status(r) === st)) && (!q || `${r.id} ${r.caption} ${r.expected} ${r.after} ${r.before}`.toLowerCase().includes(q)));
+  const set = $('f-set').value, prov = $('f-prov').value, cat = $('f-cat').value, st = $('f-status').value, out = $('f-out').value, q = $('f-q').value.trim().toLowerCase();
+  const list = rows.filter((r) => (!set || r.set === set) && (!prov || r.provider === prov) && (!cat || r.category === cat) && matchStatus(r, st) && matchOut(r, out) && (!q || `${r.id} ${r.caption} ${r.expected} ${r.after} ${r.before}`.toLowerCase().includes(q)));
   const counts = list.reduce((m, r) => ({ ...m, [status(r)]: (m[status(r)] || 0) + 1 }), {});
   $('count').textContent = `${list.length} cases · ${counts.fixed || 0} fixed · ${counts.regressed || 0} got worse · ${counts.still || 0} still wrong · ${counts.right || 0} right both times`;
   $('cases').innerHTML = list.slice(0, shown).map((r) => {
     const s = status(r);
-    return `<article class="case"><div class="top"><span class="chip ${s}">${LABEL[s]}</span>${r.confidentWrong ? '<span class="chip wrong">Confidently wrong</span>' : ''}<span class="id">${esc(r.id)} · ${esc(r.setLabel)}${r.category ? ` · ${esc(r.category)}` : ''}</span></div>
+    return `<article class="case"><div class="top"><span class="chip ${s}">${LABEL[s]}</span>${r.confidentWrong ? '<span class="chip wrong">Confidently wrong</span>' : ''}<span class="prov">${esc(r.provider)}</span><span class="id">${esc(r.id)} · ${esc(r.setLabel)}${r.category ? ` · ${esc(r.category)}` : ''}${r.repeats ? ` · ${esc(r.repeats)}` : ''}</span></div>
       <p class="cap">${esc(r.caption || '(no caption)')}</p>
-      <div class="grid"><div><b>Answer</b>${esc(r.expected)}</div><div><b>Before</b><span class="${r.beforeOk ? 'ok' : 'no'}">${esc(r.before)}</span><span class="why">${esc(r.beforeWhy)}</span></div><div><b>Now</b><span class="${r.afterOk ? 'ok' : 'no'}">${esc(r.after)}</span><span class="why">${esc(r.afterWhy)}</span></div></div></article>`;
+      <div class="grid"><div><b>Answer</b>${esc(r.expected)}</div><div><b>Before</b><span class="${r.beforeOk ? 'ok' : 'no'}">${esc(r.before || '—')}</span><span class="why">${esc(r.beforeWhy)}</span></div><div><b>Now</b><span class="${r.afterOk ? 'ok' : 'no'}">${esc(r.after)}</span><span class="why">${esc(r.afterWhy)}</span></div></div></article>`;
   }).join('');
   $('more').hidden = list.length <= shown;
 }
-for (const id of ['f-set', 'f-cat', 'f-status']) $(id).addEventListener('change', () => { shown = 100; if (id === 'f-set') cats(); render(); });
+for (const id of ['f-set', 'f-prov', 'f-cat', 'f-status', 'f-out']) $(id).addEventListener('change', () => { shown = 100; if (id === 'f-set') cats(); render(); });
 $('f-q').addEventListener('input', () => { shown = 100; render(); });
 $('more').addEventListener('click', () => { shown += 100; render(); });
 cats();
 render();
+
+if (DATA.heldout) {
+  $('held-sec').hidden = false;
+  $('held-about').textContent = DATA.heldout.about || '';
+  $('held').innerHTML = Object.entries(DATA.heldout.folds || {}).map(([k, ids]) => `<details class="ids"><summary>Fold ${esc(k)}: ${ids.length} saves${DATA.heldout.use?.[k] ? ` · ${esc(DATA.heldout.use[k])}` : ''}</summary><p>${esc(ids.join(' '))}</p></details>`).join('');
+  $('labels').textContent = DATA.labels || '';
+}
+if (DATA.gaps.length) {
+  $('gaps-sec').hidden = false;
+  $('gaps').innerHTML = DATA.gaps.map((g) => `<li>${esc(g)}</li>`).join('');
+}
 </script>
+</body>
+</html>
