@@ -735,7 +735,8 @@ struct FindOnMapButton: View {
     @State private var asking = false
 
     var body: some View {
-        Group {
+        // A real container: on a Group the .task below would ride on the button and never run while it's hidden.
+        ZStack {
             if !ids.isEmpty && model.aiRun == nil {
                 Button { Haptic.detent(); asking = true } label: {
                     Label(ids.count == 1 ? "Find 1 place on the map" : "Find \(ids.count.formatted()) places on the map", systemImage: "sparkles")
