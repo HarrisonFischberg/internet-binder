@@ -281,3 +281,25 @@ export const placeLookupKey = (item) => {
   const d = item.details || {};
   return [item.title, d.address, d.locality, d.region, d.lat, d.lng].map((x) => String(x ?? '').trim().toLowerCase()).join('|');
 };
+
+// Find on the map (Places → Map): every place with no pin yet that hasn't been looked for with what it
+// says now. `tried` maps a save's id to its placeLookupKey from the last run, so a place that wasn't found
+// waits until you change it.
+export function placesToMap(items, tried = {}) {
+  return items.filter((i) => !i.deletedAt && kindOf(i) === 'place' && i.details?.lat == null && tried[i.id] !== placeLookupKey(i));
+}
+
+// One place for Find on the map: the Places list's Check with AI (AI names it and its city from the post,
+// then the place check: only a place OpenStreetMap or a cited page confirms gets its pin). What it can't be
+// sure of keeps the places it found for you to choose (placeChoices); a post that doesn't say enough stays
+// as it was. Returns pinned, choose or unclear, and the key it was looked for by.
+export async function mapPlace(store, id, deps) {
+  const item = await store.getItem(id);
+  if (!item || item.deletedAt || kindOf(item) !== 'place') return null;
+  if (item.details?.lat == null) {
+    await fillSave(store, id, { verify: true, review: placeReviewReasons(item).length > 0 }, deps);
+  }
+  const after = (await store.getItem(id)) || item;
+  const outcome = after.details?.lat != null ? 'pinned' : after.placeChoices?.length ? 'choose' : 'unclear';
+  return { outcome, title: after.title, key: placeLookupKey(after) };
+}

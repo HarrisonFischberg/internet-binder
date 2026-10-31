@@ -155,6 +155,12 @@ export function planPlaceResolution(item, result, { at = nowIso() } = {}) {
       changes.push({ field: 'title', from: item.title, to: c.name });
     }
     patch.placeChoices = [];
+  } else if (result.outcome === 'verified' && d.lat == null && result.chosen.check.pin) {
+    // Details you wrote stay as they are; a confirmed pin is only added beside them.
+    const pin = result.chosen.check.pin;
+    patch.details = sanitizeDetails('place', { ...d, lat: pin.lat, lng: pin.lng, lookup: { source: 'OpenStreetMap', url: pin.url || '', verifiedBy: result.chosen.check.confirmedBy, at } });
+    changes.push({ field: 'place details', from: '—', to: 'pin on the map' });
+    patch.placeChoices = [];
   } else if (result.outcome === 'review') {
     patch.placeChoices = result.candidates.map((c) => ({
       name: c.name, address: c.check.confirmedBy.length ? c.address || '' : '', locality: c.locality || '', region: c.region || '',

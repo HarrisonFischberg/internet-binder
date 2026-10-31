@@ -57,6 +57,10 @@ struct PlacesScreen: View {
         .task(id: model.index.placesKey) {
             view = try? await model.library?.places()
         }
+        // Find on the map finished: the places it couldn't be sure of are in Review now.
+        .onChange(of: model.aiRun == nil) { _, idle in
+            if idle { Task { view = try? await model.library?.places() } }
+        }
         .sheet(item: $editing) { save in
             PlaceFixSheet(save: save) { Task { view = try? await model.library?.places() } }
         }
@@ -202,7 +206,7 @@ struct PlacesScreen: View {
     // MARK: map
 
     private var map: some View {
-        PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }, waiting: waiting) { mode = .review }
+        PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }, waiting: waiting, findOnMap: true) { mode = .review }
     }
 
     // MARK: review
@@ -272,6 +276,7 @@ struct PlacesScreen: View {
             // The buttons keep their usual size, like the save's own action row; a long press shows them large.
             .dynamicTypeSize(...DynamicTypeSize.large)
             .accessibilityShowsLargeContentViewer()
+            if let choices = w.choices, !choices.isEmpty { choiceList(choices, place: w.item) }
         }
         .padding(14).ksSurface()
         .contextMenu { SaveMenu(save: save) { startSelecting(w.item.id) } }
@@ -322,6 +327,45 @@ struct PlacesScreen: View {
             .accessibilityLabel("Fix \(w.item.title)")
     }
 
+    /// The places Find on the map or Read again found it could be: tap the right one and it's pinned.
+    private func choiceList(_ choices: [PlacesView.Choice], place: Save) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Which one is it?").font(KSFont.label).foregroundStyle(t.inkMuted).accessibilityAddTraits(.isHeader)
+            ForEach(Array(choices.enumerated()), id: \.offset) { i, c in
+                Button { choose(i, c, place: place) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "mappin.circle").font(.title3).foregroundStyle(t.accent).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(c.name).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                            if !c.area.isEmpty { Text(c.area).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading) }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8).frame(minHeight: 44)
+                    .background(t.well, in: RoundedRectangle(cornerRadius: min(t.radius, 12), style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PressStyle())
+                .disabled(reading != nil)
+                .accessibilityLabel([c.name, c.area].filter { !$0.isEmpty }.joined(separator: ", "))
+                .accessibilityHint("Uses this place for \(place.title)")
+            }
+        }
+        .padding(.top, 2)
+    }
+
+    private func choose(_ index: Int, _ c: PlacesView.Choice, place: Save) {
+        reading = place.id
+        Task {
+            try? await model.library?.choosePlace(place.id, index)
+            model.refresh()
+            view = try? await model.library?.places()
+            reading = nil
+            Haptic.settled()
+            model.show(view?.review.contains { $0.item.id == place.id } == true ? "\(c.name) chosen" : "\(c.name) is on your list now")
+        }
+    }
+
     /// Reads the place again and says what came of it, so a tap that finds nothing new still answers.
     private func readAgain(_ place: Save) {
         reading = place.id
@@ -347,6 +391,7 @@ struct PlacesScreen: View {
         switch reason {
         case "no place name": "Needs the place's name"
         case "no state": "Needs a state or country"
+        case "choose place": "Could be more than one place"
         default: reason
         }
     }
@@ -439,6 +484,8 @@ struct PlacesMap: View {
     /// Places waiting in Review, and how to get there (the Places tab only).
     var waiting = 0
     var onReview: (() -> Void)?
+    /// Find on the map, under the pins (the Places tab only).
+    var findOnMap = false
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
@@ -513,10 +560,16 @@ struct PlacesMap: View {
             if step != zoomStep { zoomStep = step }
         }
         .onAppear { position = fit(pinned.map(\.1)) }
+        // The first pins on an empty map (Find on the map): fitted once, then left where you put it, so
+        // pins arriving never move the camera.
+        .onChange(of: pinned.isEmpty) { wasEmpty, empty in
+            if wasEmpty && !empty { position = fit(pinned.map(\.1)) }
+        }
         // The selected place's card sits above the tab bar; the map's own logo and Legal link move up
         // above it rather than under it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if let save = selectedSave { card(save).padding(.horizontal, 16).padding(.bottom, 12).transition(.move(edge: .bottom).combined(with: .opacity)) }
+            else if findOnMap { FindOnMapButton().padding(.horizontal, 16).padding(.bottom, 12) }
         }
         .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: chosen)
         .overlay {
@@ -668,4 +721,114 @@ struct PinCluster: Identifiable {
     let id: String
     let members: [Save]
     let centre: CLLocationCoordinate2D
+}
+
+/// Find on the map: every place with no pin yet is read again (Apple Intelligence on this iPhone, or your
+/// AI when that isn't here) for its name and city, then looked up on OpenStreetMap. Only a place a source
+/// confirms gets a pin; when it could be more than one, the ones found wait in Review for you to pick, and a
+/// post that doesn't say where it is stays as it was. Asks first, with how many and about how long.
+struct FindOnMapButton: View {
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+    @State private var ids: [String] = []
+    @State private var lookupsOn = true
+    @State private var asking = false
+
+    var body: some View {
+        Group {
+            if !ids.isEmpty && model.aiRun == nil {
+                Button { Haptic.detent(); asking = true } label: {
+                    Label(ids.count == 1 ? "Find 1 place on the map" : "Find \(ids.count.formatted()) places on the map", systemImage: "sparkles")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(t.onAccent).monospacedDigit()
+                        .padding(.horizontal, 18).frame(minHeight: 48)
+                        .background(t.accent, in: Capsule())
+                        .shadow(color: .black.opacity(0.25), radius: 6, y: 3)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(PressStyle())
+                .accessibilityIdentifier("findOnMap")
+                .accessibilityHint("Reads each place with no pin and puts the ones it's sure of on the map.")
+                .confirmationDialog(ids.count == 1 ? "Find 1 place on the map?" : "Find \(ids.count.formatted()) places on the map?", isPresented: $asking, titleVisibility: .visible) {
+                    Button(lookupsOn ? "Find \(ids.count == 1 ? "it" : "them")" : "Turn on OpenStreetMap and find") { start() }
+                } message: {
+                    Text(message)
+                }
+            }
+        }
+        .task(id: "\(model.index.placesKey)|\(model.aiRun == nil)") {
+            guard model.aiRun == nil, let r = try? await model.library?.placesToMap() else { return }
+            ids = r.ids
+            lookupsOn = r.lookupsOn
+        }
+    }
+
+    private var message: String {
+        let reads = model.appleAI == .ready && !model.aiBackup
+            ? "Apple Intelligence reads each post on this iPhone for the place's name and city, then OpenStreetMap looks it up."
+            : model.aiReady ? "Your AI reads each post for the place's name and city, then OpenStreetMap looks it up."
+            : "Each post is read for the place's name and city, then OpenStreetMap looks it up."
+        let minutes = max(1, Int((Double(ids.count) * 4 / 60).rounded()))
+        return reads + " Only a place OpenStreetMap confirms gets a pin. If it could be more than one, they wait in Review for you to pick."
+            + (lookupsOn ? "" : " This turns on Lookups → Places in Settings.")
+            + " About \(minutes) min."
+    }
+
+    private func start() {
+        let todo = ids
+        Task {
+            if !lookupsOn { try? await model.library?.updateSettings(["lookups": ["places": true]]) }
+            await model.findOnMap(todo)
+        }
+    }
+}
+
+extension LibraryModel {
+    /// Find on the map, one place at a time (fill.js mapPlace) at OpenStreetMap's pace, with the bar at the
+    /// bottom and Stop. Keeps going when you leave the app (BackgroundWork); what's left, or a place that
+    /// wasn't found, is looked for again the next time you tap it (a place you changed, that is).
+    func findOnMap(_ ids: [String]) async {
+        guard let lib = library, !ids.isEmpty, aiRun == nil else { return }
+        aiRun = AIRun(done: 0, total: ids.count, mapping: true)
+        workEnd = nil
+        if ids.count > 1 {
+            BackgroundWork.shared.begin("map", title: "Finding your places", subtitle: "0 of \(ids.count)", total: ids.count) { [weak self] in
+                self?.aiRun?.cutOff = true
+                self?.aiRun?.stopping = true
+            }
+        }
+        var pinned = 0, choose = 0, unclear = 0
+        defer {
+            if let run = aiRun, run.total > 1 {
+                endWork(run, summary: Self.mapSummary(pinned: pinned, choose: choose, unclear: unclear), rest: "The rest wait: tap Find on the map to carry on.")
+            }
+            aiRun = nil
+        }
+        for id in ids {
+            if aiRun?.stopping == true { break }
+            aiRun?.current = [id]
+            let title = index.byId[id]?.title ?? "A place"
+            let outcome = (try? await lib.mapPlace(id)) ?? "unclear"
+            switch outcome {
+            case "pinned": pinned += 1
+            case "choose": choose += 1
+            default: unclear += 1
+            }
+            aiRun?.note(WorkLine(id: id, text: title, symbol: outcome == "pinned" ? "mappin" : outcome == "choose" ? "questionmark.circle" : "minus"))
+            aiRun?.done += 1
+            BackgroundWork.shared.update("map", done: aiRun?.done ?? 0, total: ids.count, subtitle: "\(aiRun?.done ?? 0) of \(ids.count)")
+            // The pins appear as they're found, a few at a time.
+            if pinned > 0 && (aiRun?.done ?? 0) % 3 == 0 { refresh() }
+        }
+        BackgroundWork.shared.end("map", success: aiRun?.stopping != true)
+        refresh()
+        if pinned > 0 { Haptic.settled() } else { Haptic.detent() }
+        show(Self.mapSummary(pinned: pinned, choose: choose, unclear: unclear))
+    }
+
+    static func mapSummary(pinned: Int, choose: Int, unclear: Int) -> String {
+        var parts = [pinned == 0 ? "No new pins" : "Pinned \(pinned) \(pinned == 1 ? "place" : "places")"]
+        if choose > 0 { parts.append("\(choose) to pick in Review") }
+        if unclear > 0 { parts.append("\(unclear) didn't say enough to find") }
+        return parts.joined(separator: ", ") + "."
+    }
 }

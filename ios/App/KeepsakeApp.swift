@@ -96,6 +96,8 @@ final class LibraryModel {
         var stopping = false
         /// Run AI on imported saves (rather than Fix with AI): the bar says "Reading" and offers Pause.
         var imported = false
+        /// Find on the map (Places): the bar and progress screen say "Finding", and Stop leaves the rest for next time.
+        var mapping = false
         /// Your provider asked to slow down: the bar says so until then.
         var waitingUntil: Date?
         let startedAt = Date()
@@ -428,6 +430,13 @@ struct SaveIndex {
             if comeBackTo == nil, s.status != "done", s.purchased != true, old(s.createdAt), old(s.openedAt) { comeBackTo = s }
             places.combine(s.id)
             places.combine(s.status)
+            // A place's name, area and pin too, so Places redraws as Find on the map pins them.
+            if s.kind == "place" {
+                places.combine(s.title)
+                places.combine(s.details?["locality"]?.string)
+                places.combine(s.details?["region"]?.string)
+                places.combine(s.details?["lat"]?.number)
+            }
         }
         placesKey = places.finalize()
     }

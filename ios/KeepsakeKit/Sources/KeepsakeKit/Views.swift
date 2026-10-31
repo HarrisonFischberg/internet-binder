@@ -44,9 +44,12 @@ public struct PlacesView: Decodable, Sendable {
     public struct StateGroup: Decodable, Sendable, Hashable { public let state: String; public let cities: [City] }
     public struct Waiting: Decodable, Sendable, Hashable {
         public let item: Save
-        /// "no place name", "no state" (places.js placeReviewReasons).
+        /// "no place name", "no state" (places.js placeReviewReasons), "choose place" (choices below).
         public let reasons: [String]
+        /// The places the place check found it could be, for you to pick (placeResolve.js placeChoices).
+        public let choices: [Choice]?
     }
+    public struct Choice: Decodable, Sendable, Hashable { public let name: String; public let area: String; public let why: String }
     public let groups: [StateGroup]
     public let review: [Waiting]
 }
@@ -320,6 +323,19 @@ extension Library {
     /// Runs the after-save work that is turned on (AI tidy, fill-in with AI and Lookups).
     public func finishSaves() async throws { try await prepare(); try await core.call("views.finishSaves") }
     public func fixPlace(_ id: String) async throws -> Save { try await core.call("views.fixPlace", [id], as: Save.self) }
+    /// You picked one of the places the place check found: its address and pin are yours now.
+    public func choosePlace(_ id: String, _ index: Int) async throws { _ = try await core.call("views.choosePlace", [id, index]) }
+    /// Find on the map: the places with no pin that haven't been looked for with what they say now, and
+    /// whether Lookups → Places (OpenStreetMap) is on.
+    public func placesToMap() async throws -> (ids: [String], lookupsOn: Bool) {
+        try await prepare()
+        let r = (try await core.call("views.placesToMap") as? [String: Any]) ?? [:]
+        return (r["ids"] as? [String] ?? [], r["lookupsOn"] as? Bool ?? false)
+    }
+    /// One place for Find on the map: "pinned", "choose" (several it could be) or "unclear".
+    public func mapPlace(_ id: String) async throws -> String {
+        ((try await core.call("views.mapPlace", [id]) as? [String: Any])?["outcome"] as? String) ?? "unclear"
+    }
     public func aiLog() async throws -> [AIChange] { try await prepare(); return try await core.call("views.aiLog", as: [AIChange].self) }
     @discardableResult public func undoAI(_ ids: [String]) async throws -> Int { try await core.call("views.undoAi", [ids], as: Int.self) }
     /// Optional AI is on and a key is set.
