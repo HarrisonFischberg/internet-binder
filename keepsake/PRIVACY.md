@@ -1,6 +1,6 @@
 # Internet Binder privacy policy
 
-_Last updated: October 2026 · applies to Internet Binder 2.2.6_
+_Last updated: October 2026 · applies to Internet Binder 2.2.7_
 
 Internet Binder is a browser extension that saves products and inspiration into collections **stored in your browser**. It has no server of its own, no account, no analytics and no advertising. In Safari on the Mac (and in the iPhone app) **iCloud sync** stores a copy of your library in your own iCloud account, through Apple's CloudKit, end-to-end encrypted; it's on for a new install and you can turn it off (see *iCloud sync* below). Chrome has no sync, so there your library is stored only in your browser. This document describes exactly what it stores, what it can send and when, and how to inspect or erase all of it.
 
