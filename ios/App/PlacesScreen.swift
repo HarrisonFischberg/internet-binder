@@ -206,7 +206,7 @@ struct PlacesScreen: View {
     // MARK: map
 
     private var map: some View {
-        PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }, waiting: waiting, findOnMap: true) { mode = .review }
+        PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }, waiting: waiting, onReview: { mode = .review }, findOnMap: true)
     }
 
     // MARK: review
