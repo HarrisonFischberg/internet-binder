@@ -12,6 +12,7 @@ struct SettingsScreen: View {
     @State private var settings: [String: Any] = [:]
     @State private var aiOn = false
     @State private var readPosts = true
+    @State private var readXPosts = true
     @State private var provider = "anthropic"
     @State private var aiModel = SettingsScreen.claudeModels[0].id
     @State private var effort = "medium"
@@ -83,6 +84,7 @@ struct SettingsScreen: View {
                 aiSection
                 lookupsSection
                 instagramSection
+                xSection
                 Section {
                     Toggle("Music while cooking", isOn: $cookingMusic)
                     NavigationLink("Music credits") { MusicCreditsScreen() }
@@ -276,6 +278,18 @@ struct SettingsScreen: View {
         }
     }
 
+    /// settings.x.readPostDetails, on unless turned off (src/shared/xPost.js).
+    private var xSection: some View {
+        Section {
+            Toggle("Read posts you share", isOn: Binding(get: { readXPosts }, set: { on in
+                readXPosts = on
+                Task { try? await model.library?.updateSettings(["x": ["readPostDetails": on]]) }
+            }))
+        } header: { Text("X") } footer: {
+            Text("When you share a post, Internet Binder asks X for that post's public embed, the same one shown when a post is embedded on a web page, without your account or cookies, to save its text, creator, date, pictures and the post it quotes. Turn off to save just the link.")
+        }
+    }
+
     private func lookupToggle(_ key: String, _ title: String) -> some View {
         Toggle(title, isOn: Binding(get: { lookups[key] ?? false }, set: { on in
             if on { consent = .lookup(key) } else { Task { lookups[key] = false; try? await model.library?.updateSettings(["lookups": [key: false]]) } }
@@ -295,6 +309,7 @@ struct SettingsScreen: View {
         effort = ai["effort"] as? String ?? "medium"
         key = (try? await lib.aiKey()) ?? ""
         readPosts = (s["instagram"] as? [String: Any])?["readPostDetails"] as? Bool ?? true
+        readXPosts = (s["x"] as? [String: Any])?["readPostDetails"] as? Bool ?? true
         let l = s["lookups"] as? [String: Any] ?? [:]
         for k in lookups.keys { lookups[k] = l[k] as? Bool ?? false }
     }
@@ -530,6 +545,7 @@ struct PrivacyScreen: View {
                 Text("Your own AI key and each Lookup: only when you turn them on, and only what their switch says.")
                 Text("Sharing from Safari: Internet Binder reads the page you shared, on this iPhone.")
                 Text("Sharing an Instagram post or reel: Internet Binder opens that post's public page once, without your account or cookies, to save its caption and picture. You can turn this off under Instagram.")
+                Text("Sharing a post on X: Internet Binder asks X once for that post's public embed, without your account or cookies, to save its text and pictures. You can turn this off under X.")
             }
         }
         .navigationTitle("Privacy")

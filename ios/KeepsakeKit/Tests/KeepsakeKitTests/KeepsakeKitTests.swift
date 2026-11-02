@@ -320,6 +320,37 @@ struct CaptureTests {
         #expect(r.save?.title.contains("Brown butter pasta") == true)
     }
 
+    /// X's embed data for one post, as cdn.syndication.twimg.com answers it; oEmbed is never needed.
+    struct XEmbed: NetworkTransport {
+        let json: String
+        func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
+            #expect(request.url?.host() == "cdn.syndication.twimg.com")
+            #expect(request.url?.query()?.contains("id=1851234567890123456") == true)
+            #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
+            return (200, Data(json.utf8))
+        }
+    }
+
+    @Test func sharedXPostIsReadLikeInstagram() async throws {
+        let json = """
+        {"__typename":"Tweet","id_str":"1851234567890123456","created_at":"2026-10-30T14:05:00.000Z",
+         "user":{"screen_name":"miachen","name":"Mia Chen"},
+         "text":"Brown butter pasta\n\nIngredients\n- 350 g rigatoni\n- 90 g butter\n- 12 sage leaves\n\nMethod\n1. Boil the pasta.\n2. Brown the butter. https://t.co/p",
+         "entities":{"urls":[],"media":[{"url":"https://t.co/p"}]},
+         "mediaDetails":[{"type":"photo","media_url_https":"https://pbs.twimg.com/media/pasta.jpg"}]}
+        """
+        let lib = try library()
+        #expect(XPost.isPost("https://x.com/miachen/status/1851234567890123456?s=46&t=abc"))
+        #expect(!XPost.isPost("https://x.com/miachen"))
+        let p = await lib.sharedProduct(url: "https://x.com/miachen/status/1851234567890123456?s=46&t=abc", title: nil, text: nil, transport: XEmbed(json: json))
+        #expect(p["xBundle"] != nil)
+        let r = try await lib.capture(product: p)
+        #expect(r.save?.kind == "recipe")
+        #expect(r.save?.title == "Brown butter pasta")
+        #expect(r.save?.instagram?.creator == "miachen")
+        #expect(r.save?.url == "https://x.com/miachen/status/1851234567890123456")
+    }
+
     /// Your AI provider, faked: it files every save it's asked about in Home Decor (the shopping check's
     /// answer, or the filing answer for a link). The save's own page
     /// (read first, without cookies) isn't there.

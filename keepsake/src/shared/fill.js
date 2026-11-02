@@ -5,7 +5,7 @@
 // AI calls go through src/ai/provider.js with the person's own key; nothing runs unless it is on.
 
 import { uid, nowIso, sanitizeText } from './util.js';
-import { kindOf, kindInfo, detailsForKind, genericTitle, hasOwnView } from './kinds.js';
+import { kindOf, kindInfo, detailsForKind, genericTitle, hasOwnView, isPostSave } from './kinds.js';
 import { placeNamed, placeReviewReasons, stateCode } from './places.js';
 import { lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './lookups.js';
 import { FILLED_KINDS } from './capture.js';
@@ -44,7 +44,7 @@ export async function fillSave(store, id, { review = false, verify = false, forc
   // An Instagram place: its caption read again with today's rules first (nothing sent anywhere). Normally
   // that only fills what's missing. From Places review (you asked), what an older reading wrote is replaced:
   // its name, street, city and state, never what you typed yourself; a new street drops the old pin.
-  if (kind === 'place' && item.type === 'instagram') {
+  if (kind === 'place' && isPostSave(item)) {
     const fresh = detailsForKind('place', { ...item, kind: 'link', details: {} });
     const yours = new Set(item.userFields || []);
     const old = item.details || {};
@@ -63,7 +63,7 @@ export async function fillSave(store, id, { review = false, verify = false, forc
   let d = item.details || {};
   // A post with no name for its place (its title is the caption's), or an imported post that says nothing
   // about where it is: your provider names it and its city, so the lookup can find it.
-  const unknownPlace = kind === 'place' && item.type === 'instagram' && !d.address && d.lat == null && !d.locality;
+  const unknownPlace = kind === 'place' && isPostSave(item) && !d.address && d.lat == null && !d.locality;
   const inReview = review && kind === 'place' && placeReviewReasons(item).length > 0;
   const incomplete = verify && kind === 'place' && (!d.address || !d.locality || !d.region);
   const unnamed = (genericTitle(item.title) || unknownPlace || inReview || incomplete) && !(item.userFields || []).includes('title');
@@ -174,7 +174,7 @@ export async function tidySave(store, id, deps = {}) {
   const before = {};
   const changes = [];
   // A title your provider took from the product's own page (understandProduct) stays.
-  if (ai && ai.title && current.type !== 'instagram' && !userFields.has('title') && ai.title !== current.title && current.title === item.title) {
+  if (ai && ai.title && !isPostSave(current) && !userFields.has('title') && ai.title !== current.title && current.title === item.title) {
     before.title = current.title;
     patch.title = ai.title;
     changes.push({ field: 'title', from: current.title, to: ai.title });

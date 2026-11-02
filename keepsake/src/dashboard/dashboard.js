@@ -8,7 +8,7 @@ import { MSG, SESSION_KEYS } from '../shared/messages.js';
 import { el, clear, formatPrice, formatDate, sanitizeText, parsePrice, debounce, pluralize, hostnameOf, prettyRetailer, mostFirst } from '../shared/util.js';
 import { classify, nearMatchCollection, collectionWords, keywordLabel } from '../shared/categorizer.js';
 import { openableUrl } from '../shared/url.js';
-import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection, hasOwnView, LIFESTYLE, kindChangePatch, shoppingKindFor, detailsForKind } from '../shared/kinds.js';
+import { KINDS, kindOf, kindInfo, keyFact, formatMinutes, sanitizeDetails, parseExerciseLine, exerciseName, formatExercise, workoutFromText, addressLine, mapsLinks, formatDuration, secondsFrom, needsCollection, hasOwnView, LIFESTYLE, kindChangePatch, shoppingKindFor, detailsForKind, isPostSave } from '../shared/kinds.js';
 import { cleanTopics, guessTopics } from '../shared/topics.js';
 import { searchItems } from '../shared/search.js';
 import { LOOKUP_SOURCES } from '../shared/lookups.js';
@@ -1176,7 +1176,7 @@ function cardNode(item, { list = false } = {}) {
   const info = kindInfo(kind);
   const price = formatPrice(item.price, item.currency);
   const fact = kind === 'product' ? price || '' : keyFact(item);
-  const creator = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : '';
+  const creator = isPostSave(item) && item.instagram?.creator ? `@${item.instagram.creator}` : '';
   const source = creator || item.retailer || item.host || '';
   const done = item.status === 'done';
   const muted = done || item.purchased;

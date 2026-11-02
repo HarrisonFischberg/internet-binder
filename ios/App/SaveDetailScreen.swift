@@ -29,6 +29,7 @@ struct SaveDetailScreen: View {
     /// Things to buy: products, and anything filed in a collection.
     private var canBuy: Bool { current.kind == "product" || !(current.collectionId ?? "").isEmpty }
     private var isInstagram: Bool { (current.host ?? "").hasSuffix("instagram.com") }
+    private var isXPost: Bool { XPost.isPost(current.url) }
     /// The recipe's steps, without wordless lines (older saves kept Instagram's "." spacers).
     private var steps: [String] { (d?["steps"]?.array?.compactMap(\.string) ?? []).filter { $0.contains(where: { $0.isLetter || $0.isNumber }) } }
 
@@ -169,7 +170,7 @@ struct SaveDetailScreen: View {
             }
             .buttonStyle(PressStyle())
             .disabled(current.url == nil)
-            .accessibilityLabel(isInstagram ? "Open the post on Instagram" : "Open \(current.host ?? "the page")")
+            .accessibilityLabel(isInstagram ? "Open the post on Instagram" : isXPost ? "Open the post on X" : "Open \(current.host ?? "the page")")
             .padding(.top, 8)
         } else {
             // No picture: the kind chip and title below lead (a card here would say the title twice).
@@ -286,7 +287,7 @@ struct SaveDetailScreen: View {
             if let caption {
                 VStack(alignment: .leading, spacing: 6) {
                     if !summary.isEmpty || !shopText.isEmpty {
-                        Text(isInstagram ? "The post said" : "Saved with it").font(.caption.weight(.semibold)).foregroundStyle(t.inkMuted)
+                        Text(isInstagram || isXPost ? "The post said" : "Saved with it").font(.caption.weight(.semibold)).foregroundStyle(t.inkMuted)
                     }
                     Text(caption).font(reading).foregroundStyle(summary.isEmpty && shopText.isEmpty ? t.ink : t.inkMuted).lineSpacing(4)
                 }

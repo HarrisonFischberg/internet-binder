@@ -41,6 +41,9 @@ export function normalizeUrl(input) {
   // Instagram posts and reels: keep the shortcode only
   const ig = path.match(/^\/(?:[^/]+\/)?(p|reel|reels)\/([A-Za-z0-9_-]+)/);
   if (/(^|\.)instagram\.com$/.test(host) && ig) return `instagram.com/${ig[1] === 'reels' ? 'reel' : ig[1]}/${ig[2]}`;
+  // Posts on X: the post's id only (x.com and twitter.com, any handle or /i/, ?s=46&t=… are the same post).
+  const xs = path.match(/^\/(?:[A-Za-z0-9_]{1,15}|i(?:\/web)?)\/status(?:es)?\/(\d{5,25})(?:\/|$)/);
+  if (/^(?:mobile\.)?(?:x|twitter)\.com$/.test(host) && xs) return `x.com/status/${xs[1]}`;
 
   const params = [];
   for (const [key, value] of u.searchParams.entries()) {
