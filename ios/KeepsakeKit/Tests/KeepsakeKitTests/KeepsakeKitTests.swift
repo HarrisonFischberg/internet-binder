@@ -332,13 +332,13 @@ struct CaptureTests {
     }
 
     @Test func sharedXPostIsReadLikeInstagram() async throws {
-        let json = """
+        let json = #"""
         {"__typename":"Tweet","id_str":"1851234567890123456","created_at":"2026-10-30T14:05:00.000Z",
          "user":{"screen_name":"miachen","name":"Mia Chen"},
          "text":"Brown butter pasta\n\nIngredients\n- 350 g rigatoni\n- 90 g butter\n- 12 sage leaves\n\nMethod\n1. Boil the pasta.\n2. Brown the butter. https://t.co/p",
          "entities":{"urls":[],"media":[{"url":"https://t.co/p"}]},
          "mediaDetails":[{"type":"photo","media_url_https":"https://pbs.twimg.com/media/pasta.jpg"}]}
-        """
+        """#
         let lib = try library()
         #expect(XPost.isPost("https://x.com/miachen/status/1851234567890123456?s=46&t=abc"))
         #expect(!XPost.isPost("https://x.com/miachen"))

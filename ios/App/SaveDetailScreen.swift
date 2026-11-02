@@ -620,9 +620,17 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var source: some View {
         if let host = current.host, !host.isEmpty {
             let ig = current.instagram
-            let by = [ig?.creator.flatMap { $0.isEmpty ? nil : "@\($0)" }, ig?.postedAt.flatMap { $0.isEmpty ? nil : $0 }].compactMap { $0 }
+            let by = [ig?.creator.flatMap { $0.isEmpty ? nil : "@\($0)" }, ig?.postedAt.flatMap { $0.isEmpty ? nil : Self.postDate($0) }].compactMap { $0 }
             Text((["Saved from \(host)"] + by).joined(separator: " · ")).font(.footnote).foregroundStyle(t.inkMuted)
         }
+    }
+
+    /// A post's date as people read it ("Dec 10, 2020"); a date already in words stays as it is.
+    static func postDate(_ raw: String) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = iso.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        return date?.formatted(date: .abbreviated, time: .omitted) ?? raw
     }
 
     // MARK: actions

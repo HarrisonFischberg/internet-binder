@@ -20,7 +20,7 @@ export function xStatusId(url) {
   let u;
   try { u = new URL(String(url || '')); } catch { return ''; }
   if (!isXHost(u.hostname)) return '';
-  const m = u.pathname.match(/^\/(?:[A-Za-z0-9_]{1,15}|i(?:\/web)?)\/status(?:es)?\/(\d{5,25})(?:\/|$)/);
+  const m = u.pathname.match(/^\/(?:[A-Za-z0-9_]{1,15}|i(?:\/web)?)\/status(?:es)?\/(\d{1,25})(?:\/|$)/);
   return m ? m[1] : '';
 }
 
@@ -130,8 +130,10 @@ function fromOembed(o) {
     const l = label.replace(/<[^>]+>/g, '');
     if (/^pic\.(?:x|twitter)\.com\//i.test(l)) return '';
     if (/^[#@]/.test(l)) return l;
-    return /^https?:\/\/t\.co\//.test(href) && !/^https?:/.test(l) ? `https://${l.replace(/…$/, '')}` : l;
-  }).replace(/<[^>]+>/g, '')).trim();
+    // A bare t.co link says nothing; a link X shows by its address is written out, set apart by a space.
+    if (/^(?:https?:\/\/)?t\.co\//i.test(l)) return ' ';
+    return ` ${/^https?:\/\/t\.co\//.test(href) && !/^https?:/.test(l) ? `https://${l.replace(/…$/, '')}` : l} `;
+  }).replace(/<[^>]+>/g, '')).replace(/\s*https?:\/\/t\.co\/\S+/gi, '').replace(/[ \t]{2,}/g, ' ').replace(/ +([.,!?;:])/g, '$1').replace(/[ \t]*\n[ \t]*/g, '\n').trim();
   const handle = (String(o.author_url || '').match(/(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})/i) || [])[1] || '';
   const date = (o.html.match(/<a\b[^>]*\/status\/\d+[^>]*>([^<]{4,40})<\/a>\s*<\/blockquote>/i) || [])[1] || '';
   return { text: sanitizeMultiline(text, 4000), creator: handle, name: sanitizeText(decodeEntities(o.author_name || ''), 80), postedAt: sanitizeText(date, 40) };
@@ -145,7 +147,7 @@ export function xTitle(text, creator = '', type = 'post') {
     .map((l) => sanitizeText(l.replace(URL_RE, ''), 600).replace(/^(?:[#@][\w.]+[\s,]*)+/u, '').replace(/^[\s\p{Extended_Pictographic}\p{P}\uFE0F\u200D]+/u, '').trim());
   const c = lines.find((l) => l.replace(/[#@\s\p{P}]/gu, '').length >= 4) || '';
   const first = c.split(/(?<=[.!?…])\s+|\s+[|•·]\s+|\s+-\s+/)[0] || '';
-  let t = first.replace(/(?:\s*#[\p{L}\p{N}_]+)+\s*$/u, '').replace(/[\s\p{Extended_Pictographic}\uFE0F\u200D:.]+$/u, '').trim();
+  let t = first.replace(/^[\s"“”'‘’«»]+|[\s"“”'‘’«»]+$/g, '').replace(/(?:\s*#[\p{L}\p{N}_]+)+\s*$/u, '').replace(/[\s\p{Extended_Pictographic}\uFE0F\u200D:.]+$/u, '').trim();
   if (t.length > 80) t = t.slice(0, 79).replace(/\s+\S*$/, '') + '…';
   if (t.replace(/[#@\s\p{P}]/gu, '').length >= 4) return t;
   const what = type === 'video' ? 'Video' : 'Post';

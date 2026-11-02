@@ -159,3 +159,18 @@ test('a post on X opened in Safari: X’s own page title is replaced by the post
   const r = await saveCapture(s, { url: SHARED, title: 'Mia Chen on X: "Best ramen in the East Village" / X', xBundle: { tweet: tweet({ text: 'Best ramen in the East Village is still Raku' }) } }, { source: 'share-sheet', instant: true });
   assert.equal(r.item.title, 'Best ramen in the East Village is still Raku');
 });
+
+test('short ids, glued t.co links and quote marks are read cleanly', () => {
+  assert.equal(xStatusId('https://x.com/jack/status/20'), '20');
+  const oembed = { author_url: 'https://twitter.com/a', html: '<blockquote><p>Big Improvements<a href="https://t.co/abc">https://t.co/abc</a> see <a href="https://t.co/d">example.com/page</a></p>&mdash; A (@a) <a href="https://twitter.com/a/status/1">May 1, 2020</a></blockquote>' };
+  assert.equal(parseXPost({ oembed }, 'https://x.com/a/status/12345').text, 'Big Improvements see https://example.com/page');
+  assert.equal(xTitle('“White people could do the same thing”'), 'White people could do the same thing');
+});
+
+test('why only the link was saved: the switch is off, or X had nothing', async () => {
+  const s = store();
+  const off = await saveCapture(s, { sparse: true, url: SHARED, isXPost: true, xRead: 'off' }, { source: 'share-sheet', instant: true });
+  assert.match(off.item.categorizationReason, /off in Settings/);
+  const gone = await saveCapture(s, share({ tweet: { __typename: 'TweetTombstone' } }, 'https://x.com/a/status/1851234567890000001'), { source: 'share-sheet', instant: true });
+  assert.match(gone.item.categorizationReason, /may be deleted or private/);
+});

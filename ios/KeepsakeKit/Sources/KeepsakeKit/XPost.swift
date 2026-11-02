@@ -12,7 +12,7 @@ public enum XPost {
         guard let url, let u = URL(string: url), let h = u.host()?.lowercased() else { return false }
         let host = h.replacingOccurrences(of: #"^(www|mobile|m)\."#, with: "", options: .regularExpression)
         guard host == "x.com" || host == "twitter.com" else { return false }
-        return u.path.range(of: #"^/(?:[A-Za-z0-9_]{1,15}|i(?:/web)?)/status(?:es)?/\d{5,25}(?:/|$)"#, options: .regularExpression) != nil
+        return u.path.range(of: #"^/(?:[A-Za-z0-9_]{1,15}|i(?:/web)?)/status(?:es)?/\d{1,25}(?:/|$)"#, options: .regularExpression) != nil
     }
 
     /// Fetches the post's embed data and returns { tweet, oembed } (either may be missing), or nil when
@@ -43,9 +43,9 @@ extension Library {
         var p = product
         p["isXPost"] = true
         let settings = (try? await settings()) ?? [:]
-        if (settings["x"] as? [String: Any])?["readPostDetails"] as? Bool == false { return p }
+        if (settings["x"] as? [String: Any])?["readPostDetails"] as? Bool == false { p["xRead"] = "off"; return p }
         try? await prepare()
-        guard let bundle = await XPost.read(url, core: core, transport: transport) else { return p }
+        guard let bundle = await XPost.read(url, core: core, transport: transport) else { p["xRead"] = "none"; return p }
         p["xBundle"] = bundle
         p["sparse"] = false
         return p

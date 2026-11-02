@@ -40,7 +40,7 @@ export function normalizeProduct(raw) {
       if (post.image && !p.image) p.image = post.image;
       if (post.images.length && !p.images?.length) p.images = post.images;
       if (post.hashtags.length && !p.hashtags?.length) p.hashtags = post.hashtags;
-    }
+    } else p.xRead = 'none';
   }
   if (p.isXPost) {
     const clean = xPostUrl(p.canonicalUrl || p.url);
@@ -266,7 +266,10 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
   }
   if (product.isXPost && kind === 'link' && !product.description && !product.instagram?.caption && !given) {
     if (!product.title || product.title === product.url) product.title = 'Post on X';
-    if (classification.isInbox) classification = { ...classification, reason: 'Only the link came through (X didn’t share the post’s text), so there was nothing to sort by' };
+    const why = product.xRead === 'off' ? 'Reading posts on X is off in Settings, so only the link was saved'
+      : product.xRead === 'none' ? 'X had nothing for this post (it may be deleted or private), so only the link was saved'
+        : 'Only the link came through (X didn’t share the post’s text), so there was nothing to sort by';
+    if (classification.isInbox) classification = { ...classification, reason: why };
   }
   if (taught && !given) classification = { ...classification, reason: `You file posts like this in ${kindInfo(kind).plural} (${taught.words.map((w) => `“${w}”`).join(', ')}, learned)` };
 
