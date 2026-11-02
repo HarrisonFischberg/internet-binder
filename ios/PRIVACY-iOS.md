@@ -44,6 +44,10 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
 - **Instagram**, only when you share an Instagram post or reel into Internet Binder: that post's public page
   on `www.instagram.com`, fetched once without cookies or your account, to save its caption, creator,
   date and picture (Chrome's "Read post details"). Settings → Instagram → Read posts you share turns it off.
+- **X**, only when you share a post on X into Internet Binder: that post's public embed data on
+  `cdn.syndication.twimg.com` (and `publish.twitter.com` if that doesn't answer), fetched without cookies or
+  your account, to save its text, creator, date, pictures and the post it quotes or answers.
+  Settings → X → Read posts you share turns it off.
 Any other request is refused by the app itself (an allowlist built from your settings).
 
 ## Sharing into Internet Binder

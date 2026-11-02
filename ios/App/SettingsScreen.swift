@@ -273,6 +273,7 @@ struct SettingsScreen: View {
                 readPosts = on
                 Task { try? await model.library?.updateSettings(["instagram": ["readPostDetails": on]]) }
             }))
+            .accessibilityLabel("Read Instagram posts you share")
         } header: { Text("Instagram") } footer: {
             Text("When you share a post or reel, Internet Binder opens its public page once, without your account or cookies, to save its caption, creator, date and picture. Turn off to save just the link.")
         }
@@ -285,8 +286,9 @@ struct SettingsScreen: View {
                 readXPosts = on
                 Task { try? await model.library?.updateSettings(["x": ["readPostDetails": on]]) }
             }))
+            .accessibilityLabel("Read X posts you share")
         } header: { Text("X") } footer: {
-            Text("When you share a post, Internet Binder asks X for that post's public embed, the same one shown when a post is embedded on a web page, without your account or cookies, to save its text, creator, date, pictures and the post it quotes. Turn off to save just the link.")
+            Text("When you share a post, Internet Binder asks X for that post's public details, without your account or cookies, to save its text, creator, date, pictures and the post it quotes or answers. Turn off to save just the link.")
         }
     }
 
@@ -545,7 +547,7 @@ struct PrivacyScreen: View {
                 Text("Your own AI key and each Lookup: only when you turn them on, and only what their switch says.")
                 Text("Sharing from Safari: Internet Binder reads the page you shared, on this iPhone.")
                 Text("Sharing an Instagram post or reel: Internet Binder opens that post's public page once, without your account or cookies, to save its caption and picture. You can turn this off under Instagram.")
-                Text("Sharing a post on X: Internet Binder asks X once for that post's public embed, without your account or cookies, to save its text and pictures. You can turn this off under X.")
+                Text("Sharing a post on X: Internet Binder asks X once for that post's public details, without your account or cookies, to save its text, pictures and the post it quotes or answers. You can turn this off under X.")
             }
         }
         .navigationTitle("Privacy")
