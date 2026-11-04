@@ -792,8 +792,12 @@ const tagMatches = (a, b) => {
 };
 
 // What a page title says when it isn't the thing's name ("Instagram", "Name on Instagram: …", "Google Maps").
-export const genericTitle = (t) => !t || /^(?:instagram(?: (?:post|reel|photo|video))?|tiktok|youtube|google maps|facebook|untitled( item)?)$/i.test(String(t).trim())
-  || /\son instagram:/i.test(String(t));
+export const genericTitle = (t) => !t || /^(?:instagram(?: (?:post|reel|photo|video))?|tiktok|youtube|google maps|facebook|untitled( item)?|x|twitter|post on x)$/i.test(String(t).trim())
+  || /\son instagram:|\son x: [“"]/i.test(String(t));
+
+// A post someone made (an Instagram post or reel, a post on X): its title is our reading of its caption,
+// so a better name from the AI replaces it; a web page's own title stays.
+export const isPostSave = (item) => !!item && (item.type === 'instagram' || /^x-/.test(String(item.instagram?.postType || '')));
 
 // Turning a save into another kind (you picked a Lifestyle for it): that kind's details, worked out from
 // what the save already holds (its link, caption, description, title). Returns { details, title } where

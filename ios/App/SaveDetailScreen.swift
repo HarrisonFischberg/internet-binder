@@ -29,6 +29,7 @@ struct SaveDetailScreen: View {
     /// Things to buy: products, and anything filed in a collection.
     private var canBuy: Bool { current.kind == "product" || !(current.collectionId ?? "").isEmpty }
     private var isInstagram: Bool { (current.host ?? "").hasSuffix("instagram.com") }
+    private var isXPost: Bool { XPost.isPost(current.url) }
     /// The recipe's steps, without wordless lines (older saves kept Instagram's "." spacers).
     private var steps: [String] { (d?["steps"]?.array?.compactMap(\.string) ?? []).filter { $0.contains(where: { $0.isLetter || $0.isNumber }) } }
 
@@ -169,7 +170,7 @@ struct SaveDetailScreen: View {
             }
             .buttonStyle(PressStyle())
             .disabled(current.url == nil)
-            .accessibilityLabel(isInstagram ? "Open the post on Instagram" : "Open \(current.host ?? "the page")")
+            .accessibilityLabel(isInstagram ? "Open the post on Instagram" : isXPost ? "Open the post on X" : "Open \(current.host ?? "the page")")
             .padding(.top, 8)
         } else {
             // No picture: the kind chip and title below lead (a card here would say the title twice).
@@ -286,7 +287,7 @@ struct SaveDetailScreen: View {
             if let caption {
                 VStack(alignment: .leading, spacing: 6) {
                     if !summary.isEmpty || !shopText.isEmpty {
-                        Text(isInstagram ? "The post said" : "Saved with it").font(.caption.weight(.semibold)).foregroundStyle(t.inkMuted)
+                        Text(isInstagram || isXPost ? "The post said" : "Saved with it").font(.caption.weight(.semibold)).foregroundStyle(t.inkMuted)
                     }
                     Text(caption).font(reading).foregroundStyle(summary.isEmpty && shopText.isEmpty ? t.ink : t.inkMuted).lineSpacing(4)
                 }
@@ -619,9 +620,17 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var source: some View {
         if let host = current.host, !host.isEmpty {
             let ig = current.instagram
-            let by = [ig?.creator.flatMap { $0.isEmpty ? nil : "@\($0)" }, ig?.postedAt.flatMap { $0.isEmpty ? nil : $0 }].compactMap { $0 }
+            let by = [ig?.creator.flatMap { $0.isEmpty ? nil : "@\($0)" }, ig?.postedAt.flatMap { $0.isEmpty ? nil : Self.postDate($0) }].compactMap { $0 }
             Text((["Saved from \(host)"] + by).joined(separator: " · ")).font(.footnote).foregroundStyle(t.inkMuted)
         }
+    }
+
+    /// A post's date as people read it ("Dec 10, 2020"); a date already in words stays as it is.
+    static func postDate(_ raw: String) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = iso.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        return date?.formatted(date: .abbreviated, time: .omitted) ?? raw
     }
 
     // MARK: actions

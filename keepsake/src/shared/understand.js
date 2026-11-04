@@ -32,7 +32,7 @@
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
 import { isSocialHost } from './categorizer.js';
 import { guessTopics } from './topics.js';
-import { mentionsFood, isWorkoutPost, kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
+import { mentionsFood, isWorkoutPost, kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, isPostSave, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI, supportsWebLookup, keyFor, aiAvailable } from '../ai/provider.js';
 
@@ -193,7 +193,7 @@ export function planUnderstanding(item, ai, sourceText = '') {
   }
   // The thing's own name, for a post (its title is the caption's first line) or a page titled after its site.
   const title = ai.kind === kind && ai.title.length >= 3 ? ai.title : base.title || '';
-  if (title && title !== item.title && !mine.has('title') && (item.type === 'instagram' || genericTitle(item.title) || base.title)) {
+  if (title && title !== item.title && !mine.has('title') && (isPostSave(item) || genericTitle(item.title) || base.title)) {
     patch.title = title;
     changes.push({ field: 'title', from: item.title, to: title });
   }
@@ -262,7 +262,7 @@ export function planTitle(item, ai, picture = '', { on = today() } = {}) {
     Object.assign(patch, { image: picture, images: [picture] });
     changes.push({ field: 'picture', from: 'none', to: kind === 'book' ? 'the cover' : 'the poster' });
   }
-  if (ai.title && ai.title.length >= 2 && ai.title !== item.title && !mine.has('title') && (item.type === 'instagram' || genericTitle(item.title))) {
+  if (ai.title && ai.title.length >= 2 && ai.title !== item.title && !mine.has('title') && (isPostSave(item) || genericTitle(item.title))) {
     patch.title = ai.title;
     changes.push({ field: 'title', from: item.title, to: ai.title });
   }
@@ -525,7 +525,7 @@ export function planProduct(item, ai, page = null) {
   // Its real name: the shop page's, else the provider's. A post's title is its caption's first line, so
   // it's replaced; a shop page's own title stays unless it's a site's name.
   const name = shop?.name || (sure ? ai.name : '');
-  const renames = item.type === 'instagram' || item.type === 'inspiration' || genericTitle(item.title) || current !== 'product' || /facebook\.com$/i.test(item.host || '');
+  const renames = isPostSave(item) || item.type === 'inspiration' || genericTitle(item.title) || current !== 'product' || /facebook\.com$/i.test(item.host || '');
   if (name && name.length >= 3 && name !== item.title && !mine.has('title') && renames) {
     patch.title = name;
     changes.push({ field: 'title', from: item.title, to: name });

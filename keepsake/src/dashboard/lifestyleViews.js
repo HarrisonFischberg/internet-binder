@@ -2,7 +2,7 @@
 // along with. Moved out of dashboard.js as they were.
 
 import * as UI from './ui.js';
-import { formatMinutes } from '../shared/kinds.js';
+import { formatMinutes, isPostSave } from '../shared/kinds.js';
 import { formatSeconds, goalProgress, goalTitle, localDay, resultText } from '../shared/goals.js';
 import { clear, el, hostnameOf, pluralize } from '../shared/util.js';
 import { kindIcon } from '../shared/kindIcon.js';
@@ -26,7 +26,7 @@ export async function openWorkout(id) {
   const exercises = d.exercises || [];
   const aiReady = !!D.state.settings?.ai?.on && !!(await D.store.getSecret('aiApiKey').catch(() => ''));
   const sourceLabel = { page: 'Exercises from the page', caption: 'Exercises from the caption', you: 'Exercises added by you', ai: 'Exercises read by AI', 'ai-draft': 'Exercises drafted by AI: check them before you train' }[d.source] || '';
-  const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
+  const from = isPostSave(item) && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const facts = [
     exercises.length ? ['Exercises', String(exercises.length)] : null,
     d.durationMinutes ? ['Time', formatMinutes(d.durationMinutes)] : null,
@@ -303,7 +303,7 @@ export async function openRecipe(id) {
     el('a', { href: d.basedOn.url, target: '_blank', rel: 'noopener noreferrer' }, [d.basedOn.site || hostnameOf(d.basedOn.url)]),
     '. The post didn’t share its recipe, so AI found a close one; it may differ from the video.',
   ]) : null;
-  const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
+  const from = isPostSave(item) && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const facts = [
     d.totalMinutes ? ['Time', formatMinutes(d.totalMinutes)] : null,
     d.prepMinutes && d.cookMinutes ? ['Prep · cook', `${formatMinutes(d.prepMinutes)} · ${formatMinutes(d.cookMinutes)}`] : null,

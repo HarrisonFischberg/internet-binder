@@ -7,6 +7,7 @@
 import { classify, learnFromCorrection, learnedKindOf, isSocialHost, AUTO_FILE_CONFIDENCE } from './categorizer.js';
 import { parsePrice, sanitizeText } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
+import { isXPost, parseXPost, xPostRecord, xPostUrl } from './xPost.js';
 import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, isRecipePost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
 import { guessTopics } from './topics.js';
 import { aiAvailable, usableKey } from '../ai/provider.js';
@@ -27,6 +28,26 @@ export function normalizeProduct(raw) {
     }
   }
   delete p.igBundle;
+  // A post on X: its text, creator, date, pictures and links from X's embed data (src/shared/xPost.js),
+  // kept in the same post record an Instagram post has, so the rest of the app reads both alike.
+  if (!p.isXPost && isXPost(p.canonicalUrl || p.url)) p.isXPost = true;
+  if (p.isXPost && p.xBundle && !p.instagram) {
+    const post = parseXPost(p.xBundle, p.canonicalUrl || p.url);
+    if (post.ok) {
+      p.instagram = xPostRecord(post);
+      if (post.caption && (!p.description || p.description.length < post.caption.length)) p.description = post.caption;
+      if (!p.title || genericTitle(p.title) || /^\S+ on X\b|\bon X: |^X$/.test(p.title) || p.title === p.url) p.title = post.title;
+      if (post.image && !p.image) p.image = post.image;
+      if (post.images.length && !p.images?.length) p.images = post.images;
+      if (post.hashtags.length && !p.hashtags?.length) p.hashtags = post.hashtags;
+    } else p.xRead = 'none';
+  }
+  if (p.isXPost) {
+    const clean = xPostUrl(p.canonicalUrl || p.url);
+    if (clean) { p.url = clean; p.canonicalUrl = clean; }
+    if (!p.retailer) p.retailer = 'X';
+  }
+  delete p.xBundle;
   if (p.price === null || p.price === undefined || p.price === '' || Number.isNaN(Number(p.price))) {
     const parsed = parsePrice(p.priceText || p.price, p.currency);
     if (parsed) {
@@ -67,10 +88,11 @@ const KIND_REASON = {
 export function workoutOf(product) {
   const about = `${product.title || ''} ${product.description || ''}`;
   if (!looksLikeWorkout(about) && !isWorkoutPost(about)) return null;
-  const source = product.isInstagram ? 'caption' : 'page';
+  const post = product.isInstagram || product.isXPost;
+  const source = post ? 'caption' : 'page';
   // Instagram puts the caption in the page title as well as the description, and either may be cut
   // short: read the longer one first.
-  const texts = product.isInstagram ? [product.title, product.description].filter(Boolean).sort((a, b) => b.length - a.length) : [product.description];
+  const texts = post ? [product.title, product.description].filter(Boolean).sort((a, b) => b.length - a.length) : [product.description];
   const fromCaption = texts.map((t) => workoutFromText(t, { source })).find(Boolean) || null;
   if (fromCaption) return fromCaption;
   return Array.isArray(product.workoutLines) && product.workoutLines.length ? workoutFromText(product.workoutLines.slice(0, 150).join('\n'), { source: 'page' }) : null;
@@ -122,9 +144,9 @@ export function kindOfCapture(product) {
   if ((fromTypes === 'video' || fromTypes === 'article') && workoutOf(product)) return 'workout';
   if (fromTypes && fromTypes !== 'product') return fromTypes;
   if (product.recipe) return 'recipe';
-  // An Instagram post: a recipe or workout in the caption, a place when it's tagged with a location or
-  // names one with 📍; otherwise a link.
-  if (product.isInstagram) {
+  // An Instagram post or a post on X: a recipe or workout in the caption, a place when it's tagged with
+  // a location or names one with 📍; otherwise a link.
+  if (product.isInstagram || product.isXPost) {
     const found = recipeOrWorkout(product.description, workoutOf(product));
     if (found) return found.kind;
     const about = `${product.title || ''}\n${product.description || ''}`;
@@ -241,6 +263,13 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
   if (product.isInstagram && kind === 'link' && !product.description && !product.instagram?.caption && !given) {
     if (!product.title) product.title = /\/reels?\//.test(product.url || '') ? 'Instagram reel' : 'Instagram post';
     if (classification.isInbox) classification = { ...classification, reason: 'Only the link came through (Instagram showed a sign-in page), so there was nothing to sort by' };
+  }
+  if (product.isXPost && kind === 'link' && !product.description && !product.instagram?.caption && !given) {
+    if (!product.title || product.title === product.url) product.title = 'Post on X';
+    const why = product.xRead === 'off' ? 'Reading posts on X is off in Settings, so only the link was saved'
+      : product.xRead === 'none' ? 'X had nothing for this post (it may be deleted or private), so only the link was saved'
+        : 'Only the link came through (X didn’t share the post’s text), so there was nothing to sort by';
+    if (classification.isInbox) classification = { ...classification, reason: why };
   }
   if (taught && !given) classification = { ...classification, reason: `You file posts like this in ${kindInfo(kind).plural} (${taught.words.map((w) => `“${w}”`).join(', ')}, learned)` };
 

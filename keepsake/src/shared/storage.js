@@ -108,6 +108,8 @@ export const DEFAULT_SETTINGS = {
     readPostDetails: true, // after a scan, read each post's page for caption/creator/links (needs instagram.com access)
     readDelayMs: 1500,
   },
+  // A post on X you share: read its text, pictures and links from X's public embed data (src/shared/xPost.js).
+  x: { readPostDetails: true },
   ai: {
     // One switch for everything AI: instant save (the AI tidies the title and picks the
     // collection at save time), "Fix with AI", and "Find products" for Instagram saves.

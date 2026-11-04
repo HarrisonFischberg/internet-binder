@@ -1,7 +1,7 @@
 // Places in the dashboard: the list by state and city, Places review, and the map (MapLibre, OpenFreeMap
 // tiles, only once Places lookups are on). Moved out of dashboard.js as it was.
 
-import { addressLine, kindOf, mapsLinks } from '../shared/kinds.js';
+import { addressLine, kindOf, mapsLinks, isPostSave } from '../shared/kinds.js';
 import { el, pluralize } from '../shared/util.js';
 import * as UI from './ui.js';
 import { kindIcon } from '../shared/kindIcon.js';
@@ -39,7 +39,7 @@ export async function openPlace(id) {
   }
   const d = item.details || {};
   const where = addressLine(d);
-  const from = item.type === 'instagram' && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
+  const from = isPostSave(item) && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const sourceLabel = d.lookup?.source && d.lookup.source !== 'AI' ? '' : { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you', ai: 'Details found by AI' }[d.source] || '';
   const copyAddress = el('button', { type: 'button', class: 'btn btn-sm', onClick: async () => {
     try {
