@@ -18,3 +18,10 @@ fastlane/report.xml
 fastlane/README.md
 fastlane/test_output/
 *.p8
+# Store releases: build output and secrets never go in git (release/README.md)
+# Raw simulator shots; only the framed ones in store/ios/screenshots are committed.
+store/ios/raw/
+*.ipa
+*.dSYM.zip
+# App Review phone number: kept out of git on purpose (release/README.md).
+store/ios/metadata/review_information/phone_number.txt
