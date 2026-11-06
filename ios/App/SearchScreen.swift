@@ -44,6 +44,7 @@ struct SearchScreen: View {
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
             }
+            .clearsTabBar()
             .scrollDismissesKeyboard(.immediately)
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
         }

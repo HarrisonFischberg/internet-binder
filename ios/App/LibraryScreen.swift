@@ -83,6 +83,7 @@ struct LibraryScreen: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, selecting ? 140 : 32)
             }
+            .clearsTabBar()
             .scrollDismissesKeyboard(.immediately)
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
             if selecting {

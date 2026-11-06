@@ -263,6 +263,35 @@ public struct TopScrim: View {
     }
 }
 
+/// The tab bar's floor: content fades into the table just above the floating tab bar and stays solid
+/// behind it, and the extra inset lets the last card scroll fully clear of it. Only where the tab bar
+/// is (compact width; iPad and wide windows use the sidebar).
+public struct TabBarScrim: View {
+    @Environment(\.ks) private var t
+    @Environment(\.horizontalSizeClass) private var size
+    public init() {}
+    public var body: some View {
+        if size == .compact {
+            Color.clear
+                .frame(height: 20)
+                .background {
+                    LinearGradient(stops: [.init(color: t.table.opacity(0), location: 0), .init(color: t.table.opacity(0.9), location: 0.4), .init(color: t.table, location: 1)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .ignoresSafeArea(edges: .bottom)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+extension View {
+    /// A tab's scrolling page: its content clears the tab bar instead of ending under it.
+    public func clearsTabBar() -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) { TabBarScrim() }
+    }
+}
+
 /// Content fades into the table under floating bottom controls, so text never runs behind them.
 public struct BottomScrim: View {
     @Environment(\.ks) private var t

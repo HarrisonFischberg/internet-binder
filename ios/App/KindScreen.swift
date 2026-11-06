@@ -50,6 +50,7 @@ struct KindScreen: View {
                     }
                     .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
                 }
+                .clearsTabBar()
             }
             if selecting {
                 SaveSelectionBar(all: (todo + done).map(\.id), selected: $selected, selecting: $selecting)
@@ -147,6 +148,7 @@ struct ReviewScreen: View {
                 .padding(.horizontal, 18).padding(.bottom, 40)
                 .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: saves.map(\.id))
             }
+            .clearsTabBar()
         }
         .navigationBarTitleDisplayMode(.inline)
         .task(id: saves.map(\.id)) {

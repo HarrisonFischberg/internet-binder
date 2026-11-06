@@ -28,6 +28,7 @@ struct LifestyleScreen: View {
                 }
                 .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
             }
+            .clearsTabBar()
             if selecting {
                 let inside = lifestyle.filter { selected.contains($0.kind) }.count
                 SelectionBar(noun: { $0 == 1 ? "view" : "views" }, all: KindStyle.lifestyle.filter { k in lifestyle.contains { $0.kind == k } }, selected: $selected) {
