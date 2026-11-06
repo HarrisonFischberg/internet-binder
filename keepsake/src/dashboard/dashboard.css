@@ -2958,6 +2958,18 @@ button.home-attention {
   text-underline-offset: 2px;
 }
 
+.recipe-from-link {
+  align-self: flex-start;
+  justify-self: start;
+  margin-inline-start: -10px;
+  color: var(--c-text-muted);
+}
+
+.recipe-from-link:hover,
+.recipe-from-link:focus-visible {
+  color: var(--c-text);
+}
+
 .recipe-facts-grid {
   display: grid;
   grid-template-columns: auto 1fr;

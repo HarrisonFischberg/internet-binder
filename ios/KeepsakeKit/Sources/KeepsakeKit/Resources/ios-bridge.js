@@ -308,10 +308,13 @@
         workout: { page: 'Exercises from the page', caption: 'Exercises from the caption', you: 'Exercises added by you', ai: 'Exercises read by AI', 'ai-draft': 'Exercises drafted by AI: check them before you train' },
         place: { page: 'Details from the page', 'maps-link': 'From a maps link', you: 'Added by you', ai: 'Details found by AI' },
       };
-      out.sourceLabel = SOURCE[item.kind]?.[d.source] || '';
+      // A recipe from a link you added says where it's from itself (basedOn below), so no label repeats it.
+      const linked = item.kind === 'recipe' && d.basedOn?.url && d.source !== 'web';
+      out.sourceLabel = linked ? '' : SOURCE[item.kind]?.[d.source] || '';
       out.drafted = Array.isArray(d.drafted) ? d.drafted : [];
       // A recipe your provider found online because the post never wrote one down: the page it's based on.
-      if (item.kind === 'recipe' && d.basedOn?.url) out.basedOn = d.basedOn;
+      // linked: the page you pointed it to yourself (Import recipe from a link); readByAI: AI read it from that page.
+      if (item.kind === 'recipe' && d.basedOn?.url) out.basedOn = { ...d.basedOn, linked: !!linked, readByAI: !!linked && d.source === 'ai' };
       return out;
     },
     // What the widgets show, worked out here so the widget process never runs this code: active goals
@@ -435,6 +438,17 @@
     async aiReady() {
       const settings = await store.getSettings();
       return K.provider.aiAvailable(settings, await store.getSecret('aiApiKey'));
+    },
+    // Import recipe from a link: the page you pasted fills this recipe (understand.js importRecipeFromLink): its
+    // own recipe card, or AI reads it (Apple Intelligence, or your key: you asked). The page is read once,
+    // without cookies (__native.fetchAskedPage). { ok, error, site, ingredients, steps, logId } for Undo.
+    async importRecipe(id, link) {
+      try {
+        return await K.understand.importRecipeFromLink(store, id, link, { fetchPage: viaNative('fetchAskedPage') });
+      } catch (e) {
+        const msg = String((e && e.message) || e);
+        return { ok: false, error: /\((401|403|429)\)|API key/i.test(msg) ? `Your AI provider didn’t answer: ${msg}` : msg || 'Something went wrong.' };
+      }
     },
     // Optional AI is on with a key: your provider backs Apple Intelligence up.
     async aiBackupReady() {

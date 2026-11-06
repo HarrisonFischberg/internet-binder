@@ -676,6 +676,41 @@ function foundRecipeAnswer(p, seen) {
   };
 }
 
+// --- A recipe page you pointed to (Import recipe from a link) -----------------------------------------
+// For a recipe save the AI couldn't fill in: you paste the link to the real recipe, Internet Binder reads that
+// page (src/shared/understand.js importRecipeFromLink), and when the page has no recipe card of its own
+// (schema.org Recipe) this reads the recipe from the page's text. Sends that text and the dish's name only.
+// Apple Intelligence reads it on the device when there's no key in play.
+const RECIPE_PAGE_SYSTEM = `You read the recipe on one web page that a person chose for a dish they saved.
+Return ONLY JSON: {"title":"the recipe's name on the page","ingredients":["as the page lists them, quantities included"],"steps":["as the page gives them, one step each"],"yield":"","totalMinutes":number|null,"reason":"one short sentence"}
+Rules: copy the page's own ingredients and steps in its order; never invent or add anything the page doesn't say; skip the story, ads, comments and other recipes; if the page has no recipe, return empty lists.`;
+const RECIPE_PAGE_DEVICE_NOTE = '\nOn this device: use only the page text given. If it has no recipe, return empty lists.';
+
+export async function readRecipePageWithAI(input, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  const cut = (v, n) => String(v || '').slice(0, n);
+  const text = [
+    input.dish ? `The dish they saved: ${cut(input.dish, 200)}` : '',
+    `Page: ${cut(input.url, 300)}`,
+    `Page text:\n${cut(input.text, 12000)}`,
+  ].filter(Boolean).join('\n');
+  return withReader(cfg, apiKey, async (ask) => recipePageAnswer(parseJsonBlock(await ask({ system: RECIPE_PAGE_SYSTEM, deviceNote: RECIPE_PAGE_DEVICE_NOTE, userText: text, maxTokens: 2500 }))));
+}
+
+function recipePageAnswer(p) {
+  if (!p || typeof p !== 'object') throw new Error('The provider didn’t return a usable answer.');
+  const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  const strings = (v, n, each) => (Array.isArray(v) ? v : []).map((x) => cut(String(x ?? ''), each)).filter(Boolean).slice(0, n);
+  return {
+    title: cut(p.title, 200),
+    ingredients: strings(p.ingredients, 60, 200),
+    steps: strings(p.steps, 40, 600),
+    yield: cut(p.yield, 60),
+    totalMinutes: Number.isFinite(Number(p.totalMinutes)) && Number(p.totalMinutes) > 0 ? Math.round(Number(p.totalMinutes)) : null,
+    reason: cut(p.reason, 200),
+  };
+}
+
 const PROGRESSION_SYSTEM = `You plan gentle, safe training progressions for a home workout app. Only on the person's request.
 Return ONLY JSON: {"plan":[{"week":1,"perWeek":number|null,"sets":number|null,"reps":number|null,"durationSeconds":number|null,"note":"short"}, …],"note":"one short caveat"}
 Rules: one entry per week; for a frequency goal set perWeek (never above the goal's) and leave sets/reps empty unless useful; for a target goal build sets and reps (or seconds) up to the target by the last week, in small steps, starting near the person's best so far; never more than 10% harder week to week; no medical claims.`;

@@ -38,6 +38,11 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
   *Understanding a book, film or show* lets the provider search the web for the title (with your country,
   for where it streams), then reads one page about it (the save's own page, else one the search returned),
   without cookies, for its cover or poster.
+- **Import recipe from a link**, only when you paste a link into it on a recipe: that one page, fetched once over
+  https without cookies, for its recipe card (schema.org Recipe). When the page has none, its visible text
+  (up to 12,000 characters) and the dish's name are read by Apple Intelligence on the device, or, with no
+  Apple Intelligence, by your own AI key's provider. The ingredients, steps and link are stored on the save;
+  one Undo puts it back.
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and
   covers load from Wikimedia Commons and `covers.openlibrary.org`.

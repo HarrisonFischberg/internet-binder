@@ -63,6 +63,8 @@ Internet Binder makes **no network requests of its own**, with these exceptions,
 - **Books: Open Library.** Sends the **title** (and author, if known) of books you save to `openlibrary.org` for the author, year, pages, ISBN and cover. Covers load from `covers.openlibrary.org`.
 - Only missing details are filled in; anything you or the page already gave is kept. Each save shows where its details came from ("Details from Wikidata ↗").
 
+**Import recipe from a link** — only when you paste a link into *Import recipe from a link* on a recipe, Internet Binder asks your browser for permission to read that one site, then fetches that page once, **without cookies**, and takes its recipe card (schema.org Recipe). Only if the page has no recipe card, and Optional AI is on, the page's visible text (up to 12,000 characters) and the dish's name go to your provider to read the recipe from it. The ingredients, steps and the page's link are stored on the save; the change can be undone.
+
 **Live product pages ("Fix with AI" only)** — if you tick *Read each item's live product page* when starting a run, Internet Binder fetches the saved page URL of each item in that run, from your browser, **without cookies** (`credentials: 'omit'`), and reads only its structured product data (JSON-LD and product meta tags) with a parser that never runs the page's scripts. Nothing from those pages is stored except the fixes that are applied. This needs the optional all-sites permission.
 
 ## iCloud sync (Safari on the Mac and the iPhone app only)
@@ -84,7 +86,7 @@ Safari on the Mac and the Internet Binder app for iPhone can keep one library in
 | `unlimitedStorage` | Let your library grow past Chrome's 10 MB default for extension storage. It stays on your device. |
 | `activeTab`, `scripting` | Read the page you explicitly asked Internet Binder to save from, and show the confirmation toast there. |
 | `contextMenus` | The "Save to Internet Binder" right-click item. |
-| Optional site access (`*://*/*` or individual sites) | Requested **only** if you enable on-page save buttons, use *Import from tabs* (all sites, to read the open tabs you choose to import), or start a *Fix with AI* run with live-page reading ticked (all sites, to fetch your saved items' product pages). Revoke in Internet Binder's settings or at `chrome://extensions`. Leaving "all sites" mode returns the permission automatically. |
+| Optional site access (`*://*/*` or individual sites) | Requested **only** if you enable on-page save buttons, paste a link into *Import recipe from a link* (that site only), use *Import from tabs* (all sites, to read the open tabs you choose to import), or start a *Fix with AI* run with live-page reading ticked (all sites, to fetch your saved items' product pages). Revoke in Internet Binder's settings or at `chrome://extensions`. Leaving "all sites" mode returns the permission automatically. |
 | Optional `https://www.instagram.com/*` | Requested **only** when you use "Read post details" during an Instagram import. Revoke under Settings → Instagram. |
 | Optional provider origin (e.g. `https://api.openai.com/*`) | Requested **only** if you turn AI on; given back when you turn it off. |
 | Optional `https://nominatim.openstreetmap.org/*`, `https://tiles.openfreemap.org/*` | Requested **only** when you turn on Places lookups (or the map); given back when you turn them off. |

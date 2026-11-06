@@ -139,6 +139,26 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(note.label.hasPrefix("Based on a recipe from Sally's Baking Addiction"), note.label)
     }
 
+    func testImportRecipeFromLinkSheet() {
+        let app = XCUIApplication()
+        app.launchEnvironment["KEEPSAKE_DB"] = "uitest-\(UUID().uuidString)"
+        app.launchArguments += ["-importOnLaunch", URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("../demo/keepsake-web-recipe-demo.json").standardized.path]
+        app.launch()
+        open(app, kind: "Recipes", save: "Apple Fritter Coffee Cake")
+        // Not the right recipe: paste the page that has it. Something that isn't a link says so and changes nothing.
+        let swap = app.buttons["recipe.importLink"]
+        XCTAssertTrue(swap.waitForExistence(timeout: 5))
+        swap.tap()
+        let field = app.textFields["recipeLink.field"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText("apple cake")
+        app.buttons["recipeLink.import"].tap()
+        XCTAssertTrue(app.staticTexts["That doesn’t look like a web address. Paste the link to the recipe page."].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["recipe.basedOn"].waitForExistence(timeout: 5), "the card is as it was")
+    }
+
     func testWorkoutGoalAndCheckIn() {
         let app = launch()
         open(app, kind: "Workouts", save: "Push-up ladder")

@@ -28,13 +28,17 @@
 // caption, so the first read had little to go on) gets a web read with your key, readRecipe: the provider
 // searches for a published recipe as close to the dish as it can find, and that page's recipe goes on the
 // card, labelled "Based on a recipe from <site>" with its link, so it is never taken for the creator's own.
+//
+// When even that misses, you can point it to the right page yourself: Import recipe from a link
+// (importRecipeFromLink) reads the page you paste, takes its own recipe card, or has AI read the recipe
+// from its text, and fills in the same save, labelled "Recipe from <site>" with the link.
 
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
 import { isSocialHost } from './categorizer.js';
 import { guessTopics } from './topics.js';
 import { mentionsFood, isWorkoutPost, kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, isPostSave, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
-import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI, supportsWebLookup, keyFor, aiAvailable } from '../ai/provider.js';
+import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI, readRecipePageWithAI, supportsWebLookup, keyFor, aiAvailable } from '../ai/provider.js';
 
 // How sure the provider must be to make a save a Lifestyle kind, or to change a Lifestyle kind Internet Binder picked.
 export const UNDERSTAND_CONFIDENCE = 0.7;
@@ -383,6 +387,119 @@ async function readRecipe(item, settings, key, { fetchShopPage }) {
     }
   }
   return { found, page };
+}
+
+// --- A recipe from a link you paste ---------------------------------------------------------------------
+
+// The link as typed: "www.site.com/x" works too, and http becomes https. Only a web page.
+export function recipeLink(text) {
+  let v = String(text || '').trim();
+  const inText = v.match(/https?:\/\/\S+/i);
+  if (inText) v = inText[0];
+  if (!v || /\s/.test(v)) return '';
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(v)) v = `https://${v}`;
+  try {
+    const u = new URL(v);
+    if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) return '';
+    // Pages are read over https only (the iPhone app reads nothing else, and the card's link must open).
+    u.protocol = 'https:';
+    return u.href;
+  } catch {
+    return '';
+  }
+}
+
+// A page's words for AI, from where its recipe starts: a food blog's story comes first, the recipe last.
+export function recipePageText(html) {
+  const src = String(html || '').slice(0, 3_000_000);
+  const text = decodeEntities(src
+    .replace(/<(script|style|noscript|svg|template|iframe)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<(nav|header|footer|aside|form)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<br\s*\/?>|<\/(p|li|h[1-6]|div|tr)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' '))
+    .replace(/[ \t\f\v]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+  const LIMIT = 12000;
+  if (text.length <= LIMIT) return text;
+  // The last "Ingredients" heading on its own line is usually the recipe card (earlier ones sit in the story).
+  const heads = [...text.matchAll(/(^|\n)ingredients?\b[^\n]{0,30}(\n|$)/gi)].map((m) => m.index);
+  const at = heads.length ? heads[heads.length - 1] : text.search(/ingredients?/i);
+  const start = at > 0 ? Math.max(0, at - 600) : 0;
+  return text.slice(start, start + LIMIT);
+}
+
+const metaOf = (html, name) => {
+  const m = String(html || '').match(new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=(?:"([^"]*)"|'([^']*)')`, 'i'));
+  return decodeEntities((m && (m[1] ?? m[2])) || '').trim();
+};
+
+// The change a recipe from your link makes to the save (pure): the page's recipe, where it's from, and
+// the page's dish name when the save's title says nothing (a post's first line, a site's name).
+export function planLinkedRecipe(item, url, recipe, how) {
+  const old = item.details || {};
+  const site = recipe.siteName || prettyRetailer(hostnameOf(url)) || hostnameOf(url);
+  const kindPatch = kindOf(item) === 'recipe' ? {} : kindChangePatch(item, 'recipe');
+  const details = sanitizeDetails('recipe', {
+    ingredients: recipe.ingredients,
+    steps: recipe.steps,
+    yield: recipe.yield || '',
+    totalMinutes: recipe.totalMinutes || null,
+    prepMinutes: recipe.prepMinutes || null,
+    cookMinutes: recipe.cookMinutes || null,
+    cuisine: recipe.cuisine || old.cuisine || '',
+    category: recipe.category || old.category || '',
+    author: recipe.author || '',
+    source: how === 'page' ? 'page' : 'ai',
+    drafted: [],
+    basedOn: { url, site, title: recipe.title || '' },
+  });
+  const patch = { ...kindPatch, details, understoodAt: nowIso(), needsAi: false };
+  const changes = [{ field: 'recipe details', from: `${(old.ingredients || []).length} ingredient${(old.ingredients || []).length === 1 ? '' : 's'}`, to: `recipe from ${site}` }];
+  const title = String(recipe.title || '').trim();
+  if (title.length >= 3 && title !== item.title && !(item.userFields || []).includes('title') && (isPostSave(item) || genericTitle(item.title) || !item.title)) {
+    patch.title = title.slice(0, 200);
+    changes.push({ field: 'title', from: item.title, to: patch.title });
+  }
+  return { patch, changes, site };
+}
+
+// Import recipe from a link: you paste the page with the real recipe, and this save gets it (the same save,
+// not a new one). The page's own recipe card (schema.org Recipe) when it has one, with no AI at all; else
+// AI reads the recipe from the page's text (Apple Intelligence on the device, or your key). Logged with Undo.
+// fetchPage(url) returns the page's HTML or null. Returns { ok, site, ingredients, steps, how, logId } or
+// { ok: false, error } with words to show.
+export async function importRecipeFromLink(store, id, link, { fetchPage = async () => null } = {}) {
+  const url = recipeLink(link);
+  if (!url) return { ok: false, error: 'That doesn’t look like a web address. Paste the link to the recipe page.' };
+  if (SOCIAL.test(hostOf(url))) return { ok: false, error: 'That’s a social post, which can’t be read without signing in. Paste the link to the recipe page itself.' };
+  const item = await store.getItem(id);
+  if (!item || item.deletedAt) return { ok: false, error: 'That save no longer exists.' };
+  let html = null;
+  try { html = await fetchPage(url); } catch { html = null; }
+  if (!html) return { ok: false, error: 'Couldn’t open that page. Check the link, or try the recipe’s own page.' };
+  let recipe = recipeFromHtml(html);
+  let how = 'page';
+  let reason = '';
+  if (!recipe || (recipe.ingredients || []).length < 1) {
+    const settings = await store.getSettings();
+    // You asked: your key may be used (not only the device model).
+    const key = keyFor(settings, await store.getSecret('aiApiKey'));
+    if (!aiAvailable(settings, key)) return { ok: false, error: 'That page has no recipe card to read. Turn on Apple Intelligence or add your AI key, and AI can read the recipe from the page.' };
+    const ai = await readRecipePageWithAI({ dish: item.title, url, text: recipePageText(html) }, settings, key);
+    if (!ai.ingredients.length) return { ok: false, error: 'No recipe found on that page. Try the page with the full recipe on it.' };
+    recipe = { ...ai, title: ai.title || recipe?.title || '', siteName: recipe?.siteName || '' };
+    how = 'ai';
+    reason = ai.reason;
+  }
+  if (!recipe.siteName) recipe.siteName = metaOf(html, 'og:site_name');
+  if (!recipe.title) recipe.title = metaOf(html, 'og:title');
+  const current = await store.getItem(id);
+  if (!current || current.deletedAt) return { ok: false, error: 'That save no longer exists.' };
+  const { patch, changes, site } = planLinkedRecipe(current, url, recipe, how);
+  const before = Object.fromEntries([...LOGGED, 'understoodAt', 'needsAi'].filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
+  await store.updateItem(id, patch, { by: 'ai' });
+  const logId = uid();
+  await store.appendAiLog([{ id: logId, runId: `link-recipe-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: reason || `Recipe from the link you added (${site}).`, undone: false }]);
+  return { ok: true, site, how, ingredients: patch.details.ingredients.length, steps: patch.details.steps.length, logId };
 }
 
 // --- Something to buy -----------------------------------------------------------------------------

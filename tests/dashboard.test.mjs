@@ -155,6 +155,43 @@ test('Review rows offer numbered suggestions and file with a number key', async 
   assert.equal(filed.needsReview, false);
 });
 
+test('Import recipe from a link: an empty recipe gets the page\'s recipe, on the same save, with Undo', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const it = await store.addItem({ title: 'Apple fritter coffee cake', url: 'https://www.instagram.com/reel/LINK1/', type: 'instagram', kind: 'recipe', details: { ingredients: [], steps: [], source: 'you' } });
+  await afterChange();
+  const page = `<html><head><meta property="og:site_name" content="Sally's Baking Addiction"><script type="application/ld+json">{"@type":"Recipe","name":"Apple Fritter Cake","recipeIngredient":["2 cups flour","1 cup sugar","2 apples"],"recipeInstructions":["Mix.","Bake."]}</script></head></html>`;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => page });
+  try {
+    await go('#kind/recipe');
+    [...view().querySelectorAll('.card')].find((c) => c.textContent.includes('fritter')).querySelector('.card-hit').click();
+    await afterChange();
+    const open = [...window.document.querySelectorAll('.modal-recipe .recipe-empty button')].find((b) => /Import recipe from a link/.test(b.textContent));
+    assert.ok(open, 'the empty recipe offers the import');
+    open.click();
+    await settle();
+    const input = window.document.querySelector('.modal-recipe-link input');
+    assert.ok(input, 'the link dialog opened');
+    input.value = 'sallysbakingblog.com/apple-fritter-cake';
+    [...window.document.querySelectorAll('.modal-recipe-link button')].find((b) => b.textContent === 'Import recipe').click();
+    await until(() => window.document.querySelector('.modal-recipe .recipe-ingredients'));
+    const saved = await store.getItem(it.id);
+    assert.deepEqual(saved.details.ingredients, ['2 cups flour', '1 cup sugar', '2 apples']);
+    assert.equal(saved.details.basedOn.url, 'https://sallysbakingblog.com/apple-fritter-cake');
+    assert.match(window.document.querySelector('.modal-recipe .recipe-based-on').textContent, /Recipe from Sally's Baking Addiction, the link you added/);
+    assert.ok(window.document.querySelector('.modal-recipe .recipe-from-link'), 'a filled recipe still offers another link');
+    const undo = [...window.document.querySelectorAll('.toast .toast-action')].find((b) => b.textContent === 'Undo');
+    undo.click();
+    await afterChange();
+    assert.deepEqual((await store.getItem(it.id)).details.ingredients, []);
+  } finally {
+    globalThis.fetch = realFetch;
+    window.document.querySelectorAll('.modal-close').forEach((b) => b.click());
+    await afterChange();
+  }
+});
+
 test('recipes get their own view, a kind badge, and a recipe panel', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
   const store = createStore(chromeBackend(), idbBackend());
