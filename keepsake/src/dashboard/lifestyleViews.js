@@ -9,6 +9,9 @@ import { kindIcon } from '../shared/kindIcon.js';
 import { suggestProgression } from '../ai/provider.js';
 import { openableUrl } from '../shared/url.js';
 import { stepIngredients } from '../shared/stepIngredients.js';
+import { importRecipeFromLink, recipeLink } from '../shared/understand.js';
+import { undoFixes } from '../shared/aiFix.js';
+import { fetchPage } from '../ai/pages.js';
 
 // dashboard.js's own state and helpers, handed over once at boot.
 let D;
@@ -285,9 +288,73 @@ export async function openWorkout(id) {
 const isDrafted = (d, field) => Array.isArray(d?.drafted) && d.drafted.includes(field);
 const draftTag = () => el('span', { class: 'badge badge-brass ai-draft-tag', title: 'Your AI provider wrote this because the post doesn’t say it. Check it before you use it.' }, ['AI draft']);
 
+// Import recipe from a link: you paste the page with the real recipe and this save gets it (understand.js
+// importRecipeFromLink): the page's own recipe card, or AI reads it from the page. The browser asks once for
+// that site, since Internet Binder only reads sites you let it. Resolves true when the card changed.
+export async function importRecipeDialog(item, { onUndo } = {}) {
+  const input = el('input', { class: 'input', type: 'url', inputmode: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://', 'aria-label': 'Recipe link', 'aria-describedby': 'recipe-link-help' });
+  const status = el('p', { class: 'help', role: 'status', 'aria-live': 'polite' });
+  const body = [
+    el('label', { class: 'label', for: 'recipe-link' }, ['Link to the recipe']),
+    Object.assign(input, { id: 'recipe-link' }),
+    el('p', { class: 'help', id: 'recipe-link-help' }, ['The page with the full recipe, like a food blog or recipe site. Its ingredients and steps replace what’s on this card. You can undo it.']),
+    status,
+  ];
+  let done = null;
+  const run = async (close, btn) => {
+    const url = recipeLink(input.value);
+    if (!url) {
+      input.focus();
+      throw new Error('That doesn’t look like a web address. Paste the link to the recipe page.');
+    }
+    // First, while the click still counts: the browser's own prompt to read that one site.
+    let granted = false;
+    try { granted = await chrome.permissions.request({ origins: [`${new URL(url).origin}/*`] }); } catch { granted = false; }
+    if (!granted) throw new Error('Internet Binder needs your OK to read that site. Try again and choose Allow.');
+    btn.textContent = 'Reading the page…';
+    input.disabled = true;
+    status.textContent = 'Reading the page…';
+    try {
+      const r = await importRecipeFromLink(D.store, item.id, url, { fetchPage });
+      if (!r.ok) throw new Error(r.error);
+      done = r;
+      close(true);
+      return false;
+    } catch (err) {
+      throw new Error(/\((401|403|429)\)|API key/i.test(String(err?.message)) ? `Your AI provider didn’t answer: ${err.message}` : err?.message || 'Something went wrong.');
+    } finally {
+      input.disabled = false;
+      btn.textContent = 'Import recipe';
+      status.textContent = '';
+    }
+  };
+  const ok = await UI.openModal({
+    title: 'Import recipe from a link',
+    body,
+    className: 'modal-recipe-link',
+    actions: [
+      { label: 'Cancel', quiet: true, value: false },
+      { label: 'Import recipe', primary: true, onClick: run },
+    ],
+    onOpen: ({ dialog }) => input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); dialog.querySelector('.modal-actions .btn-primary')?.click(); }
+    }),
+  });
+  if (!ok || !done) return false;
+  UI.toast(`Recipe added from ${done.site}: ${pluralize(done.ingredients, 'ingredient')}${done.steps ? `, ${pluralize(done.steps, 'step')}` : ''}.`, {
+    action: { label: 'Undo', onClick: async () => {
+      const entry = (await D.store.getAiLog()).find((e) => e.id === done.logId);
+      if (entry) await undoFixes(D.store, [entry]);
+      onUndo?.();
+      UI.toast('Recipe put back as it was.', { duration: 2200 });
+    } },
+  });
+  return true;
+}
+
 // The recipe view: a large dialog with the photo, what you need and what to do. Checking off
 // ingredients and steps is just for cooking along (not saved). Editing lives in Edit details.
-export async function openRecipe(id) {
+export async function openRecipe(id, onShown) {
   const item = await D.store.getItem(id);
   if (!item) {
     UI.toast('That item no longer exists.', { kind: 'danger' });
@@ -296,13 +363,25 @@ export async function openRecipe(id) {
   const d = item.details || {};
   const ingredients = d.ingredients || [];
   const steps = d.steps || [];
-  const sourceLabel = { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', ai: 'Recipe read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' }[d.source] || '';
-  // A close recipe your AI provider found online because the post never wrote one down (understand.js readRecipe).
-  const basedOn = d.basedOn?.url ? el('p', { class: 'recipe-based-on' }, [
-    'Based on a recipe from ',
-    el('a', { href: d.basedOn.url, target: '_blank', rel: 'noopener noreferrer' }, [d.basedOn.site || hostnameOf(d.basedOn.url)]),
-    '. The post didn’t share its recipe, so AI found a close one; it may differ from the video.',
-  ]) : null;
+  // A recipe from a link you added (Import recipe from a link) says where it's from; the label would repeat it.
+  const linked = d.basedOn?.url && d.source !== 'web';
+  const sourceLabel = linked ? '' : { page: 'Recipe from the page', caption: 'Recipe from the caption', you: 'Recipe added by you', ai: 'Recipe read by AI', 'ai-draft': 'Drafted by AI: check it before you cook' }[d.source] || '';
+  // A close recipe your AI provider found online because the post never wrote one down (understand.js readRecipe),
+  // or the page you pointed it to.
+  const siteLink = () => el('a', { href: d.basedOn.url, target: '_blank', rel: 'noopener noreferrer' }, [d.basedOn.site || hostnameOf(d.basedOn.url)]);
+  const basedOn = !d.basedOn?.url ? null : linked
+    ? el('p', { class: 'recipe-based-on' }, ['Recipe from ', siteLink(), d.source === 'ai' ? ', the link you added. AI read it from the page; check it before you cook.' : ', the link you added.'])
+    : el('p', { class: 'recipe-based-on' }, ['Based on a recipe from ', siteLink(), '. The post didn’t share its recipe, so AI found a close one; it may differ from the video.']);
+  // Not the right recipe (or none at all): paste the page that has it.
+  const fromLink = async (close) => {
+    close(false);
+    // Undo while the refreshed view is still open shows the recipe as it was again.
+    let reopen = () => {};
+    if (await importRecipeDialog(item, { onUndo: () => reopen() })) {
+      await openRecipe(id, (closeNew) => { reopen = () => { closeNew(false); openRecipe(id); }; });
+      reopen = () => {};
+    }
+  };
   const from = isPostSave(item) && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const facts = [
     d.totalMinutes ? ['Time', formatMinutes(d.totalMinutes)] : null,
@@ -361,6 +440,7 @@ export async function openRecipe(id) {
         el('h2', { class: 'recipe-title' }, [item.title]),
         el('p', { class: 'recipe-from' }, [[from, d.author && d.author !== from ? `by ${d.author}` : '', sourceLabel].filter(Boolean).join(' · ')]),
         basedOn,
+        empty ? null : el('button', { type: 'button', class: 'btn btn-quiet btn-sm recipe-from-link', onClick: () => fromLink(closeRecipe) }, [UI.linkIcon(), 'Not the right recipe? Import from a link']),
         facts.length ? el('dl', { class: 'recipe-facts-grid' }, facts.flatMap(([k, v]) => [el('dt', {}, [k]), el('dd', {}, [v])])) : null,
         item.note ? el('p', { class: 'recipe-note' }, [`“${item.note}”`]) : null,
         item.status === 'done' ? el('span', { class: 'badge' }, ['Cooked']) : null,
@@ -369,7 +449,8 @@ export async function openRecipe(id) {
     empty
       ? el('div', { class: 'recipe-empty' }, [
         el('p', {}, ['No ingredients or steps were found on the page or in the caption.']),
-        el('p', { class: 'help' }, ['Add them yourself in Edit details, or, with Optional AI on, ask for a draft there.']),
+        el('p', { class: 'help' }, ['Know where the recipe is? Paste its link and Internet Binder fills this card in. Or add it yourself in Edit details.']),
+        el('div', {}, [el('button', { type: 'button', class: 'btn btn-primary btn-sm', onClick: () => fromLink(closeRecipe) }, [UI.linkIcon(), 'Import recipe from a link'])]),
       ])
       : el('div', { class: 'recipe-columns' }, [
         el('section', { class: 'recipe-col' }, [el('div', { class: 'recipe-col-head' }, [el('h3', {}, ['Ingredients', isDrafted(d, 'ingredients') ? draftTag() : null]), counter]), ingList]),
@@ -377,11 +458,13 @@ export async function openRecipe(id) {
       ]),
   ]);
   const cooked = item.status === 'done';
+  let closeRecipe = () => {};
   await UI.openModal({
     title: item.title,
     body,
     full: true,
     className: 'modal-recipe',
+    onOpen: ({ close }) => { closeRecipe = close; onShown?.(close); },
     actions: [
       { label: 'Edit details', quiet: true, autofocus: true, closes: false, onClick: async (close) => { close(false); await D.openItem(item.id); } },
       item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), icon: UI.externalIcon() } : null,

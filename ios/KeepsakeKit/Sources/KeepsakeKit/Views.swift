@@ -98,8 +98,19 @@ public struct SaveDetail: Decodable, Sendable {
     /// The fields your AI provider drafted because the save didn't say them ("ingredients", "steps", "exercises").
     public let drafted: [String]?
     /// A recipe your AI provider found online because the post never wrote one down: the page it's based on.
-    public struct BasedOn: Decodable, Sendable { public let url: String; public let site: String?; public let title: String? }
+    /// linked: the page you pointed it to yourself (Import recipe from a link); readByAI: AI read the recipe from it.
+    public struct BasedOn: Decodable, Sendable { public let url: String; public let site: String?; public let title: String?; public let linked: Bool?; public let readByAI: Bool? }
     public let basedOn: BasedOn?
+}
+
+/// What Import recipe from a link did: the site and counts, or words to show; logId undoes it.
+public struct RecipeImport: Decodable, Sendable {
+    public let ok: Bool
+    public let error: String?
+    public let site: String?
+    public let ingredients: Int?
+    public let steps: Int?
+    public let logId: String?
 }
 
 public struct GoalView: Decodable, Sendable {
@@ -349,6 +360,11 @@ extension Library {
     /// Chrome's Fix with AI for any saves: reads each again (a product from its picture and shop page) and
     /// files the ones in Review the AI is confident about.
     public func fixWithAI(_ ids: [String]) async throws -> AIFixReport { try await prepare(); return try await core.call("views.fixWithAI", [ids], as: AIFixReport.self) }
+    /// Import recipe from a link: the page you pasted fills this recipe (its recipe card, or AI reads it).
+    public func importRecipe(_ id: String, link: String) async throws -> RecipeImport {
+        try await prepare()
+        return try await core.call("views.importRecipe", [id, link], as: RecipeImport.self)
+    }
     public func testAI() async throws { try await core.call("views.testAi") }
     /// Run AI on imported saves, one save (fill.js readImported): your provider reads it, then its details
     /// or collection. Throws the provider's error ("Provider error (429): …") so the caller can wait and retry.

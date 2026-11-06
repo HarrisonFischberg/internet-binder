@@ -3,7 +3,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe } from '../keepsake/src/shared/understand.js';
+import { undoFixes } from '../keepsake/src/shared/aiFix.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink } from '../keepsake/src/shared/understand.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
@@ -331,6 +332,8 @@ test('thin recipes: fewer than three ingredients or one step; yours and a page\'
 test('recipeFromHtml reads the page\'s own schema.org recipe and site name', () => {
   const r = recipeFromHtml(FRITTER_PAGE);
   assert.deepEqual([r.title, r.siteName, r.ingredients.length, r.steps.length, r.totalMinutes, r.yield], ['Apple Fritter Cake', "Sally's Baking Addiction", 5, 3, 70, '12 slices']);
+  // Minified pages leave the attribute unquoted (loveandlemons.com: <script type=application/ld+json class=…>).
+  assert.equal(recipeFromHtml(FRITTER_PAGE.replace('type="application/ld+json"', 'type=application/ld+json class=yoast-schema-graph')).ingredients.length, 5);
 });
 
 test('planRecipe: the page\'s recipe goes on the card, labelled as based on it, with its link; unsure or unlinked finds do nothing', () => {
@@ -395,4 +398,95 @@ test('understandItem: a Reel that only shows the dish gets a close recipe from t
   await store.setSecret('aiApiKey', '');
   await understandItem(store, it.id, { force: true }, { fetchShopPage: async () => FRITTER_PAGE });
   assert.equal(bodies.length, 0);
+});
+
+// --- Import recipe from a link ------------------------------------------------------------------------
+
+const linkStore = async () => {
+  const kv = {};
+  const store = createStore({ get: async (k) => Object.fromEntries((Array.isArray(k) ? k : [k]).filter((x) => x in kv).map((x) => [x, kv[x]])), set: async (o) => Object.assign(kv, o), remove: async () => {}, clear: async () => {}, onChanged: () => () => {} }, memoryRecordBackend());
+  await store.init();
+  return store;
+};
+
+test('recipeLink: a pasted address works with or without https, inside other words too; anything else is refused', () => {
+  assert.equal(recipeLink('https://site.com/cake'), 'https://site.com/cake');
+  assert.equal(recipeLink('  www.site.com/cake '), 'https://www.site.com/cake');
+  assert.equal(recipeLink('Check this out https://site.com/cake?x=1 so good'), 'https://site.com/cake?x=1');
+  assert.equal(recipeLink('http://site.com/cake'), 'https://site.com/cake');
+  for (const bad of ['', 'apple cake', 'javascript:alert(1)', 'localhost', 'ftp://site.com/x']) assert.equal(recipeLink(bad), '', bad);
+});
+
+test('recipePageText: a long food blog starts near its recipe card, not at the story', () => {
+  const story = '<p>' + 'We went apple picking and it was lovely. '.repeat(600) + '</p>';
+  const html = `<html><body>${story}<h2>Ingredients</h2><ul><li>2 cups flour</li><li>3 apples</li></ul><h2>Instructions</h2><ol><li>Mix</li></ol></body></html>`;
+  const text = recipePageText(html);
+  assert.ok(text.length <= 12000);
+  assert.match(text, /2 cups flour/);
+});
+
+test('importRecipeFromLink: the page\'s own recipe card fills the same save, no AI needed, labelled with the link, with Undo', async () => {
+  const store = await linkStore();
+  const it = await store.addItem(post('apple fritter coffee cake 🍎', { kind: 'recipe', collectionId: null, details: { ingredients: ['1 apple fritter coffee cake'], steps: [], source: 'ai-draft', drafted: ['ingredients'] } }));
+  const read = [];
+  const r = await importRecipeFromLink(store, it.id, 'sallysbakingblog.com/apple-fritter-cake/', { fetchPage: async (u) => { read.push(u); return FRITTER_PAGE; } });
+  assert.equal(r.ok, true);
+  assert.equal(r.how, 'page');
+  assert.deepEqual(read, ['https://sallysbakingblog.com/apple-fritter-cake/']);
+  const saved = await store.getItem(it.id);
+  assert.equal((await store.getItems()).length, 1, 'no new save');
+  assert.deepEqual([saved.details.source, saved.details.ingredients.length, saved.details.steps.length, saved.details.basedOn.url, saved.details.basedOn.site, saved.details.drafted], ['page', 5, 3, 'https://sallysbakingblog.com/apple-fritter-cake/', "Sally's Baking Addiction", undefined]);
+  assert.equal(saved.title, 'Apple Fritter Cake', 'a post\'s first line gives way to the dish\'s name');
+  const log = (await store.getAiLog()).at(-1);
+  assert.equal(log.id, r.logId);
+  assert.deepEqual(log.before.details.ingredients, ['1 apple fritter coffee cake']);
+  // Undo (the toast's, through aiFix.undoFixes as the iPhone's views.undoAi does) puts the card back.
+  await undoFixes(store, [log]);
+  const back = await store.getItem(it.id);
+  assert.deepEqual([back.title, back.details.ingredients, back.details.basedOn], [it.title, ['1 apple fritter coffee cake'], undefined]);
+});
+
+test('importRecipeFromLink: a page with no recipe card is read by AI; without AI, or with no recipe, it says so and changes nothing', async () => {
+  const store = await linkStore();
+  const it = await store.addItem(post('pasta night', { kind: 'recipe', collectionId: null }));
+  const plain = '<html><head><meta property="og:site_name" content="Nonna Blog"></head><body><h1>Cacio e pepe</h1><p>Ingredients</p><ul><li>200g spaghetti</li><li>100g pecorino</li><li>Black pepper</li></ul><p>Boil the pasta. Toss with cheese and pepper.</p></body></html>';
+  // No AI at all.
+  let r = await importRecipeFromLink(store, it.id, 'https://nonna.example.com/cacio', { fetchPage: async () => plain });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /Apple Intelligence|AI key/);
+  // With a key: the provider reads the page's text.
+  await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await store.setSecret('aiApiKey', 'sk');
+  const bodies = [];
+  let answer = { title: 'Cacio e pepe', ingredients: ['200g spaghetti', '100g pecorino', 'Black pepper'], steps: ['Boil the pasta.', 'Toss with cheese and pepper.'], yield: '2 servings', totalMinutes: 15 };
+  globalThis.fetch = async (url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(answer) }] }) };
+  };
+  r = await importRecipeFromLink(store, it.id, 'https://nonna.example.com/cacio', { fetchPage: async () => plain });
+  assert.equal(r.ok, true);
+  assert.equal(r.how, 'ai');
+  assert.equal(bodies.length, 1);
+  assert.match(JSON.stringify(bodies[0].messages), /200g spaghetti/);
+  const saved = await store.getItem(it.id);
+  assert.deepEqual([saved.details.source, saved.details.ingredients.length, saved.details.basedOn.site, saved.details.yield], ['ai', 3, 'Nonna Blog', '2 servings']);
+  // A page with no recipe on it.
+  answer = { title: '', ingredients: [], steps: [] };
+  const before = JSON.stringify((await store.getItem(it.id)).details);
+  r = await importRecipeFromLink(store, it.id, 'https://nonna.example.com/about', { fetchPage: async () => '<html><body>About us</body></html>' });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /No recipe found/);
+  assert.equal(JSON.stringify((await store.getItem(it.id)).details), before);
+});
+
+test('importRecipeFromLink: a bad address, a social post or a page that won\'t open changes nothing', async () => {
+  const store = await linkStore();
+  const it = await store.addItem(post('pasta night', { kind: 'recipe', collectionId: null }));
+  let fetched = 0;
+  const fetchPage = async () => { fetched++; return null; };
+  assert.match((await importRecipeFromLink(store, it.id, 'pasta', { fetchPage })).error, /web address/);
+  assert.match((await importRecipeFromLink(store, it.id, 'https://www.instagram.com/reel/XYZ/', { fetchPage })).error, /social post/);
+  assert.equal(fetched, 0);
+  assert.match((await importRecipeFromLink(store, it.id, 'https://gone.example.com/x', { fetchPage })).error, /Couldn’t read that page/);
+  assert.equal((await store.getAiLog()).length, 0);
 });

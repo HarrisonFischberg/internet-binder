@@ -20,6 +20,8 @@ struct SaveDetailScreen: View {
     @State private var destinations: [Destination] = []
     /// A place choice being saved (its index; -1 for None of these): its button shows progress, the rest wait.
     @State private var choosing: Int?
+    /// Import recipe from a link: the sheet where you paste the page with the real recipe.
+    @State private var linkSheet = false
 
     /// The latest copy (a stamp or an edit updates it in place).
     private var current: Save { model.index.byId[save.id] ?? save }
@@ -66,6 +68,9 @@ struct SaveDetailScreen: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button("Edit", systemImage: "pencil") { editing = true }
+                    if current.kind == "recipe" {
+                        Button("Import Recipe from Link", systemImage: "link") { linkSheet = true }
+                    }
                     Menu("Move to…", systemImage: "folder") {
                         Button("New collection…", systemImage: "plus") { model.newCollectionFor = [current.id] }
                         ForEach(destinations) { d in
@@ -97,6 +102,9 @@ struct SaveDetailScreen: View {
             destinations = (try? await model.library?.destinations()) ?? []
         }
         .sheet(isPresented: $editing) { EditSaveSheet(save: current) }
+        .sheet(isPresented: $linkSheet) {
+            RecipeLinkSheet(save: current) { Task { await reload() } }
+        }
         .task(id: "\(current.status ?? "")\(current.title)") { await reload() }
         .fullScreenCover(isPresented: $cooking) {
             CookingView(save: current, steps: steps,
@@ -192,7 +200,7 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var panel: some View {
         switch current.kind {
         case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placeChoicesCard; placePanel }
-        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; recipePanel }
+        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; swapRecipeLink; recipePanel }
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         case "product": productPanel
         case "book", "media": shelfPanel
@@ -215,15 +223,20 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var basedOnNote: some View {
         if let based = detail?.basedOn, let link = URL(string: based.url) {
             let site = based.site.flatMap { $0.isEmpty ? nil : $0 } ?? link.host() ?? "another site"
+            // A page you pointed it to yourself, or a close one AI found because the post never shared its recipe.
+            let mine = based.linked == true
+            let lead = mine ? "Recipe from " : "Based on a recipe from "
+            let note = !mine ? "The post didn't share its recipe, so AI found a close one. It may differ from the video."
+                : based.readByAI == true ? "The link you added. AI read the recipe from the page; check it before you cook." : "The link you added."
             Button { openURL(link) } label: {
                 // Accessibility sizes: the icon sits above the words so they get the card's full width.
                 (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 12))) {
                     Image(systemName: "link").font(.subheadline.weight(.semibold)).foregroundStyle(KindStyle("recipe").color)
                         .padding(.top, 2).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        (Text("Based on a recipe from ") + Text(site).fontWeight(.semibold).underline())
+                        (Text(lead) + Text(site).fontWeight(.semibold).underline())
                             .font(.subheadline).foregroundStyle(t.ink)
-                        Text("The post didn't share its recipe, so AI found a close one. It may differ from the video.")
+                        Text(note)
                             .font(.footnote).foregroundStyle(t.inkMuted)
                     }
                     .multilineTextAlignment(.leading)
@@ -239,7 +252,7 @@ struct SaveDetailScreen: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(PressStyle())
-            .accessibilityLabel("Based on a recipe from \(site). It may differ from the video.")
+            .accessibilityLabel(mine ? "Recipe from \(site), the link you added." : "Based on a recipe from \(site). It may differ from the video.")
             .accessibilityHint("Opens \(site)")
             .accessibilityIdentifier("recipe.basedOn")
         }
@@ -522,8 +535,37 @@ struct SaveDetailScreen: View {
                 }
             }
             if ingredients.isEmpty && steps.isEmpty {
-                Text("This page didn't include a written recipe.").font(KSFont.note).foregroundStyle(t.inkMuted)
+                // No recipe yet: paste the page that has it.
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("No written recipe was found for this save.").font(reading).foregroundStyle(t.ink)
+                    Text("Know where the recipe is? Paste its link and the ingredients and steps fill in here.")
+                        .font(.subheadline).foregroundStyle(t.inkMuted)
+                    Button { linkSheet = true } label: {
+                        Label("Import Recipe from Link", systemImage: "link").font(.headline).frame(maxWidth: .infinity, minHeight: 36)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .buttonBorderShape(.capsule)
+                    .controlSize(.large)
+                    .tint(KindStyle("recipe").color)
+                    .accessibilityIdentifier("recipe.importLink")
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .ksSurface()
             }
+        }
+    }
+
+    /// Not the one: a quiet way to swap in the right page, next to the note that says where the recipe came from.
+    @ViewBuilder private var swapRecipeLink: some View {
+        if !(d?["ingredients"]?.array ?? []).isEmpty || !steps.isEmpty {
+            Button { linkSheet = true } label: {
+                Label("Not the right recipe? Import from a link", systemImage: "link")
+                    .font(.subheadline.weight(.medium)).foregroundStyle(t.inkMuted)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("recipe.importLink")
         }
     }
 
@@ -755,5 +797,108 @@ struct EditSaveSheet: View {
             .onAppear { title = save.title; note = save.note ?? "" }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// Import recipe from a link: you paste the page with the real recipe, and this save gets its ingredients and
+/// steps (understand.js importRecipeFromLink): the page's own recipe card, or AI reads it from the page. The
+/// same save is filled in, not a new one; one Undo puts it back.
+struct RecipeLinkSheet: View {
+    let save: Save
+    let done: () -> Void
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+    @Environment(\.dismiss) private var dismiss
+    @State private var link = ""
+    @State private var working = false
+    @State private var problem = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Paste the page with the full recipe, like a food blog or recipe site. Its ingredients and steps replace what's on this card. You can undo it.")
+                    .font(.subheadline).foregroundStyle(t.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    TextField("https://", text: $link)
+                        .keyboardType(.URL).textContentType(.URL)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .submitLabel(.go)
+                        .focused($focused)
+                        .onSubmit { start() }
+                        .disabled(working)
+                        .foregroundStyle(t.ink)
+                        .padding(.horizontal, 16).frame(minHeight: 52)
+                        .background(t.well, in: Capsule())
+                        .overlay(Capsule().strokeBorder(focused ? t.accent : t.rule, lineWidth: focused ? 1.5 : 1))
+                        .accessibilityLabel("Recipe link")
+                        .accessibilityIdentifier("recipeLink.field")
+                    // The system Paste button reads the clipboard only when tapped, so iOS never asks to allow it.
+                    PasteButton(payloadType: URL.self) { urls in
+                        if let url = urls.first { link = url.absoluteString; start() }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
+                    .tint(t.accentForWhiteGlyph)
+                    .disabled(working)
+                    .accessibilityLabel("Paste the link you copied")
+                }
+                if !problem.isEmpty {
+                    Label(problem, systemImage: "exclamationmark.circle")
+                        .font(.subheadline).foregroundStyle(t.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("recipeLink.problem")
+                }
+                Spacer(minLength: 0)
+                // While it reads, the slab stays lit with a spinner (start() ignores taps), so a slow page doesn't look stuck.
+                PrimarySlab(working ? "Reading the page…" : "Import Recipe", symbol: "arrow.down.doc", kind: "recipe") { start() }
+                    .overlay(alignment: .leading) {
+                        if working { ProgressView().tint(t.onPrimary).padding(.leading, 24).accessibilityHidden(true) }
+                    }
+                    .disabled(!working && link.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityIdentifier("recipeLink.import")
+            }
+            .padding(20)
+            .background(TableBackground())
+            .navigationTitle("Import Recipe from Link")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(working) } }
+        }
+        .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled(working)
+        .onAppear { focused = true }
+    }
+
+    private func start() {
+        guard !working, let lib = model.library else { return }
+        let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        working = true
+        problem = ""
+        Task {
+            defer { working = false }
+            do {
+                let r = try await lib.importRecipe(save.id, link: text)
+                guard r.ok else {
+                    problem = r.error ?? "Couldn't read that page."
+                    Haptic.warning()
+                    return
+                }
+                Haptic.settled()
+                model.refresh()
+                done()
+                dismiss()
+                let counts = [r.ingredients.map { $0 == 1 ? "1 ingredient" : "\($0) ingredients" }, (r.steps ?? 0) > 0 ? r.steps.map { $0 == 1 ? "1 step" : "\($0) steps" } : nil].compactMap { $0 }.joined(separator: ", ")
+                model.show("Recipe added from \(r.site ?? "the page")\(counts.isEmpty ? "" : ": \(counts)")") {
+                    if let id = r.logId { try? await lib.undoAI([id]) }
+                    model.refresh()
+                    done()
+                }
+            } catch {
+                problem = error.localizedDescription
+            }
+        }
     }
 }

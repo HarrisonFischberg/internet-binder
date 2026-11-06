@@ -67,6 +67,7 @@ public final class KeepsakeCore: @unchecked Sendable {
         native.setObject(clearTimeout, forKeyedSubscript: "clearTimeout" as NSString)
         native.setObject(networkBridge(), forKeyedSubscript: "fetch" as NSString)
         native.setObject(pageBridge(), forKeyedSubscript: "fetchPage" as NSString)
+        native.setObject(pageBridge(asked: true), forKeyedSubscript: "fetchAskedPage" as NSString)
         native.setObject(imageBridge(), forKeyedSubscript: "loadImage" as NSString)
         native.setObject(recordBridge(in: ctx), forKeyedSubscript: "db" as NSString)
         native.setObject(settingsBridge(in: ctx), forKeyedSubscript: "kv" as NSString)
@@ -124,8 +125,9 @@ public final class KeepsakeCore: @unchecked Sendable {
 
     /// One GET of a public https page or picture, without cookies, for Optional AI (understand.js): the shop
     /// page your provider's web search found for a product, or the picture a card already shows.
-    private func readOnce(_ urlString: String, accept: String, limit: Int, done: @escaping @Sendable (Data?) -> Void) {
-        guard aiOn(), let url = URL(string: urlString), url.scheme == "https", url.host() != nil else { done(nil); return }
+    /// `asked`: a page you pasted yourself (Import recipe from a link), read whether or not Optional AI is on.
+    private func readOnce(_ urlString: String, accept: String, limit: Int, asked: Bool = false, done: @escaping @Sendable (Data?) -> Void) {
+        guard asked || aiOn(), let url = URL(string: urlString), url.scheme == "https", url.host() != nil else { done(nil); return }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.httpShouldHandleCookies = false
@@ -138,11 +140,11 @@ public final class KeepsakeCore: @unchecked Sendable {
         }
     }
 
-    /// __native.fetchPage(url, done(html | null)).
-    private func pageBridge() -> @convention(block) (String, JSValue) -> Void {
+    /// __native.fetchPage(url, done(html | null)); __native.fetchAskedPage the same for a link you pasted.
+    private func pageBridge(asked: Bool = false) -> @convention(block) (String, JSValue) -> Void {
         return { [unowned self] url, done in
             let callback = JSBox(done)
-            self.readOnce(url, accept: "text/html,application/xhtml+xml", limit: 3_000_000) { data in
+            self.readOnce(url, accept: "text/html,application/xhtml+xml", limit: 3_000_000, asked: asked) { data in
                 let html = data.map { String(decoding: $0, as: UTF8.self) }
                 self.queue.async { callback.value.call(withArguments: [html ?? NSNull()]) }
             }
