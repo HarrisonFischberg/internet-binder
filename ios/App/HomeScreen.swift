@@ -91,6 +91,7 @@ struct HomeScreen: View {
                 }
                 .padding(.horizontal, 20).padding(.bottom, 40)
             }
+            .clearsTabBar()
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
         }
         .toolbar(.hidden, for: .navigationBar)

@@ -28,6 +28,7 @@ struct CollectionsScreen: View {
                 }
                 .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
             }
+            .clearsTabBar()
             if selecting { selectionBar.transition(.move(edge: .bottom).combined(with: .opacity)) }
         }
         .animation(KSMotion.settle, value: selecting)
@@ -116,6 +117,7 @@ struct CollectionScreen: View {
                 }
                 .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
             }
+            .clearsTabBar()
             if selecting {
                 SaveSelectionBar(all: (toBuy + bought).map(\.id), selected: $selected, selecting: $selecting)
                     .transition(.move(edge: .bottom).combined(with: .opacity))

@@ -9,6 +9,24 @@ final class TabBarAndConsentTests: XCTestCase {
         try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(name).png"))
     }
 
+    /// Scrolled to the end, Home's last card sits fully above the floating tab bar, not under it.
+    func testHomeEndClearsTabBar() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
+        app.launchArguments += ["-importOnLaunch", demo, "-ksTheme", "nocturne"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Recent"].waitForExistence(timeout: 10))
+        sleep(2)
+        for _ in 0..<4 { app.swipeUp(velocity: .fast) }
+        sleep(1)
+        if let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] {
+            try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+            try shoot(folder, "tabbar-0-home-end")
+        }
+        let lifestyle = app.buttons["Lifestyle"].frame, bar = app.tabBars.buttons["Home"].frame
+        XCTAssertLessThanOrEqual(lifestyle.maxY, bar.minY, "Lifestyle ends under the tab bar (card \(lifestyle), tab \(bar))")
+    }
+
     func testTabBarAndConsent() throws {
         guard let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] else { throw XCTSkip("set KEEPSAKE_SHOTS to a folder") }
         try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)

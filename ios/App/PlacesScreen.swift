@@ -116,6 +116,7 @@ struct PlacesScreen: View {
             }
             .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
         }
+        .clearsTabBar()
     }
 
     /// A region's name and count; tap to fold it shut or open it again.
@@ -240,6 +241,7 @@ struct PlacesScreen: View {
             }
             .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
         }
+        .clearsTabBar()
     }
 
     /// A place waiting in review. The top opens the save (its picture, caption and details); the post
