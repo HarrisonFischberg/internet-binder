@@ -200,7 +200,7 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var panel: some View {
         switch current.kind {
         case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placeChoicesCard; placePanel }
-        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; recipePanel }
+        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; swapRecipeLink; recipePanel }
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         case "product": productPanel
         case "book", "media": shelfPanel
@@ -552,16 +552,20 @@ struct SaveDetailScreen: View {
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .ksSurface()
-            } else {
-                // Not the one: a quiet way to swap in the right page.
-                Button { linkSheet = true } label: {
-                    Label("Not the right recipe? Import from a link", systemImage: "link")
-                        .font(.subheadline.weight(.medium)).foregroundStyle(t.inkMuted)
-                        .frame(minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("recipe.importLink")
             }
+        }
+    }
+
+    /// Not the one: a quiet way to swap in the right page, next to the note that says where the recipe came from.
+    @ViewBuilder private var swapRecipeLink: some View {
+        if !(d?["ingredients"]?.array ?? []).isEmpty || !steps.isEmpty {
+            Button { linkSheet = true } label: {
+                Label("Not the right recipe? Import from a link", systemImage: "link")
+                    .font(.subheadline.weight(.medium)).foregroundStyle(t.inkMuted)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("recipe.importLink")
         }
     }
 
@@ -848,8 +852,12 @@ struct RecipeLinkSheet: View {
                         .accessibilityIdentifier("recipeLink.problem")
                 }
                 Spacer(minLength: 0)
-                PrimarySlab(working ? "Reading the page…" : "Import Recipe", symbol: working ? "hourglass" : "arrow.down.doc", kind: "recipe") { start() }
-                    .disabled(working || link.trimmingCharacters(in: .whitespaces).isEmpty)
+                // While it reads, the slab stays lit with a spinner (start() ignores taps), so a slow page doesn't look stuck.
+                PrimarySlab(working ? "Reading the page…" : "Import Recipe", symbol: "arrow.down.doc", kind: "recipe") { start() }
+                    .overlay(alignment: .leading) {
+                        if working { ProgressView().tint(t.onPrimary).padding(.leading, 24).accessibilityHidden(true) }
+                    }
+                    .disabled(!working && link.trimmingCharacters(in: .whitespaces).isEmpty)
                     .accessibilityIdentifier("recipeLink.import")
             }
             .padding(20)

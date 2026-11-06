@@ -391,6 +391,28 @@ struct CaptureTests {
         #expect(try lib.save(saved.id)?.needsCollection == true)
     }
 
+    struct RecipePage: NetworkTransport {
+        func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
+            #expect(request.url?.absoluteString == "https://www.example-recipes.com/apple-crisp/" && request.value(forHTTPHeaderField: "Cookie") == nil)
+            // Minified, as real food blogs serve it: the script type is unquoted.
+            let html = #"<html><head><meta property="og:site_name" content="Example Recipes"><script type=application/ld+json>{"@type":"Recipe","name":"Easy Apple Crisp","recipeIngredient":["6 apples","1 cup oats"],"recipeInstructions":["Heat the oven.","Bake."]}</script></head></html>"#
+            return (200, Data(html.utf8))
+        }
+    }
+
+    @Test func importRecipeFromLinkFillsTheSaveAndUndoPutsItBack() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-link-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets(), transport: RecipePage())
+        try await lib.prepare()
+        let saved = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/apple-cake", title: "Apple cake", text: nil)).save)
+        let r = try await lib.importRecipe(saved.id, link: "www.example-recipes.com/apple-crisp/")
+        #expect(r.ok && r.ingredients == 2 && r.steps == 2 && r.site == "Example Recipes")
+        #expect(try await lib.detail(saved.id)?.basedOn?.linked == true)
+        try await lib.undoAI([try #require(r.logId)])
+        #expect(try await lib.detail(saved.id)?.basedOn == nil)
+    }
+
     @Test func instagramLoginWallStaysALink() async throws {
         let wall = #"<html><head><title>Login • Instagram</title></head><body><form id="loginForm"><input name="username"></form></body></html>"#
         let lib = try library()

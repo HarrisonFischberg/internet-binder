@@ -291,7 +291,7 @@ const draftTag = () => el('span', { class: 'badge badge-brass ai-draft-tag', tit
 // Import recipe from a link: you paste the page with the real recipe and this save gets it (understand.js
 // importRecipeFromLink): the page's own recipe card, or AI reads it from the page. The browser asks once for
 // that site, since Internet Binder only reads sites you let it. Resolves true when the card changed.
-export async function importRecipeDialog(item) {
+export async function importRecipeDialog(item, { onUndo } = {}) {
   const input = el('input', { class: 'input', type: 'url', inputmode: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://', 'aria-label': 'Recipe link', 'aria-describedby': 'recipe-link-help' });
   const status = el('p', { class: 'help', role: 'status', 'aria-live': 'polite' });
   const body = [
@@ -345,6 +345,7 @@ export async function importRecipeDialog(item) {
     action: { label: 'Undo', onClick: async () => {
       const entry = (await D.store.getAiLog()).find((e) => e.id === done.logId);
       if (entry) await undoFixes(D.store, [entry]);
+      onUndo?.();
       UI.toast('Recipe put back as it was.', { duration: 2200 });
     } },
   });
@@ -353,7 +354,7 @@ export async function importRecipeDialog(item) {
 
 // The recipe view: a large dialog with the photo, what you need and what to do. Checking off
 // ingredients and steps is just for cooking along (not saved). Editing lives in Edit details.
-export async function openRecipe(id) {
+export async function openRecipe(id, onShown) {
   const item = await D.store.getItem(id);
   if (!item) {
     UI.toast('That item no longer exists.', { kind: 'danger' });
@@ -374,7 +375,12 @@ export async function openRecipe(id) {
   // Not the right recipe (or none at all): paste the page that has it.
   const fromLink = async (close) => {
     close(false);
-    if (await importRecipeDialog(item)) await openRecipe(id);
+    // Undo while the refreshed view is still open shows the recipe as it was again.
+    let reopen = () => {};
+    if (await importRecipeDialog(item, { onUndo: () => reopen() })) {
+      await openRecipe(id, (closeNew) => { reopen = () => { closeNew(false); openRecipe(id); }; });
+      reopen = () => {};
+    }
   };
   const from = isPostSave(item) && item.instagram?.creator ? `@${item.instagram.creator}` : item.retailer || item.host || '';
   const facts = [
@@ -458,7 +464,7 @@ export async function openRecipe(id) {
     body,
     full: true,
     className: 'modal-recipe',
-    onOpen: ({ close }) => { closeRecipe = close; },
+    onOpen: ({ close }) => { closeRecipe = close; onShown?.(close); },
     actions: [
       { label: 'Edit details', quiet: true, autofocus: true, closes: false, onClick: async (close) => { close(false); await D.openItem(item.id); } },
       item.url ? { label: item.type === 'instagram' ? 'Open post' : 'Visit page', href: openableUrl(item.url), icon: UI.externalIcon() } : null,

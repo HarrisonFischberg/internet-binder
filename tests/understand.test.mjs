@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
+import { undoFixes } from '../keepsake/src/shared/aiFix.js';
 import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink } from '../keepsake/src/shared/understand.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
@@ -331,6 +332,8 @@ test('thin recipes: fewer than three ingredients or one step; yours and a page\'
 test('recipeFromHtml reads the page\'s own schema.org recipe and site name', () => {
   const r = recipeFromHtml(FRITTER_PAGE);
   assert.deepEqual([r.title, r.siteName, r.ingredients.length, r.steps.length, r.totalMinutes, r.yield], ['Apple Fritter Cake', "Sally's Baking Addiction", 5, 3, 70, '12 slices']);
+  // Minified pages leave the attribute unquoted (loveandlemons.com: <script type=application/ld+json class=…>).
+  assert.equal(recipeFromHtml(FRITTER_PAGE.replace('type="application/ld+json"', 'type=application/ld+json class=yoast-schema-graph')).ingredients.length, 5);
 });
 
 test('planRecipe: the page\'s recipe goes on the card, labelled as based on it, with its link; unsure or unlinked finds do nothing', () => {
@@ -437,6 +440,10 @@ test('importRecipeFromLink: the page\'s own recipe card fills the same save, no 
   const log = (await store.getAiLog()).at(-1);
   assert.equal(log.id, r.logId);
   assert.deepEqual(log.before.details.ingredients, ['1 apple fritter coffee cake']);
+  // Undo (the toast's, through aiFix.undoFixes as the iPhone's views.undoAi does) puts the card back.
+  await undoFixes(store, [log]);
+  const back = await store.getItem(it.id);
+  assert.deepEqual([back.title, back.details.ingredients, back.details.basedOn], [it.title, ['1 apple fritter coffee cake'], undefined]);
 });
 
 test('importRecipeFromLink: a page with no recipe card is read by AI; without AI, or with no recipe, it says so and changes nothing', async () => {
@@ -480,6 +487,6 @@ test('importRecipeFromLink: a bad address, a social post or a page that won\'t o
   assert.match((await importRecipeFromLink(store, it.id, 'pasta', { fetchPage })).error, /web address/);
   assert.match((await importRecipeFromLink(store, it.id, 'https://www.instagram.com/reel/XYZ/', { fetchPage })).error, /social post/);
   assert.equal(fetched, 0);
-  assert.match((await importRecipeFromLink(store, it.id, 'https://gone.example.com/x', { fetchPage })).error, /Couldn’t open/);
+  assert.match((await importRecipeFromLink(store, it.id, 'https://gone.example.com/x', { fetchPage })).error, /Couldn’t read that page/);
   assert.equal((await store.getAiLog()).length, 0);
 });

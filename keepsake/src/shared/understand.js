@@ -68,7 +68,7 @@ export function pageText(html) {
     nodes.push(n);
     if (n['@graph']) walk(n['@graph'], depth + 1);
   };
-  for (const m of src.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+  for (const m of src.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
     try { walk(JSON.parse(m[1].trim())); } catch { /* not JSON */ }
   }
   const types = (n) => (Array.isArray(n['@type']) ? n['@type'] : [n['@type']]).map((t) => String(t || ''));
@@ -218,7 +218,7 @@ export function titlePicture(html, baseUrl = '') {
   const meta = (name) => decodeEntities((src.match(new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']*)`, 'i'))
     || src.match(new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${name}["']`, 'i')) || [])[1] || '').trim();
   let schema = '';
-  for (const m of src.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+  for (const m of src.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
       const nodes = [].concat(JSON.parse(m[1].trim())).flatMap((n) => (n && n['@graph'] ? [n, ...[].concat(n['@graph'])] : [n]));
       const hit = nodes.find((n) => n && /^(book|movie|tvseries|tvseason|creativework)$/i.test(String([].concat(n['@type'])[0] || '')) && n.image);
@@ -331,7 +331,7 @@ export function recipeFromHtml(html) {
     nodes.push(n);
     if (n['@graph']) walk(n['@graph'], depth + 1);
   };
-  for (const m of src.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+  for (const m of src.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
     try { walk(JSON.parse(m[1].trim())); } catch { /* not JSON */ }
   }
   const node = nodes.find((n) => [].concat(n['@type']).map(String).includes('Recipe'));
@@ -475,7 +475,7 @@ export async function importRecipeFromLink(store, id, link, { fetchPage = async 
   if (!item || item.deletedAt) return { ok: false, error: 'That save no longer exists.' };
   let html = null;
   try { html = await fetchPage(url); } catch { html = null; }
-  if (!html) return { ok: false, error: 'Couldn’t open that page. Check the link, or try the recipe’s own page.' };
+  if (!html) return { ok: false, error: 'Couldn’t read that page. Some recipe sites don’t let apps read them. Check the link, or try another page with this recipe.' };
   let recipe = recipeFromHtml(html);
   let how = 'page';
   let reason = '';
@@ -520,7 +520,7 @@ export function productFromHtml(html, baseUrl = '') {
     nodes.push(n);
     if (n['@graph']) walk(n['@graph'], depth + 1);
   };
-  for (const m of src.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+  for (const m of src.matchAll(/<script[^>]*type=["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi)) {
     try { walk(JSON.parse(m[1].trim())); } catch { /* not JSON */ }
   }
   const types = (n) => (Array.isArray(n['@type']) ? n['@type'] : [n['@type']]).map((t) => String(t || ''));
