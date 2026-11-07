@@ -1,1 +1,11 @@
-No account or sign-in. To try it: open any recipe or shop page in a browser, tap Share, then Binder. The save appears on Home. Optional AI needs your own API key and isn't required to use the app.
+1. Screen recording: attached to this App Review Information (recorded on iPhone, latest iOS). It shows launching the app, saving a recipe from Safari with Share > Binder, cooking mode, the Library, Places and Search tabs, and Settings.
+
+2. Purpose and audience: Internet Binder is a personal bookmarking app for anyone who saves things they find online (recipes, places, products, workouts, videos, articles) and loses track of them across screenshots and browser tabs. It sorts each save by what it is and helps put it to use: cooking mode for recipes, a map for places, goals for workouts.
+
+3. Setup: No account, no sign-in, no login credentials and no sample files needed. Open the app and finish the short onboarding. To add a save: open any recipe or shop page in Safari, tap Share, then Binder. The save appears on Home (or in Review if the app isn't sure where it belongs). Open a recipe and tap Start cooking to try cooking mode. Places appear on a map in the Places tab. The app has no user accounts, so there is no registration or account deletion flow. There is no user-generated content shared with other people, and no paid content or in-app purchases.
+
+4. External services: Apple iCloud / CloudKit (optional sync, in the user's own private iCloud database), Apple MapKit (maps and directions for places), Apple Intelligence (on-device, to tidy titles and sort saves). Optional, user's own key, off by default: Anthropic or OpenAI, for users who want a cloud AI model; the app works fully without it. Optional lookups, off by default, fill in missing public details from OpenStreetMap (places), Wikidata (films and shows) and Open Library (books). When a user shares an Instagram or X post, the app reads that post's public page once, without any account or cookies, to save its caption and picture. Page titles and pictures are read directly from the web page the user shares. No analytics, ads or tracking. Cooking music is bundled, freely licensed recordings.
+
+5. Regions: The app works the same in all regions. There is no region-specific content or features.
+
+6. Regulated industries / third-party material: Not applicable. The app is not in a regulated industry and includes no protected third-party content; users only save links to pages they choose.
