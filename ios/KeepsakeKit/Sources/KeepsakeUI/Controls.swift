@@ -263,8 +263,8 @@ public struct TopScrim: View {
     }
 }
 
-/// The tab bar's floor: content fades into the table just above the floating tab bar and stays solid
-/// behind it, and the extra inset lets the last card scroll fully clear of it. Only where the tab bar
+/// The tab bar's floor: content fades out just above the floating tab bar and never shows behind it,
+/// and the extra inset lets the last card scroll fully clear of it. Only where the tab bar
 /// is (compact width; iPad and wide windows use the sidebar).
 public struct TabBarScrim: View {
     @Environment(\.ks) private var t
@@ -273,11 +273,14 @@ public struct TabBarScrim: View {
     public var body: some View {
         if size == .compact {
             Color.clear
-                .frame(height: 20)
-                .background {
-                    LinearGradient(stops: [.init(color: t.table.opacity(0), location: 0), .init(color: t.table.opacity(0.9), location: 0.4), .init(color: t.table, location: 1)],
-                                   startPoint: .top, endPoint: .bottom)
-                        .ignoresSafeArea(edges: .bottom)
+                .frame(height: 32)
+                .background(alignment: .top) {
+                    // A 20 pt fade, then solid from 12 pt above the bar down, so cards end before the bar, never under it.
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [t.table.opacity(0), t.table], startPoint: .top, endPoint: .bottom).frame(height: 20)
+                        t.table
+                    }
+                    .ignoresSafeArea(edges: .bottom)
                 }
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
