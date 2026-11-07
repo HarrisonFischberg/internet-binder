@@ -92,6 +92,12 @@ export function keyFor(settings, key, { deviceOnly = false } = {}) {
   return deviceOnly && localModelReady() ? '' : usableKey(settings, key);
 }
 
+// Prefer my Claude key (Settings, iPhone): new saves are read by your provider instead of the device model.
+// Only while your key is usable; what reads the older saves (the sweep on each open) stays on the device.
+export function prefersKey(settings, key) {
+  return !!settings?.ai?.preferKey && !!usableKey(settings, key);
+}
+
 // Something can read saves: the model on this device, or your provider with your key.
 export function aiAvailable(settings, key) {
   return localModelReady() || !!usableKey(settings, key);
