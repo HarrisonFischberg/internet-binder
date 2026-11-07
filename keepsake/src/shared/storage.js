@@ -117,6 +117,7 @@ export const DEFAULT_SETTINGS = {
     webLookup: false, // "Find products": also run the provider's web search for listings
     provider: 'anthropic', // anthropic | openai | custom
     effort: 'medium', // low | medium | high (Claude models)
+    preferKey: false, // iPhone: new saves go to your provider instead of Apple Intelligence (provider.js prefersKey)
     baseUrl: '',
     model: '',
   },

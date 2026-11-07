@@ -11,6 +11,7 @@ struct SettingsScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var settings: [String: Any] = [:]
     @State private var aiOn = false
+    @State private var preferKey = false
     @State private var readPosts = true
     @State private var readXPosts = true
     @State private var provider = "anthropic"
@@ -215,6 +216,15 @@ struct SettingsScreen: View {
                     }
                 }
                 if let testResult { Text(testResult).font(.footnote).foregroundStyle(.secondary) }
+                if model.appleAI == .ready {
+                    Toggle(provider == "anthropic" ? "Prefer my Claude key" : "Prefer my key", isOn: Binding(get: { preferKey }, set: { on in
+                        preferKey = on
+                        Task { try? await model.library?.updateSettings(["ai": ["preferKey": on]]) }
+                    }))
+                    .accessibilityIdentifier("preferKey")
+                    Text("New saves are read by \(provider == "anthropic" ? "Claude" : "your provider") instead of Apple Intelligence, so each one is sent to \(provider == "anthropic" ? "Anthropic" : "your provider") and uses your key. Saves you already have stay with Apple Intelligence on this iPhone.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
         } header: { Text("Your own AI key") } footer: {
             Text(model.appleAI == .ready
@@ -305,6 +315,7 @@ struct SettingsScreen: View {
         settings = s
         let ai = s["ai"] as? [String: Any] ?? [:]
         aiOn = ai["on"] as? Bool ?? false
+        preferKey = ai["preferKey"] as? Bool ?? false
         provider = ai["provider"] as? String ?? "anthropic"
         let m = ai["model"] as? String ?? ""
         aiModel = m.isEmpty ? Self.claudeModels[0].id : m

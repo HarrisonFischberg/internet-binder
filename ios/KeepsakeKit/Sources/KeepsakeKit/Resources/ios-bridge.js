@@ -338,7 +338,10 @@
     // run here when the app is open. Only what is turned on runs; a save is filled in once.
     async finishSaves() {
       const settings = await store.getSettings();
-      const aiOn = K.provider.aiAvailable(settings, await store.getSecret('aiApiKey'));
+      const secret = await store.getSecret('aiApiKey');
+      const aiOn = K.provider.aiAvailable(settings, secret);
+      // Prefer my Claude key: new saves go to your provider (tidySave), so they don't wait for a cooler phone.
+      const keyFirst = K.provider.prefersKey(settings, secret);
       const lookupsOn = Object.values(settings.lookups || {}).some(Boolean);
       let tidied = 0;
       // With AI on, tidySave first has your provider work out what each save is (understand.js). A handful
@@ -346,7 +349,7 @@
       // In Low Power Mode or on a hot phone, Apple Intelligence's work waits for a later open: new saves stay
       // as they were saved (still waiting to be tidied) and nothing is swept.
       const waitForLater = K.provider.localModelReady() && resting();
-      if (!waitForLater) for (const it of await K.fill.pendingToTidy(store)) { await K.fill.tidySave(store, it.id, autoDeps); tidied++; }
+      if (!waitForLater || keyFirst) for (const it of await K.fill.pendingToTidy(store)) { await K.fill.tidySave(store, it.id, autoDeps); tidied++; }
       const read = await views.readOnDevice();
       if ((!aiOn && !lookupsOn) || waitForLater) return { tidied, filled: 0, read };
       const raw = await store.backend.get(['keepsake_ios_filled']);

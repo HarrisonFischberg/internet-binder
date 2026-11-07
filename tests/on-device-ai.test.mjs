@@ -3,7 +3,7 @@
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
-import { setLocalModel, localModelReady, aiAvailable, keyFor, understandWithAI, cleanupWithAI, understandProductWithAI } from '../keepsake/src/ai/provider.js';
+import { setLocalModel, localModelReady, aiAvailable, keyFor, prefersKey, understandWithAI, cleanupWithAI, understandProductWithAI } from '../keepsake/src/ai/provider.js';
 import { understandItem } from '../keepsake/src/shared/understand.js';
 import { tidySave } from '../keepsake/src/shared/fill.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
@@ -123,6 +123,36 @@ test('tidySave with only the device model: a new save is read and tidied with no
   const saved = await store.getItem(it.id);
   assert.deepEqual([saved.kind, saved.captureState], ['recipe', 'complete']);
   assert.equal(sent.length, 0);
+});
+
+test('prefersKey: only with the switch on and a usable key', () => {
+  assert.equal(prefersKey({ ai: { on: true, preferKey: true } }, 'sk'), true);
+  assert.equal(prefersKey({ ai: { on: true, preferKey: false } }, 'sk'), false);
+  assert.equal(prefersKey({ ai: { on: true, preferKey: true } }, ''), false, 'no key');
+  assert.equal(prefersKey({ ai: { on: false, preferKey: true } }, 'sk'), false, 'Use your own key off');
+});
+
+test('Prefer my Claude key: a new save goes to your provider, not the device model', async () => {
+  const store = await makeStore({ key: 'sk', on: true });
+  await store.updateSettings({ ai: { preferKey: true } });
+  const it = await store.addItem({ ...post('Brownies 😍'), captureState: 'pending' });
+  const asked = device(recipe);
+  const sent = provider(recipe);
+  const r = await tidySave(store, it.id, { deviceOnly: true });
+  assert.equal(r.kind, 'recipe');
+  assert.ok(sent.length >= 1, 'your provider read it');
+  assert.equal(asked.length, 0, 'the device model was not asked');
+  assert.equal((await store.getItem(it.id)).captureState, 'complete');
+});
+
+test('Prefer my Claude key off: a new save stays on the device even with your key set', async () => {
+  const store = await makeStore({ key: 'sk', on: true });
+  const it = await store.addItem({ ...post('Brownies 😍'), captureState: 'pending' });
+  const asked = device(recipe);
+  const sent = provider(recipe);
+  await tidySave(store, it.id, { deviceOnly: true });
+  assert.equal(sent.length, 0);
+  assert.ok(asked.length >= 1);
 });
 
 // What Apple Intelligence really answered (FoundationModels on a Mac, Oct 2026): the format's examples

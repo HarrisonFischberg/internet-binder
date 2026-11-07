@@ -9,7 +9,7 @@ import { kindOf, kindInfo, detailsForKind, genericTitle, hasOwnView, isPostSave 
 import { placeNamed, placeReviewReasons, stateCode } from './places.js';
 import { lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './lookups.js';
 import { FILLED_KINDS } from './capture.js';
-import { cleanupWithAI, identifyForKind, keyFor, aiAvailable } from '../ai/provider.js';
+import { cleanupWithAI, identifyForKind, keyFor, aiAvailable, prefersKey } from '../ai/provider.js';
 import { understandItem } from './understand.js';
 import { fileSave } from './filing.js';
 import { resolvePlaceSave } from './placeResolve.js';
@@ -131,7 +131,10 @@ export async function tidySave(store, id, deps = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt || item.captureState !== 'pending') return null;
   const [collections, prefs, settings, secret] = await Promise.all([store.getCollections(), store.getPrefs(), store.getSettings(), store.getSecret('aiApiKey')]);
-  const key = keyFor(settings, secret, { deviceOnly: !!deps.deviceOnly });
+  // Prefer my Claude key: a new save goes to your provider, as if you'd asked.
+  const deviceOnly = !!deps.deviceOnly && !prefersKey(settings, secret);
+  deps = { ...deps, deviceOnly };
+  const key = keyFor(settings, secret, { deviceOnly });
   if (!aiAvailable(settings, key)) {
     await store.updateItem(id, { captureState: 'complete' }, { by: 'machine' });
     return { kind: kindOf(item) };
@@ -152,7 +155,7 @@ export async function tidySave(store, id, deps = {}) {
   if (kindOf(read) !== 'product') {
     try {
       // The device's model only files what's waiting in Review; your provider may also move a first guess.
-      await fileSave(store, id, { runId: `save-${id}`, deviceOnly: !!deps.deviceOnly, scope: deps.deviceOnly ? 'review' : 'all' });
+      await fileSave(store, id, { runId: `save-${id}`, deviceOnly, scope: deviceOnly ? 'review' : 'all' });
       await store.updateItem(id, { captureState: 'complete', captureError: '' }, { by: 'machine' });
     } catch (e) {
       await store.updateItem(id, { captureState: 'complete', captureError: sanitizeText(`AI filing skipped: ${(e && e.message) || e}`, 200) }, { by: 'machine' }).catch(() => {});
