@@ -45,6 +45,22 @@ export function normalizeUrl(input) {
   const xs = path.match(/^\/(?:[A-Za-z0-9_]{1,15}|i(?:\/web)?)\/status(?:es)?\/(\d{1,25})(?:\/|$)/);
   if (/^(?:mobile\.)?(?:x|twitter)\.com$/.test(host) && xs) return `x.com/status/${xs[1]}`;
 
+  // YouTube: watch?v=, youtu.be/, /shorts/, /live/, /embed/ are the same video.
+  if (/^(?:youtube\.com|music\.youtube\.com|youtube-nocookie\.com|youtu\.be)$/.test(host)) {
+    const yt = host === 'youtu.be' ? (u.pathname.match(/^\/([\w-]{11})/) || [])[1] : (u.searchParams.get('v') || '').match(/^[\w-]{11}$/)?.[0] || (u.pathname.match(/^\/(?:shorts|live|embed|v)\/([\w-]{11})/) || [])[1];
+    if (yt) return `youtube.com/watch?v=${yt}`;
+  }
+  // TikTok: the video or photo post's id, whatever the handle in front of it.
+  const tt = u.pathname.match(/^\/@[^/]+\/(?:video|photo)\/(\d{8,25})/) || u.pathname.match(/^\/v\/(\d{8,25})/);
+  if (/(^|\.)tiktok\.com$/.test(host) && tt) return `tiktok.com/video/${tt[1]}`;
+  // Reddit: the post's id (any subreddit path, title slug, old./new. host, or redd.it).
+  const rd = u.pathname.match(/\/comments\/([a-z0-9]{4,12})(?:\/|$)/i);
+  if (/(^|\.)reddit\.com$/.test(host) && rd) return `reddit.com/comments/${rd[1].toLowerCase()}`;
+  if (host === 'redd.it' && /^\/[a-z0-9]{4,12}\/?$/i.test(u.pathname)) return `reddit.com/comments/${u.pathname.replace(/\//g, '').toLowerCase()}`;
+  // Pinterest: the pin's id (any country's site).
+  const pin = u.pathname.match(/^\/pin\/(?:[^/]*?--)?(\d{6,25})/);
+  if (/(^|\.)pinterest\.[a-z.]{2,8}$/.test(host) && pin) return `pinterest.com/pin/${pin[1]}`;
+
   const params = [];
   for (const [key, value] of u.searchParams.entries()) {
     const k = key.toLowerCase();

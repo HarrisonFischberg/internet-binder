@@ -8,6 +8,7 @@ import { classify, learnFromCorrection, learnedKindOf, isSocialHost, AUTO_FILE_C
 import { parsePrice, sanitizeText } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
 import { isXPost, parseXPost, xPostRecord, xPostUrl } from './xPost.js';
+import { parseLink, mergeLinkRead } from './linkReader.js';
 import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, isRecipePost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
 import { guessTopics } from './topics.js';
 import { aiAvailable, usableKey } from '../ai/provider.js';
@@ -48,6 +49,11 @@ export function normalizeProduct(raw) {
     if (!p.retailer) p.retailer = 'X';
   }
   delete p.xBundle;
+  // A link shared from another app (TikTok, YouTube, Reddit, Bluesky, Pinterest, Threads, Facebook, or any
+  // page): what the site publishes about it (src/shared/linkReader.js). A post keeps the same post record.
+  if (p.linkBundle && !p.isInstagram && !p.isXPost) Object.assign(p, mergeLinkRead(p, parseLink(p.linkBundle, p.linkUrl || p.canonicalUrl || p.url)));
+  delete p.linkBundle;
+  delete p.linkUrl;
   if (p.price === null || p.price === undefined || p.price === '' || Number.isNaN(Number(p.price))) {
     const parsed = parsePrice(p.priceText || p.price, p.currency);
     if (parsed) {
@@ -88,7 +94,7 @@ const KIND_REASON = {
 export function workoutOf(product) {
   const about = `${product.title || ''} ${product.description || ''}`;
   if (!looksLikeWorkout(about) && !isWorkoutPost(about)) return null;
-  const post = product.isInstagram || product.isXPost;
+  const post = product.isInstagram || product.isXPost || product.isPost;
   const source = post ? 'caption' : 'page';
   // Instagram puts the caption in the page title as well as the description, and either may be cut
   // short: read the longer one first.
@@ -146,7 +152,7 @@ export function kindOfCapture(product) {
   if (product.recipe) return 'recipe';
   // An Instagram post or a post on X: a recipe or workout in the caption, a place when it's tagged with
   // a location or names one with 📍; otherwise a link.
-  if (product.isInstagram || product.isXPost) {
+  if (product.isInstagram || product.isXPost || product.isPost) {
     const found = recipeOrWorkout(product.description, workoutOf(product));
     if (found) return found.kind;
     const about = `${product.title || ''}\n${product.description || ''}`;
@@ -159,7 +165,10 @@ export function kindOfCapture(product) {
     if (placeFromProfile(product.profile)) return 'place';
     // A recipe whose recipe is a comment away: a Recipe with no ingredients listed.
     if (isRecipePost(about)) return 'recipe';
-    return 'link';
+    // A pin of a recipe page (its schema.org Recipe came with it).
+    if (product.recipe) return 'recipe';
+    // A TikTok or a Reddit video is still a video, as it was before its caption was read.
+    return product.isPost && videoPlatform(product.url) ? 'video' : 'link';
   }
   if (!fromTypes && product.price === null && !product.priceText && workoutOf(product)) return 'workout';
   if (!fromTypes && product.screen) return 'media';
@@ -269,6 +278,13 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
     const why = product.xRead === 'off' ? 'Reading posts on X is off in Settings, so only the link was saved'
       : product.xRead === 'none' ? 'X had nothing for this post (it may be deleted or private), so only the link was saved'
         : 'Only the link came through (X didn’t share the post’s text), so there was nothing to sort by';
+    if (classification.isInbox) classification = { ...classification, reason: why };
+  }
+  if (product.isPost && kind === 'link' && !product.description && !product.instagram?.caption && !given) {
+    const site = product.retailer || 'the site';
+    const why = product.linkRead === 'off' ? 'Reading links you share is off in Settings, so only the link was saved'
+      : product.linkRead === 'none' ? `${site} had nothing for this post (it may be deleted or private), so only the link was saved`
+        : `Only the link came through (${site} didn’t share the post’s text), so there was nothing to sort by`;
     if (classification.isInbox) classification = { ...classification, reason: why };
   }
   if (taught && !given) classification = { ...classification, reason: `You file posts like this in ${kindInfo(kind).plural} (${taught.words.map((w) => `“${w}”`).join(', ')}, learned)` };

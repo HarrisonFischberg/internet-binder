@@ -351,6 +351,58 @@ struct CaptureTests {
         #expect(r.save?.url == "https://x.com/miachen/status/1851234567890123456")
     }
 
+    /// TikTok's embed and page, faked: a short link (vm.tiktok.com) lands on the video's page, which names
+    /// the video; its embed answers next. No cookies, a browser's name only for the page.
+    struct TikTokSite: NetworkTransport {
+        func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
+            #expect(request.value(forHTTPHeaderField: "Cookie") == nil && request.httpMethod == "GET")
+            let item = #"{"id":"7301234567890123456","desc":"Best cacio e pepe in Rome 📍 Da Enzo al 29 #rome","createTime":"1730300000","author":{"uniqueId":"chef.mia","nickname":"Mia"},"video":{"duration":42,"cover":"https://p16.tiktokcdn.com/cover.jpg"},"poi":{"name":"Da Enzo al 29","city":"Rome"}}"#
+            switch request.url?.host() {
+            case "vm.tiktok.com":
+                #expect(request.value(forHTTPHeaderField: "User-Agent")?.contains("Safari") == true)
+                let page = #"<html><head><link rel="canonical" href="https://www.tiktok.com/@chef.mia/video/7301234567890123456"></head><body><script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">{"__DEFAULT_SCOPE__":{"webapp.video-detail":{"itemInfo":{"itemStruct":"# + item + #"}}}}</script></body></html>"#
+                return (200, Data(page.utf8))
+            case "www.tiktok.com":
+                #expect(request.url?.path() == "/oembed")
+                return (200, Data(#"{"title":"Best cacio e pepe in Rome","author_unique_id":"chef.mia","author_name":"Mia"}"#.utf8))
+            default:
+                Issue.record("unexpected request \(request.url?.absoluteString ?? "")")
+                return (404, Data())
+            }
+        }
+    }
+
+    @Test func sharedTikTokShortLinkIsReadAndFiledByWhatItSays() async throws {
+        let lib = try library()
+        #expect(LinkReader.canRead("https://vm.tiktok.com/ZMabc123/"))
+        #expect(!LinkReader.canRead("https://www.instagram.com/p/C0ffee123/"))
+        #expect(!LinkReader.canRead("https://x.com/mia/status/1851234567890123456"))
+        let p = await lib.sharedProduct(url: "https://vm.tiktok.com/ZMabc123/", title: "TikTok - Make Your Day", text: nil, transport: TikTokSite())
+        #expect(p["linkBundle"] != nil)
+        let r = try await lib.capture(product: p)
+        #expect(r.save?.kind == "place")
+        #expect(r.save?.url == "https://www.tiktok.com/@chef.mia/video/7301234567890123456")
+        #expect(r.save?.instagram?.creator == "chef.mia")
+        #expect(r.save?.title.contains("TikTok - Make Your Day") == false)
+    }
+
+    @Test func linkReadingCanBeTurnedOff() async throws {
+        let lib = try library()
+        try await lib.updateSettings(["links": ["readShared": false]])
+        let p = await lib.sharedProduct(url: "https://vm.tiktok.com/ZMabc123/", title: nil, text: nil, transport: TikTokSite())
+        #expect(p["linkBundle"] == nil)
+        #expect(p["linkRead"] as? String == "off")
+    }
+
+    @Test func bigPagesAreTrimmedToWhatIsRead() {
+        let filler = String(repeating: "<div>x</div>", count: 60_000)
+        let html = "<html><head><meta property=\"og:title\" content=\"Hi\"></head><body>\(filler)<script>var other = 1;</script><script>var ytInitialPlayerResponse = {\"a\":1};</script><script type=\"application/ld+json\">{\"@type\":\"Recipe\"}</script></body></html>"
+        let slim = LinkReader.slim(html, keep: ["ytInitialPlayerResponse"])
+        #expect(slim.utf8.count < 2_000)
+        #expect(slim.contains("og:title") && slim.contains("ytInitialPlayerResponse") && slim.contains("Recipe"))
+        #expect(!slim.contains("var other"))
+    }
+
     /// Your AI provider, faked: it files every save it's asked about in Home Decor (the shopping check's
     /// answer, or the filing answer for a link). The save's own page
     /// (read first, without cookies) isn't there.

@@ -66,7 +66,11 @@ final class ShareState {
             self.library = library
             var product: [String: Any]
             // A post on X opened in Safari: X's page has no text until its script runs, so its embed data is read too.
-            if let page = shared.page { product = await library.withXPost(page) } else { product = await library.sharedProduct(url: shared.url, title: shared.title, text: shared.text) }
+            if let page = shared.page {
+                product = await library.withXPost(page)
+                // A page whose own tags said little (a TikTok or Reddit post in Safari): its site's public data too.
+                if product["xBundle"] == nil, ((product["description"] as? String) ?? "").count < 40 { product = await library.withLinkRead(product) }
+            } else { product = await library.sharedProduct(url: shared.url, title: shared.title, text: shared.text) }
             // A screenshot or photo with no link: its picture and the text read from it, on this device.
             if shared.page == nil, shared.url == nil, let image = shared.image {
                 product = await ImageCapture.product(from: image)
