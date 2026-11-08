@@ -8,12 +8,18 @@ targets or build settings, then run: python3 ios/tools/make-xcodeproj.py
 """
 import json
 import os
+import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'Keepsake.xcodeproj', 'project.pbxproj')
 # The app's version is the extension's (Settings shows it); re-run this script after a version bump.
 with open(os.path.join(HERE, '..', '..', 'keepsake', 'manifest.json')) as f:
     VERSION = json.load(f)['version']
+# The build number is bumped in place by release uploads (fastlane); keep it across regenerations.
+try:
+    BUILD = re.search(r'CURRENT_PROJECT_VERSION = (\d+)', open(OUT).read()).group(1)
+except (OSError, AttributeError):
+    BUILD = '1'
 
 T = {  # target key: (name, product, productType, folder, bundle id, extra settings)
  'app':   ('Keepsake', 'Keepsake.app', 'com.apple.product-type.application', 'App', 'com.harrisonfischberg.keepsake',
@@ -76,7 +82,7 @@ for k, (name, prod, ptype, folder, bid, extra) in T.items():
     deps = [ids[x]['dep'] for x in ('share', 'widgets')] if k == 'app' else [i['appdep']] if k == 'uitests' else []
     add(f'\t\t{i["target"]} /* {name} */ = {{isa = PBXNativeTarget; buildConfigurationList = {i["cfgs"]}; buildPhases = ({", ".join(phases)}); buildRules = (); dependencies = ({", ".join(deps)}); fileSystemSynchronizedGroups = ({i["group"]}); name = {name}; packageProductDependencies = ({", ".join(dep for _, dep, _ in i["pkgs"])}); productName = {name}; productReference = {i["product"]}; productType = "{ptype}"; }};\n')
     base = {'CODE_SIGN_STYLE': 'Automatic', 'DEVELOPMENT_TEAM': 'KTV2G3Z883', '"CODE_SIGN_IDENTITY[sdk=iphonesimulator*]"': '"-"',
-            'CURRENT_PROJECT_VERSION': '1', 'MARKETING_VERSION': VERSION, 'GENERATE_INFOPLIST_FILE': 'YES',
+            'CURRENT_PROJECT_VERSION': BUILD, 'MARKETING_VERSION': VERSION, 'GENERATE_INFOPLIST_FILE': 'YES',
             'PRODUCT_BUNDLE_IDENTIFIER': bid, 'PRODUCT_NAME': '"$(TARGET_NAME)"', 'SWIFT_VERSION': '5.0', 'TARGETED_DEVICE_FAMILY': '"1,2"',
             'SWIFT_EMIT_LOC_STRINGS': 'YES', 'ENABLE_PREVIEWS': 'YES'}
     base.update(extra)
@@ -100,3 +106,42 @@ os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(OUT, 'w') as f:
     f.write(''.join(o))
 print(f'wrote {os.path.normpath(OUT)}')
+
+# Shared scheme, so xcodebuild, fastlane and CI build the same thing (release.sh, scripts/store-screenshots.sh).
+ref = lambda k: (f'<BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "{ids[k]["target"]}" '
+                 f'BuildableName = "{T[k][1]}" BlueprintName = "{T[k][0]}" ReferencedContainer = "container:Keepsake.xcodeproj"></BuildableReference>')
+SCHEME = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion = "2700" version = "1.7">
+   <BuildAction parallelizeBuildables = "YES" buildImplicitDependencies = "YES">
+      <BuildActionEntries>
+         <BuildActionEntry buildForTesting = "YES" buildForRunning = "YES" buildForProfiling = "YES" buildForArchiving = "YES" buildForAnalyzing = "YES">
+            {ref('app')}
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction buildConfiguration = "Debug" selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv = "YES">
+      <Testables>
+         <TestableReference skipped = "NO">
+            {ref('uitests')}
+         </TestableReference>
+      </Testables>
+   </TestAction>
+   <LaunchAction buildConfiguration = "Debug" selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle = "0" useCustomWorkingDirectory = "NO" ignoresPersistentStateOnLaunch = "NO" debugDocumentVersioning = "YES" debugServiceExtension = "internal" allowLocationSimulation = "YES">
+      <BuildableProductRunnable runnableDebuggingMode = "0">
+         {ref('app')}
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction buildConfiguration = "Release" shouldUseLaunchSchemeArgsEnv = "YES" savedToolIdentifier = "" useCustomWorkingDirectory = "NO" debugDocumentVersioning = "YES">
+      <BuildableProductRunnable runnableDebuggingMode = "0">
+         {ref('app')}
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction buildConfiguration = "Debug"></AnalyzeAction>
+   <ArchiveAction buildConfiguration = "Release" revealArchiveInOrganizer = "YES"></ArchiveAction>
+</Scheme>
+'''
+SCHEME_OUT = os.path.join(HERE, '..', 'Keepsake.xcodeproj', 'xcshareddata', 'xcschemes', 'Keepsake.xcscheme')
+os.makedirs(os.path.dirname(SCHEME_OUT), exist_ok=True)
+with open(SCHEME_OUT, 'w') as f:
+    f.write(SCHEME)
+print(f'wrote {os.path.normpath(SCHEME_OUT)}')
