@@ -65,6 +65,8 @@ test('the requests ask each site only for the shared post, its public data first
   assert.deepEqual(linkRequests('https://vm.tiktok.com/ZMabc123/').map((r) => r.key), ['page']);
   const rd = linkRequests('https://www.reddit.com/r/Cooking/comments/1g2h3j4/x/');
   assert.equal(rd[0].url, 'https://www.reddit.com/comments/1g2h3j4/.json?raw_json=1&limit=12&depth=1&sort=top');
+  // Reddit's oEmbed only takes the post's full address.
+  assert.equal(rd[1].url, `https://www.reddit.com/oembed?url=${encodeURIComponent('https://www.reddit.com/r/Cooking/comments/1g2h3j4/x/')}`);
   assert.deepEqual(hosts(linkRequests('https://bsky.app/profile/mia.bsky.social/post/3l6oveex3ii2l')), ['public.api.bsky.app', 'embed.bsky.app']);
   assert.deepEqual(hosts(linkRequests('https://www.pinterest.com/pin/123456789012345678/')), ['widgets.pinterest.com', 'www.pinterest.com']);
   assert.deepEqual(hosts(linkRequests('https://vimeo.com/76979871')), ['vimeo.com']);
@@ -223,8 +225,15 @@ test('Reddit blocked the data: the embed or the page still give the title', () =
   assert.equal(p.title, 'Best ramen in Tokyo?');
   assert.equal(p.creator, 'noodlefan');
   assert.equal(p.url, 'https://www.reddit.com/r/JapanTravel/comments/1g2h3j4/best_ramen/');
+  // Everything turned away (Reddit blocks some networks): the address's subreddit and slug still say what it is.
+  const blocked = parseLink({}, 'https://www.reddit.com/r/Cooking/comments/1xmgzdp/whats_your_favorite_use_for_the_5_costco_chicken/');
+  assert.equal(blocked.title, 'Whats your favorite use for the 5 costco chicken');
+  assert.match(blocked.text, /r\/Cooking/);
+  assert.equal(blocked.source, 'address');
+  // The embed's HTML names the post when its JSON has no title.
+  assert.equal(parseLink({ oembed: { author_name: 'Eruionmel', html: '<blockquote><a href="https://www.reddit.com/r/Cooking/comments/1xmgzdp/x/">What&#39;s your favorite use for the $5 Costco chicken?</a></blockquote>' } }, 'https://redd.it/1xmgzdp').title, 'What\'s your favorite use for the $5 Costco chicken?');
   // Reddit's bot check is not the post.
-  assert.equal(parseLink({ page: '<html><title>Blocked</title><body>You\'ve been blocked by network security.</body></html>' }, 'https://www.reddit.com/r/x/comments/1g2h3j4/').ok, false);
+  assert.equal(parseLink({ page: '<html><title>Blocked</title><body>You\'ve been blocked by network security.</body></html>' }, 'https://redd.it/1g2h3j4').ok, false);
 });
 
 // --- Bluesky, Pinterest, Threads, Facebook, Vimeo, Spotify ------------------------------------------
