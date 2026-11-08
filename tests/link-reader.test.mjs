@@ -115,6 +115,8 @@ test('jsonAfter reads a script’s object with braces inside its strings', () =>
   assert.deepEqual(jsonAfter('x = {"a":"}{","b":{"c":1}}; y', 'x ='), { a: '}{', b: { c: 1 } });
   assert.deepEqual(jsonAfter('x = {"a":"\\"}"}', 'x ='), { a: '"}' });
   assert.equal(jsonAfter('nothing here', 'x ='), null);
+  // YouTube's phone page sets it to null first and fills it in further down.
+  assert.deepEqual(jsonAfter('var ytInitialPlayerResponse = null; … var ytInitialPlayerResponse = {"videoDetails":{"shortDescription":"hi"}};', 'ytInitialPlayerResponse'), { videoDetails: { shortDescription: 'hi' } });
   assert.equal(jsonAfter('x = {"broken": }', 'x ='), null);
 });
 
@@ -289,6 +291,8 @@ test('Vimeo, SoundCloud and Spotify keep their title, maker and length', async (
   assert.equal(s.title, 'Bohemian Rhapsody');
   assert.equal(s.text, 'Queen · A Night at the Opera · Song · 1975');
   assert.equal(s.ogType, 'music.song');
+  // A song is a link, not something to buy.
+  assert.equal((await save(mergeLinkRead({ url: 'https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC', sparse: true }, s))).kind, 'link');
 });
 
 // --- any web page -----------------------------------------------------------------------------------
@@ -326,8 +330,12 @@ test('a product page keeps its price; an article its author and date', () => {
 });
 
 test('sign-in walls, bot checks and app-name titles are not what the link is about', async () => {
-  for (const t of ['TikTok - Make Your Day', 'Reddit - The heart of the internet', 'YouTube', 'Just a moment...', 'Log in or sign up to view', 'Instagram', 'Access Denied']) assert.equal(junkTitle(t), true, t);
+  for (const t of ['Log into Facebook | Facebook', 'Untitled item', 'We’re working on it. System maintenance is in progress.', 'TikTok - Make Your Day', 'Reddit - The heart of the internet', 'YouTube', 'Just a moment...', 'Log in or sign up to view', 'Instagram', 'Access Denied']) assert.equal(junkTitle(t), true, t);
   for (const t of ['Brown butter pasta', 'Reddit’s best lasagna', 'The YouTube algorithm explained']) assert.equal(junkTitle(t), false, t);
+  const fbWall = '<html><head><title>Log into Facebook | Facebook</title><meta property="og:description" content="Log into Facebook to start sharing and connecting with your friends."></head></html>';
+  assert.equal(parseLink({ page: fbWall }, 'https://www.facebook.com/NASA').ok, false);
+  const down = '<html><head><title>Patagonia Outdoor Clothing</title><meta name="description" content="We\'re working on it. System maintenance is in progress."></head></html>';
+  assert.equal(parseLink({ page: down }, 'https://www.patagonia.com/product/x/1.html').text, '');
   const cf = '<html><head><title>Just a moment...</title></head><body><div id="challenge-platform"></div></body></html>';
   const r = parseLink({ page: cf }, 'https://shop.example/thing');
   assert.equal(r.ok, false);

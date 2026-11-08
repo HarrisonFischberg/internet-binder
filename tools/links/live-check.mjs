@@ -5,6 +5,14 @@
 // pass more links as arguments. With --out <dir>, writes report.json and each link's raw answers there.
 //   node tools/links/live-check.mjs [--out <dir>] [links…]
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+// YouTube answers a phone's request with headers bigger than Node's 16 KB default (the app has no such limit).
+if (!process.execArgv.some((a) => a.startsWith('--max-http-header-size'))) {
+  const r = spawnSync(process.execPath, ['--max-http-header-size=262144', fileURLToPath(import.meta.url), ...process.argv.slice(2)], { stdio: 'inherit' });
+  process.exit(r.status ?? 1);
+}
 import { join } from 'node:path';
 import { linkRequests, linkFollowUp, parseLink, mergeLinkRead, BROWSER_UA } from '../../keepsake/src/shared/linkReader.js';
 import { createStore, memoryBackend, memoryRecordBackend } from '../../keepsake/src/shared/storage.js';
@@ -59,6 +67,11 @@ async function discover() {
   const found = [];
   const rd = await get('https://www.reddit.com/r/Cooking/top.json?t=week&limit=3', { as: 'json', browser: true });
   for (const c of rd.value?.data?.children || []) if (c?.data?.permalink) found.push(`https://www.reddit.com${c.data.permalink}?share_id=test&utm_source=share`);
+  // Reddit's data may be turned away; its feeds usually aren't.
+  if (!found.length) {
+    const rss = await get('https://www.reddit.com/r/Cooking/top/.rss?t=week&limit=4', { as: 'html', browser: true });
+    for (const m of String(rss.value || '').matchAll(/<link href="(https:\/\/www\.reddit\.com\/r\/\w+\/comments\/[^"]+)"/g)) if (found.length < 3) found.push(m[1]);
+  }
   const bs = await get('https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=bsky.app&limit=3&filter=posts_no_replies', { as: 'json', browser: false });
   for (const f of bs.value?.feed || []) {
     const m = String(f?.post?.uri || '').match(/^at:\/\/([^/]+)\/app\.bsky\.feed\.post\/(\w+)$/);

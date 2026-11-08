@@ -103,7 +103,8 @@ export function linkRequests(url) {
       return [json('oembed', `https://www.tiktok.com/oembed?url=${enc(`https://www.tiktok.com/@${s.handle || '_'}/${s.photo ? 'photo' : 'video'}/${s.id}`)}`), page(`https://www.tiktok.com/@${s.handle || '_'}/${s.photo ? 'photo' : 'video'}/${s.id}`, ['__UNIVERSAL_DATA_FOR_REHYDRATION__', 'SIGI_STATE'])];
     case 'reddit':
       if (s.short) return [page(href, [])];
-      return [json('post', `https://www.reddit.com/comments/${s.id}/.json?raw_json=1&limit=12&depth=1&sort=top`, true), json('oembed', `https://www.reddit.com/oembed?url=${enc(`https://www.reddit.com/comments/${s.id}/`)}`)];
+      // Reddit turns away some networks' requests for its data: the embed and the post's page are tried too.
+      return [json('post', `https://www.reddit.com/comments/${s.id}/.json?raw_json=1&limit=12&depth=1&sort=top`, true), json('oembed', `https://www.reddit.com/oembed?url=${enc(`https://www.reddit.com/comments/${s.id}/`)}`), page(`https://www.reddit.com/comments/${s.id}/`, [])];
     case 'bluesky':
       return [
         json('thread', `https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${enc(`at://${s.actor}/app.bsky.feed.post/${s.rkey}`)}&depth=0&parentHeight=1`),
@@ -207,10 +208,18 @@ function linkHref(html, rel) {
 // The JSON object that starts at the first "{" after `marker` (a script's `var x = {...};`), or null.
 export function jsonAfter(src, marker, limit = 4_000_000) {
   const s = String(src || '');
-  const at = s.indexOf(marker);
-  if (at < 0) return null;
-  const start = s.indexOf('{', at + marker.length);
-  if (start < 0 || start - at > 200) return null;
+  // A page may set it to null first and fill it in later (YouTube's mobile page): the first object wins.
+  for (let at = s.indexOf(marker); at >= 0; at = s.indexOf(marker, at + marker.length)) {
+    const rest = s.slice(at + marker.length, at + marker.length + 40);
+    const m = rest.match(/^\s*[=:]?\s*(?:window\.\w+\s*=\s*)?\{/);
+    if (!m) continue;
+    const found = objectAt(s, at + marker.length + m[0].length - 1, limit);
+    if (found) return found;
+  }
+  return null;
+}
+
+function objectAt(s, start, limit) {
   let depth = 0;
   let inStr = false;
   for (let i = start, end = Math.min(s.length, start + limit); i < end; i++) {
@@ -261,7 +270,10 @@ const absUrl = (v, base) => {
 };
 
 // What sign-in pages, bot checks and error pages are called: not what the link is about.
-const JUNK_TITLE = /^(?:(?:tiktok|youtube|reddit|facebook|instagram|pinterest|threads|bluesky|vimeo|spotify|soundcloud|linkedin)(?:\s*[-–|:]\s*.{0,60})?|log ?in|sign ?in|sign up|log in or sign up(?: to view)?|just a moment\.{0,3}|attention required!?.*|access denied|403 forbidden|404 not found|page not found|are you a robot\??|security check|verify you are human|please wait\.{0,3}|redirecting\.{0,3}|error|whoops!?.*|blocked|too many requests)$/i;
+const JUNK_TITLE = /^(?:(?:tiktok|youtube|reddit|facebook|instagram|pinterest|threads|bluesky|vimeo|spotify|soundcloud|linkedin)(?:\s*[-–|:]\s*.{0,60})?|log ?in|sign ?in|sign up|log in or sign up(?: to view)?|just a moment\.{0,3}|attention required!?.*|access denied|403 forbidden|404 not found|page not found|are you a robot\??|security check|verify you are human|please wait\.{0,3}|redirecting\.{0,3}|error|whoops!?.*|blocked|too many requests|log ?in(?:to)? .{0,40}|untitled(?: item)?|we(?:'|’)re working on it.*|.*\bsystem maintenance\b.*|site (?:is )?(?:under|down for) maintenance.*|temporarily unavailable.*)$/i;
+// A description that is a sign-in prompt or a maintenance notice, not the page's.
+const JUNK_TEXT = /^(?:log ?in(?:to)?|sign ?in(?:to)?|sign up|create an account)\b|\bsystem maintenance\b|we(?:'|’)re working on it|temporarily unavailable|enable javascript and cookies|access to this page has been denied/i;
+export const junkText = (t) => JUNK_TEXT.test(String(t || '').trim());
 export const junkTitle = (t) => !String(t || '').trim() || JUNK_TITLE.test(String(t).trim());
 const BOT_WALL = /<title>\s*(?:just a moment|attention required|access denied|are you a robot|security check|blocked|too many requests)|cf-browser-verification|challenge-platform|captcha-delivery|px-captcha|You've been blocked by network security/i;
 
@@ -279,7 +291,7 @@ export function pageFacts(html, url = '') {
   const place = of(/^(?:restaurant|foodestablishment|cafeorcoffeeshop|bakery|barorpub|localbusiness|touristattraction|museum|park|lodgingbusiness|hotel|store|winery|brewery)$/i);
   const docTitle = textOf((src.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '');
   const title = [nameOf(recipe?.name), nameOf(product?.name), meta['og:title'], meta['twitter:title'], nameOf(article?.headline), nameOf(video?.name), docTitle].find((t) => t && !junkTitle(t)) || '';
-  const description = [meta['og:description'], meta['twitter:description'], meta.description, textOf(typeof recipe?.description === 'string' ? recipe.description : ''), textOf(typeof video?.description === 'string' ? video.description : '')].find((t) => t && t.length > 3) || '';
+  const description = [meta['og:description'], meta['twitter:description'], meta.description, textOf(typeof recipe?.description === 'string' ? recipe.description : ''), textOf(typeof video?.description === 'string' ? video.description : '')].find((t) => t && t.length > 3 && !junkText(t)) || '';
   const images = [];
   for (const v of [meta['og:image'], meta['og:image:url'], meta['og:image:secure_url'], meta['twitter:image'], meta['twitter:image:src'], recipe?.image, product?.image, video?.thumbnailUrl, article?.image]) {
     const a = absUrl(v, url);
@@ -295,7 +307,7 @@ export function pageFacts(html, url = '') {
     const p = Number(String(meta['product:price:amount']).replace(/[^\d.]/g, ''));
     if (p > 0) { price = p; currency = String(meta['product:price:currency'] || '').toUpperCase(); }
   }
-  const loginWall = !meta['og:description'] && !meta.description && /name=["']?(?:username|email|pass)["']?|\/accounts\/login|\/login\/?["'?]/i.test(src);
+  const loginWall = junkText(meta['og:description'] || meta.description || '') || junkTitle(docTitle) && /log ?in|sign ?in/i.test(docTitle) || !meta['og:description'] && !meta.description && /name=["']?(?:username|email|pass)["']?|\/accounts\/login|\/login\/?["'?]/i.test(src);
   return {
     title: sanitizeText(title, 300),
     description: sanitizeMultiline(description, 2000),
@@ -664,7 +676,7 @@ function pageOnly(r, html, url) {
     // A canonical link to the same site only (a page never moves itself to another site).
     try { if (bare(new URL(f.canonical).hostname) === bare(new URL(url).hostname)) r.url = f.canonical; } catch { /* not a URL */ }
   }
-  r.ok = !f.botWall && !!(f.title || f.description || f.image || f.schemaTypes.length);
+  r.ok = !f.botWall && !(f.loginWall && !f.title) && !!(f.title || f.description || f.schemaTypes.length);
   r.source = 'page';
   return r;
 }
@@ -755,7 +767,7 @@ export function mergeLinkRead(product, r) {
   if (r.hashtags.length && !p.hashtags?.length) p.hashtags = r.hashtags;
   // A post or a video site's own data says what it is; a page read from the share sheet stays a link unless
   // its own data says otherwise (a recipe, a product with a price, an article…), as before.
-  if (r.site !== 'page') p.sparse = false;
+  if (r.post || r.site === 'youtube' || r.site === 'vimeo') p.sparse = false;
   if (r.post) {
     p.isPost = true;
     if (!p.instagram) p.instagram = linkPostRecord(r);
