@@ -1,16 +1,22 @@
 # Releasing
 
-One command, from the repo root:
+One command, from the repo root. The target defaults to `ios`.
 
 | What | Command |
 |---|---|
-| Dry run everything (builds and validates, publishes nothing) | `./release.sh all` |
-| iPhone/iPad build to TestFlight | `./release.sh ios --live` |
-| iPhone/iPad to App Store review (build, listing, screenshots, age rating, submit) | `./release.sh ios --live --track production` |
+| Dry run iPhone/iPad (archives and has App Store Connect validate it, uploads nothing) | `./release.sh` |
+| Dry run everything (iPhone/iPad, Mac, Chrome) | `./release.sh all` |
+| iPhone/iPad build to TestFlight | `./release.sh --live` |
+| iPhone/iPad to App Store review: retake screenshots, build, upload, listing, submit, auto-release on approval | `./release.sh --live --track production --version 2.3.0` |
 | Mac Safari app build to TestFlight | `./release.sh mac --live` |
 | Mac Safari app to App Store review | `./release.sh mac --live --track production` |
 | Everything at once (iPhone/iPad, Mac, Chrome) | `./release.sh all --live --track production` |
 | Chrome Web Store upload and publish | `./release.sh chrome --live` |
+| Copy the App Store Connect listing into `store/ios` (read-only) | `./release.sh pull-listing` |
+
+Extra flags: `--version X.Y.Z` sets the version first, `--first` for the app's first App Store version
+(Apple refuses What's New on it; the app has never been on the App Store yet, so the first release needs it),
+`--no-screenshots` keeps the current store images instead of retaking them.
 
 Each `--live` run ends by printing where it went: the TestFlight page, the App Store link (works once Apple approves) or the Chrome Web Store page.
 
@@ -18,9 +24,22 @@ Without `--live` nothing leaves the machine except App Store Connect's validatio
 `ios` and `mac` need a Mac with Xcode signed in to team KTV2G3Z883. `chrome` runs anywhere with Node 20+.
 `android` and `firefox` are accepted and do nothing: this repo has no Android app, and the Firefox build is on hold.
 
-Each `--live` iOS or Mac run bumps `CURRENT_PROJECT_VERSION` in both Xcode projects to one above the
-newest TestFlight build. Commit that change afterwards. Bump the version itself (`keepsake/manifest.json`,
-then `python3 ios/tools/make-xcodeproj.py`) before a new App Store version.
+**Build number.** Each `--live` iOS or Mac run uses the projects' `CURRENT_PROJECT_VERSION` if TestFlight
+doesn't have it yet, otherwise one above the newest TestFlight build, and writes it into both Xcode projects.
+So a build number committed ahead of time (a "Build 40" PR) is uploaded as 40, not 41. Commit the change afterwards.
+
+**Version.** `--version X.Y.Z` writes `keepsake/manifest.json` (the Chrome extension's version, which the
+apps share), regenerates `ios/Keepsake.xcodeproj` (`python3 ios/tools/make-xcodeproj.py`, which keeps the
+build number and the shared `Keepsake` scheme) and sets the Mac project's `MARKETING_VERSION`.
+
+**Screenshots.** `scripts/store-screenshots.sh` runs `KeepsakeUITests/AppStoreScreenshotsUITests` on an
+iPhone Pro Max and an iPad Pro 13-inch simulator with the demo library (`ios/demo/store-demo.json`), then
+`scripts/frame_store_shots.py` adds the captions from `store/ios/screenshots.json`. A simulator that was
+already running is left running. Run it on its own any time to refresh the images.
+
+**pull-listing** overwrites `store/ios/metadata` with whatever App Store Connect has. In Nov 2026 that was
+still empty (no version had been submitted), so the files in the repo are the listing: don't pull until a
+version is live, and check `git diff` after.
 
 The Chrome Web Store refuses an upload while the previous one is still in review: cancel that review in
 the dashboard first. Pushing a `v*.*.*` tag still publishes Chrome through `.github/workflows/release.yml`;
@@ -28,12 +47,15 @@ the dashboard first. Pushing a `v*.*.*` tag still publishes Chrome through `.git
 
 ## Where things live
 
-- `fastlane/` – Appfile (bundle id, team) and Fastfile (lanes `check`, `beta`, `release` for iOS and for Mac).
+- `release.sh` and `release/config.sh` – the one command, and the app's bundle id, team, scheme and screenshot simulators.
+- `fastlane/` – Appfile (bundle id, team) and Fastfile (lanes `check`, `beta`, `release` for iOS and for Mac, `pull_listing`).
 - `store/ios/metadata/` – App Store text: name, subtitle, description, keywords, promo text, URLs, categories,
   copyright, App Review contact and notes. Add `en-US/release_notes.txt` for every version after the first.
 - `store/ios/age-rating.json` – age rating answers (all "none", result 4+).
-- `store/ios/screenshots/en-US/` – iPhone 6.9" (1320×2868), iPhone 6.3" (1206×2622) and iPad 13" (2064×2752).
-  fastlane sorts them by size; the number prefix sets the order.
+- `store/ios/screenshots.json` – order, captions and colours of the framed screenshots.
+- `store/ios/screenshots/en-US/` – iPhone 6.9" (1320×2868), 6.5" (1284×2778) and iPad 13" (2064×2752), made by
+  `scripts/store-screenshots.sh`. fastlane sorts them by size; the number prefix sets the order. Raw shots go to
+  `store/ios/raw/` (not committed).
 - `store/mac/` – the Mac App Store text (Safari-specific description, review notes) and 2880×1800 screenshots. Name, subtitle, categories and age rating are shared with iOS.
 - `store/chrome/` – what the Chrome listing needs (edited by hand, see its README).
 
@@ -60,7 +82,8 @@ Put these in `~/.zshrc` (or a file you `source` that is not in the repo).
    `mkdir -p ~/.appstoreconnect && mv ~/Downloads/AuthKey_*.p8 ~/.appstoreconnect/`
 3. Add the `ASC_*` lines to `~/.zshrc`, open a new Terminal window.
 4. Chrome: create the OAuth client and refresh token (guide above), add the `CWS_*` lines.
-5. Check it all with a dry run: `cd ~/projects/internet-binder && ./release.sh all`
+5. `python3 -m pip install --user pillow` (frames the screenshots)
+6. Check it all with a dry run: `cd ~/projects/internet-binder/main && ./release.sh all`
 
 ## Steps that can't be automated (once, in App Store Connect)
 

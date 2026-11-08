@@ -1,33 +1,59 @@
 #!/usr/bin/env bash
 # One command for every store this repo ships to. See release/README.md.
-#   ./release.sh [ios|mac|chrome|android|firefox|all] [--live] [--track production]
-# Without --live nothing is published: it builds and validates only.
-# iOS and Mac go to TestFlight with --live, and to App Store review with --live --track production.
+#   ./release.sh [ios|mac|chrome|android|firefox|all] [--live] [--track testflight|production]
+#                [--version X.Y.Z] [--first] [--no-screenshots]
+#   ./release.sh pull-listing     (read-only: copy the live App Store listing into store/ios)
+# The target defaults to ios. Without --live nothing is published: it builds and validates only.
+# iOS and Mac go to TestFlight with --live, and to App Store review (automatic release after
+# approval) with --live --track production. iOS production first retakes the store screenshots.
+#   --version   sets the version everywhere first (keepsake/manifest.json, both Xcode projects)
+#   --first     first version of a new app: leaves out What's New (Apple refuses it on 1.0)
 set -euo pipefail
 cd "$(dirname "$0")"
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 # fastlane needs a UTF-8 locale for the listing text
 : "${CWS_EXTENSION_ID:=akekjlfpdbkghhopdkgnfnkcibonaiom}" # this repo's Chrome Web Store item
+# shellcheck source=release/config.sh
+source release/config.sh
+export APP_NAME BUNDLE_ID TEAM_ID SCHEME XCODE_PROJECT XCODE_WORKSPACE
 
-target=${1:-all}; shift || true
-live=0; track=testflight
+usage="Usage: ./release.sh [ios|mac|chrome|android|firefox|all|pull-listing] [--live] [--track testflight|production] [--version X.Y.Z] [--first] [--no-screenshots]"
+target=ios
+case ${1:-} in ios|mac|chrome|android|firefox|all|pull-listing) target=$1; shift ;; esac
+live=0; track=testflight; version=; first=false; shots=true
 while [ $# -gt 0 ]; do
   case $1 in
     --live) live=1 ;;
     --track) track=${2:?--track needs a value}; shift ;;
-    *) echo "Unknown option $1" >&2; exit 2 ;;
+    --version) version=${2:?--version needs a value}; shift ;;
+    --first) first=true ;;
+    --no-screenshots) shots=false ;;
+    *) echo "$usage" >&2; exit 2 ;;
   esac
   shift
 done
+case $track in testflight|internal) track=testflight ;; production) ;; *) echo "$usage" >&2; exit 2 ;; esac
 
 need() { for v in "$@"; do [ -n "${!v:-}" ] || { echo "Missing env var $v (see release/README.md)" >&2; exit 1; }; done; }
 say() { printf '\n== %s\n' "$*"; }
 
+# The app's version is the extension's: manifest.json drives both Xcode projects (and Chrome).
+set_version() {
+  [[ $version =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "--version wants X.Y or X.Y.Z" >&2; exit 2; }
+  node -e 'const f="keepsake/manifest.json",fs=require("fs"),m=JSON.parse(fs.readFileSync(f));m.version=process.argv[1];fs.writeFileSync(f,JSON.stringify(m,null,2)+"\n")' "$version"
+  python3 ios/tools/make-xcodeproj.py >/dev/null
+  sed -i '' -E "s/MARKETING_VERSION = [0-9.]+;/MARKETING_VERSION = $version;/" safari/Keepsake/Keepsake.xcodeproj/project.pbxproj
+  say "version $version (keepsake/manifest.json, iOS and Mac projects)"
+}
+
 apple() { # $1 = fastlane platform (ios or mac)
   need ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_PATH
+  [ -f "${ASC_KEY_PATH/#\~/$HOME}" ] || { echo "ASC_KEY_PATH points to a missing file: $ASC_KEY_PATH" >&2; exit 1; }
   [ "$(uname)" = Darwin ] || { echo "$1 builds need a Mac with Xcode" >&2; exit 1; }
+  command -v fastlane >/dev/null || { echo "fastlane is not installed: brew install fastlane" >&2; exit 1; }
   if [ $live = 0 ]; then say "$1: dry run (build + App Store Connect validation, nothing uploaded)"; fastlane "$1" check
   elif [ "$track" = production ]; then
-    say "$1: upload, listing and screenshots, submit for review"; fastlane "$1" release
+    if [ "$1" = ios ] && [ "$shots" = true ]; then say "ios: retake store screenshots"; scripts/store-screenshots.sh; fi
+    say "$1: upload, listing and screenshots, submit for review"; fastlane "$1" release first:"$first"
   else say "$1: upload to TestFlight"; fastlane "$1" beta
   fi
 }
@@ -51,12 +77,14 @@ chrome() {
 
 skip() { echo "$1: not shipped from this repo ($2), nothing to do"; }
 
+[ -z "$version" ] || set_version
+
 case $target in
+  pull-listing) need ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_PATH; fastlane ios pull_listing ;;
   ios) apple ios ;;
   mac) apple mac ;;
   chrome) chrome ;;
   android) skip android "there is no Android app"; exit 1 ;;
   firefox) skip firefox "the Firefox build is on hold"; exit 1 ;;
   all) chrome; apple ios; apple mac; skip android "there is no Android app"; skip firefox "the Firefox build is on hold" ;;
-  *) echo "Usage: ./release.sh [ios|mac|chrome|android|firefox|all] [--live] [--track production]" >&2; exit 2 ;;
 esac

@@ -3,6 +3,9 @@
 # Listing text, review notes and screenshots live in store/ios and store/mac; the age rating in store/ios.
 # The iPhone/iPad app and the Mac Safari app share one App Store record (universal purchase) and one build number.
 
+require "json"
+require "shellwords"
+
 default_platform(:ios)
 
 ROOT = File.expand_path("..") # the Fastfile is read from inside fastlane/
@@ -18,6 +21,16 @@ SUBMIT = {
 }
 PROJECTS = ["#{ROOT}/ios/Keepsake.xcodeproj", "#{ROOT}/safari/Keepsake/Keepsake.xcodeproj"]
 
+# --first (a brand new app's 1.0): Apple refuses What's New, so submit a copy of the listing without it.
+def listing_for(dir, options)
+  return listing(dir) unless options[:first].to_s == "true"
+  tmp = "#{ROOT}/build/metadata-first-#{dir}"
+  FileUtils.rm_rf(tmp)
+  FileUtils.cp_r("#{ROOT}/store/#{dir}/metadata", tmp)
+  Dir.glob("#{tmp}/*/release_notes.txt").each { |f| File.delete(f) }
+  listing(dir).merge(metadata_path: tmp)
+end
+
 before_all do
   app_store_connect_api_key(
     key_id: ENV.fetch("ASC_KEY_ID"),
@@ -26,12 +39,13 @@ before_all do
   )
 end
 
-# Next build number: one above both the projects and the newest TestFlight upload, written into both projects.
+# Build number: the projects' own, unless TestFlight already has it, then one above the newest upload.
+# Written into both projects. A build number committed ahead of time (a "Build 40" PR) is used as is.
 def bump_build(platform)
   pbx = PROJECTS.map { |p| "#{p}/project.pbxproj" }
   current = File.read(pbx[0])[/CURRENT_PROJECT_VERSION = (\d+)/, 1].to_i
   uploaded = latest_testflight_build_number(platform: platform, initial_build_number: 0).to_i
-  n = [current, uploaded].max + 1
+  n = [current, uploaded + 1].max
   pbx.each { |f| File.write(f, File.read(f).gsub(/CURRENT_PROJECT_VERSION = \d+/, "CURRENT_PROJECT_VERSION = #{n}")) }
   UI.success("Build #{n}")
 end
@@ -64,14 +78,30 @@ platform :ios do
   end
 
   desc "Bump the build, archive, upload with listing and screenshots, submit for review"
-  lane :release do
+  lane :release do |options|
     bump_build("ios")
     build_ios
     deliver(
-      **listing("ios"),
+      **listing_for("ios", options),
       **SUBMIT
     )
     links(store: true)
+  end
+
+  desc "Read-only: copy the App Store listing and screenshots into store/ios (./release.sh pull-listing)"
+  lane :pull_listing do
+    key_json = "#{ROOT}/build/asc_key.json"
+    FileUtils.mkdir_p(File.dirname(key_json))
+    File.write(key_json, { key_id: ENV.fetch("ASC_KEY_ID"), issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+                           key: File.read(File.expand_path(ENV.fetch("ASC_KEY_PATH"))), in_house: false }.to_json)
+    File.chmod(0o600, key_json)
+    begin
+      common = "--api_key_path #{key_json.shellescape} --app_identifier #{CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier)} --force"
+      sh("cd #{ROOT.shellescape} && fastlane deliver download_metadata #{common} -m store/ios/metadata")
+      sh("cd #{ROOT.shellescape} && fastlane deliver download_screenshots #{common} -w store/ios/screenshots")
+    ensure
+      File.delete(key_json) if File.exist?(key_json)
+    end
   end
 end
 
@@ -97,10 +127,10 @@ platform :mac do
   end
 
   desc "Bump the build, archive, upload with the Mac listing and screenshots, submit for review"
-  lane :release do
+  lane :release do |options|
     bump_build("osx")
     build_mac
-    deliver(**listing("mac"), platform: "osx", **SUBMIT)
+    deliver(**listing_for("mac", options), platform: "osx", **SUBMIT)
     links(store: true)
   end
 end
