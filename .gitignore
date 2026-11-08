@@ -25,3 +25,4 @@ store/ios/raw/
 *.dSYM.zip
 # App Review phone number: kept out of git on purpose (release/README.md).
 store/ios/metadata/review_information/phone_number.txt
+store/mac/metadata/review_information/phone_number.txt
