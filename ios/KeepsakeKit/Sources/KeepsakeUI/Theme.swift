@@ -72,7 +72,7 @@ public struct KSTheme: Sendable {
     /// Nocturne: a luminous private archive. Deep night blue, photographs carry the energy, amber for
     /// what you can touch, cyan for collection details, faint orbits drifting behind.
     public static let nocturne = make(.nocturne, "Nocturne", blurb: "A luminous private archive. Deep night blue, amber for every touch.",
-                                      tagline: "Save the internet. Organize your mind.", scheme: .dark, card: "surface", well: "surface-2", stamp: "detail",
+                                      tagline: "Organize your mind", scheme: .dark, card: "surface", well: "surface-2", stamp: "detail",
                                       shadow: .black.opacity(0.45), radius: 20, depth: .lifted)
 
     /// Paper & Ink: a personal internet, beautifully kept. Espresso serif headings on cream, clean sans
