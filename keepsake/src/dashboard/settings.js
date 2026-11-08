@@ -60,6 +60,7 @@ export function renderSettings(ctx, view) {
   page.append(aiSummarySection(ctx));
   page.append(dataSection(ctx));
   page.append(privacySection(ctx));
+  page.append(debugLogsSection());
   page.append(aboutSection(ctx));
   view.append(page);
 }
@@ -538,6 +539,31 @@ function formatBytes(n) {
 
 function stat(value, label) {
   return el('div', { class: 'stat' }, [el('div', { class: 'stat-value' }, [String(value)]), el('div', { class: 'stat-label' }, [label])]);
+}
+
+// Send Debug Logs: a draft to support in the user's own email app. Internet Binder sends nothing itself.
+export const SUPPORT_EMAIL = 'support@rarecreatures.app';
+export function debugLogsMail(problem, { version, userAgent, language }) {
+  const body = [problem.trim(), '', '--- Debug logs (you can edit or delete anything below) ---', `App: Internet Binder ${version}`, `Browser: ${userAgent}`, `Language: ${language}`].join('\n');
+  return { body, url: `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Internet Binder ${version} debug logs`)}&body=${encodeURIComponent(body)}` };
+}
+
+function debugLogsSection() {
+  const problem = el('textarea', { class: 'textarea', id: 'debug-problem', rows: '3' });
+  const send = el('button', { type: 'button', class: 'btn', disabled: true }, ['Send Debug Logs']);
+  const note = el('div', { class: 'help', role: 'status' }, ['Opens your email app with what you wrote, Internet Binder’s version and your browser. Nothing is sent until you press Send.']);
+  problem.addEventListener('input', () => { send.disabled = !problem.value.trim(); });
+  send.addEventListener('click', () => {
+    const { body, url } = debugLogsMail(problem.value, { version: chrome.runtime.getManifest().version, userAgent: navigator.userAgent, language: navigator.language });
+    navigator.clipboard?.writeText(body).catch(() => {});
+    el('a', { href: url }).click();
+    note.textContent = `Your email app is opening with the report filled in: press Send there. It is also copied, so if no email app opens, paste it into an email to ${SUPPORT_EMAIL}.`;
+  });
+  return UI.section(`Send Debug Logs to ${SUPPORT_EMAIL}`, '', [
+    el('div', { class: 'field' }, [el('label', { class: 'label', for: 'debug-problem' }, ['What went wrong?']), problem]),
+    el('div', { class: 'review-actions' }, [send]),
+    note,
+  ]);
 }
 
 function aboutSection(ctx) {
