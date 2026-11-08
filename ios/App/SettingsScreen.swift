@@ -104,6 +104,7 @@ struct SettingsScreen: View {
                     Button("Export library", systemImage: "square.and.arrow.up") { Task { await export() } }
                     Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
                 }
+                SendDebugLogsSection()
                 Section {
                     NavigationLink("Privacy") { PrivacyScreen() }
                     Button("Erase everything", role: .destructive) { erasing = true }

@@ -1100,3 +1100,30 @@ test('a collection’s Delete offers keep-the-saves or delete-them-too, no confi
   assert.ok(!(await store.getItem(save.id)).deletedAt);
   assert.ok((await store.getCollections()).some((c) => c.id === collection.id));
 });
+
+test('Settings: Send Debug Logs opens an email to support with the note, version and browser', async () => {
+  await go('#settings');
+  const section = [...view().querySelectorAll('section, .section')].find((s) => /Send Debug Logs to support@rarecreatures\.app/.test(s.textContent));
+  assert.ok(section, 'the section is in Settings');
+  const problem = section.querySelector('textarea');
+  const send = [...section.querySelectorAll('button')].find((b) => b.textContent === 'Send Debug Logs');
+  assert.equal(problem.labels[0].textContent, 'What went wrong?');
+  assert.equal(send.disabled, true, 'nothing to send yet');
+  const opened = [];
+  const click = window.HTMLAnchorElement.prototype.click;
+  window.HTMLAnchorElement.prototype.click = function () { opened.push(this.href); };
+  try {
+    problem.value = 'Saves from Etsy have no price';
+    problem.dispatchEvent(new window.Event('input'));
+    assert.equal(send.disabled, false);
+    send.click();
+  } finally {
+    window.HTMLAnchorElement.prototype.click = click;
+  }
+  assert.equal(opened.length, 1);
+  assert.ok(opened[0].startsWith('mailto:support@rarecreatures.app?subject='));
+  const body = decodeURIComponent(opened[0].split('&body=')[1]);
+  assert.ok(body.startsWith('Saves from Etsy have no price\n\n--- Debug logs'));
+  assert.match(body, /App: Internet Binder \d/);
+  assert.match(section.textContent, /Your email app is opening/);
+});
