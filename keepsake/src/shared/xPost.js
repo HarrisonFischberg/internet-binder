@@ -142,7 +142,8 @@ function fromOembed(o) {
 const iso = (s) => { const d = new Date(s); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
 
 // A post's title: its first line that says something, short, with no links or trailing hashtags.
-export function xTitle(text, creator = '', type = 'post') {
+// `site` names where it's from in the fallback ("Post by @mia on X"); '' gives '' instead of a fallback.
+export function xTitle(text, creator = '', type = 'post', site = 'X') {
   const lines = String(text || '').slice(0, 2000).split(/\r?\n/)
     .map((l) => sanitizeText(l.replace(URL_RE, ''), 600).replace(/^(?:[#@][\w.]+[\s,]*)+/u, '').replace(/^[\s\p{Extended_Pictographic}\p{P}\uFE0F\u200D]+/u, '').trim());
   const c = lines.find((l) => l.replace(/[#@\s\p{P}]/gu, '').length >= 4) || '';
@@ -150,8 +151,9 @@ export function xTitle(text, creator = '', type = 'post') {
   let t = first.replace(/^[\s"“”'‘’«»]+|[\s"“”'‘’«»]+$/g, '').replace(/(?:\s*#[\p{L}\p{N}_]+)+\s*$/u, '').replace(/[\s\p{Extended_Pictographic}\uFE0F\u200D:.]+$/u, '').trim();
   if (t.length > 80) t = t.slice(0, 79).replace(/\s+\S*$/, '') + '…';
   if (t.replace(/[#@\s\p{P}]/gu, '').length >= 4) return t;
+  if (!site) return '';
   const what = type === 'video' ? 'Video' : 'Post';
-  return creator ? `${what} by @${creator} on X` : `${what} on X`;
+  return creator ? `${what} by @${creator} on ${site}` : `${what} on ${site}`;
 }
 
 // Everything worth keeping from a shared post. `bundle` is { tweet, oembed } (either may be missing):

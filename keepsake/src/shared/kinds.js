@@ -797,7 +797,8 @@ export const genericTitle = (t) => !t || /^(?:instagram(?: (?:post|reel|photo|vi
 
 // A post someone made (an Instagram post or reel, a post on X): its title is our reading of its caption,
 // so a better name from the AI replaces it; a web page's own title stays.
-export const isPostSave = (item) => !!item && (item.type === 'instagram' || /^x-/.test(String(item.instagram?.postType || '')));
+// A post from a social app (Instagram, X, TikTok, Reddit, Bluesky, Pinterest, Threads, Facebook, LinkedIn).
+export const isPostSave = (item) => !!item && (item.type === 'instagram' || /^(?:x-|tiktok|reddit|bluesky|pinterest|threads|facebook|linkedin)/.test(String(item.instagram?.postType || '')));
 
 // Turning a save into another kind (you picked a Lifestyle for it): that kind's details, worked out from
 // what the save already holds (its link, caption, description, title). Returns { details, title } where

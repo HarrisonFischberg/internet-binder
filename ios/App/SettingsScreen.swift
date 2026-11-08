@@ -14,6 +14,7 @@ struct SettingsScreen: View {
     @State private var preferKey = false
     @State private var readPosts = true
     @State private var readXPosts = true
+    @State private var readLinks = true
     @State private var provider = "anthropic"
     @State private var aiModel = SettingsScreen.claudeModels[0].id
     @State private var effort = "medium"
@@ -86,6 +87,7 @@ struct SettingsScreen: View {
                 lookupsSection
                 instagramSection
                 xSection
+                linksSection
                 Section {
                     Toggle("Music while cooking", isOn: $cookingMusic)
                     NavigationLink("Music credits") { MusicCreditsScreen() }
@@ -302,6 +304,18 @@ struct SettingsScreen: View {
         }
     }
 
+    /// settings.links.readShared, on unless turned off (src/shared/linkReader.js).
+    private var linksSection: some View {
+        Section {
+            Toggle("Read links you share", isOn: Binding(get: { readLinks }, set: { on in
+                readLinks = on
+                Task { try? await model.library?.updateSettings(["links": ["readShared": on]]) }
+            }))
+        } header: { Text("Links") } footer: {
+            Text("When you share a TikTok, YouTube video, Reddit post, pin or any web page, Internet Binder asks that site for the public details it shows in link previews, without your account or cookies, to save its caption, creator, picture and where it's from. Turn off to save just the link.")
+        }
+    }
+
     private func lookupToggle(_ key: String, _ title: String) -> some View {
         Toggle(title, isOn: Binding(get: { lookups[key] ?? false }, set: { on in
             if on { consent = .lookup(key) } else { Task { lookups[key] = false; try? await model.library?.updateSettings(["lookups": [key: false]]) } }
@@ -323,6 +337,7 @@ struct SettingsScreen: View {
         key = (try? await lib.aiKey()) ?? ""
         readPosts = (s["instagram"] as? [String: Any])?["readPostDetails"] as? Bool ?? true
         readXPosts = (s["x"] as? [String: Any])?["readPostDetails"] as? Bool ?? true
+        readLinks = (s["links"] as? [String: Any])?["readShared"] as? Bool ?? true
         let l = s["lookups"] as? [String: Any] ?? [:]
         for k in lookups.keys { lookups[k] = l[k] as? Bool ?? false }
     }

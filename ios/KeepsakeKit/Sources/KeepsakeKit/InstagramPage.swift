@@ -104,11 +104,14 @@ public enum InstagramPage {
 extension Library {
     /// What a share from another app becomes: a link, and for an Instagram post its public page read
     /// as Chrome reads it (unless Read post details is off), so a recipe reel arrives as a Recipe. A
-    /// post on X is read from X's embed data the same way (unless Settings → X says not to).
+    /// post on X is read from X's embed data the same way (unless Settings → X says not to), and any
+    /// other link from what its site publishes for previews (unless Settings → Links says not to).
     public func sharedProduct(url: String?, title: String?, text: String?, transport: NetworkTransport = URLSessionTransport()) async -> [String: Any] {
         var p = Self.sharedProduct(url: url, title: title, text: text)
         // A post on X: its embed data (XPost.swift).
         if XPost.isPost(url) { return await withXPost(p, transport: transport) }
+        // Any other app's link (TikTok, YouTube, Reddit, Pinterest, a web page…): what its site publishes (LinkReader.swift).
+        if LinkReader.canRead(url) { return await withLinkRead(p, transport: transport) }
         guard let url, InstagramPage.isPost(url) else { return p }
         let settings = (try? await settings()) ?? [:]
         if (settings["instagram"] as? [String: Any])?["readPostDetails"] as? Bool == false { return p }

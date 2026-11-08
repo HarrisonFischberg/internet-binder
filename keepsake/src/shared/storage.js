@@ -110,6 +110,9 @@ export const DEFAULT_SETTINGS = {
   },
   // A post on X you share: read its text, pictures and links from X's public embed data (src/shared/xPost.js).
   x: { readPostDetails: true },
+  // A link you share from another app (TikTok, YouTube, Reddit, Pinterest, any page): read what the site
+  // publishes about it for link previews (src/shared/linkReader.js).
+  links: { readShared: true },
   ai: {
     // One switch for everything AI: instant save (the AI tidies the title and picks the
     // collection at save time), "Fix with AI", and "Find products" for Instagram saves.
