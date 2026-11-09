@@ -471,7 +471,7 @@ final class ScreenshotTests: XCTestCase {
             // Collections, two ticked.
             app.tabBars.buttons["Home"].tap()
             app.buttons["Collections"].tap()
-            XCTAssertTrue(app.staticTexts["For things to buy"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["Your saves, sorted."].waitForExistence(timeout: 5))
             sleep(1)
             app.buttons["Select"].tap()
             app.buttons["Collection Kitchen"].tap()

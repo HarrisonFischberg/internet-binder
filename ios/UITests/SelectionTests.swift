@@ -67,7 +67,7 @@ final class SelectionTests: XCTestCase {
     func testDeleteCollectionsTogetherAndUndo() {
         let app = launch()
         app.buttons["Collections"].tap()
-        XCTAssertTrue(app.staticTexts["For things to buy"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Your saves, sorted."].waitForExistence(timeout: 5))
         app.buttons["Select"].tap()
         app.buttons["Collection Clothing"].tap()
         app.buttons["Collection Technology"].tap()

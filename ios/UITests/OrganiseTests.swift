@@ -67,7 +67,7 @@ final class OrganiseTests: XCTestCase {
     func testCollectionsListShopping() {
         let app = launch()
         app.buttons["Collections"].tap()
-        XCTAssertTrue(app.staticTexts["For things to buy"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Your saves, sorted."].waitForExistence(timeout: 5))
     }
 
     func card(_ app: XCUIApplication, _ title: String) -> XCUIElement {

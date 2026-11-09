@@ -20,7 +20,7 @@ struct CollectionsScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    ScreenHeader(title: "Collections", subtitle: "For things to buy")
+                    ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
                     CollectionTiles(collections: collections, onNew: { naming = true }, selection: selecting ? $selected : nil) { id in
                         selected = [id]
                         selecting = true
