@@ -1,0 +1,2 @@
+- Collections now say what they really are: your saves, sorted. The "things to buy" label is gone from the Collections page and the save picker.
+- Having trouble? Settings has a new Send Debug Logs button. It starts an email to support in your own mail app, with app and device details you can read and edit before you send it.
