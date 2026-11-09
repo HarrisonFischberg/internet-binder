@@ -170,7 +170,7 @@ Click the puzzle-piece icon in Chrome's toolbar and press the pin next to **Inte
 Open any page and click the Internet Binder icon (or press Alt+Shift+K). The toolbar icon never saves on its own: the popup opens with **Open dashboard** at the top and the page's picture and title, then asks **Where does it live?**
 
 1. Internet Binder reads the page (a skeleton shows while it does) and says what it thinks ("Internet Binder thinks **Home Decor**", or "Internet Binder isn't sure yet").
-2. Pick **Collections** (things to buy) or **Lifestyle** (recipes, places and more), then the collection or view. You can name a new collection right there. Or pick **Not sure? Put it in Review** and Internet Binder suggests a home later.
+2. Pick **Collections** (your saves, sorted) or **Lifestyle** (recipes, places and more), then the collection or view. You can name a new collection right there. Or pick **Not sure? Put it in Review** and Internet Binder suggests a home later.
 3. Rename the title if you like, add a note, then **Save**.
 4. The popup confirms with *Saved to …*, **Undo** and a button that opens where it landed (its collection, its Lifestyle view, or Review). When you picked something other than Internet Binder's guess, "Use this choice for similar items" teaches the categorizer strongly.
 

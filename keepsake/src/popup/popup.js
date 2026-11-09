@@ -332,7 +332,7 @@ function renderHome() {
   }
 
   const guess = state.initialChoice;
-  for (const [id, which, plain] of [['libCollections', 'collections', 'Things to buy'], ['libLifestyle', 'lifestyle', 'Recipes, places & more']]) {
+  for (const [id, which, plain] of [['libCollections', 'collections', 'Your saves, sorted'], ['libLifestyle', 'lifestyle', 'Recipes, places & more']]) {
     const card = $(id);
     const here = picked && shelfOf(choice) === which;
     const guessed = !here && shelfOf(guess) === which;

@@ -458,7 +458,7 @@ struct ShareCard: View {
             let rows = typeSize.isAccessibilitySize
             let stack = rows ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
             stack {
-                libraryCard(.collections, "Collections", "Things to buy", symbol: "bag", tint: KindStyle("product").color, row: rows)
+                libraryCard(.collections, "Collections", "Your saves, sorted", symbol: "bag", tint: KindStyle("product").color, row: rows)
                 libraryCard(.lifestyle, "Lifestyle", "Recipes, places & more", symbol: "sparkles", tint: KindStyle("recipe").color, row: rows)
             }
             reviewCard
