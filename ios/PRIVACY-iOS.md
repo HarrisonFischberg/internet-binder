@@ -72,7 +72,10 @@ When you share a screenshot or photo, its text is read on this device (Apple's V
 of the picture is kept with the save. Nothing is sent anywhere.
 
 When you share a page from Safari, Internet Binder reads that page in Safari to save its title, picture and
-details (the same reader as Chrome's toolbar button). Nothing is sent anywhere.
+details (the same reader as Chrome's toolbar button). Usually nothing is sent anywhere. Two exceptions: a post
+on X is also read from X's public embed data, and when the page's own details say little (a TikTok or Reddit
+post, for example) the app also asks that link's site for its public details. Both are the link reads described
+above, under the same settings.
 
 ## App Store privacy label (proposed)
 **Data Not Collected.** Internet Binder's developer receives nothing; iCloud sync goes to the person's own iCloud, which the developer can't read. AI and Lookups requests go from your
