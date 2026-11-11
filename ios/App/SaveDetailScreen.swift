@@ -13,7 +13,7 @@ struct SaveDetailScreen: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dismiss) private var dismiss
     @State private var detail: SaveDetail?
-    @State private var checked: Set<Int> = []
+    @State private var checked: Set<Int> = DesignSwitch.checked
     @State private var cooking = false
     @State private var goalSheet = false
     @State private var editing = false

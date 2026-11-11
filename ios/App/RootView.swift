@@ -40,6 +40,7 @@ struct RootView: View {
         .task { IconPicker.retireOldIcons() }
         #if DEBUG
         .task { if let kind = UserDefaults.standard.string(forKey: "demoWork") { await model.demoWork(kind) } }
+        .task { await DesignSwitch.stage(model) }
         #endif
         // Asks once whether "Saved to …" notifications may show (not in UI tests, where the prompt would
         // cover the screen).
@@ -84,7 +85,7 @@ struct RootView: View {
 
     private var tabs: some View {
         TabView(selection: $tab) {
-            Tab("Home", systemImage: "house", value: "home") { Stack(name: "home") { HomeScreen(zoom: $0) } }
+            Tab("Home", systemImage: "house", value: "home") { Stack(name: "home") { HomeRoot(zoom: $0) } }
                 .badge(model.reviewCount)
             Tab("Library", systemImage: "books.vertical", value: "library") { Stack(name: "library") { LibraryScreen(zoom: $0) } }
             Tab("Places", systemImage: "map", value: "places") { Stack(name: "places") { PlacesScreen(zoom: $0) } }
@@ -124,7 +125,7 @@ struct Stack<Root: View>: View {
         NavigationStack(path: $path) {
             root(zoom)
                 .navigationDestination(for: Save.self) { save in
-                    SaveDetailScreen(save: save).navigationTransition(.zoom(sourceID: save.id, in: zoom))
+                    SaveRoot(save: save).navigationTransition(.zoom(sourceID: save.id, in: zoom))
                         .modifier(PageBar(t: t))
                         .onAppear { saveDepths.insert(path.count) }
                 }
