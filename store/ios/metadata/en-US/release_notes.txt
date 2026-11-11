@@ -1,2 +1,5 @@
-- Collections now say what they really are: your saves, sorted. The "things to buy" label is gone from the Collections page and the save picker.
-- Having trouble? Settings has a new Send Debug Logs button. It starts an email to support in your own mail app, with app and device details you can read and edit before you send it.
+This update fixes bugs.
+
+- Two different Facebook videos, or two different Google Maps places, no longer count as the same save.
+- A workout goal you reached now shows the day you reached it in your own time zone.
+- Importing a backup keeps a workout goal even when its workout is a second copy of a link.
