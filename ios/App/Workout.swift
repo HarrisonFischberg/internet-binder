@@ -70,6 +70,7 @@ struct GoalSheet: View {
     let create: (Int, Int) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.ks) private var t
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var perWeek = 3
     @State private var weeks = 4
 
@@ -78,8 +79,8 @@ struct GoalSheet: View {
             VStack(spacing: 24) {
                 Text("\(perWeek)× a week for \(weeks) week\(weeks == 1 ? "" : "s")")
                     .font(KSFont.name(.title)).foregroundStyle(t.ink)
-                    .contentTransition(.numericText())
-                    .animation(KSMotion.settle, value: perWeek * 100 + weeks)
+                    .contentTransition(reduce ? .opacity : .numericText())
+                    .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: perWeek * 100 + weeks)
                 Stepper("Times a week: \(perWeek)", value: $perWeek, in: 1...14)
                     .onChange(of: perWeek) { Haptic.detent() }
                 Stepper("Weeks: \(weeks)", value: $weeks, in: 1...52)
