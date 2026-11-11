@@ -82,7 +82,6 @@ struct SelectionBar<Actions: View>: View {
     @Binding var selected: Set<String>
     @ViewBuilder let actions: Actions
     @Environment(\.ks) private var t
-    @Environment(\.accessibilityReduceMotion) private var reduce
 
     private var allOn: Bool { !all.isEmpty && all.allSatisfy(selected.contains) }
 
@@ -91,7 +90,6 @@ struct SelectionBar<Actions: View>: View {
             HStack {
                 Text(selected.isEmpty ? "Tap to select" : "\(selected.count) \(noun(selected.count)) selected")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).monospacedDigit()
-                    .contentTransition(reduce ? .opacity : .numericText()).animation(KSMotion.quiet, value: selected.count)
                     .accessibilityAddTraits(.updatesFrequently)
                 Spacer()
                 Button(allOn ? "Select none" : "Select all") {
