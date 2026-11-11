@@ -11,6 +11,16 @@ test('normalizeUrl: tracking parameters are ignored, product parameters kept', (
   assert.equal(normalizeUrl('https://shop.com/products/tent?color=red'), normalizeUrl('https://m.shop.com/products/tent/?color=red&gclid=9'));
 });
 
+test('normalizeUrl: two Facebook videos or photos, or two Google Maps places, are not the same save', () => {
+  assert.notEqual(normalizeUrl('https://www.facebook.com/watch/?v=1234567890123456'), normalizeUrl('https://www.facebook.com/watch/?v=9876543210987654'));
+  assert.notEqual(normalizeUrl('https://www.facebook.com/photo/?fbid=10159876543210987&set=a.1'), normalizeUrl('https://www.facebook.com/photo/?fbid=10151111111111111&set=a.1'));
+  assert.notEqual(normalizeUrl('https://www.facebook.com/story.php?story_fbid=1234567890123&id=42'), normalizeUrl('https://www.facebook.com/story.php?story_fbid=9876543210987&id=42'));
+  assert.notEqual(normalizeUrl('https://maps.google.com/?cid=12345678901234567'), normalizeUrl('https://maps.google.com/?cid=7654321'));
+  assert.equal(normalizeUrl('https://maps.google.com/?cid=7654321'), normalizeUrl('https://www.google.com/maps?cid=7654321&hl=en'));
+  // Elsewhere cid is still a campaign id.
+  assert.equal(normalizeUrl('https://shop.com/tent?cid=123'), 'shop.com/tent');
+});
+
 test('normalizeUrl: marketplace and Instagram keys', () => {
   assert.equal(normalizeUrl('https://www.amazon.com/Some-Title/dp/B0ABCDEFGH/ref=sr_1?th=1'), 'amazon.com/dp/B0ABCDEFGH');
   assert.equal(normalizeUrl('https://www.etsy.com/listing/12345/slug?ref=x'), 'etsy.com/listing/12345');

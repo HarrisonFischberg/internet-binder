@@ -11,7 +11,8 @@ const TRACKING_PARAMS = new Set([
   'vero_id', 'wickedid', 'yhsclid', 'zanpid',
 ]);
 
-const PARAMS_THAT_IDENTIFY_PRODUCTS = new Set(['variant', 'sku', 'productid', 'product_id', 'pid', 'id', 'p', 'itemid', 'item', 'asin', 'color', 'size']);
+// v, fbid, story_fbid: Facebook names a video, photo or post by a long number in the query.
+const PARAMS_THAT_IDENTIFY_PRODUCTS = new Set(['variant', 'sku', 'productid', 'product_id', 'pid', 'id', 'p', 'itemid', 'item', 'asin', 'color', 'size', 'v', 'fbid', 'story_fbid']);
 
 export function normalizeUrl(input) {
   if (!input) return '';
@@ -60,6 +61,9 @@ export function normalizeUrl(input) {
   // Pinterest: the pin's id (any country's site).
   const pin = u.pathname.match(/^\/pin\/(?:[^/]*?--)?(\d{6,25})/);
   if (/(^|\.)pinterest\.[a-z.]{2,8}$/.test(host) && pin) return `pinterest.com/pin/${pin[1]}`;
+  // Google Maps: a place shared by its id (?cid=…). cid is a campaign id everywhere else.
+  const cid = u.searchParams.get('cid') || '';
+  if (/(^|\.)google\.[a-z.]{2,6}$/.test(host) && /^\d+$/.test(cid)) return `google.com/maps?cid=${cid}`;
 
   const params = [];
   for (const [key, value] of u.searchParams.entries()) {
