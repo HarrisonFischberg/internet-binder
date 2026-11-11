@@ -49,10 +49,10 @@ struct PlacesScreen: View {
             }
             if selecting {
                 SaveSelectionBar(all: shownPlaces.map(\.id), selected: $selected, selecting: $selecting)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(KSMotion.rise(reduce: reduce))
             }
         }
-        .animation(KSMotion.settle, value: selecting)
+        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
         .toolbar(.hidden, for: .navigationBar)
         .task(id: model.index.placesKey) {
             view = try? await model.library?.places()
@@ -454,16 +454,18 @@ struct PlaceFixSheet: View {
     @State private var city = ""
     @State private var region = ""
     @State private var country = ""
+    @State private var failed = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Place") { TextField("Name", text: $name) }
                 Section("Where") {
-                    TextField("City", text: $city)
-                    TextField("State or region", text: $region)
-                    TextField("Country", text: $country)
+                    TextField("City", text: $city).textContentType(.addressCity)
+                    TextField("State or region", text: $region).textContentType(.addressState)
+                    TextField("Country", text: $country).textContentType(.countryName)
                 }
+                .textInputAutocapitalization(.words)
             }
             .navigationTitle("Fix place")
             .navigationBarTitleDisplayMode(.inline)
@@ -482,7 +484,11 @@ struct PlaceFixSheet: View {
                             // Yours: Read again, AI and lookups leave the name and place alone, and a name
                             // you keep as it was still counts as the place's name.
                             details["source"] = "you"
-                            try? await model.library?.update(save.id, ["title": name, "details": details, "userFields": ["title"]])
+                            do { try await model.library?.update(save.id, ["title": name, "details": details, "userFields": ["title"]]) } catch {
+                                Haptic.refused()
+                                failed = true
+                                return
+                            }
                             model.refresh()
                             Haptic.settled()
                             done()
@@ -498,8 +504,12 @@ struct PlaceFixSheet: View {
                 region = save.details?["region"]?.string ?? ""
                 country = save.details?["country"]?.string ?? ""
             }
+            .alert("Couldn't save. Try again.", isPresented: $failed) {}
         }
         .presentationDetents([.medium, .large])
+        // What you typed isn't lost to a stray swipe down: Cancel or Save closes it.
+        .interactiveDismissDisabled(name != save.title || city != (save.details?["locality"]?.string ?? "")
+                                    || region != (save.details?["region"]?.string ?? "") || country != (save.details?["country"]?.string ?? ""))
     }
 }
 
@@ -596,7 +606,7 @@ struct PlacesMap: View {
         // The selected place's card sits above the tab bar; the map's own logo and Legal link move up
         // above it rather than under it.
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if let save = selectedSave { card(save).padding(.horizontal, 16).padding(.bottom, 12).transition(.move(edge: .bottom).combined(with: .opacity)) }
+            if let save = selectedSave { card(save).padding(.horizontal, 16).padding(.bottom, 12).transition(KSMotion.rise(reduce: reduce)) }
             else if findOnMap { FindOnMapButton().padding(.horizontal, 16).padding(.bottom, 12) }
         }
         .animation(KSMotion.or(KSMotion.sheet, reduce: reduce), value: chosen)
