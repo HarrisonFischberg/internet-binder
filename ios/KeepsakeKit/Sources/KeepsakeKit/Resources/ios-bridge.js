@@ -222,9 +222,11 @@
     async inCollection(collectionId) {
       return listItems().filter((i) => i.collectionId === collectionId).map(withFact);
     },
-    // Search: ranked, forgives a typo (search.js), collection names count as text.
-    async search(query) {
-      const [items, cols] = [listItems(), await store.getCollections()];
+    // Search: ranked, forgives a typo (search.js), collection names count as text. `within` (save
+    // ids) keeps it to one page's saves: a collection, a Lifestyle view, Places.
+    async search(query, within) {
+      const scope = Array.isArray(within) ? new Set(within) : null;
+      const [items, cols] = [scope ? listItems().filter((i) => scope.has(i.id)) : listItems(), await store.getCollections()];
       const names = new Map(cols.map((c) => [c.id, c.name]));
       const r = K.search.searchItems(items, query, (i) => names.get(i.collectionId) || '');
       return { items: r.results.map((x) => withFact(x.item)), query: r.query, corrected: r.corrected };

@@ -144,6 +144,11 @@ extension Library {
 
     public func search(_ query: String) async throws -> SearchResult { try await prepare(); return try await core.call("views.search", [query], as: SearchResult.self) }
 
+    /// Search only these saves (one page's: a collection, a Lifestyle view, Places), ranked the same way.
+    public func search(_ query: String, within ids: [String]) async throws -> SearchResult {
+        try await prepare(); return try await core.call("views.search", [query, ids], as: SearchResult.self)
+    }
+
     public func places() async throws -> PlacesView { try await prepare(); return try await core.call("views.places", as: PlacesView.self) }
 
     public func detail(_ id: String) async throws -> SaveDetail? {

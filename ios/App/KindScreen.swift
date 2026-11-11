@@ -15,31 +15,44 @@ struct KindScreen: View {
     @ScaledMetric(relativeTo: .title3) private var mapButton: CGFloat = 44
     @State private var selecting = false
     @State private var selected: Set<String> = []
+    @State private var query = ""
+    @State private var matches: PageMatches?
 
     @AppStorage("saveSorts") private var sorts = SaveSorts()
 
     private var saves: [Save] { model.index.kind(kind) }
     private var onMap: Bool { kind == "place" && showMap && !saves.isEmpty }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         let k = KindStyle(kind)
         let sorted = sorts[view: "kind:\(kind)"].apply(saves)
         let todo = sorted.filter { $0.status != "done" }
         let done = sorted.filter { $0.status == "done" }
+        let found = searching ? (matches?.pick(saves) ?? []) : todo + done
         ZStack(alignment: .bottom) {
             TableBackground()
             if onMap {
                 VStack(spacing: 0) {
-                    header(k).padding(.horizontal, 18).padding(.bottom, 12)
-                    PlacesMap(places: saves)
+                    VStack(alignment: .leading, spacing: 14) {
+                        header(k)
+                        searchField(k)
+                    }
+                    .padding(.horizontal, 18).padding(.bottom, 12)
+                    // Searching narrows the pins to the places that match.
+                    PlacesMap(places: searching ? found : saves)
                         .overlay(alignment: .top) { Rectangle().fill(t.line).frame(height: 1) }
                 }
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         header(k)
+                        if !saves.isEmpty { searchField(k) }
                         if saves.isEmpty {
                             EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Internet Binder and it lands here.")
+                        } else if searching {
+                            PageSearchResults(query: query, matches: matches, saves: saves, place: k.plural, zoom: zoom,
+                                              selecting: selecting, selected: $selected, onSelect: startSelecting)
                         } else {
                             SaveGrid(saves: todo, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
                             if !done.isEmpty {
@@ -51,9 +64,10 @@ struct KindScreen: View {
                     .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
                 }
                 .clearsTabBar()
+                .scrollDismissesKeyboard(.immediately)
             }
             if selecting {
-                SaveSelectionBar(all: (todo + done).map(\.id), selected: $selected, selecting: $selecting)
+                SaveSelectionBar(all: found.map(\.id), selected: $selected, selecting: $selecting)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -74,6 +88,12 @@ struct KindScreen: View {
         }
         .onChange(of: saves.isEmpty) { _, empty in if empty { selecting = false } }
         .onChange(of: onMap) { _, map in if map { selecting = false; selected = [] } }
+        .pageSearch(query, in: saves, matches: $matches)
+    }
+
+    /// Search this view's saves only.
+    private func searchField(_ k: KindStyle) -> some View {
+        PageSearchField(placeholder: "Search \(k.plural.lowercased())", query: $query)
     }
 
     private func startSelecting(_ id: String) {

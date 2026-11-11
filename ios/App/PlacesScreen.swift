@@ -20,6 +20,8 @@ struct PlacesScreen: View {
     @State private var selected: Set<String> = []
     /// Regions folded shut in the list (kept while the app runs).
     @State private var folded: Set<String> = []
+    @State private var query = ""
+    @State private var matches: PageMatches?
 
     enum Mode: String, CaseIterable { case list = "List", map = "Map", review = "Review" }
 
@@ -39,6 +41,8 @@ struct PlacesScreen: View {
                         selecting = false
                         selected = []
                     }
+                    // Searches your places only; the list, the map and Review all narrow to what matches.
+                    if !allPlaces.isEmpty { PageSearchField(placeholder: "Search places", query: $query) }
                 }
                 .padding(.horizontal, 20).padding(.bottom, 12)
                 switch mode {
@@ -61,6 +65,7 @@ struct PlacesScreen: View {
         .onChange(of: model.aiRun == nil) { _, idle in
             if idle { Task { view = try? await model.library?.places() } }
         }
+        .pageSearch(query, in: allPlaces, matches: $matches)
         .sheet(item: $editing) { save in
             PlaceFixSheet(save: save) { Task { view = try? await model.library?.places() } }
         }
@@ -69,8 +74,30 @@ struct PlacesScreen: View {
     private var waiting: Int { view?.review.count ?? 0 }
     /// What Select all ticks: the list's places, or the ones waiting in review.
     private var shownPlaces: [Save] {
-        mode == .review ? (view?.review.map(\.item) ?? []) : (view?.groups.flatMap { $0.cities.flatMap(\.items) } ?? [])
+        mode == .review ? reviewList.map(\.item) : listGroups.flatMap { $0.cities.flatMap(\.items) }
     }
+
+    // MARK: search
+
+    private var allPlaces: [Save] { (view?.groups.flatMap { $0.cities.flatMap(\.items) } ?? []) + (view?.review.map(\.item) ?? []) }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// While searching, the places that match; nil (not searching, or the first answer isn't back yet) shows everything.
+    private var hits: Set<String>? { searching ? matches.map { Set($0.ids) } : nil }
+    private func keep(_ s: Save) -> Bool { hits?.contains(s.id) ?? true }
+
+    private struct PlaceCity { let city: String; let items: [Save] }
+    private struct PlaceGroup { let state: String; let cities: [PlaceCity] }
+    /// Regions and cities with only the places that match (all of them when not searching).
+    private var listGroups: [PlaceGroup] {
+        (view?.groups ?? []).compactMap { g in
+            let cities = g.cities.compactMap { c -> PlaceCity? in
+                let items = c.items.filter(keep)
+                return items.isEmpty ? nil : PlaceCity(city: c.city, items: items)
+            }
+            return cities.isEmpty ? nil : PlaceGroup(state: g.state, cities: cities)
+        }
+    }
+    private var reviewList: [PlacesView.Waiting] { (view?.review ?? []).filter { keep($0.item) } }
     private var ready: Int { view?.groups.reduce(0) { $0 + $1.cities.reduce(0) { $0 + $1.items.count } } ?? 0 }
     private var subtitle: String {
         guard view != nil else { return "" }
@@ -83,7 +110,9 @@ struct PlacesScreen: View {
     private var list: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18, pinnedViews: [.sectionHeaders]) {
-                if let view, view.groups.isEmpty {
+                if view != nil, hits != nil, listGroups.isEmpty {
+                    EmptyNote(symbol: "magnifyingglass", text: "No places match “\(query.trimmingCharacters(in: .whitespaces))”.")
+                } else if let view, view.groups.isEmpty {
                     EmptyNote(symbol: "mappin.and.ellipse", text: waiting > 0
                               ? "No places here yet. \(waiting) place\(waiting == 1 ? " is" : "s are") waiting in Review for a name or a state."
                               : "No places here yet. Save a restaurant, café or anywhere you want to go and it shows up here, by state and city.")
@@ -94,9 +123,10 @@ struct PlacesScreen: View {
                     }
                     .accessibilityHidden(true)
                 }
-                ForEach(view?.groups ?? [], id: \.state) { group in
+                ForEach(listGroups, id: \.state) { group in
                     Section {
-                        if !folded.contains(group.state) {
+                        // A search opens every region, so no match hides in a folded one.
+                        if !folded.contains(group.state) || searching {
                             ForEach(group.cities, id: \.city) { city in
                                 VStack(alignment: .leading, spacing: 10) {
                                     if group.cities.count > 1 || !city.city.isEmpty {
@@ -117,6 +147,7 @@ struct PlacesScreen: View {
             .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
         }
         .clearsTabBar()
+        .scrollDismissesKeyboard(.immediately)
     }
 
     /// A region's name and count; tap to fold it shut or open it again.
@@ -207,7 +238,7 @@ struct PlacesScreen: View {
     // MARK: map
 
     private var map: some View {
-        PlacesMap(places: (view?.groups ?? []).flatMap { $0.cities.flatMap(\.items) }, waiting: waiting, onReview: { mode = .review }, findOnMap: true)
+        PlacesMap(places: listGroups.flatMap { $0.cities.flatMap(\.items) }, waiting: waiting, onReview: { mode = .review }, findOnMap: true)
     }
 
     // MARK: review
@@ -217,8 +248,10 @@ struct PlacesScreen: View {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if waiting == 0 {
                     EmptyNote(symbol: "checkmark.circle", text: "Every place has a name and a state.")
+                } else if hits != nil && reviewList.isEmpty {
+                    EmptyNote(symbol: "magnifyingglass", text: "No places waiting in Review match “\(query.trimmingCharacters(in: .whitespaces))”.")
                 }
-                ForEach(view?.review ?? [], id: \.item.id) { w in
+                ForEach(reviewList, id: \.item.id) { w in
                     if selecting {
                         let on = selected.contains(w.item.id)
                         Button {
@@ -242,6 +275,7 @@ struct PlacesScreen: View {
             .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
         }
         .clearsTabBar()
+        .scrollDismissesKeyboard(.immediately)
     }
 
     /// A place waiting in review. The top opens the save (its picture, caption and details); the post
