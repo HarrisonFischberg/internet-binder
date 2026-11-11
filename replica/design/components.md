@@ -1,5 +1,7 @@
 # Keepsake components
 
+The iPhone and iPad app's shipping layout (the sheet, index tabs and ruled lines) is described in `ios/DESIGN.md`; where the two differ for iOS, that file wins.
+
 Tokens use the role names in `tokens.json`: `--c-*` in CSS, `KS.Palette.*` in Swift. Sizes in px for Chrome and pt for Apple. Screens are S01–S15 (`replica/recon.md`).
 
 Every component has a visible focus state (2 px `focus` ring with a 2 px offset on Chrome; the system focus ring on Apple), honours reduced motion (cross-fade only), and supports Dynamic Type on Apple up to accessibility sizes. Minimum targets: 32 px on Chrome, 44 pt on iOS.
