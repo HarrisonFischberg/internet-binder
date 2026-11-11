@@ -64,6 +64,7 @@ final class LifestyleTests: XCTestCase {
         search.tap()
         search.typeText("azulejo")
         XCTAssertTrue(app.staticTexts["Nothing in Recipes matches “azulejo”."].waitForExistence(timeout: 3))
+        search.typeText("\n") // Search key puts the keyboard away so the tab bar shows again
 
         app.tabBars.buttons["Places"].tap()
         let places = app.textFields["pageSearch"]
