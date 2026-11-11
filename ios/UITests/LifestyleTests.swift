@@ -182,10 +182,10 @@ final class LifestyleTests: XCTestCase {
     func testHomeShowsReviewAndLifestyle() {
         let app = launch()
         XCTAssertTrue(app.staticTexts["1 save needs a collection"].waitForExistence(timeout: 5))
-        // Collections first, then Lifestyle: each folded into one row that opens its page.
+        // Collections first, then Lifestyle: each an index tab over Home's sheet that opens its page.
         let collections = app.buttons["Collections"], lifestyle = app.buttons["Lifestyle"]
         XCTAssertTrue(collections.exists && lifestyle.exists)
-        XCTAssertLessThan(collections.frame.minY, lifestyle.frame.minY, "Collections sits above Lifestyle")
+        XCTAssertLessThan(collections.frame.minX, lifestyle.frame.minX, "the Collections tab comes before Lifestyle")
         lifestyle.tap()
         XCTAssertTrue(app.buttons["Places, 2 saves"].waitForExistence(timeout: 3))
         app.buttons["Recipes, 2 saves"].tap()

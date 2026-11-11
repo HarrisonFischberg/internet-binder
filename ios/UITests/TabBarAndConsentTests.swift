@@ -9,7 +9,7 @@ final class TabBarAndConsentTests: XCTestCase {
         try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(name).png"))
     }
 
-    /// Scrolled to the end, Home's last card sits fully above the floating tab bar, not under it.
+    /// Scrolled to the end, Home's last line (the oldest of Recent) sits fully above the floating tab bar, not under it.
     func testHomeEndClearsTabBar() throws {
         let app = XCUIApplication()
         app.launchEnvironment["KEEPSAKE_DB"] = "shots-\(UUID().uuidString)"
@@ -23,8 +23,10 @@ final class TabBarAndConsentTests: XCTestCase {
             try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
             try shoot(folder, "tabbar-0-home-end")
         }
-        let lifestyle = app.buttons["Lifestyle"].frame, bar = app.tabBars.buttons["Home"].frame
-        XCTAssertLessThanOrEqual(lifestyle.maxY, bar.minY, "Lifestyle ends under the tab bar (card \(lifestyle), tab \(bar))")
+        let last = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Enameled cast iron'")).firstMatch
+        XCTAssertTrue(last.exists, "Recent's last line")
+        let line = last.frame, bar = app.tabBars.buttons["Home"].frame
+        XCTAssertLessThanOrEqual(line.maxY, bar.minY, "Recent ends under the tab bar (line \(line), tab \(bar))")
     }
 
     func testTabBarAndConsent() throws {

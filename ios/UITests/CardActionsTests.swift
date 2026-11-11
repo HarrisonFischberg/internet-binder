@@ -64,16 +64,17 @@ final class CardActionsTests: XCTestCase {
         let places = card(app, "Places,"), recipes = card(app, "Recipes,")
         XCTAssertTrue(recipes.waitForExistence(timeout: 5))
         for _ in 0..<4 where !recipes.isHittable { app.swipeUp() }
-        XCTAssertLessThan(places.frame.minX, recipes.frame.minX, "Chrome's order to start: Places, then Recipes")
+        // The Lifestyle views are lines down the sheet, so their order is top to bottom.
+        XCTAssertLessThan(places.frame.minY, recipes.frame.minY, "Chrome's order to start: Places, then Recipes")
         recipes.press(forDuration: 1.2, thenDragTo: places)
         XCTAssertTrue(recipes.waitForExistence(timeout: 2))
-        XCTAssertLessThan(recipes.frame.minX, places.frame.minX, "Recipes now comes first")
+        XCTAssertLessThan(recipes.frame.minY, places.frame.minY, "Recipes now comes first")
         // Kept: Home's Lifestyle page shows the same order.
         app.terminate()
         app.launch()
         app.tabBars.buttons["Library"].tap()
         XCTAssertTrue(recipes.waitForExistence(timeout: 5))
         for _ in 0..<4 where !recipes.isHittable { app.swipeUp() }
-        XCTAssertLessThan(recipes.frame.minX, places.frame.minX, "the order is kept")
+        XCTAssertLessThan(recipes.frame.minY, places.frame.minY, "the order is kept")
     }
 }

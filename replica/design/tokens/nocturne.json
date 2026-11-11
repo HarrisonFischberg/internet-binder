@@ -313,6 +313,14 @@
   [
    "on-kind-fill",
    "kind-link-fill"
+  ],
+  [
+   "detail",
+   "surface"
+  ],
+  [
+   "on-accent",
+   "highlight"
   ]
  ],
  "font": {

@@ -313,6 +313,54 @@
   [
    "on-kind-fill",
    "kind-link-fill"
+  ],
+  [
+   "kind-product",
+   "raised"
+  ],
+  [
+   "kind-place",
+   "raised"
+  ],
+  [
+   "kind-recipe",
+   "raised"
+  ],
+  [
+   "kind-video",
+   "raised"
+  ],
+  [
+   "kind-article",
+   "raised"
+  ],
+  [
+   "kind-workout",
+   "raised"
+  ],
+  [
+   "kind-film",
+   "raised"
+  ],
+  [
+   "kind-book",
+   "raised"
+  ],
+  [
+   "kind-link",
+   "raised"
+  ],
+  [
+   "accent",
+   "raised"
+  ],
+  [
+   "accent",
+   "raised"
+  ],
+  [
+   "on-accent",
+   "highlight"
   ]
  ],
  "font": {
