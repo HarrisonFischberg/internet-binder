@@ -240,23 +240,6 @@ struct CelebrationView: View {
     }
 }
 
-/// A screen's big title in the appearance's display face, and a quiet line under it.
-struct ScreenHeader: View {
-    let title: String
-    var subtitle: String?
-    @Environment(\.ks) private var t
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            // A one-word title shrinks to fit rather than breaking mid-word ("Libr / ary" at the largest sizes).
-            Text(title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                .lineLimit(title.contains(" ") ? nil : 1).minimumScaleFactor(0.5)
-            if let subtitle, !subtitle.isEmpty { Text(subtitle).font(KSFont.note).foregroundStyle(t.inkMuted).monospacedDigit() }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 8)
-    }
-}
-
 /// How a collection or Lifestyle view orders its saves (Chrome's Sort, same names). Newest saved first
 /// until you pick another; each view keeps its own choice on this device.
 enum SaveSort: String, CaseIterable, Identifiable {
@@ -324,8 +307,9 @@ struct SortMenu: View {
     }
 }
 
-/// Saves as objects, linking to their screens. With a selection, Select mode: a tap ticks a save instead,
-/// and a long press offers Select to start it.
+/// Saves as index lines on the sheet, each linking to its page; side by side in columns where the
+/// sheet is wide (iPad). With a selection, Select mode: a tap ticks a save instead, and a long press
+/// offers Select to start it.
 struct SaveGrid: View {
     let saves: [Save]
     let zoom: Namespace.ID
@@ -334,31 +318,58 @@ struct SaveGrid: View {
     /// Long press → Select: starts Select mode with this save ticked.
     var onSelect: ((String) -> Void)?
     @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var width: CGFloat = 0
+
+    /// One column on iPhone; two or three once each can be at least 340 points wide.
+    private var columns: Int { typeSize.isAccessibilitySize ? 1 : max(1, min(3, Int((width + 32) / 372))) }
+
     var body: some View {
-        Masonry(saves, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: 170) { save in
-            if selecting, let selected {
-                let on = selected.wrappedValue.contains(save.id)
-                Button {
-                    Haptic.checked()
-                    if on { selected.wrappedValue.remove(save.id) } else { selected.wrappedValue.insert(save.id) }
-                } label: {
-                    SaveObject(save).selectionCheck(on)
-                }
-                .buttonStyle(PressStyle())
-                .accessibilityLabel(save.title)
-                .accessibilityHint(on ? "Selected. Tap to leave it out." : "Tap to select.")
-            } else {
-                NavigationLink(value: save) { SaveObject(save).matchedTransitionSource(id: save.id, in: zoom) }
-                    .buttonStyle(PressStyle())
-                    .draggable(save.id) { SaveObject(save).frame(width: 160) }
-                    // VoiceOver rotor: the card's own actions without opening it.
-                    .accessibilityAction(named: save.status == "done" ? "Mark not \(KindStyle(save.kind).doneVerb.lowercased())" : "Mark \(KindStyle(save.kind).doneVerb.lowercased())") {
-                        Task { await model.setDone(save, save.status != "done") }
+        let n = columns
+        Group {
+            if n == 1 {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(saves) { save in
+                        SheetRule()
+                        line(save)
                     }
-                    .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
-                    .contextMenu { SaveMenu(save: save, onSelect: onSelect.map { f in { f(save.id) } }) }
+                    SheetRule()
+                }
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 32, alignment: .top), count: n), spacing: 0) {
+                    ForEach(saves) { save in
+                        line(save).overlay(alignment: .top) { Rectangle().fill(t.rule).frame(height: 1) }
+                    }
+                }
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+
+    @ViewBuilder private func line(_ save: Save) -> some View {
+        if selecting, let selected {
+            let on = selected.wrappedValue.contains(save.id)
+            Button {
+                Haptic.checked()
+                if on { selected.wrappedValue.remove(save.id) } else { selected.wrappedValue.insert(save.id) }
+            } label: {
+                SaveRow(save, ticked: on)
+            }
+            .buttonStyle(RowPressStyle())
+            .accessibilityLabel(save.title)
+            .accessibilityHint(on ? "Selected. Tap to leave it out." : "Tap to select.")
+        } else {
+            NavigationLink(value: save) { SaveRow(save).matchedTransitionSource(id: save.id, in: zoom) }
+                .buttonStyle(RowPressStyle())
+                .draggable(save.id) { SaveObject(save).frame(width: 160) }
+                // VoiceOver rotor: the line's own actions without opening it.
+                .accessibilityAction(named: save.status == "done" ? "Mark not \(KindStyle(save.kind).doneVerb.lowercased())" : "Mark \(KindStyle(save.kind).doneVerb.lowercased())") {
+                    Task { await model.setDone(save, save.status != "done") }
+                }
+                .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
+                .contextMenu { SaveMenu(save: save, onSelect: onSelect.map { f in { f(save.id) } }) }
         }
     }
 }

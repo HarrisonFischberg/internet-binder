@@ -2,8 +2,9 @@ import SwiftUI
 import KeepsakeKit
 import KeepsakeUI
 
-/// Home: what needs you, what's new, your Collections and Lifestyle (each folded into one row that
-/// opens its own page), and one save to come back to. Nothing else.
+/// Home: the binder's front page. Index tabs across the top file every section one tap away (what
+/// waits to be filed, Collections, Lifestyle, then each kind you have); the sheet under them lists
+/// what needs you, your newest saves as ruled lines, and one save to come back to.
 struct HomeScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
@@ -12,24 +13,25 @@ struct HomeScreen: View {
     @State private var appearance = false
     @State private var fixingAll = false
     @State private var collections: [SaveCollection] = []
-    /// Recent and the two sections, in the order you've dragged them into.
+    /// Recent, in the order you've dragged it into.
     @State private var recentOrder: [String] = []
-    @State private var sectionOrder: [String] = []
     @State private var dragging: String?
     @Environment(\.accessibilityReduceMotion) private var reduce
-    /// Recent shelf cards: all one size (168 pt at the default text size), growing with Dynamic Type.
-    @ScaledMetric(relativeTo: .headline) private var shelfWidth: CGFloat = 164
     @Environment(\.horizontalSizeClass) private var size
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// The two sections' tabs follow the order kept for Home and the Library.
+    @AppStorage(SavedOrder.key(HomeSections.key)) private var sectionOrder = ""
 
     private var lifestyleSaves: [Save] { model.glance?.lifestyle ?? model.index.lifestyle }
-    private var collectedSaves: [Save] { model.glance?.collected ?? model.index.collected }
     /// Until the whole library is read, Home draws from the launch glance (newest saves, counts).
     private var newest: [Save] { model.glance?.recent ?? Array(model.saves.prefix(8)) }
     private var collectionCount: Int { model.glance?.collections ?? collections.count }
-    private var collectedCount: Int { model.glance?.collectedCount ?? collectedSaves.count }
-    private var lifestyleCount: Int { model.glance?.lifestyleCount ?? lifestyleSaves.count }
-    private var lifestyleViews: Int { model.glance?.lifestyleKinds ?? Set(lifestyleSaves.map(\.kind)).count }
+    private var lifestyleKinds: Int { model.glance?.lifestyleKinds ?? Set(lifestyleSaves.map(\.kind)).count }
+    /// Kinds with something in them, most saves first (a tie keeps the app's usual order).
+    private var kinds: [(kind: String, count: Int)] {
+        KindStyle.lifestyle.map { ($0, model.index.kind($0).count) }.filter { $0.1 > 0 }
+            .enumerated().sorted { $0.element.1 != $1.element.1 ? $0.element.1 > $1.element.1 : $0.offset < $1.offset }.map(\.element)
+    }
 
     /// Saved over six weeks ago and not opened since (Home's "Come back to" in Chrome).
     private var comeBackTo: Save? { model.index.comeBackTo }
@@ -57,39 +59,13 @@ struct HomeScreen: View {
                             .padding(.top, 8)
                         }
                     }
-                    if model.reviewCount > 0 { reviewBanner }
-                    if showAppleNote { appleNote }
-                    FinishFixingButton()
-                        .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
-                    if model.aiReady && !model.aiBacklog.isEmpty {
-                        RunAIOnImportedButton()
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
-                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).padding(.horizontal, 16)
-                            .ksSurface(radius: 14)
+                    .padding(.horizontal, 4)
+                    VStack(alignment: .leading, spacing: -1) {
+                        tabs.zIndex(1)
+                        sheet
                     }
-                    if model.saves.isEmpty && model.loaded {
-                        EmptyNote(symbol: "bookmark", text: "Save something worth coming back to. Share a page, a post or a place to Internet Binder from any app.")
-                    }
-                    if !newest.isEmpty { recent.padding(.bottom, -8) }
-                    // Chromatic sets the two folders side by side; at large text sizes, and in the other
-                    // appearances, they stack.
-                    (t.style == .chromatic && !typeSize.isAccessibilitySize ? AnyLayout(HStackLayout(alignment: .top, spacing: 12)) : AnyLayout(VStackLayout(spacing: 12))) {
-                        ForEach(sectionOrder, id: \.self) { section in
-                            Group {
-                                if section == "collections" {
-                                    shelfRow("Collections", route: .collections, saves: collectedSaves, symbol: "bag", second: false,
-                                             detail: count(collectionCount, "collection") + " · " + count(collectedCount, "save"))
-                                } else {
-                                    shelfRow("Lifestyle", route: .lifestyle, saves: lifestyleSaves, symbol: "sparkles", second: true,
-                                             detail: lifestyleCount == 0 ? "Places, recipes, workouts and more" : count(lifestyleViews, "kind") + " · " + count(lifestyleCount, "save"))
-                                }
-                            }
-                            .reorderable(section, in: $sectionOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set(HomeSections.key, $0) }
-                        }
-                    }
-                    if let save = comeBackTo { comeBack(save).padding(.top, 6) }
                 }
-                .padding(.horizontal, 20).padding(.bottom, 40)
+                .padding(.horizontal, KSBinder.outer).padding(.bottom, 40)
             }
             .clearsTabBar()
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
@@ -102,8 +78,7 @@ struct HomeScreen: View {
             Text("\(model.aiReadsAgain) Every change can be undone. Fix one collection or Lifestyle view from its own page.")
         }
         .sheet(isPresented: $appearance) { AppearanceSheet() }
-        .task(id: model.saves.count) { collections = (try? model.library?.collections()) ?? [] }
-        .onAppear { sectionOrder = HomeSections.order() }
+        .task(id: "\(model.saves.count)|\(model.collectionsChanged)") { collections = (try? model.library?.collections()) ?? [] }
         // The newest eight, in your order; a new save joins at the front.
         .onChange(of: newest.map(\.id), initial: true) { _, latest in
             recentOrder = latest.arranged(by: SavedOrder.get("recentOrder"), newFirst: true) { $0 }
@@ -116,81 +91,96 @@ struct HomeScreen: View {
             .accessibilityLabel(label)
     }
 
-    private func count(_ n: Int, _ noun: String) -> String { n == 1 ? "1 \(noun)" : "\(n) \(noun)s" }
-
-    /// A folded section (Collections or Lifestyle): a fan of its pictures, its name and what it holds.
-    /// One tap opens its page. Nocturne lights the card from one side (cyan for Collections, amber for
-    /// Lifestyle); Paper & Ink lays it on sage or rose card; Chromatic files it in a lilac or coral folder.
-    private func shelfRow(_ title: String, route: Route, saves: [Save], symbol: String, second: Bool, detail: String) -> some View {
-        NavigationLink(value: route) {
-            Group {
-                if t.style == .chromatic { folderRow(title, saves: saves, symbol: symbol, second: second, detail: detail) }
-                else { cardRow(title, saves: saves, symbol: symbol, second: second, detail: detail) }
-            }
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue(detail)
-        .accessibilityHint("Opens \(title)")
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private func cardRow(_ title: String, saves: [Save], symbol: String, second: Bool, detail: String) -> some View {
-        let paper = t.style == .paper
-        let glow = second ? t.accent : t.detail
-        let fill: Color = paper ? (second ? t.alt : t.detail) : t.paper
-        let ink: Color = paper ? (second ? t.onAlt : t.onDetail) : t.ink
-        return HStack(spacing: 14) {
-            // At accessibility sizes the fan steps aside, so the name has the width to stay whole.
-            if !typeSize.isAccessibilitySize { CoverFan(saves, symbol: symbol, tint: glow, size: 50) }
-            VStack(alignment: .leading, spacing: 3) {
-                Label {
-                    Text(title).font(paper ? .system(.title, design: .serif).weight(.medium) : KSFont.name(.title2))
-                } icon: {
-                    if !paper { Image(systemName: symbol).foregroundStyle(glow).font(.title3.weight(.semibold)) }
+    /// The index tabs: Recent in front, then every other section, scrolling sideways when they outrun the sheet.
+    private var tabs: some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .bottom, spacing: 4) {
+                IndexTab("Recent", front: true).accessibilityAddTraits([.isHeader, .isSelected])
+                if model.reviewCount > 0 {
+                    NavigationLink(value: Route.review) { IndexTab("To file", symbol: "tray", count: model.reviewCount) }
+                        .accessibilityHint("Opens the saves waiting for a collection")
                 }
-                .labelStyle(.titleAndIcon)
-                .foregroundStyle(ink)
-                Text(detail).font(.subheadline).foregroundStyle(paper ? ink.opacity(0.78) : t.inkMuted).lineLimit(2).monospacedDigit()
+                ForEach(HomeSections.order(sectionOrder), id: \.self) { section in
+                    if section == "collections" {
+                        NavigationLink(value: Route.collections) { IndexTab("Collections", symbol: "bag", count: collectionCount) }
+                            .accessibilityHint("Opens Collections")
+                    } else {
+                        NavigationLink(value: Route.lifestyle) { IndexTab("Lifestyle", symbol: "sparkles", count: lifestyleKinds) }
+                            .accessibilityHint("Opens Lifestyle")
+                    }
+                }
+                ForEach(kinds, id: \.kind) { k in
+                    NavigationLink(value: Route.kind(k.kind)) {
+                        IndexTab(KindStyle(k.kind).plural, symbol: KindStyle(k.kind).symbol, count: k.count, kind: k.kind)
+                    }
+                    .accessibilityHint("Opens \(KindStyle(k.kind).plural)")
+                }
             }
-            Spacer(minLength: 0)
-            ChevronDisc(fill: paper ? ink.opacity(0.85) : glow.opacity(0.18), ink: paper ? fill : glow)
+            .buttonStyle(PressStyle())
+            .padding(.trailing, KSBinder.outer)
         }
-        .padding(.horizontal, 16).padding(.vertical, 16)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
-        .background {
-            if !paper {
-                LinearGradient(colors: [glow.opacity(0.22), glow.opacity(0.04)], startPoint: .leading, endPoint: .trailing)
-            }
-        }
-        .ksSurface(fill, stroke: paper ? .clear : glow.opacity(0.35))
+        .scrollIndicators(.hidden)
+        .padding(.trailing, -KSBinder.outer)
     }
 
-    private func folderRow(_ title: String, saves: [Save], symbol: String, second: Bool, detail: String) -> some View {
-        let fill = second ? t.alt : t.accent
-        let ink = t.onAccent
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top) {
-                Image(systemName: second ? "sparkles" : "folder.fill").font(.title3.weight(.semibold)).foregroundStyle(ink.opacity(0.85))
-                    .frame(width: 40, height: 40).background(ink.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Spacer(minLength: 0)
-                CoverFan(saves, symbol: symbol, tint: ink, size: 48)
-                    .offset(y: -22)
+    private var sheet: some View {
+        BinderSheet {
+            SheetHeading("Recent", note: model.saves.isEmpty ? nil : model.saves.count == 1 ? "1 save in the binder" : "\(model.saves.count.formatted()) saves in the binder")
+                .padding(.top, 16).padding(.bottom, 12)
+            VStack(alignment: .leading, spacing: 8) {
+                if model.reviewCount > 0 {
+                    NavigationLink(value: Route.review) { NeedsCollectionStrip(count: model.reviewCount) }
+                        .buttonStyle(PressStyle())
+                }
+                if showAppleNote { appleNote }
+                FinishFixingButton()
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
+                if model.aiReady && !model.aiBacklog.isEmpty {
+                    RunAIOnImportedButton()
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
+                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).padding(.horizontal, 12)
+                        .sheetNote()
+                }
             }
-            Spacer(minLength: 4)
-            Text(title).font(KSFont.name(.title2)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.7)
-            HStack(alignment: .bottom) {
-                Text(detail).font(.footnote.weight(.medium)).foregroundStyle(ink.opacity(0.8)).lineLimit(2).monospacedDigit()
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
-                ChevronDisc(fill: ink.opacity(0.12), ink: ink)
+            .padding(.bottom, 12)
+            if let problem = model.problem {
+                SheetRule()
+                EmptyNote(symbol: "exclamationmark.triangle", text: problem).padding(.bottom, 24)
+            } else if model.saves.isEmpty && model.loaded {
+                SheetRule()
+                EmptyNote(symbol: "bookmark", text: "Save something worth coming back to. Share a page, a post or a place to Internet Binder from any app.")
+                    .padding(.bottom, 24)
+            } else if newest.isEmpty {
+                // Reading the library: lines the size of real ones, so nothing jumps when they arrive.
+                ForEach(0..<4, id: \.self) { _ in
+                    SheetRule()
+                    HStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: KSBinder.pictureRadius, style: .continuous).fill(t.well).frame(width: KSBinder.picture, height: KSBinder.picture)
+                        RoundedRectangle(cornerRadius: 4, style: .continuous).fill(t.well).frame(height: 14).frame(maxWidth: 180)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: KSBinder.line)
+                }
+                .accessibilityHidden(true)
+            }
+            ForEach(recentOrder.compactMap { id in newest.first { $0.id == id } }) { save in
+                SheetRule()
+                NavigationLink(value: save) { SaveRow(save).matchedTransitionSource(id: save.id, in: zoom) }
+                    .buttonStyle(RowPressStyle())
+                    // Hold and slide to put Recent in your own order.
+                    .reorderable(save.id, in: $recentOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set("recentOrder", $0) }
+                    // Long press: the same menu as the Library's lines.
+                    .contextMenu { SaveMenu(save: save) }
+                    .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
+            }
+            if let save = comeBackTo {
+                SheetRule()
+                SheetHeading("Come back to").padding(.top, 24).padding(.bottom, 4)
+                NavigationLink(value: save) { SaveRow(save).matchedTransitionSource(id: save.id, in: zoom) }
+                    .buttonStyle(RowPressStyle())
+                    .contextMenu { SaveMenu(save: save) }
             }
         }
-        .padding(14).padding(.top, 14)
-        .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
-        .background(FolderShape(tab: 18, radius: t.radius).fill(fill))
-        .contentShape(FolderShape(tab: 18, radius: t.radius))
     }
 
     /// Apple Intelligence's state, once per state: on a new install (or the first open after it arrived) it
@@ -205,15 +195,15 @@ struct HomeScreen: View {
         case .off: ("Turn on Apple Intelligence", "In the Settings app, under Apple Intelligence & Siri. Then your saves are read and fixed on this iPhone.")
         default: ("Apple Intelligence is getting ready", "Once it has downloaded, your saves are read and fixed on this iPhone.")
         }
-        return HStack(alignment: .top, spacing: 14) {
-            Image(systemName: "apple.intelligence").font(.title3.weight(.semibold)).foregroundStyle(t.accent)
-                .frame(width: 40, height: 40)
-                .background(t.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        return HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "apple.intelligence").font(.body.weight(.semibold)).foregroundStyle(t.accent)
+                .padding(.top, 12)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline).foregroundStyle(t.ink)
-                Text(line).font(.subheadline).foregroundStyle(t.inkMuted).fixedSize(horizontal: false, vertical: true)
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink)
+                Text(line).font(.footnote).foregroundStyle(t.inkMuted).fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.vertical, 12)
             .accessibilityElement(children: .combine)
             Spacer(minLength: 0)
             Button {
@@ -224,70 +214,10 @@ struct HomeScreen: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss")
-            .padding(.top, -10).padding(.trailing, -10)
         }
-        .padding(14)
-        .ksSurface(radius: 14)
+        .padding(.leading, 12)
+        .sheetNote()
         .accessibilityIdentifier("appleAINote")
-    }
-
-    private var reviewBanner: some View {
-        NavigationLink(value: Route.review) {
-            // What needs you, in the appearance's one interactive colour.
-            HStack(spacing: 14) {
-                Image(systemName: "tray.full").font(.title3.weight(.semibold)).foregroundStyle(t.onHighlight)
-                    .frame(width: 40, height: 40)
-                    .background(t.onHighlight.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.reviewCount == 1 ? "1 save needs a collection" : "\(model.reviewCount) saves need a collection")
-                        .font(.headline).foregroundStyle(t.onHighlight)
-                    Text("One tap each, and it learns.").font(.subheadline).foregroundStyle(t.onHighlight.opacity(0.85))
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.body.weight(.bold)).foregroundStyle(t.onHighlight)
-            }
-            .padding(14)
-            .ksSurface(t.highlight, stroke: .clear)
-        }
-        .buttonStyle(PressStyle())
-    }
-
-    private var recent: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            section("Recent")
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 16) {
-                    ForEach(recentOrder.compactMap { id in newest.first { $0.id == id } }) { save in
-                        NavigationLink(value: save) {
-                            ShelfCard(save, width: min(shelfWidth, 300)).matchedTransitionSource(id: save.id, in: zoom)
-                        }
-                        .buttonStyle(PressStyle())
-                        // Hold and slide to put Recent in your own order.
-                        .reorderable(save.id, in: $recentOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set("recentOrder", $0) }
-                        // Long press: the same menu as the Library's cards.
-                        .contextMenu { SaveMenu(save: save) }
-                        .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
-                    }
-                }
-                .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 14)
-            }
-            .scrollIndicators(.hidden)
-            .padding(.horizontal, -20)
-        }
-    }
-
-    private func comeBack(_ save: Save) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            section("Come back to")
-            NavigationLink(value: save) {
-                SaveObject(save).frame(maxWidth: 260).matchedTransitionSource(id: save.id, in: zoom)
-            }
-            .buttonStyle(PressStyle())
-        }
-    }
-
-    private func section(_ title: String) -> some View {
-        Text(title).font(KSFont.section()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -317,19 +247,8 @@ struct Wordmark: View {
     }
 }
 
-/// A chevron in a small disc: the "open" mark on Home's summary cards.
-struct ChevronDisc: View {
-    let fill: Color
-    let ink: Color
-    var body: some View {
-        Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).foregroundStyle(ink)
-            .frame(width: 36, height: 36).background(fill, in: Circle())
-            .accessibilityHidden(true)
-    }
-}
-
-/// Home's two sections (and the Library's), in the order you've put them: Collections first unless
-/// you've dragged Lifestyle above it.
+/// Home's two section tabs (and the Library's sections), in the order kept for them: Collections first
+/// unless Lifestyle was dragged above it.
 enum HomeSections {
     static let key = "homeSectionOrder"
     static func order(_ saved: String? = nil) -> [String] {
