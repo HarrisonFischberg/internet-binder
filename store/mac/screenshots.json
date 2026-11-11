@@ -1,0 +1,9 @@
+{
+  "shots": [
+    {"name": "01-home", "view": "home", "headline": "Keep what you find", "accent": "online", "color": "#FFC268", "subtitle": "Click the Internet Binder button in Safari to save a page."},
+    {"name": "02-sorted", "view": "all", "headline": "Saves sorted", "accent": "by kind", "color": "#80DFE8", "subtitle": "Filter your library to recipes, places, books or workouts."},
+    {"name": "03-recipe", "view": "kind/recipe", "open": "Smoky shakshuka with feta", "headline": "Recipes you can", "accent": "cook from", "color": "#F2A7C9", "subtitle": "Each step lists the ingredients it uses."},
+    {"name": "04-workout", "view": "kind/workout", "open": "Kettlebell full body, 25 minutes", "headline": "Keep count of your", "accent": "workouts", "color": "#8EE0A4", "subtitle": "Set a goal, like 3 times a week, and click Done today after each one."},
+    {"name": "05-styles", "view": "home", "style": "chromatic", "headline": "Pick how it", "accent": "looks", "color": "#B7ADFF", "subtitle": "There are three looks: Nocturne, Paper & Ink and Chromatic."}
+  ]
+}
