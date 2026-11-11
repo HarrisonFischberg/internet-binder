@@ -19,7 +19,7 @@ public enum NetworkPolicy {
         if ai["on"] as? Bool == true, hasAIKey {
             let base = (ai["baseUrl"] as? String).flatMap { $0.isEmpty ? nil : $0 }
             if let base, let url = URL(string: base), url.scheme == "https", let host = url.host() { hosts.insert(host) }
-            else if base == nil, let host = providerHosts[ai["provider"] as? String ?? "openai"] { hosts.insert(host) }
+            else if base == nil, let host = providerHosts[ai["provider"] as? String ?? "anthropic"] { hosts.insert(host) }
         }
         let lookups = settings["lookups"] as? [String: Any] ?? [:]
         for (key, host) in lookupHosts where lookups[key] as? Bool == true { hosts.insert(host) }

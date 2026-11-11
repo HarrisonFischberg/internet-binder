@@ -779,6 +779,7 @@ struct NetworkTests {
         #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true, "provider": "anthropic"]], hasAIKey: false).isEmpty, "no key, no AI")
         #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true, "provider": "anthropic"]], hasAIKey: true) == ["api.anthropic.com"])
         #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true, "baseUrl": "http://insecure.example"]], hasAIKey: true).isEmpty, "https only")
+        #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true]], hasAIKey: true) == ["api.anthropic.com"], "no provider saved: the shared code's default (provider.js providerConfig)")
         #expect(NetworkPolicy.allowedHosts(settings: ["lookups": ["media": true, "books": false]], hasAIKey: false) == ["www.wikidata.org"])
     }
 
