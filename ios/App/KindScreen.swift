@@ -8,6 +8,7 @@ struct KindScreen: View {
     let kind: String
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.ks) private var t
     /// Places only: the Map button next to the title swaps the cards for a map (kept on this iPhone).
     @AppStorage("placesShowMap") private var showMap = false
@@ -54,10 +55,10 @@ struct KindScreen: View {
             }
             if selecting {
                 SaveSelectionBar(all: (todo + done).map(\.id), selected: $selected, selecting: $selecting)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(KSMotion.rise(reduce: reduce))
             }
         }
-        .animation(KSMotion.settle, value: selecting)
+        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Sort orders the cards, so like Select it steps aside while the map is showing.

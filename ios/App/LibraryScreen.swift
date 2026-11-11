@@ -88,7 +88,7 @@ struct LibraryScreen: View {
             .safeAreaInset(edge: .top, spacing: 0) { TopScrim() }
             if selecting {
                 SaveSelectionBar(all: shown.map(\.id), selected: $selected, selecting: $selecting)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(KSMotion.rise(reduce: reduce))
             }
         }
         .toolbar(.hidden, for: .navigationBar)

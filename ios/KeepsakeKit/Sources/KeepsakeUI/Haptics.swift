@@ -78,5 +78,7 @@ public enum KSMotion {
     public static let stamp = Animation.spring(response: 0.18, dampingFraction: 0.5)
     public static let quiet = Animation.easeOut(duration: 0.18)
     public static func or(_ a: Animation, reduce: Bool) -> Animation { reduce ? quiet : a }
+    /// A bar or card that comes up from the bottom edge and leaves the same way; a cross-fade under Reduce Motion.
+    public static func rise(reduce: Bool) -> AnyTransition { reduce ? .opacity : .move(edge: .bottom).combined(with: .opacity) }
 }
 #endif
