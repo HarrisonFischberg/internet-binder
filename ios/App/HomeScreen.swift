@@ -19,8 +19,8 @@ struct HomeScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.horizontalSizeClass) private var size
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// The two sections' tabs follow the order kept for Home and the Library.
-    @AppStorage(SavedOrder.key(HomeSections.key)) private var sectionOrder = ""
+    /// The two sections' tabs, in the order you've dragged them into (the Library's sections follow it).
+    @State private var sectionOrder: [String] = HomeSections.order()
 
     private var lifestyleSaves: [Save] { model.glance?.lifestyle ?? model.index.lifestyle }
     /// Until the whole library is read, Home draws from the launch glance (newest saves, counts).
@@ -120,14 +120,18 @@ struct HomeScreen: View {
             NavigationLink(value: Route.review) { IndexTab("To file", symbol: "tray", count: model.reviewCount) }
                 .accessibilityHint("Opens the saves waiting for a collection")
         }
-        ForEach(HomeSections.order(sectionOrder), id: \.self) { section in
-            if section == "collections" {
-                NavigationLink(value: Route.collections) { IndexTab("Collections", symbol: "bag", count: collectionCount) }
-                    .accessibilityHint("Opens Collections")
-            } else {
-                NavigationLink(value: Route.lifestyle) { IndexTab("Lifestyle", symbol: "sparkles", count: lifestyleKinds) }
-                    .accessibilityHint("Opens Lifestyle")
+        ForEach(sectionOrder, id: \.self) { section in
+            Group {
+                if section == "collections" {
+                    NavigationLink(value: Route.collections) { IndexTab("Collections", symbol: "bag", count: collectionCount) }
+                        .accessibilityHint("Opens Collections")
+                } else {
+                    NavigationLink(value: Route.lifestyle) { IndexTab("Lifestyle", symbol: "sparkles", count: lifestyleKinds) }
+                        .accessibilityHint("Opens Lifestyle")
+                }
             }
+            // Hold one and slide it past the other to swap them.
+            .reorderable(section, in: $sectionOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set(HomeSections.key, $0) }
         }
         ForEach(kinds, id: \.kind) { k in
             NavigationLink(value: Route.kind(k.kind)) {
