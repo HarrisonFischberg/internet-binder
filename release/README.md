@@ -56,7 +56,7 @@ the dashboard first. Pushing a `v*.*.*` tag still publishes Chrome through `.git
 - `store/ios/screenshots/en-US/` – iPhone 6.9" (1320×2868), 6.5" (1284×2778) and iPad 13" (2064×2752), made by
   `scripts/store-screenshots.sh`. fastlane sorts them by size; the number prefix sets the order. Raw shots go to
   `store/ios/raw/` (not committed).
-- `store/mac/` – the Mac App Store text (Safari-specific description, review notes) and 2880×1800 screenshots. Name, subtitle, categories and age rating are shared with iOS.
+- `store/mac/` – the Mac App Store text (Safari-specific description, review notes) and 2880×1800 screenshots, made by `scripts/mac-store-screenshots.mjs` with the captions in `store/mac/screenshots.json`. Name, subtitle, categories and age rating are shared with iOS.
 - `store/chrome/` – what the Chrome listing needs (edited by hand, see its README).
 
 ## Secrets (env vars, never committed)
