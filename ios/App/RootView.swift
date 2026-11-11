@@ -370,6 +370,7 @@ struct SaveGrid: View {
                 }
                 .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
                 .contextMenu { SaveMenu(save: save, onSelect: onSelect.map { f in { f(save.id) } }) }
+                .swipeToDelete { Task { await model.trash(save) } }
         }
     }
 }
