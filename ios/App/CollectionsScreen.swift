@@ -19,14 +19,14 @@ struct CollectionsScreen: View {
         ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
+                BinderPage(IndexTab("Collections", symbol: "bag", front: true), note: "Your saves, sorted.") {
                     CollectionTiles(collections: collections, onNew: { naming = true }, selection: selecting ? $selected : nil) { id in
                         selected = [id]
                         selecting = true
                     }
+                    .padding(.top, 8)
                 }
-                .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+                .padding(.horizontal, KSBinder.outer).padding(.top, 8).padding(.bottom, selecting ? 140 : 40)
             }
             .clearsTabBar()
             if selecting { selectionBar.transition(.move(edge: .bottom).combined(with: .opacity)) }
@@ -106,16 +106,23 @@ struct CollectionScreen: View {
         ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    ScreenHeader(title: name, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
-                    if saves.isEmpty { EmptyNote(symbol: "bag", text: "Nothing here yet. Move a save here from Review or its own screen.") }
-                    SaveGrid(saves: toBuy, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                BinderPage(IndexTab(name, symbol: "bag", front: true), note: saves.count == 1 ? "1 save" : "\(saves.count) saves") {
+                    if saves.isEmpty {
+                        EmptyNote(symbol: "bag", text: "Nothing here yet. Move a save here from Review or its own screen.").padding(.bottom, 24)
+                    }
+                    if !toBuy.isEmpty {
+                        // A heading only once there is a Purchased list to tell it apart from.
+                        if !bought.isEmpty {
+                            SheetHeading("To buy", note: "\(toBuy.count)").padding(.top, 16).padding(.bottom, 12)
+                        }
+                        SaveGrid(saves: toBuy, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                    }
                     if !bought.isEmpty {
-                        Text("Purchased").font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                        SheetHeading("Purchased", note: "\(bought.count)").padding(.top, toBuy.isEmpty ? 16 : 28).padding(.bottom, 12)
                         SaveGrid(saves: bought, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
                     }
                 }
-                .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+                .padding(.horizontal, KSBinder.outer).padding(.top, 8).padding(.bottom, selecting ? 140 : 40)
             }
             .clearsTabBar()
             if selecting {

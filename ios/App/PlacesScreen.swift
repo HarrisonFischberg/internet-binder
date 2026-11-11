@@ -27,23 +27,24 @@ struct PlacesScreen: View {
         ZStack(alignment: .bottom) {
             TableBackground()
             VStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 14) {
-                    // At accessibility sizes Select drops below the title, so the subtitle gets the full width.
-                    (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 4)) : AnyLayout(HStackLayout(alignment: .center))) {
-                        ScreenHeader(title: "Places", subtitle: subtitle)
-                        if mode != .map && !shownPlaces.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
+                // The Places divider stays put; its sheet (or the map) is under it.
+                HStack(alignment: .bottom, spacing: 8) {
+                    IndexTab("Places", symbol: KindStyle("place").symbol, kind: "place", filled: true).accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    if !typeSize.isAccessibilitySize {
+                        Text(subtitle).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit().lineLimit(1).padding(.bottom, 10).padding(.trailing, 4)
                     }
-                    SegmentedTabs(Mode.allCases.map { m in (m, m == .review && waiting > 0 ? "Review \(waiting)" : m.rawValue) }, selection: $mode)
-                    .onChange(of: mode) {
-                        Haptic.detent()
-                        selecting = false
-                        selected = []
-                    }
+                    if mode != .map && !shownPlaces.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected).padding(.bottom, 6) }
                 }
-                .padding(.horizontal, 20).padding(.bottom, 12)
+                .padding(.horizontal, KSBinder.outer).padding(.top, 8)
+                .zIndex(1)
                 switch mode {
                 case .list: list
-                case .map: map
+                case .map:
+                    modePicker.padding(.horizontal, KSBinder.outer).padding(.vertical, 12)
+                        .background(t.paper)
+                        .overlay(alignment: .top) { Rectangle().fill(t.rule).frame(height: 1) }
+                    map
                 case .review: review
                 }
             }
@@ -66,6 +67,16 @@ struct PlacesScreen: View {
         }
     }
 
+    /// List, Map or Review: at the top of the sheet, or over the map.
+    private var modePicker: some View {
+        SegmentedTabs(Mode.allCases.map { m in (m, m == .review && waiting > 0 ? "Review \(waiting)" : m.rawValue) }, selection: $mode)
+            .onChange(of: mode) {
+                Haptic.detent()
+                selecting = false
+                selected = []
+            }
+    }
+
     private var waiting: Int { view?.review.count ?? 0 }
     /// What Select all ticks: the list's places, or the ones waiting in review.
     private var shownPlaces: [Save] {
@@ -82,7 +93,9 @@ struct PlacesScreen: View {
 
     private var list: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 18, pinnedViews: [.sectionHeaders]) {
+          BinderSheet {
+            modePicker.padding(.top, 12).padding(.bottom, 4)
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
                 if let view, view.groups.isEmpty {
                     EmptyNote(symbol: "mappin.and.ellipse", text: waiting > 0
                               ? "No places here yet. \(waiting) place\(waiting == 1 ? " is" : "s are") waiting in Review for a name or a state."
@@ -90,7 +103,13 @@ struct PlacesScreen: View {
                 } else if view == nil {
                     // Loading: rows the size of real ones, so nothing jumps when they arrive.
                     ForEach(0..<4, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: t.radius, style: .continuous).fill(t.well).frame(height: 88)
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: KSBinder.pictureRadius, style: .continuous).fill(t.well).frame(width: KSBinder.picture, height: KSBinder.picture)
+                            RoundedRectangle(cornerRadius: 4, style: .continuous).fill(t.well).frame(height: 14).frame(maxWidth: 180)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(minHeight: KSBinder.line)
+                        .overlay(alignment: .top) { SheetRule() }
                     }
                     .accessibilityHidden(true)
                 }
@@ -98,12 +117,13 @@ struct PlacesScreen: View {
                     Section {
                         if !folded.contains(group.state) {
                             ForEach(group.cities, id: \.city) { city in
-                                VStack(alignment: .leading, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 0) {
                                     if group.cities.count > 1 || !city.city.isEmpty {
                                         Text(city.city.isEmpty ? "Elsewhere in \(group.state)" : city.city)
                                             .font(.subheadline.weight(.semibold))
                                             .foregroundStyle(t.style == .chromatic ? t.accent : t.inkMuted)
                                             .accessibilityAddTraits(.isHeader)
+                                            .padding(.top, 12).padding(.bottom, 8)
                                     }
                                     ForEach(city.items) { place in row(place, city: city.city) }
                                 }
@@ -114,7 +134,8 @@ struct PlacesScreen: View {
                     }
                 }
             }
-            .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
+          }
+          .padding(.horizontal, KSBinder.outer).padding(.bottom, selecting ? 140 : 40)
         }
         .clearsTabBar()
     }
@@ -139,8 +160,9 @@ struct PlacesScreen: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.vertical, 2)
-        .background(TablePatch())
+        .padding(.top, 10)
+        // Pinned while its places scroll under it: the sheet's own colour, edge to edge.
+        .background(t.paper.padding(.leading, -(KSBinder.lead - 2)).padding(.trailing, -KSBinder.trail))
         .accessibilityLabel("\(state), \(count) place\(count == 1 ? "" : "s")")
         .accessibilityValue(open ? "Expanded" : "Collapsed")
         .accessibilityHint(open ? "Folds this region shut." : "Opens this region.")
@@ -156,21 +178,21 @@ struct PlacesScreen: View {
                 if on { selected.remove(place.id) } else { selected.insert(place.id) }
             } label: {
                 rowBody(place, city: city, menu: false).selectionCheck(on, alignment: .trailing)
-                    .overlay { if on { RoundedRectangle(cornerRadius: t.radius, style: .continuous).strokeBorder(t.accent, lineWidth: 2) } }
             }
-            .buttonStyle(PressStyle())
+            .buttonStyle(RowPressStyle())
             .accessibilityLabel(place.title)
             .accessibilityAddTraits(on ? .isSelected : [])
         } else {
             NavigationLink(value: save) { rowBody(place, city: city, menu: true).matchedTransitionSource(id: place.id, in: zoom) }
-                .buttonStyle(PressStyle())
+                .buttonStyle(RowPressStyle())
                 // The row's menu, one tap away: laid over the row, outside its link.
                 .overlay(alignment: .trailing) {
                     Menu { SaveMenu(save: save) { startSelecting(place.id) } } label: {
-                        GlassIcon("ellipsis", size: 36, font: .footnote.weight(.bold)).frame(width: 44, height: 44)
+                        Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(t.inkMuted)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
                     .accessibilityLabel("More for \(place.title)")
-                    .padding(.trailing, 8)
+                    .padding(.trailing, -8)
                 }
                 .contextMenu { SaveMenu(save: save) { startSelecting(place.id) } }
                 .swipeToDelete { Task { await model.trash(save) } }
@@ -186,12 +208,12 @@ struct PlacesScreen: View {
     /// Photo, name, then city and kind of place; the whole row opens the save.
     private func rowBody(_ place: Save, city: String, menu: Bool) -> some View {
         let detail = PlacesMap.detail(city, city: city, fact: place.fact)
-        return HStack(spacing: 14) {
-            SaveImage(place, symbolSize: 20).frame(width: 64, height: 64).clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        return HStack(spacing: 12) {
+            SaveImage(place, symbolSize: 20).frame(width: KSBinder.picture, height: KSBinder.picture).clipped()
+                .clipShape(RoundedRectangle(cornerRadius: KSBinder.pictureRadius, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text(place.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
-                if !detail.isEmpty { Text(detail).font(.subheadline).foregroundStyle(t.inkMuted).lineLimit(2) }
+                Text(place.title).font(.body.weight(.semibold)).foregroundStyle(t.ink).lineLimit(2).multilineTextAlignment(.leading)
+                if !detail.isEmpty { Text(detail).font(.footnote).foregroundStyle(t.inkMuted).lineLimit(2).multilineTextAlignment(.leading) }
             }
             Spacer(minLength: 0)
             if place.status == "done" {
@@ -199,9 +221,11 @@ struct PlacesScreen: View {
                     .accessibilityLabel("Been")
             }
         }
-        .padding(.leading, 12).padding(.vertical, 12).padding(.trailing, menu ? 56 : 48)
-        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-        .ksSurface()
+        .padding(.vertical, 8).padding(.trailing, 40)
+        .frame(maxWidth: .infinity, minHeight: KSBinder.line, alignment: .leading)
+        .background(t.paper)
+        .overlay(alignment: .top) { SheetRule() }
+        .contentShape(Rectangle())
     }
 
     // MARK: map
@@ -214,9 +238,11 @@ struct PlacesScreen: View {
 
     private var review: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+          BinderSheet {
+            modePicker.padding(.top, 12).padding(.bottom, 12)
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if waiting == 0 {
-                    EmptyNote(symbol: "checkmark.circle", text: "Every place has a name and a state.")
+                    EmptyNote(symbol: "checkmark.circle", text: "Every place has a name and a state.").padding(.bottom, 24)
                 }
                 ForEach(view?.review ?? [], id: \.item.id) { w in
                     if selecting {
@@ -229,17 +255,20 @@ struct PlacesScreen: View {
                                 Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
                                 Text(Self.reasonLine(w)).font(.footnote).foregroundStyle(t.stamp)
                             }
-                            .padding(14).padding(.trailing, 44).frame(maxWidth: .infinity, alignment: .leading).ksSurface()
+                            .padding(.vertical, 14).padding(.trailing, 44).frame(maxWidth: .infinity, alignment: .leading)
+                            .overlay(alignment: .top) { SheetRule() }
+                            .contentShape(Rectangle())
                             .selectionCheck(on, alignment: .trailing)
                         }
-                        .buttonStyle(PressStyle())
+                        .buttonStyle(RowPressStyle())
                         .accessibilityLabel(w.item.title)
                     } else {
                         reviewRow(w)
                     }
                 }
             }
-            .padding(.horizontal, 20).padding(.bottom, selecting ? 140 : 40)
+          }
+          .padding(.horizontal, KSBinder.outer).padding(.bottom, selecting ? 140 : 40)
         }
         .clearsTabBar()
     }
@@ -281,14 +310,17 @@ struct PlacesScreen: View {
             .dynamicTypeSize(...DynamicTypeSize.large)
             .accessibilityShowsLargeContentViewer()
         }
-        .padding(14).ksSurface()
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(t.paper)
+        .overlay(alignment: .top) { SheetRule() }
         .contextMenu { SaveMenu(save: save) { startSelecting(w.item.id) } }
         .swipeToDelete { Task { await model.trash(save) } }
     }
 
     private func reviewThumb(_ save: Save) -> some View {
-        SaveImage(save, symbolSize: 18).frame(width: 56, height: 56).clipped()
-            .ksSurface(radius: min(t.radius, 10), scale: 0.5)
+        SaveImage(save, symbolSize: 18).frame(width: KSBinder.picture, height: KSBinder.picture).clipped()
+            .clipShape(RoundedRectangle(cornerRadius: KSBinder.pictureRadius, style: .continuous))
             .matchedTransitionSource(id: save.id, in: zoom)
     }
 
@@ -299,7 +331,7 @@ struct PlacesScreen: View {
 
     private func reviewText(_ w: PlacesView.Waiting) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(w.item.title).font(KSFont.name(.headline)).foregroundStyle(t.ink)
+            Text(w.item.title).font(.body.weight(.semibold)).foregroundStyle(t.ink)
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
                 .multilineTextAlignment(.leading)
             Text(Self.reasonLine(w)).font(.footnote).foregroundStyle(t.stamp)

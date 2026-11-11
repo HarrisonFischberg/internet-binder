@@ -32,17 +32,19 @@ struct SearchScreen: View {
         ZStack {
             TableBackground()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ScreenHeader(title: "Search")
-                    field
-                    if model.saves.isEmpty {
-                        EmptyNote(symbol: "magnifyingglass", text: "Your saves will be searchable here.")
-                    } else {
-                        filters
-                        if browsing { recent } else { found }
+                BinderPage(IndexTab("Search", symbol: "magnifyingglass", front: true)) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        field
+                        if model.saves.isEmpty {
+                            EmptyNote(symbol: "magnifyingglass", text: "Your saves will be searchable here.").padding(.bottom, 24)
+                        } else {
+                            filters
+                            if browsing { recent } else { found }
+                        }
                     }
+                    .padding(.top, 16)
                 }
-                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
+                .padding(.horizontal, KSBinder.outer).padding(.top, 8).padding(.bottom, 32)
             }
             .clearsTabBar()
             .scrollDismissesKeyboard(.immediately)

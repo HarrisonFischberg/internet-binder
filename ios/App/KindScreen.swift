@@ -30,25 +30,34 @@ struct KindScreen: View {
             TableBackground()
             if onMap {
                 VStack(spacing: 0) {
-                    header(k).padding(.horizontal, 18).padding(.bottom, 12)
+                    header(k).padding(.horizontal, KSBinder.outer).padding(.top, 8)
                     PlacesMap(places: saves)
                         .overlay(alignment: .top) { Rectangle().fill(t.line).frame(height: 1) }
                 }
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        header(k)
-                        if saves.isEmpty {
-                            EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Internet Binder and it lands here.")
-                        } else {
-                            SaveGrid(saves: todo, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
-                            if !done.isEmpty {
-                                Text(k.doneVerb).font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                                SaveGrid(saves: done, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                    VStack(alignment: .leading, spacing: -1) {
+                        header(k).zIndex(1)
+                        BinderSheet {
+                            if saves.isEmpty {
+                                EmptyNote(symbol: k.symbol, text: "No \(k.plural.lowercased()) yet. Share one to Internet Binder and it lands here.")
+                                    .padding(.bottom, 24)
+                            } else {
+                                if !todo.isEmpty {
+                                    // The tab already names the kind: a heading only once there is a done list to tell apart.
+                                    if !done.isEmpty {
+                                        SheetHeading("Still to do", note: "\(todo.count)").padding(.top, 16).padding(.bottom, 12)
+                                    }
+                                    SaveGrid(saves: todo, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                                }
+                                if !done.isEmpty {
+                                    SheetHeading(k.doneVerb, note: "\(done.count)").padding(.top, todo.isEmpty ? 16 : 28).padding(.bottom, 12)
+                                    SaveGrid(saves: done, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                                }
                             }
                         }
                     }
-                    .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+                    .padding(.horizontal, KSBinder.outer).padding(.top, 8).padding(.bottom, selecting ? 140 : 40)
                 }
                 .clearsTabBar()
             }
@@ -82,10 +91,14 @@ struct KindScreen: View {
         selecting = true
     }
 
-    /// The title, and for Places a Map button beside it that switches between the cards and the map.
+    /// The kind's divider tab, how many it holds, and for Places a Map button that switches between the
+    /// lines and the map.
     private func header(_ k: KindStyle) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            ScreenHeader(title: k.plural, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
+        HStack(alignment: .bottom, spacing: 12) {
+            IndexTab(k.plural, symbol: k.symbol, kind: kind, filled: true).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            Text(saves.count == 1 ? "1 save" : "\(saves.count) saves").font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit()
+                .padding(.bottom, 10).padding(.trailing, 4)
             if kind == "place" && !saves.isEmpty {
                 Button {
                     Haptic.detent()
@@ -96,7 +109,7 @@ struct KindScreen: View {
                               font: .title3.weight(.semibold))
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 8)
+                .padding(.bottom, 6)
                 .accessibilityLabel("Map")
                 .accessibilityAddTraits(showMap ? .isSelected : [])
                 .accessibilityIdentifier("placesMapToggle")
@@ -120,8 +133,10 @@ struct ReviewScreen: View {
         ZStack {
             TableBackground()
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(title: "Review", subtitle: "Internet Binder wasn't sure where these go")
+                BinderPage(IndexTab("Review", symbol: "tray", front: true), note: saves.isEmpty ? nil : saves.count == 1 ? "1 save" : "\(saves.count) saves") {
+                  LazyVStack(alignment: .leading, spacing: 0) {
+                    Text("Internet Binder wasn't sure where these go").font(KSFont.note).foregroundStyle(t.inkMuted)
+                        .padding(.top, 16).padding(.bottom, 12)
                     if model.aiReady && !saves.isEmpty {
                         let asking = model.aiRun != nil
                         Button {
@@ -137,16 +152,18 @@ struct ReviewScreen: View {
                         }
                         .disabled(asking)
                         .accessibilityHint("Sends each save's title and caption to your AI provider, which files the ones it's sure about.")
+                        .padding(.bottom, 12)
                     }
                     if saves.isEmpty {
-                        EmptyNote(symbol: "checkmark.circle", text: "Nothing waiting. Everything has a home.")
+                        EmptyNote(symbol: "checkmark.circle", text: "Nothing waiting. Everything has a home.").padding(.bottom, 24)
                     }
                     ForEach(saves) { save in
                         row(save).transition(reduce ? .opacity : .move(edge: .trailing).combined(with: .opacity))
                     }
+                  }
+                  .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: saves.map(\.id))
                 }
-                .padding(.horizontal, 18).padding(.bottom, 40)
-                .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: saves.map(\.id))
+                .padding(.horizontal, KSBinder.outer).padding(.top, 8).padding(.bottom, 40)
             }
             .clearsTabBar()
         }
@@ -162,9 +179,10 @@ struct ReviewScreen: View {
         VStack(alignment: .leading, spacing: 12) {
             NavigationLink(value: save) {
                 HStack(spacing: 12) {
-                    SaveImage(save, symbolSize: 18).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 4))
+                    SaveImage(save, symbolSize: 18).frame(width: KSBinder.picture, height: KSBinder.picture)
+                        .clipShape(RoundedRectangle(cornerRadius: KSBinder.pictureRadius, style: .continuous))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(save.title).font(KSFont.name(.headline)).foregroundStyle(t.ink).lineLimit(2)
+                        Text(save.title).font(.body.weight(.semibold)).foregroundStyle(t.ink).lineLimit(2).multilineTextAlignment(.leading)
                         if let why = suggestions[save.id]?.reason, !why.isEmpty {
                             Text(why).font(.footnote).foregroundStyle(t.inkMuted).lineLimit(2)
                         }
@@ -189,7 +207,10 @@ struct ReviewScreen: View {
                 .accessibilityLabel("More")
             }
         }
-        .padding(14).ksSurface()
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { SheetRule() }
+        .background(t.paper)
         .contextMenu { SaveMenu(save: save) }
         .swipeToDelete { Task { await model.trash(save) } }
     }
@@ -412,8 +433,8 @@ struct FinishFixingButton: View {
                 Button("Not now", systemImage: "xmark") { model.aiFixLeft = [] }
                     .labelStyle(.iconOnly).foregroundStyle(t.inkMuted).frame(width: 44, height: 44)
             }
-            .frame(minHeight: 48).padding(.leading, 16).padding(.trailing, 4)
-            .ksSurface(radius: 14)
+            .frame(minHeight: 48).padding(.leading, 12).padding(.trailing, 4)
+            .sheetNote()
             .accessibilityElement(children: .contain)
         }
     }
@@ -563,9 +584,9 @@ struct FilingPanel: View {
                 }
             }
         }
-        .padding(16)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .ksSurface()
+        .sheetNote(t.accent)
         .task(id: save.id) {
             guard let lib = model.library else { return }
             async let s = try? lib.suggestions(for: save.id)
@@ -576,7 +597,7 @@ struct FilingPanel: View {
 
     private func group<C: View>(_ title: String, @ViewBuilder _ chips: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.caption.weight(.semibold)).tracking(0.8).foregroundStyle(t.inkMuted)
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(t.inkMuted)
             Flow(spacing: 8) { chips() }
         }
     }

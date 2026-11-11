@@ -3,16 +3,15 @@ import UniformTypeIdentifiers
 import KeepsakeKit
 import KeepsakeUI
 
-/// Library: Home's shape with everything in it. Your Collections, then your Lifestyle views, each a
-/// stack you open to see its saves; chips narrow it to one group, and filtering, searching or
-/// selecting lays the saves out as cards. Search sits at the top with paste-a-link beside it, so
-/// nothing floats over the saves.
+/// Library: the whole binder on one sheet. Your Collections, then your Lifestyle views, each a line
+/// you open to see its saves; chips narrow it to one group, and filtering, searching or selecting
+/// lists the saves themselves. Search sits at the top with paste-a-link beside it, so nothing floats
+/// over the saves.
 struct LibraryScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
-    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var filter: Filter = .all
     @State private var query = ""
     @State private var results: SearchResult?
@@ -74,13 +73,18 @@ struct LibraryScreen: View {
         ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    header
-                    if model.loaded { searchField }
-                    if !model.saves.isEmpty && query.isEmpty { filters }
-                    content
+                BinderPage(IndexTab("Library", front: true),
+                           note: model.saves.count == 1 ? "1 save" : "\(model.saves.count.formatted()) saves") {
+                    headerButtons
+                } content: {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if model.loaded { searchField }
+                        if !model.saves.isEmpty && query.isEmpty { filters }
+                        content
+                    }
+                    .padding(.top, 16)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, KSBinder.outer)
                 .padding(.bottom, selecting ? 140 : 32)
             }
             .clearsTabBar()
@@ -116,26 +120,17 @@ struct LibraryScreen: View {
 
     private func loadCollections() { collections = (try? model.library?.collections()) ?? [] }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Library").font(KSFont.display()).foregroundStyle(t.ink)
-                    .accessibilityAddTraits(.isHeader)
-                Text(model.saves.count == 1 ? "1 save" : "\(model.saves.count.formatted()) saves")
-                    .font(KSFont.note).foregroundStyle(t.inkMuted).monospacedDigit()
-            }
-            Spacer()
-            GlassEffectContainer(spacing: 10) {
-                HStack(spacing: 10) {
-                    if !model.saves.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
-                    Menu {
-                        Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
-                    } label: { GlassIcon("ellipsis") }
-                    .accessibilityLabel("More")
-                }
+    /// Select and More, beside the Library's tab.
+    private var headerButtons: some View {
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                if !model.saves.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }
+                Menu {
+                    Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
+                } label: { GlassIcon("ellipsis") }
+                .accessibilityLabel("More")
             }
         }
-        .padding(.top, 8)
     }
 
     private var filters: some View {
@@ -183,10 +178,10 @@ struct LibraryScreen: View {
                     Chip(plural(k), symbol: s.symbol, tint: s.color, kind: k, selected: filter == .kind(k)) { set(.kind(k)) }
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.leading, KSBinder.lead).padding(.trailing, KSBinder.trail)
         }
         .scrollIndicators(.hidden)
-        .padding(.horizontal, -20)
+        .padding(.leading, -KSBinder.lead).padding(.trailing, -KSBinder.trail)
     }
 
     /// A hairline between the chip groups: the two libraries, your collections, then the kinds.
@@ -222,43 +217,17 @@ struct LibraryScreen: View {
             if let results, results.corrected {
                 Text("Showing results for “\(results.query)”").font(KSFont.note).foregroundStyle(t.inkMuted)
             }
-            Masonry(shown, columns: typeSize.isAccessibilitySize ? 1 : nil, minColumnWidth: 170) { save in
-                if selecting {
-                    let on = selected.contains(save.id)
-                    Button {
-                        Haptic.checked()
-                        if on { selected.remove(save.id) } else { selected.insert(save.id) }
-                    } label: {
-                        SaveObject(save).selectionCheck(on)
-                    }
-                    .buttonStyle(PressStyle())
-                    .accessibilityLabel(save.title)
-                } else {
-                NavigationLink(value: save) {
-                    SaveObject(save).matchedTransitionSource(id: save.id, in: zoom)
-                }
-                .buttonStyle(PressStyle())
-                .draggable(save.id) { SaveObject(save).frame(width: 160) }
-                // VoiceOver rotor: the card's own actions without opening it.
-                .accessibilityAction(named: save.status == "done" ? "Mark not \(KindStyle(save.kind).doneVerb.lowercased())" : "Mark \(KindStyle(save.kind).doneVerb.lowercased())") {
-                    Task { await model.setDone(save, save.status != "done") }
-                }
-                .accessibilityAction(named: "Move to Trash") { Task { await model.trash(save) } }
-                .contextMenu {
-                    SaveMenu(save: save) {
-                        Haptic.detent()
-                        selected = [save.id]
-                        selecting = true
-                    }
-                }
-                }
+            SaveGrid(saves: shown, zoom: zoom, selecting: selecting, selected: $selected) { id in
+                Haptic.detent()
+                selected = [id]
+                selecting = true
             }
         }
     }
 
-    /// Collections first, then Lifestyle: each group a stack with one of its pictures, opening to its saves.
+    /// Collections first, then Lifestyle: each group a line with one of its pictures, opening to its saves.
     @ViewBuilder private var overview: some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: 28) {
             if filter == .all, model.reviewCount > 0 { reviewRow }
             // In Home's order: drag the sections there, and the stacks within them here.
             ForEach(HomeSections.order(sectionOrder), id: \.self) { section in
@@ -283,21 +252,10 @@ struct LibraryScreen: View {
         .padding(.top, 4)
     }
 
-    /// Saves waiting for a home, as one quiet row above the stacks.
+    /// Saves waiting for a home, set into the sheet above the sections.
     private var reviewRow: some View {
-        Button { set(.review) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "tray.full").font(.title3)
-                Text(model.reviewCount == 1 ? "1 save needs a collection" : "\(model.reviewCount) saves need a collection")
-                    .font(.subheadline.weight(.bold))
-                Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.bold))
-            }
-            .foregroundStyle(t.onHighlight)
-            .padding(.horizontal, 14).frame(minHeight: 52)
-            .ksSurface(t.highlight, stroke: .clear)
-        }
-        .buttonStyle(PressStyle())
+        Button { set(.review) } label: { NeedsCollectionStrip(count: model.reviewCount) }
+            .buttonStyle(PressStyle())
     }
 
     private func count(_ n: Int, _ noun: String) -> String { n == 1 ? "1 \(noun)" : "\(n) \(noun)s" }

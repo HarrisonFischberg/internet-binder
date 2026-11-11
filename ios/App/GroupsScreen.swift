@@ -2,7 +2,7 @@ import SwiftUI
 import KeepsakeKit
 import KeepsakeUI
 
-/// Lifestyle: every Lifestyle view that has saves (Places, Recipes, Workouts…), each a stack you open.
+/// Lifestyle: every Lifestyle view that has saves (Places, Recipes, Workouts…), each a line you open.
 /// Select mode ticks whole views: delete every save in them at once (with Undo).
 struct LifestyleScreen: View {
     let zoom: Namespace.ID
@@ -15,18 +15,19 @@ struct LifestyleScreen: View {
         ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ScreenHeader(title: "Lifestyle", subtitle: "Places, recipes, workouts and more")
+                BinderPage(IndexTab("Lifestyle", symbol: "sparkles", front: true), note: "Places, recipes, workouts and more") {
                     if !model.index.lifestyle.isEmpty {
                         LifestyleTiles(selection: selecting ? $selected : nil) { kind in
                             selected = [kind]
                             selecting = true
                         }
+                        .padding(.top, 8)
                     } else {
                         EmptyNote(symbol: "sparkles", text: "Nothing here yet. Share a recipe, a place or a workout to Internet Binder and it lands here.")
+                            .padding(.bottom, 24)
                     }
                 }
-                .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
+                .padding(.horizontal, KSBinder.outer).padding(.top, 8).padding(.bottom, selecting ? 140 : 40)
             }
             .clearsTabBar()
             if selecting {
@@ -62,8 +63,15 @@ struct LifestyleScreen: View {
     }
 }
 
-/// The grid both pages and the Library use: two stacks across on iPhone, more on iPad.
-let groupColumns = [GridItem(.adaptive(minimum: 150), spacing: 16)]
+/// The lines both pages and the Library use: one column on iPhone, more where the sheet is wide (iPad).
+let groupColumns = [GridItem(.adaptive(minimum: 300), spacing: 32, alignment: .top)]
+
+/// The rule over a group's line, across the sheet like the rules between saves.
+struct GroupRule: ViewModifier {
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .top) { SheetRule() }
+    }
+}
 
 /// How the Collections and Lifestyle stacks are ordered (Chrome's Collections sort, same names).
 /// Dragging a stack puts them in your own order instead, until you pick a sort again.
@@ -115,7 +123,7 @@ struct GroupSortMenu: View {
     }
 }
 
-/// Each Lifestyle view with saves, as a stack linking to its view: most saves first (a tie A–Z), or the
+/// Each Lifestyle view with saves, as a line linking to its view: most saves first (a tie A–Z), or the
 /// sort you pick, until you drag them into your own order (kept on this iPhone).
 struct LifestyleTiles: View {
     /// Select mode: a tap ticks a view instead of opening it.
@@ -145,23 +153,25 @@ struct LifestyleTiles: View {
                     withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = present }
                 }
             }
-            LazyVGrid(columns: groupColumns, spacing: 20) {
-                ForEach(Array(order.enumerated()), id: \.element) { i, kind in
+            LazyVGrid(columns: groupColumns, spacing: 0) {
+                ForEach(order, id: \.self) { kind in
                     let items = model.index.kind(kind)
                     let k = KindStyle(kind)
-                    let tile = GroupTile(k.plural, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: k.symbol, tint: k.color, kind: kind, number: i + 1)
+                    let subtitle = items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves")
+                    let cover = items.first(where: \.hasImage) ?? items.first
                     if let selection {
                         let on = selection.wrappedValue.contains(kind)
                         Button {
                             Haptic.checked()
                             if on { selection.wrappedValue.remove(kind) } else { selection.wrappedValue.insert(kind) }
-                        } label: { tile.selectionCheck(on) }
-                        .buttonStyle(PressStyle())
+                        } label: { GroupRow(k.plural, subtitle: subtitle, cover: cover, symbol: k.symbol, tint: k.color, kind: kind, ticked: on) }
+                        .buttonStyle(RowPressStyle())
+                        .modifier(GroupRule())
                         .accessibilityLabel(k.plural)
                     } else {
-                        NavigationLink(value: Route.kind(kind)) { tile }
-                        .buttonStyle(PressStyle())
+                        NavigationLink(value: Route.kind(kind)) { GroupRow(k.plural, subtitle: subtitle, cover: cover, symbol: k.symbol, tint: k.color, kind: kind) }
+                        .buttonStyle(RowPressStyle())
+                        .modifier(GroupRule())
                         .reorderable(kind, in: $order, dragging: $dragging, reduce: reduce) { SavedOrder.set(Self.key, $0); manual = true }
                         .contextMenu {
                             if let onSelect { Button("Select", systemImage: "checkmark.circle") { Haptic.detent(); onSelect(kind) } }
@@ -177,7 +187,7 @@ struct LifestyleTiles: View {
     }
 }
 
-/// Each collection as a stack with one of its pictures on top, linking to the collection. Pinned
+/// Each collection as a line with one of its pictures, linking to the collection. Pinned
 /// collections come first, then the rest with the most saves first (a tie A–Z) or the sort you pick.
 /// Drag them and your order is kept instead (Chrome's order, which dragging here changes), until you
 /// pick a sort again.
@@ -225,23 +235,25 @@ struct CollectionTiles: View {
                     withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = arranged(manual: false) }
                 }
             }
-            LazyVGrid(columns: groupColumns, spacing: 20) {
-                ForEach(Array(order.compactMap { id in collections.first { $0.id == id } }.enumerated()), id: \.element.id) { i, c in
+            LazyVGrid(columns: groupColumns, spacing: 0) {
+                ForEach(order.compactMap { id in collections.first { $0.id == id } }) { c in
                     let items = model.index.collection(c.id)
-                    let tile = GroupTile(c.name, subtitle: items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves"),
-                                         cover: items.first(where: \.hasImage) ?? items.first, symbol: c.pinned == true ? "pin" : "bag", tint: t.detail,
-                                         number: i + 1, menuRoom: selection == nil)
+                    let subtitle = items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves")
+                    let cover = items.first(where: \.hasImage) ?? items.first
+                    let symbol = c.pinned == true ? "pin" : "bag"
                     if let selection {
                         let on = selection.wrappedValue.contains(c.id)
                         Button {
                             Haptic.checked()
                             if on { selection.wrappedValue.remove(c.id) } else { selection.wrappedValue.insert(c.id) }
-                        } label: { tile.selectionCheck(on) }
-                        .buttonStyle(PressStyle())
+                        } label: { GroupRow(c.name, subtitle: subtitle, cover: cover, symbol: symbol, tint: t.inkMuted, ticked: on) }
+                        .buttonStyle(RowPressStyle())
+                        .modifier(GroupRule())
                         .accessibilityLabel("Collection \(c.name)")
                     } else {
-                        NavigationLink(value: Route.collection(c.id, c.name)) { tile }
-                        .buttonStyle(PressStyle())
+                        NavigationLink(value: Route.collection(c.id, c.name)) { GroupRow(c.name, subtitle: subtitle, cover: cover, symbol: symbol, tint: t.inkMuted, menuRoom: true) }
+                        .buttonStyle(RowPressStyle())
+                        .modifier(GroupRule())
                         .reorderable(c.id, in: $order, dragging: $dragging, reduce: reduce) { ids in
                             SavedOrder.set(Self.key, ["on"])
                             manual = true
@@ -249,18 +261,19 @@ struct CollectionTiles: View {
                         }
                         .contextMenu { CollectionMenu(collection: c, saves: items.count, onSelect: onSelect.map { f in { f(c.id) } }) }
                         // The same menu, one tap away, for anyone who doesn't know about the long press.
-                        .overlay(alignment: .bottomTrailing) {
+                        .overlay(alignment: .trailing) {
                             Menu { CollectionMenu(collection: c, saves: items.count, onSelect: onSelect.map { f in { f(c.id) } }) } label: {
-                                GlassIcon("ellipsis", size: 36, font: .footnote.weight(.bold)).frame(width: 44, height: 44)
+                                Image(systemName: "ellipsis").font(.body.weight(.semibold)).foregroundStyle(t.inkMuted)
+                                    .frame(width: 44, height: 44).contentShape(Rectangle())
                             }
                             .accessibilityLabel("More for \(c.name)")
-                            .padding(t.style == .chromatic ? 6 : 4)
                         }
                     }
                 }
                 if let onNew, selection == nil {
-                    Button(action: onNew) { NewGroupTile("New collection") }
-                        .buttonStyle(PressStyle())
+                    Button(action: onNew) { NewGroupRow("New collection") }
+                        .buttonStyle(RowPressStyle())
+                        .modifier(GroupRule())
                 }
             }
         }
@@ -268,22 +281,15 @@ struct CollectionTiles: View {
     }
 }
 
-/// A section of the Library: its name, how many it holds, and its stacks.
+/// A section of the Library: its name, how many it holds, and its lines.
 struct GroupSection<Content: View>: View {
     let title: String
     let detail: String
     @ViewBuilder let content: Content
-    @Environment(\.ks) private var t
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // At accessibility sizes the count goes under the title, so the title never breaks mid-word.
-            (typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4)) : AnyLayout(HStackLayout(alignment: .firstTextBaseline))) {
-                Text(title).font(KSFont.section()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                if !typeSize.isAccessibilitySize { Spacer() }
-                Text(detail).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit()
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            SheetHeading(title, note: detail)
             content
         }
     }
