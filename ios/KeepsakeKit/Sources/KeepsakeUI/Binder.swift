@@ -124,7 +124,9 @@ public struct IndexTab: View {
         let shape = UnevenRoundedRectangle(topLeadingRadius: KSBinder.tabRadius, topTrailingRadius: KSBinder.tabRadius, style: .continuous)
         HStack(spacing: 6) {
             if let symbol { Image(systemName: symbol).font(.footnote.weight(.semibold)).accessibilityHidden(true) }
-            Text(title).font(.subheadline.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+            // A one-word name shrinks to fit rather than breaking mid-word at the largest text sizes.
+            Text(title).font(.subheadline.weight(.semibold)).lineLimit(title.contains(" ") ? 2 : 1).minimumScaleFactor(0.6)
+                .multilineTextAlignment(.leading)
             if let count, count > 0 {
                 Text("\(count)").font(.caption.weight(.bold)).monospacedDigit().foregroundStyle(front ? t.inkMuted : ink.opacity(0.85))
             }
@@ -160,6 +162,10 @@ public struct BinderPage<Accessory: View, Content: View>: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: -1) {
+            // At accessibility sizes the controls sit above the tab, so the tab has the width for its name.
+            if typeSize.isAccessibilitySize {
+                accessory.frame(maxWidth: .infinity, alignment: .trailing).padding(.bottom, 8)
+            }
             HStack(alignment: .bottom, spacing: 8) {
                 tab.accessibilityAddTraits(.isHeader).layoutPriority(1)
                 Spacer(minLength: 0)
@@ -168,7 +174,7 @@ public struct BinderPage<Accessory: View, Content: View>: View {
                     Text(note).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit().lineLimit(1).padding(.bottom, 10).padding(.trailing, 4)
                         .layoutPriority(-1)
                 }
-                accessory.fixedSize().padding(.bottom, 6)
+                if !typeSize.isAccessibilitySize { accessory.fixedSize().padding(.bottom, 6) }
             }
             .zIndex(1)
             BinderSheet {
@@ -299,7 +305,7 @@ public struct SaveRow: View {
                 Text(word ? "· \(fact)" : fact).foregroundStyle(t.inkMuted)
             }
         }
-        .font(.footnote).lineLimit(1)
+        .font(.footnote).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
         // Its natural width, so ViewThatFits can tell when the kind's word has to step aside.
         .fixedSize(horizontal: word, vertical: false)
     }

@@ -63,8 +63,23 @@ struct LifestyleScreen: View {
     }
 }
 
-/// The lines both pages and the Library use: one column on iPhone, more where the sheet is wide (iPad).
+/// Columns for group lines where the sheet is wide (iPad): each at least 300 points.
 let groupColumns = [GridItem(.adaptive(minimum: 300), spacing: 32, alignment: .top)]
+
+/// A page's groups as lines: all of them built at once (there are only ever a few dozen, and VoiceOver
+/// and Find reach the ones below the fold), in one column on iPhone and side by side where the sheet is wide.
+struct GroupLines<Content: View>: View {
+    @ViewBuilder let content: Content
+    @State private var width: CGFloat = 0
+    var body: some View {
+        Group {
+            if width < 632 { VStack(alignment: .leading, spacing: 0) { content } }
+            else { LazyVGrid(columns: groupColumns, spacing: 0) { content } }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+}
 
 /// The rule over a group's line, across the sheet like the rules between saves.
 struct GroupRule: ViewModifier {
@@ -153,7 +168,7 @@ struct LifestyleTiles: View {
                     withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = present }
                 }
             }
-            LazyVGrid(columns: groupColumns, spacing: 0) {
+            GroupLines {
                 ForEach(order, id: \.self) { kind in
                     let items = model.index.kind(kind)
                     let k = KindStyle(kind)
@@ -235,7 +250,7 @@ struct CollectionTiles: View {
                     withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { order = arranged(manual: false) }
                 }
             }
-            LazyVGrid(columns: groupColumns, spacing: 0) {
+            GroupLines {
                 ForEach(order.compactMap { id in collections.first { $0.id == id } }) { c in
                     let items = model.index.collection(c.id)
                     let subtitle = items.isEmpty ? "Empty" : (items.count == 1 ? "1 save" : "\(items.count) saves")

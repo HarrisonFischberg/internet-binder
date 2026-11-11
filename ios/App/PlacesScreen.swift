@@ -27,14 +27,21 @@ struct PlacesScreen: View {
         ZStack(alignment: .bottom) {
             TableBackground()
             VStack(spacing: 0) {
-                // The Places divider stays put; its sheet (or the map) is under it.
+                // The Places divider stays put; its sheet (or the map) is under it. At accessibility sizes
+                // Select sits above it, so the tab has the width for its name.
+                if typeSize.isAccessibilitySize && mode != .map && !shownPlaces.isEmpty {
+                    HeaderSelectButton(selecting: $selecting, selected: $selected)
+                        .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, KSBinder.outer)
+                }
                 HStack(alignment: .bottom, spacing: 8) {
                     IndexTab("Places", symbol: KindStyle("place").symbol, kind: "place", filled: true).accessibilityAddTraits(.isHeader)
                     Spacer(minLength: 0)
                     if !typeSize.isAccessibilitySize {
                         Text(subtitle).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit().lineLimit(1).padding(.bottom, 10).padding(.trailing, 4)
                     }
-                    if mode != .map && !shownPlaces.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected).padding(.bottom, 6) }
+                    if !typeSize.isAccessibilitySize && mode != .map && !shownPlaces.isEmpty {
+                        HeaderSelectButton(selecting: $selecting, selected: $selected).padding(.bottom, 6)
+                    }
                 }
                 .padding(.horizontal, KSBinder.outer).padding(.top, 8)
                 .zIndex(1)

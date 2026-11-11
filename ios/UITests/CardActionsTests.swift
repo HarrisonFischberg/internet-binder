@@ -62,19 +62,23 @@ final class CardActionsTests: XCTestCase {
         let app = launch()
         app.tabBars.buttons["Library"].tap()
         let places = card(app, "Places,"), recipes = card(app, "Recipes,")
-        XCTAssertTrue(recipes.waitForExistence(timeout: 5))
-        for _ in 0..<4 where !recipes.isHittable { app.swipeUp() }
+        // The lines are built as they scroll into view, and Lifestyle sits under Collections.
+        _ = places.waitForExistence(timeout: 5)
+        for _ in 0..<6 where !(recipes.exists && recipes.isHittable && places.isHittable) { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(recipes.exists)
         // The Lifestyle views are lines down the sheet, so their order is top to bottom.
         XCTAssertLessThan(places.frame.minY, recipes.frame.minY, "Chrome's order to start: Places, then Recipes")
-        recipes.press(forDuration: 1.2, thenDragTo: places)
+        // The lines are a short drag apart: slowly, with a pause before letting go, as a finger does it.
+        recipes.press(forDuration: 1.2, thenDragTo: places, withVelocity: .slow, thenHoldForDuration: 0.6)
         XCTAssertTrue(recipes.waitForExistence(timeout: 2))
         XCTAssertLessThan(recipes.frame.minY, places.frame.minY, "Recipes now comes first")
         // Kept: Home's Lifestyle page shows the same order.
         app.terminate()
         app.launch()
         app.tabBars.buttons["Library"].tap()
-        XCTAssertTrue(recipes.waitForExistence(timeout: 5))
-        for _ in 0..<4 where !recipes.isHittable { app.swipeUp() }
+        _ = places.waitForExistence(timeout: 5)
+        for _ in 0..<6 where !(recipes.exists && recipes.isHittable && places.isHittable) { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(recipes.exists)
         XCTAssertLessThan(recipes.frame.minY, places.frame.minY, "the order is kept")
     }
 }

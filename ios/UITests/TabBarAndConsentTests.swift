@@ -23,9 +23,10 @@ final class TabBarAndConsentTests: XCTestCase {
             try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
             try shoot(folder, "tabbar-0-home-end")
         }
-        let last = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Enameled cast iron'")).firstMatch
-        XCTAssertTrue(last.exists, "Recent's last line")
-        let line = last.frame, bar = app.tabBars.buttons["Home"].frame
+        // Every line reads "name, kind, …": the lowest one is Recent's last.
+        let lines = app.buttons.matching(NSPredicate(format: "label CONTAINS ', '")).allElementsBoundByIndex.map(\.frame)
+        let bar = app.tabBars.buttons["Home"].frame
+        guard let line = lines.filter({ $0.minY < bar.maxY }).max(by: { $0.maxY < $1.maxY }) else { return XCTFail("Recent's last line") }
         XCTAssertLessThanOrEqual(line.maxY, bar.minY, "Recent ends under the tab bar (line \(line), tab \(bar))")
     }
 

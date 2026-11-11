@@ -9,6 +9,7 @@ struct KindScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Places only: the Map button next to the title swaps the cards for a map (kept on this iPhone).
     @AppStorage("placesShowMap") private var showMap = false
     /// The Map button grows with the text size, so its glyph stays inside the circle.
@@ -97,8 +98,10 @@ struct KindScreen: View {
         HStack(alignment: .bottom, spacing: 12) {
             IndexTab(k.plural, symbol: k.symbol, kind: kind, filled: true).accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
-            Text(saves.count == 1 ? "1 save" : "\(saves.count) saves").font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit()
-                .padding(.bottom, 10).padding(.trailing, 4)
+            if !typeSize.isAccessibilitySize {
+                Text(saves.count == 1 ? "1 save" : "\(saves.count) saves").font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit()
+                    .padding(.bottom, 10).padding(.trailing, 4)
+            }
             if kind == "place" && !saves.isEmpty {
                 Button {
                     Haptic.detent()
