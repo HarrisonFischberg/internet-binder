@@ -7,12 +7,12 @@
   "headline_color": "#16130F",
   "subtitle_color": "#3A2F1C",
   "shots": [
-    {"raw": "01-home", "headline": "Everything you\nmeant to keep", "subtitle": "Tap Share in the app you're reading, then Binder."},
-    {"raw": "02-review", "headline": "Sorted with\none tap", "subtitle": "It suggests where each save belongs and learns from your choices."},
-    {"raw": "03-recipe", "headline": "Recipes,\nready to cook", "subtitle": "Ingredients and steps pulled from the page you saved."},
-    {"raw": "04-cooking", "headline": "One step\nat a time", "subtitle": "Cooking mode keeps each step's ingredients right beside it."},
-    {"raw": "05-places", "headline": "Every place\non one map", "subtitle": "Cafés and spots friends recommended, grouped by city."},
-    {"raw": "06-workout", "headline": "Workouts\nthat stick", "subtitle": "Set a goal like 3 times a week and tap Done today."},
-    {"raw": "07-styles", "headline": "Make it\nyours", "subtitle": "Three looks, light or dark, and four app icons."}
+    {"raw": "01-home", "headline": "Keep what you\nfind online", "subtitle": "Tap Share in the app you're reading, then Binder."},
+    {"raw": "02-review", "headline": "File a save\nwith one tap", "subtitle": "Binder suggests a collection and learns from what you pick."},
+    {"raw": "03-recipe", "headline": "Recipes you\ncan cook from", "subtitle": "Binder pulls the ingredients and steps from the page you saved."},
+    {"raw": "04-cooking", "headline": "Cook one step\nat a time", "subtitle": "Each step shows the ingredients it needs."},
+    {"raw": "05-places", "headline": "Saved places\non a map", "subtitle": "The list view groups the same places by city."},
+    {"raw": "06-workout", "headline": "Keep count of\nyour workouts", "subtitle": "Set a goal, like 3 times a week, and tap Done today after each one."},
+    {"raw": "07-styles", "headline": "Pick how\nit looks", "subtitle": "Choose from three looks and four app icons."}
   ]
 }
