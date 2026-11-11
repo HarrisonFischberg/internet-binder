@@ -11,6 +11,7 @@ struct SaveDetailScreen: View {
     @Environment(\.ks) private var t
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.horizontalSizeClass) private var size
     @Environment(\.dismiss) private var dismiss
     @State private var detail: SaveDetail?
     @State private var checked: Set<Int> = []
@@ -42,18 +43,23 @@ struct SaveDetailScreen: View {
         ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    hero
-                    titleBlock
-                    marks
-                    if current.needsCollection && current.purchased != true { FilingPanel(save: current) }
-                    panel
-                    if let note = current.note, !note.isEmpty {
-                        Text("“\(note)”").font(KSFont.note).foregroundStyle(t.inkMuted)
+                // Filed behind its kind's divider: the tab names the kind, the sheet holds the save.
+                BinderPage(IndexTab(KindStyle(current.kind).plural, symbol: KindStyle(current.kind).symbol, kind: current.kind, filled: true),
+                           note: current.retailer.flatMap { $0.isEmpty ? nil : $0 }) {
+                    VStack(alignment: .leading, spacing: 20) {
+                        titleBlock
+                        hero
+                        marks
+                        if current.needsCollection && current.purchased != true { FilingPanel(save: current) }
+                        panel
+                        if let note = current.note, !note.isEmpty {
+                            Text("“\(note)”").font(KSFont.note).foregroundStyle(t.inkMuted)
+                        }
+                        source
                     }
-                    source
+                    .padding(.top, 20)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, KSBinder.outer).padding(.top, 8)
                 .padding(.bottom, 24)
             }
         }
@@ -143,29 +149,27 @@ struct SaveDetailScreen: View {
                     Marker(current.title, coordinate: pin).tint(KindStyle("place").color)
                 }
                 .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-                .frame(height: 280)
-                .overlay(alignment: .topTrailing) { Stamp(kind: "place", size: 44).padding(12) }
+                .frame(height: 200)
+                .overlay(alignment: .topTrailing) { Stamp(kind: "place", size: 36).padding(10) }
                 .accessibilityElement(children: .ignore)   // the map's street names aren't for VoiceOver
                 .accessibilityLabel("Map of \(current.title)")
                 .accessibilityHint("Use Directions below to go there.")
             }
-            .ksSurface()
-            .padding(.top, 8)
+            .clipShape(pictureShape)
         } else if current.hasImage && (current.kind == "book" || current.kind == "media") {
             // A cover or poster stands upright, like the thing itself.
             Button {
                 if let url = current.url.flatMap(URL.init(string:)) { openURL(url) }
             } label: {
                 SaveImage(current, symbolSize: 48)
-                    .frame(width: 200, height: 300)
-                    .ksSurface()
+                    .frame(width: 150, height: 225)
+                    .clipShape(pictureShape)
+                    .overlay(pictureShape.strokeBorder(t.rule, lineWidth: 1))
             }
             .buttonStyle(PressStyle())
             .disabled(current.url == nil)
             .accessibilityLabel(current.kind == "book" ? "Cover of \(current.title)" : "Poster for \(current.title)")
             .accessibilityHint(current.url == nil ? "" : "Opens \(current.host ?? "the page")")
-            .frame(maxWidth: .infinity)
-            .padding(.top, 8)
         } else if current.hasImage {
             // The picture opens where it came from: an Instagram reel's thumbnail (with its play
             // button) plays the reel.
@@ -173,25 +177,26 @@ struct SaveDetailScreen: View {
                 if let url = current.url.flatMap(URL.init(string:)) { openURL(url) }
             } label: {
                 SaveImage(current, symbolSize: 48)
-                    .frame(height: 300).frame(maxWidth: .infinity).clipped()
-                    .ksSurface()
+                    .frame(height: pictureHeight).frame(maxWidth: .infinity).clipped()
+                    .clipShape(pictureShape)
             }
             .buttonStyle(PressStyle())
             .disabled(current.url == nil)
             .accessibilityLabel(isInstagram ? "Open the post on Instagram" : isXPost ? "Open the post on X" : "Open \(current.host ?? "the page")")
-            .padding(.top, 8)
-        } else {
-            // No picture: the kind chip and title below lead (a card here would say the title twice).
-            Color.clear.frame(height: 8)
         }
+        // No picture: the tab and the title lead (a tile here would say the title twice).
     }
 
+    /// A picture on the sheet: small corners, like a print pasted onto the page.
+    private var pictureShape: RoundedRectangle { RoundedRectangle(cornerRadius: KSBinder.pictureRadius, style: .continuous) }
+    /// Short on a phone so the page's working part (ingredients, an address) starts on the first screen.
+    private var pictureHeight: CGFloat { size == .regular ? 300 : 168 }
+
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            KindLabel(kind: current.kind)
-            Text(current.title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(current.title).font(KSFont.name(.title)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
                 .fixedSize(horizontal: false, vertical: true)
-            if let fact = current.fact, !fact.isEmpty { Text(fact).font(.subheadline).foregroundStyle(t.inkMuted) }
+            if let fact = current.fact, !fact.isEmpty { Text(fact).font(.subheadline).foregroundStyle(t.inkMuted).monospacedDigit() }
         }
     }
 
@@ -200,7 +205,8 @@ struct SaveDetailScreen: View {
     @ViewBuilder private var panel: some View {
         switch current.kind {
         case "place": VStack(alignment: .leading, spacing: 12) { sourceNote; placeChoicesCard; placePanel }
-        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; swapRecipeLink; recipePanel }
+        // The way to swap in another page comes after the recipe, so the ingredients start on the first screen.
+        case "recipe": VStack(alignment: .leading, spacing: 12) { sourceNote; basedOnNote; recipePanel; swapRecipeLink }
         case "workout": VStack(alignment: .leading, spacing: 12) { sourceNote; workoutPanel }
         case "product": productPanel
         case "book", "media": shelfPanel
@@ -246,9 +252,9 @@ struct SaveDetailScreen: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
+                .padding(12)
                 .frame(minHeight: 44)
-                .ksSurface()
+                .sheetNote()
                 .contentShape(Rectangle())
             }
             .buttonStyle(PressStyle())
@@ -501,7 +507,8 @@ struct SaveDetailScreen: View {
         VStack(alignment: .leading, spacing: 18) {
             let ingredients = d?["ingredients"]?.array?.compactMap(\.string) ?? []
             if !ingredients.isEmpty {
-                card("Ingredients", drafted: isDrafted("ingredients")) {
+                card("Ingredients", drafted: isDrafted("ingredients"),
+                     note: checked.isEmpty ? "\(ingredients.count)" : "\(checked.count) of \(ingredients.count) ticked") {
                     ForEach(Array(ingredients.enumerated()), id: \.offset) { i, line in
                         let on = checked.contains(i)
                         Button {
@@ -509,28 +516,32 @@ struct SaveDetailScreen: View {
                             if on { checked.remove(i) } else { checked.insert(i) }
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                                    .font(.title3).foregroundStyle(on ? KindStyle("recipe").color : t.inkMuted)
+                                Image(systemName: on ? "checkmark.square.fill" : "square")
+                                    .font(.title3).foregroundStyle(on ? t.stamp : t.inkMuted)
                                 Text(line).font(reading).foregroundStyle(on ? t.inkMuted : t.ink)
-                                    .strikethrough(on, color: t.inkMuted)
+                                    .strikethrough(on, color: t.inkMuted).multilineTextAlignment(.leading)
                                 Spacer(minLength: 0)
                             }
-                            .frame(minHeight: 44)
+                            .frame(minHeight: 46)
                             .overlay(alignment: .bottom) { rule }
+                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(PressStyle())
+                        .buttonStyle(RowPressStyle())
                         .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
             }
             if !steps.isEmpty {
-                card("Method", drafted: isDrafted("steps")) {
+                card("Method", drafted: isDrafted("steps"), note: steps.count == 1 ? "1 step" : "\(steps.count) steps") {
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text("\(i + 1)").font(KSFont.name(.headline)).foregroundStyle(t.stamp)
+                            Text("\(i + 1)").font(KSFont.name(.title3)).foregroundStyle(t.stamp).monospacedDigit()
+                                .frame(minWidth: 22, alignment: .leading)
                             Text(step).font(reading).foregroundStyle(t.ink).lineSpacing(3)
+                            Spacer(minLength: 0)
                         }
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 12)
+                        .overlay(alignment: .bottom) { rule }
                     }
                 }
             }
@@ -549,9 +560,9 @@ struct SaveDetailScreen: View {
                     .tint(KindStyle("recipe").color)
                     .accessibilityIdentifier("recipe.importLink")
                 }
-                .padding(16)
+                .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .ksSurface()
+                .sheetNote()
             }
         }
     }
@@ -624,10 +635,12 @@ struct SaveDetailScreen: View {
         }
     }
 
-    private func card<C: View>(_ title: String, drafted: Bool = false, @ViewBuilder _ content: () -> C) -> some View {
+    /// A section of the page: its heading over a rule, then its lines straight on the sheet (the sheet is
+    /// the only container, so nothing here is boxed).
+    private func card<C: View>(_ title: String, drafted: Bool = false, note: String? = nil, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(title).font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                Text(title).font(KSFont.section()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
                 // What your AI provider wrote because the post doesn't say it.
                 if drafted {
                     Text("AI draft").font(.caption.weight(.semibold)).foregroundStyle(t.ink)
@@ -635,19 +648,18 @@ struct SaveDetailScreen: View {
                         .background(Capsule().fill(t.stamp.opacity(0.18)))
                         .accessibilityLabel("Drafted by AI: check it before you use it")
                 }
+                Spacer(minLength: 8)
+                if let note, !typeSize.isAccessibilitySize { Text(note).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit() }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
+            rule
             content()
         }
-        .padding(16)
-        .ksSurface()
+        .padding(.top, 4)
     }
 
-    /// A row's hairline.
-    private var rule: some View {
-        Rectangle().fill(.clear).frame(height: 1)
-            .overlay { Line().stroke(t.rule, style: StrokeStyle(lineWidth: 1)) }
-    }
+    /// A row's hairline, ruled across the sheet.
+    private var rule: some View { SheetRule() }
 
     private func ruled(_ symbol: String, _ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {

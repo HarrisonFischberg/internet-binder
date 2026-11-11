@@ -126,23 +126,27 @@ struct StyleCard: View {
         .accessibilityAddTraits(chosen ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// The sample saves on the style's own page, in its own colours, type and depth.
+    /// The sample saves on the style's own page: a tab, the sheet and two lines in its own colours and type.
     private var preview: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if saves.isEmpty {
-                Text("Your saves will show here.").font(.footnote).foregroundStyle(theme.inkMuted)
+        VStack(alignment: .leading, spacing: -1) {
+            IndexTab("Recent", front: true).zIndex(1)
+            BinderSheet {
+                if saves.isEmpty {
+                    Text("Your saves will show here.").font(.footnote).foregroundStyle(theme.inkMuted).padding(.top, 16)
+                }
+                ForEach(Array(saves.prefix(2).enumerated()), id: \.element.id) { i, save in
+                    if i > 0 { SheetRule() }
+                    SaveRow(save)
+                }
             }
-            ForEach(saves) { save in
-                SaveObject(save, compact: true).frame(width: 132).allowsHitTesting(false)
-            }
-            Spacer(minLength: 0)
         }
-        .padding(14)
+        .allowsHitTesting(false)
+        .padding(.horizontal, 14).padding(.top, 14)
         .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 230, alignment: .topLeading)
         .clipped()
         .background { TableBackground() }
         .environment(\.ks, theme)
-        // A miniature of the style: its type stops growing before it would break words in a 132 pt card.
+        // A miniature of the style: its type stops growing so two lines always show.
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityHidden(true)
     }

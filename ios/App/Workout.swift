@@ -59,8 +59,8 @@ struct GoalCard: View {
                 }
             }
         }
-        .padding(16)
-        .ksSurface()
+        .padding(12)
+        .sheetNote()
         .accessibilityElement(children: .contain)
     }
 }
