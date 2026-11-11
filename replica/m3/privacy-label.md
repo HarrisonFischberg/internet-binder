@@ -15,12 +15,15 @@ or its third-party partners access it for longer than needed to service the requ
 | Optional AI requests (title, caption, collection names…) | the AI provider **the person** chooses, with **their own key** | no | off by default; sent directly from the device to a service the person signed up for, under their own account; the developer has no access |
 | Lookups (place name and city, film title, book title) | OpenStreetMap, Wikidata, Open Library | no | off by default; anonymous requests, no cookies, no identifiers; the developer has no access |
 | Pictures of saves | the sites the saves came from | no | the same request a web page makes to show its picture |
+| Links you share (title, creator, picture, from the site's public link-preview data) | the website of that link | no | on by default, Settings → Links turns it off; anonymous requests, no cookies; the site sees the person's IP address; the developer has no access |
 | Maps and Directions | Apple Maps | no | Apple system service |
 | Sharing from Safari | nothing leaves; the page is read on the device | no | |
 
 No analytics, no crash reporting SDKs, no advertising, no tracking, no account, no Keepsake server.
-The app's own allowlist refuses any other host (`ios/KeepsakeKit/Sources/KeepsakeKit/Network.swift`,
-tested in `NetworkTests`).
+Only the AI provider and Lookups requests are checked against an allowlist built from settings
+(`ios/KeepsakeKit/Sources/KeepsakeKit/Network.swift`, tested in `NetworkTests`). Reading a shared link, showing a
+save's picture, and the Optional AI and Import recipe page reads go to whichever https site the link or picture
+names, so those sites see the person's IP address.
 
 ## Other App Store answers
 - **Tracking:** No (no `NSUserTrackingUsageDescription`, no IDFA).

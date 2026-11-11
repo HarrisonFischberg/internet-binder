@@ -53,7 +53,19 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
   `cdn.syndication.twimg.com` (and `publish.twitter.com` if that doesn't answer), fetched without cookies or
   your account, to save its text, creator, date, pictures and the post it quotes or answers.
   Settings → X → Read posts you share turns it off.
-Any other request is refused by the app itself (an allowlist built from your settings).
+- **The website of a link you share or save**, so that site sees your IP address. When you share a link into
+  Internet Binder (TikTok, YouTube, Reddit, a web page and so on), the app asks that link's site, without cookies,
+  for the public details it shows in link previews, to save its caption, creator and picture. Settings → Links →
+  Read links you share turns it off. Pictures on a save load from whatever site the save came from. With Optional
+  AI on, the shop or reference page the provider's search found, and a link you paste into Import recipe, are
+  read from their own sites too.
+
+The app has no list of every site it may contact. Only the requests for your AI provider (the provider's own
+address, or the https address you entered as a custom base URL) and for Lookups are checked against a list built
+from your settings. Reading a shared link, showing a save's picture, the Optional AI and Import recipe page
+reads, and the Instagram and X reads above each go to the site named by the link or picture concerned (or the
+fixed address above), under the setting named for them. These requests carry no cookies and no account or
+Internet Binder identifier.
 
 ## Sharing into Internet Binder
 When you share a screenshot or photo, its text is read on this device (Apple's Vision) and a small copy
