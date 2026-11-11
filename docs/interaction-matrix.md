@@ -37,6 +37,7 @@ Haptics never fire in the simulator, so every haptic below is also **device**.
 | Edit a save, Edit collection, Fix place | type, then Save or Cancel | sheet; Save disabled while the name is empty | Save and Cancel in the bar | soft on save | a swipe down no longer discards typed changes; a failed save keeps the sheet and the text, error buzz, alert | P0 | **done** |
 | Fix place fields | type a city, region, country | — | — | — | address autofill hints, words capitalised | P2 | **done** |
 | Buttons, chips, index tabs | tap | scale 0.97 (opacity under Reduce Motion), released when the finger leaves | — | selection on chips and segments only | disabled 45% | P0 | there |
+| Home: Dismiss on the Apple Intelligence note, Read imported saves | tap | — | — | — | the whole 44 pt takes the tap, not just the glyph or the words (the accessibility audit test flagged both) | P0 | **done** |
 | Stamp (Cooked, Been, Purchased, Done today) | tap: mark done | symbol swaps, the 🎉 card pops in the middle, the line says the verb | VoiceOver hint and announcement | heavy | Reduce Motion: fades, no tilt | P1 | there; device |
 | Undo toast | after any reversible act | rises above the tab bar, 8 s | Undo 44 pt; announced politely | rigid 0.5 on Undo | Reduce Motion: fade | P0 | there |
 | Tabs and navigation | tab bar, index tabs, back | system push and zoom; tab bar steps aside on a save | system back swipe untouched (the row swipe only takes leftward drags) | none | deep links `keepsake://save/<id>` | P0 | there |
