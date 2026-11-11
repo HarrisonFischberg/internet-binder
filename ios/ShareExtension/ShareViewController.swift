@@ -314,6 +314,7 @@ struct ShareCard: View {
         @Bindable var state = state
         ZStack {
             TableBackground()
+            OrbitLines()
             VStack(alignment: .leading, spacing: 16) {
                 status
                 if let save = state.save {
@@ -323,7 +324,8 @@ struct ShareCard: View {
                         SaveObject(save)
                             .frame(maxWidth: 210)
                             .frame(maxWidth: .infinity)
-                            .rotationEffect(.degrees(appeared || reduce ? 0 : -8))
+                            // Set down a touch askew, like the card in Chrome's popup.
+                            .rotationEffect(.degrees(appeared || reduce ? -2 : -8))
                             .scaleEffect(appeared || reduce ? 1 : 0.85)
                             .opacity(appeared ? 1 : 0)
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -664,5 +666,50 @@ struct ShareCard: View {
                 .ksSurface(radius: t.controlRadius.isInfinite ? 24 : t.controlRadius, scale: 0.75)
         }
         .buttonStyle(PressStyle())
+    }
+}
+
+/// The page behind Chrome's save popup (looks.css), in every look: faint orbit rings around a point low
+/// on the right, and a few stars that thin out toward the top. Still and drawn in one pass, no images
+/// (an extension has little memory); nothing for VoiceOver; plain with Increase Contrast.
+private struct OrbitLines: View {
+    @Environment(\.ks) private var t
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        if contrast != .increased {
+            Canvas { ctx, size in
+                let w = size.width, h = size.height
+                // Rings 140 pt apart, one point wide, in the ink at 5%: wider than tall, as the popup's are.
+                let centre = CGPoint(x: w * 0.78, y: h * 0.78), squash = (0.7 * h) / (1.2 * w)
+                var rings = Path()
+                var rx: CGFloat = 140
+                while rx < (w + h) * 2 {
+                    rings.addEllipse(in: CGRect(x: centre.x - rx, y: centre.y - rx * squash, width: rx * 2, height: rx * 2 * squash))
+                    rx += 140
+                }
+                ctx.stroke(rings, with: .color(t.ink.opacity(0.05)), lineWidth: 1)
+                // Two grids of dots, out of step with each other, fading in down the sheet.
+                let dark = scheme == .dark
+                for (step, start, r, color) in [(CGSize(width: 173, height: 151), CGPoint(x: 86, y: 75), 0.8, dark ? Color.white.opacity(0.55) : t.ink.opacity(0.3)),
+                                                (CGSize(width: 229, height: 197), CGPoint(x: 175, y: 187), 0.9, t.detail.opacity(0.5))] {
+                    var y = start.y
+                    while y < h {
+                        let fade = min(1, max(0, (y / h - 0.15) / 0.55))
+                        var dots = Path(), x = start.x
+                        while x < w {
+                            dots.addEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+                            x += step.width
+                        }
+                        ctx.fill(dots, with: .color(color.opacity(fade)))
+                        y += step.height
+                    }
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 }
