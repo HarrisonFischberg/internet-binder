@@ -91,36 +91,50 @@ struct HomeScreen: View {
             .accessibilityLabel(label)
     }
 
-    /// The index tabs: Recent in front, then every other section, scrolling sideways when they outrun the sheet.
-    private var tabs: some View {
-        ScrollView(.horizontal) {
-            HStack(alignment: .bottom, spacing: 4) {
-                IndexTab("Recent", front: true).accessibilityAddTraits([.isHeader, .isSelected])
-                if model.reviewCount > 0 {
-                    NavigationLink(value: Route.review) { IndexTab("To file", symbol: "tray", count: model.reviewCount) }
-                        .accessibilityHint("Opens the saves waiting for a collection")
-                }
-                ForEach(HomeSections.order(sectionOrder), id: \.self) { section in
-                    if section == "collections" {
-                        NavigationLink(value: Route.collections) { IndexTab("Collections", symbol: "bag", count: collectionCount) }
-                            .accessibilityHint("Opens Collections")
-                    } else {
-                        NavigationLink(value: Route.lifestyle) { IndexTab("Lifestyle", symbol: "sparkles", count: lifestyleKinds) }
-                            .accessibilityHint("Opens Lifestyle")
-                    }
-                }
-                ForEach(kinds, id: \.kind) { k in
-                    NavigationLink(value: Route.kind(k.kind)) {
-                        IndexTab(KindStyle(k.kind).plural, symbol: KindStyle(k.kind).symbol, count: k.count, kind: k.kind)
-                    }
-                    .accessibilityHint("Opens \(KindStyle(k.kind).plural)")
-                }
+    /// The index tabs: Recent in front, then every other section, scrolling sideways when they outrun the
+    /// sheet. At accessibility text sizes the others wrap onto rows above Recent, so none is off the screen.
+    @ViewBuilder private var tabs: some View {
+        let recent = IndexTab("Recent", front: true).accessibilityAddTraits([.isHeader, .isSelected])
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                Flow(spacing: 4) { otherTabs }.buttonStyle(PressStyle())
+                recent
             }
-            .buttonStyle(PressStyle())
-            .padding(.trailing, KSBinder.outer)
+        } else {
+            ScrollView(.horizontal) {
+                HStack(alignment: .bottom, spacing: 4) {
+                    recent
+                    otherTabs
+                }
+                .buttonStyle(PressStyle())
+                .padding(.trailing, KSBinder.outer)
+            }
+            .scrollIndicators(.hidden)
+            .padding(.trailing, -KSBinder.outer)
         }
-        .scrollIndicators(.hidden)
-        .padding(.trailing, -KSBinder.outer)
+    }
+
+    /// What waits to be filed, the two sections in their kept order, then each kind that has saves.
+    @ViewBuilder private var otherTabs: some View {
+        if model.reviewCount > 0 {
+            NavigationLink(value: Route.review) { IndexTab("To file", symbol: "tray", count: model.reviewCount) }
+                .accessibilityHint("Opens the saves waiting for a collection")
+        }
+        ForEach(HomeSections.order(sectionOrder), id: \.self) { section in
+            if section == "collections" {
+                NavigationLink(value: Route.collections) { IndexTab("Collections", symbol: "bag", count: collectionCount) }
+                    .accessibilityHint("Opens Collections")
+            } else {
+                NavigationLink(value: Route.lifestyle) { IndexTab("Lifestyle", symbol: "sparkles", count: lifestyleKinds) }
+                    .accessibilityHint("Opens Lifestyle")
+            }
+        }
+        ForEach(kinds, id: \.kind) { k in
+            NavigationLink(value: Route.kind(k.kind)) {
+                IndexTab(KindStyle(k.kind).plural, symbol: KindStyle(k.kind).symbol, count: k.count, kind: k.kind)
+            }
+            .accessibilityHint("Opens \(KindStyle(k.kind).plural)")
+        }
     }
 
     private var sheet: some View {

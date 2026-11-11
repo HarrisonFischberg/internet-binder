@@ -262,7 +262,7 @@ public struct SaveRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(save.title).font(.body.weight(.semibold)).foregroundStyle(t.ink)
-                    .lineLimit(typeSize.isAccessibilitySize ? nil : ticked == nil ? 2 : 3).multilineTextAlignment(.leading)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 3).multilineTextAlignment(.leading)
                 // The kind's word steps aside (its symbol stays) before a long fact would be cut short.
                 ViewThatFits(in: .horizontal) {
                     facts(k, word: true)
@@ -397,7 +397,8 @@ public struct NeedsCollectionStrip: View {
             HStack(spacing: 10) {
                 Image(systemName: "tray.full").font(.body.weight(.semibold)).foregroundStyle(t.accent).accessibilityHidden(true)
                 Text(count == 1 ? "1 save needs a collection" : "\(count) saves need a collection")
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).fixedSize(horizontal: false, vertical: true)
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if !typeSize.isAccessibilitySize { Spacer(minLength: 4) }
             Text(count == 1 ? "File it" : "File them").font(.subheadline.weight(.semibold)).foregroundStyle(t.onHighlight)
