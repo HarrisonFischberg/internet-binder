@@ -43,8 +43,8 @@ Shape rule: tabs round their top corners only (10); the sheet 14, square where t
 pictures 6; notes 10; controls are capsules. Nothing else has a corner of its own.
 
 At accessibility text sizes the punched margin folds away so words get the sheet's full width, names
-wrap instead of truncating, notes beside a tab move onto the sheet, and "File them" drops under its
-sentence.
+wrap instead of truncating, notes beside a tab move onto the sheet, a page's controls sit above its
+tab, Home's tabs wrap onto rows above Recent, and "File them" drops under its sentence.
 
 ## Type
 
