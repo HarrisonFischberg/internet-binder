@@ -95,6 +95,50 @@ final class SelectionTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Café Azulejo"].waitForExistence(timeout: 5))
     }
 
+    /// The same swipe on an index line in any list of saves (a Lifestyle view here); Undo brings it back
+    /// closed, so a tap opens it.
+    func testSwipeASaveLineToDelete() {
+        let app = launch()
+        openRecipes(app)
+        let line = card(app, "Brown butter pasta")
+        line.swipeLeft(velocity: .fast)
+        XCTAssertTrue(app.staticTexts["Moved to Trash"].waitForExistence(timeout: 5))
+        XCTAssertFalse(line.exists)
+        app.buttons["Undo"].tap()
+        XCTAssertTrue(line.waitForExistence(timeout: 5))
+        line.tap()
+        XCTAssertTrue(app.buttons["Cooked"].waitForExistence(timeout: 5), "the line opens its save")
+    }
+
+    /// Typed changes aren't lost to a swipe down on the Edit sheet; untouched, the sheet swipes away as usual.
+    func testEditSheetKeepsWhatYouTyped() {
+        let app = launch()
+        openRecipes(app)
+        card(app, "Brown butter pasta").tap()
+        let bar = app.navigationBars["Edit"]
+        func openEdit() {
+            app.buttons["More"].firstMatch.tap()
+            app.buttons["Edit"].firstMatch.tap()
+            XCTAssertTrue(bar.waitForExistence(timeout: 5))
+        }
+        func pullDown() {
+            let top = bar.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            top.press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 600)), withVelocity: .fast, thenHoldForDuration: 0)
+        }
+        openEdit()
+        pullDown()
+        XCTAssertTrue(bar.waitForNonExistence(timeout: 5), "nothing typed: it swipes away")
+        openEdit()
+        let title = app.descendants(matching: .any).matching(NSPredicate(format: "value BEGINSWITH 'Brown butter pasta'")).firstMatch
+        title.tap()
+        title.typeText(" again")
+        pullDown()
+        sleep(1)
+        XCTAssertTrue(bar.exists, "typed text keeps the sheet up")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(bar.waitForNonExistence(timeout: 5))
+    }
+
     func testHalfSwipeShowsDeleteWithoutOpeningTheRow() {
         let app = launch()
         go(app, "Places")
