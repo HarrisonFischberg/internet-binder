@@ -73,11 +73,13 @@ test('target progress: best so far, reached on the first check-in that hits it',
   assert.equal(p.best.id, b.id);
   assert.equal(p.summary, 'Best so far 3×10 · aiming for 3×12');
   assert.ok(Math.abs(p.ring - 30 / 36) < 1e-9);
-  const c = makeCheckin({ goalId: 't', at: at('2026-10-09'), result: { sets: 3, reps: 12 } });
+  const c = makeCheckin({ goalId: 't', at: at('2026-10-09', 23), result: { sets: 3, reps: 12 } });
   p = goalProgress(g, [a, b, c], now('2026-10-10'));
   assert.equal(p.status, 'finished');
   assert.equal(p.reachedBy.id, c.id);
   assert.equal(p.ring, 1);
+  // Your own calendar day, like every other date here (an evening check-in is not tomorrow's).
+  assert.equal(p.summary, 'Reached on 2026-10-09');
   assert.equal(resultText({ sets: 3, durationSeconds: 45 }), '3×45s');
   assert.equal(goalProgress(g, [], now('2026-10-10')).summary, 'No check-ins yet');
 });

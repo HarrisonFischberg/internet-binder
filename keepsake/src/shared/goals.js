@@ -170,7 +170,7 @@ export function goalProgress(goal, checkins = [], now = new Date()) {
   const goalScore = durationSeconds ? sets * durationSeconds : sets * reps;
   const next = planFor(weekIndex + 1);
   let summary;
-  if (reachedBy) summary = `Reached on ${reachedBy.at.slice(0, 10)}`;
+  if (reachedBy) summary = `Reached on ${localDay(new Date(reachedBy.at))}`;
   else if (best) summary = `Best so far ${resultText(best.result)} · aiming for ${setsTimes(sets, reps, durationSeconds)}`;
   else summary = mine.length ? `${mine.length} check-in${mine.length === 1 ? '' : 's'} so far` : 'No check-ins yet';
   return {
