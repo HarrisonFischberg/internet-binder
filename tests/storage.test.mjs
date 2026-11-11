@@ -390,6 +390,20 @@ test('import replace that stops halfway keeps the library that was there', async
   assert.ok(await dst.store.getGoal(goal.id), 'goals are still there');
 });
 
+test('import: a goal on a second copy of a link in the same file follows it to the copy that is kept', async () => {
+  const a = await fresh();
+  await a.store.addItem({ title: 'Leg day', url: 'https://fit.example/legs', kind: 'workout' });
+  const copy = await a.store.addItem({ title: 'Leg day (copy)', url: 'https://fit.example/legs', kind: 'workout' });
+  const g = await a.store.createGoal({ itemId: copy.id, kind: 'frequency', spec: { perWeek: 2, weeks: 2 } });
+  await a.store.addCheckin(g.id, {});
+  const b = await fresh();
+  const r = await b.store.importJSON(JSON.parse(JSON.stringify(await a.store.exportJSON())), { mode: 'replace' });
+  assert.equal(r.addedItems, 1);
+  assert.equal(r.addedGoals, 1);
+  assert.equal(r.addedCheckins, 1);
+  assert.equal((await b.store.getGoals())[0].itemId, (await b.store.getItems())[0].id);
+});
+
 test('import replace removes what the file does not have, including the Trash, goals and check-ins', async () => {
   const src = await fresh();
   await src.store.addItem({ title: 'From backup', url: 'https://a.example/b' });

@@ -1152,7 +1152,7 @@ export function createStore(kv, db = memoryRecordBackend()) {
           if (!item.understoodAt && !item.deletedAt) item.needsAi = true;
           newItems.push(item);
           ids.add(item.id);
-          if (item.urlKey && !item.deletedAt) keys.add(item.urlKey);
+          if (item.urlKey && !item.deletedAt) { keys.add(item.urlKey); byKey.set(item.urlKey, item.id); }
           addedItems++;
         }
         if ((replacing ? 0 : await db.count('items')) + newItems.length > LIMITS.maxItems) throw new Error('Item limit reached');
