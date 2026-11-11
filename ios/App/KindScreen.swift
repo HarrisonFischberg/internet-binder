@@ -381,7 +381,11 @@ struct RunAIOnImportedButton: View {
         let onDevice = model.appleAI == .ready && !model.aiBackup
         let saves = "\(waiting.count) imported \(waiting.count == 1 ? "save" : "saves")"
         if model.aiReady && !waiting.isEmpty {
-            Button(label ?? (onDevice ? "Read \(saves) now" : "Run AI on \(saves)"), systemImage: "sparkles") { confirming = true }
+            Button { confirming = true } label: {
+                // A whole 44 pt to press, not just the words.
+                Label(label ?? (onDevice ? "Read \(saves) now" : "Run AI on \(saves)"), systemImage: "sparkles")
+                    .frame(minHeight: 44).contentShape(Rectangle())
+            }
                 .disabled(model.aiRun != nil)
                 .accessibilityHint(onDevice ? "Apple Intelligence reads them all on this iPhone now, rather than a few each time you open the app." : "Your AI provider reads the saves you imported, which it hasn't seen yet.")
                 .confirmationDialog(onDevice ? "Read \(saves) now?" : "Run AI on \(saves)?", isPresented: $confirming, titleVisibility: .visible) {
