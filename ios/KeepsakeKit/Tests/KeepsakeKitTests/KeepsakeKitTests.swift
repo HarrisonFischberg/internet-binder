@@ -247,6 +247,17 @@ struct CaptureTests {
         #expect(try await lib.search("trowel").items.isEmpty)
     }
 
+    /// A page's search bar (a collection, a Lifestyle view, Places) looks through that page's saves only.
+    @Test func searchWithinOnePage() async throws {
+        let lib = try library()
+        let trowel = try await lib.capture(url: "https://example.com/trowel", title: "Garden trowel")
+        let gloves = try await lib.capture(url: "https://example.com/gloves", title: "Garden gloves")
+        #expect(Set(try await lib.search("garden").items.map(\.id)) == [trowel.id, gloves.id])
+        #expect(try await lib.search("garden", within: [gloves.id]).items.map(\.id) == [gloves.id])
+        #expect(try await lib.search("trowel", within: [gloves.id]).items.isEmpty)
+        #expect(try await lib.search("garden", within: []).items.isEmpty)
+    }
+
     @Test func bareLinkStaysALink() async throws {
         let r = try await library().capture(product: Library.sharedProduct(url: "https://example.com/", title: "Example Domain", text: nil))
         #expect(r.save?.kind == "link")

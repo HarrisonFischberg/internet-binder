@@ -41,6 +41,42 @@ final class LifestyleTests: XCTestCase {
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Push-up ladder'")).firstMatch.waitForExistence(timeout: 3))
     }
 
+    /// Every Lifestyle view, collection and Places has its own search bar that looks through that page only.
+    func testSearchInsideALifestyleView() {
+        let app = launch()
+        app.tabBars.buttons["Library"].tap()
+        let recipes = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Recipes,'")).firstMatch
+        XCTAssertTrue(recipes.waitForExistence(timeout: 5))
+        for _ in 0..<5 where !recipes.isHittable { app.swipeUp() }
+        recipes.tap()
+        let search = app.textFields["pageSearch"]
+        XCTAssertTrue(search.waitForExistence(timeout: 3))
+        search.tap()
+        search.typeText("sage")
+        let pasta = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brown butter pasta'")).firstMatch
+        XCTAssertTrue(pasta.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Morning mobility'")).firstMatch.exists)
+        if let folder = ProcessInfo.processInfo.environment["KEEPSAKE_SHOTS"] {
+            try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("page-search-recipes.png"))
+        }
+        // Only this page: a place doesn't turn up in Recipes.
+        app.buttons["Clear search"].tap()
+        search.tap()
+        search.typeText("azulejo")
+        XCTAssertTrue(app.staticTexts["Nothing in Recipes matches “azulejo”."].waitForExistence(timeout: 3))
+        search.typeText("\n") // Search key puts the keyboard away so the tab bar shows again
+
+        app.tabBars.buttons["Places"].tap()
+        let places = app.textFields["pageSearch"]
+        XCTAssertTrue(places.waitForExistence(timeout: 5))
+        places.tap()
+        places.typeText("ramen")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'No places match'")).firstMatch.waitForExistence(timeout: 3),
+                      "Ramen Kiri waits in Review, so the list has no match")
+        app.buttons["Review 1"].tap()
+        XCTAssertTrue(app.buttons["Fix Ramen Kiri"].waitForExistence(timeout: 3))
+    }
+
     func testPlacesReviewFixMovesItToItsState() {
         let app = launch()
         app.tabBars.buttons["Places"].tap()
