@@ -8,6 +8,7 @@ struct KindScreen: View {
     let kind: String
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.ks) private var t
     /// Places only: the Map button next to the title swaps the cards for a map (kept on this iPhone).
     @AppStorage("placesShowMap") private var showMap = false
@@ -68,10 +69,10 @@ struct KindScreen: View {
             }
             if selecting {
                 SaveSelectionBar(all: found.map(\.id), selected: $selected, selecting: $selecting)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(KSMotion.rise(reduce: reduce))
             }
         }
-        .animation(KSMotion.settle, value: selecting)
+        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Sort orders the cards, so like Select it steps aside while the map is showing.
@@ -400,7 +401,11 @@ struct RunAIOnImportedButton: View {
         let onDevice = model.appleAI == .ready && !model.aiBackup
         let saves = "\(waiting.count) imported \(waiting.count == 1 ? "save" : "saves")"
         if model.aiReady && !waiting.isEmpty {
-            Button(label ?? (onDevice ? "Read \(saves) now" : "Run AI on \(saves)"), systemImage: "sparkles") { confirming = true }
+            Button { confirming = true } label: {
+                // A whole 44 pt to press, not just the words.
+                Label(label ?? (onDevice ? "Read \(saves) now" : "Run AI on \(saves)"), systemImage: "sparkles")
+                    .frame(minHeight: 44).contentShape(Rectangle())
+            }
                 .disabled(model.aiRun != nil)
                 .accessibilityHint(onDevice ? "Apple Intelligence reads them all on this iPhone now, rather than a few each time you open the app." : "Your AI provider reads the saves you imported, which it hasn't seen yet.")
                 .confirmationDialog(onDevice ? "Read \(saves) now?" : "Run AI on \(saves)?", isPresented: $confirming, titleVisibility: .visible) {

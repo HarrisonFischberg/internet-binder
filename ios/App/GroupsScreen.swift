@@ -7,6 +7,7 @@ import KeepsakeUI
 struct LifestyleScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var selecting = false
     @State private var selected: Set<String> = []
     @State private var query = ""
@@ -55,10 +56,10 @@ struct LifestyleScreen: View {
                     .disabled(inside == 0)
                     .keyboardShortcut(.delete, modifiers: [])
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(KSMotion.rise(reduce: reduce))
             }
         }
-        .animation(KSMotion.settle, value: selecting)
+        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if model.aiReady && !lifestyle.isEmpty && !selecting {

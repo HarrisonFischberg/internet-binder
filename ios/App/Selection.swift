@@ -243,7 +243,11 @@ struct SwipeToDelete: ViewModifier {
     @State private var sideways: Bool?
     /// While a sideways swipe is on, the row's own tap is off: letting go over the row must not open it.
     @State private var swiping = false
+    /// Far enough that letting go deletes: one tick as it crosses, and the bin grows, so a full swipe is never a surprise.
+    @State private var armed = false
+    @GestureState private var touching = false
     private let reveal: CGFloat = 92
+    private var commit: CGFloat { min(width * 0.55, 240) }
 
     func body(content: Content) -> some View {
         ZStack(alignment: .trailing) {
@@ -254,6 +258,7 @@ struct SwipeToDelete: ViewModifier {
                     // Icon and word, like the system's swipe actions.
                     VStack(spacing: 4) {
                         Image(systemName: "trash").font(.title3.weight(.semibold))
+                            .scaleEffect(armed && !reduce ? 1.2 : 1).animation(KSMotion.press, value: armed)
                         Text("Delete").font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     // Paper on the stamp colour: white fails on dark mode's light coral.
@@ -276,24 +281,39 @@ struct SwipeToDelete: ViewModifier {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .simultaneousGesture(
             DragGesture(minimumDistance: 16)
+                .updating($touching) { _, on, _ in on = true }
                 .onChanged { v in
                     if sideways == nil { sideways = abs(v.translation.width) > abs(v.translation.height) * 1.4 }
                     guard sideways == true else { return }
                     swiping = true
                     let start: CGFloat = offset <= -reveal + 1 && v.translation.width > 0 ? -reveal : 0
                     offset = min(0, start + v.translation.width)
+                    if (-offset > commit) != armed {
+                        armed.toggle()
+                        Haptic.detent()
+                    }
                 }
                 .onEnded { v in
                     defer {
                         sideways = nil
+                        armed = false
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { swiping = false }
                     }
                     guard sideways == true else { return }
                     // Capped, so a full swipe on a wide iPad row is no longer than on a phone.
-                    if -offset > min(width * 0.55, 240) || v.predictedEndTranslation.width < -min(width * 0.8, 360) { trash() }
+                    if -offset > commit || v.predictedEndTranslation.width < -min(width * 0.8, 360) { trash() }
                     else { settle(-offset > reveal * 0.6 ? -reveal : 0) }
                 }
         )
+        // The system took the touch (a scroll, the Home gesture): no `onEnded` comes, so the row settles itself.
+        .onChange(of: touching) { _, on in
+            guard !on else { return }
+            DispatchQueue.main.async {
+                guard sideways != nil else { return }
+                sideways = nil; armed = false; swiping = false
+                settle(-offset > reveal * 0.6 ? -reveal : 0)
+            }
+        }
         .accessibilityAction(named: label) { action() }
     }
 
@@ -313,7 +333,7 @@ extension LibraryModel {
     /// Moves saves to the Trash, with one Undo for all of them.
     func trash(ids: [String]) async {
         guard let library, !ids.isEmpty else { return }
-        try? await library.trash(ids)
+        do { try await library.trash(ids) } catch { return failed("Couldn't move to Trash. Try again.") }
         Haptic.trashed()
         refresh()
         show(ids.count == 1 ? "Moved to Trash" : "Moved \(ids.count) saves to Trash") { [weak self] in
@@ -322,10 +342,16 @@ extension LibraryModel {
         }
     }
 
+    /// Nothing changed: the error buzz and a sentence, never the success ones.
+    func failed(_ text: String) {
+        Haptic.refused()
+        show(text)
+    }
+
     /// Puts saves in a collection or Lifestyle view (Chrome's Move to…).
     func put(_ ids: [String], in d: Destination) async {
         guard let library, !ids.isEmpty else { return }
-        let name = (try? await library.put(ids, in: d.value)) ?? d.label
+        guard let name = try? await library.put(ids, in: d.value) else { return failed("Couldn't move to \(d.label). Try again.") }
         Haptic.dropped()
         refresh()
         show(ids.count == 1 ? "Moved to \(name)" : "Moved \(ids.count) saves to \(name)")

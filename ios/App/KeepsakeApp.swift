@@ -375,16 +375,7 @@ final class LibraryModel {
         }
     }
 
-    func trash(_ save: Save) async {
-        guard let library else { return }
-        try? await library.trash([save.id])
-        Haptic.trashed()
-        refresh()
-        show("Moved to Trash") { [weak self] in
-            try? await library.restore([save.id])
-            self?.refresh()
-        }
-    }
+    func trash(_ save: Save) async { await trash(ids: [save.id]) }
 
     func setDone(_ save: Save, _ done: Bool) async {
         try? await library?.update(save.id, ["status": done ? "done" : "saved"])

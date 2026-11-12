@@ -85,7 +85,7 @@ struct SearchScreen: View {
                 }
                 .font(.body.weight(.medium)).foregroundStyle(t.accent)
                 .frame(minHeight: 44)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .transition(reduce ? .opacity : .move(edge: .trailing).combined(with: .opacity))
             }
         }
         .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: focused)

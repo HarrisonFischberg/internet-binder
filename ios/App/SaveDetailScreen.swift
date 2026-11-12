@@ -76,7 +76,9 @@ struct SaveDetailScreen: View {
                         ForEach(destinations) { d in
                             Button(d.label) {
                                 Task {
-                                    let name = (try? await model.library?.put([current.id], in: d.value, learn: "strong")) ?? d.label
+                                    guard let name = try? await model.library?.put([current.id], in: d.value, learn: "strong") else {
+                                        return model.failed("Couldn't move to \(d.label). Try again.")
+                                    }
                                     Haptic.dropped()
                                     model.refresh()
                                     model.show("Moved to \(name)")
@@ -773,6 +775,7 @@ struct EditSaveSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
     @State private var note = ""
+    @State private var failed = false
     var body: some View {
         NavigationStack {
             Form {
@@ -785,7 +788,11 @@ struct EditSaveSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         Task {
-                            try? await model.library?.update(save.id, ["title": title, "note": note])
+                            do { try await model.library?.update(save.id, ["title": title, "note": note]) } catch {
+                                Haptic.refused()
+                                failed = true
+                                return
+                            }
                             model.refresh()
                             Haptic.settled()
                             dismiss()
@@ -795,8 +802,11 @@ struct EditSaveSheet: View {
                 }
             }
             .onAppear { title = save.title; note = save.note ?? "" }
+            .alert("Couldn't save. Try again.", isPresented: $failed) {}
         }
         .presentationDetents([.medium, .large])
+        // What you typed isn't lost to a stray swipe down: Cancel or Save closes it.
+        .interactiveDismissDisabled(title != save.title || note != (save.note ?? ""))
     }
 }
 

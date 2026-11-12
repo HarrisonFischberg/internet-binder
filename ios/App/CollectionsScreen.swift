@@ -7,6 +7,7 @@ import KeepsakeUI
 struct CollectionsScreen: View {
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.ks) private var t
     @State private var collections: [SaveCollection] = []
     @State private var naming = false
@@ -42,9 +43,9 @@ struct CollectionsScreen: View {
             }
             .clearsTabBar()
             .scrollDismissesKeyboard(.immediately)
-            if selecting { selectionBar.transition(.move(edge: .bottom).combined(with: .opacity)) }
+            if selecting { selectionBar.transition(KSMotion.rise(reduce: reduce)) }
         }
-        .animation(KSMotion.settle, value: selecting)
+        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !selecting {
@@ -105,6 +106,7 @@ struct CollectionScreen: View {
     let name: String
     let zoom: Namespace.ID
     @Environment(LibraryModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.ks) private var t
     @Environment(\.dismiss) private var dismiss
     @State private var editing = false
@@ -148,10 +150,10 @@ struct CollectionScreen: View {
             .scrollDismissesKeyboard(.immediately)
             if selecting {
                 SaveSelectionBar(all: shown.map(\.id), selected: $selected, selecting: $selecting)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(KSMotion.rise(reduce: reduce))
             }
         }
-        .animation(KSMotion.settle, value: selecting)
+        .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !selecting {
@@ -195,6 +197,7 @@ struct CollectionEditor: View {
     @State private var pinned = false
     @State private var words: CollectionWords?
     @State private var allBuiltIn = false
+    @State private var failed = false
 
     var body: some View {
         NavigationStack {
@@ -217,7 +220,11 @@ struct CollectionEditor: View {
                     Button("Save") {
                         Task {
                             let words = keywords.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                            try? await model.library?.updateCollection(collection.id, ["name": name, "keywords": words, "pinned": pinned])
+                            do { try await model.library?.updateCollection(collection.id, ["name": name, "keywords": words, "pinned": pinned]) } catch {
+                                Haptic.refused()
+                                failed = true
+                                return
+                            }
                             model.refresh()
                             Haptic.settled()
                             dismiss()
@@ -233,7 +240,10 @@ struct CollectionEditor: View {
                 pinned = collection.pinned ?? false
             }
             .task { words = try? await model.library?.words(forCollection: collection.id) }
+            .alert("Couldn't save. Try again.", isPresented: $failed) {}
         }
+        // What you typed isn't lost to a stray swipe down: Cancel or Save closes it.
+        .interactiveDismissDisabled(name != collection.name || keywords != (collection.keywords ?? []).joined(separator: ", ") || pinned != (collection.pinned ?? false))
     }
 
     private var typed: Set<String> {

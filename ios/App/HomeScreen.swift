@@ -220,7 +220,7 @@ struct HomeScreen: View {
                 withAnimation(reduce ? nil : .snappy) { appleNoteSeen = model.appleAI.rawValue }
             } label: {
                 Image(systemName: "xmark").font(.footnote.weight(.bold)).foregroundStyle(t.inkMuted)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss")
