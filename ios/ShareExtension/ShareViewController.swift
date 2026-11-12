@@ -78,7 +78,13 @@ final class ShareState {
             let result = try await library.capture(product: product)
             if let dup = result.duplicateOf {
                 save = dup
-                destinationLabel = result.destination ?? KindStyle(dup.kind).label
+                // Where it lives: its Lifestyle view, its collection, or Review while it has no home yet.
+                // (capture.js sends an empty collection name for those last two, so it can't be used as is.)
+                let here = dup.hasOwnView ? "kind:\(dup.kind)" : dup.collectionId
+                let homes = (try? await library.destinations()) ?? []
+                destinationLabel = homes.first(where: { $0.value == here })?.label
+                    ?? result.destination.flatMap { $0.isEmpty ? nil : $0 }
+                    ?? (dup.hasOwnView ? KindStyle(dup.kind).plural : "Review")
                 phase = .duplicate
                 return
             }
