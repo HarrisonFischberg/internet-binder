@@ -10,7 +10,10 @@ struct LifestyleScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @State private var selecting = false
     @State private var selected: Set<String> = []
+    @State private var query = ""
+    @State private var matches: PageMatches?
     private var lifestyle: [Save] { model.index.lifestyle }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -18,7 +21,13 @@ struct LifestyleScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ScreenHeader(title: "Lifestyle", subtitle: "Places, recipes, workouts and more")
-                    if !model.index.lifestyle.isEmpty {
+                    // Searches every Lifestyle save. Select ticks whole views, so the box steps aside while it's on.
+                    if !lifestyle.isEmpty && !selecting {
+                        PageSearchField(placeholder: "Search Lifestyle", query: $query)
+                    }
+                    if !lifestyle.isEmpty && searching && !selecting {
+                        PageSearchResults(query: query, matches: matches, saves: lifestyle, place: "Lifestyle", zoom: zoom)
+                    } else if !lifestyle.isEmpty {
                         LifestyleTiles(selection: selecting ? $selected : nil) { kind in
                             selected = [kind]
                             selecting = true
@@ -30,6 +39,7 @@ struct LifestyleScreen: View {
                 .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
             }
             .clearsTabBar()
+            .scrollDismissesKeyboard(.immediately)
             if selecting {
                 let inside = lifestyle.filter { selected.contains($0.kind) }.count
                 SelectionBar(noun: { $0 == 1 ? "view" : "views" }, all: KindStyle.lifestyle.filter { k in lifestyle.contains { $0.kind == k } }, selected: $selected) {
@@ -55,11 +65,12 @@ struct LifestyleScreen: View {
             if model.aiReady && !lifestyle.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: lifestyle, what: "all \(lifestyle.count) Lifestyle saves") }
             }
-            if !lifestyle.isEmpty {
+            if !lifestyle.isEmpty && !searching {
                 ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
             }
         }
         .onChange(of: lifestyle.isEmpty) { _, empty in if empty { selecting = false } }
+        .pageSearch(query, in: lifestyle, matches: $matches)
     }
 }
 

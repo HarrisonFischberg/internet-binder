@@ -14,7 +14,10 @@ struct CollectionsScreen: View {
     @State private var newName = ""
     @State private var selecting = false
     @State private var selected: Set<String> = []
+    @State private var query = ""
+    @State private var matches: PageMatches?
     private var collected: [Save] { model.index.collected }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -22,14 +25,24 @@ struct CollectionsScreen: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
-                    CollectionTiles(collections: collections, onNew: { naming = true }, selection: selecting ? $selected : nil) { id in
-                        selected = [id]
-                        selecting = true
+                    // Searches the saves in every collection (a collection's name counts too). Select
+                    // ticks whole collections, so the box steps aside while it's on.
+                    if !collected.isEmpty && !selecting {
+                        PageSearchField(placeholder: "Search your collections", query: $query)
+                    }
+                    if searching && !selecting {
+                        PageSearchResults(query: query, matches: matches, saves: collected, place: "your collections", zoom: zoom)
+                    } else {
+                        CollectionTiles(collections: collections, onNew: { naming = true }, selection: selecting ? $selected : nil) { id in
+                            selected = [id]
+                            selecting = true
+                        }
                     }
                 }
                 .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
             }
             .clearsTabBar()
+            .scrollDismissesKeyboard(.immediately)
             if selecting { selectionBar.transition(KSMotion.rise(reduce: reduce)) }
         }
         .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
@@ -41,10 +54,11 @@ struct CollectionsScreen: View {
             if model.aiReady && !collected.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: collected, what: "all \(collected.count) saves in Collections") }
             }
-            if !collections.isEmpty {
+            if !collections.isEmpty && !searching {
                 ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
             }
         }
+        .pageSearch(query, in: collected, matches: $matches)
         .alert("New collection", isPresented: $naming) {
             TextField("Name", text: $newName)
             Button("Cancel", role: .cancel) { newName = "" }
@@ -98,30 +112,44 @@ struct CollectionScreen: View {
     @State private var editing = false
     @State private var selecting = false
     @State private var selected: Set<String> = []
+    @State private var query = ""
+    @State private var matches: PageMatches?
     @AppStorage("saveSorts") private var sorts = SaveSorts()
     private var saves: [Save] { model.index.collection(id) }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         let saves = sorts[view: "c:\(id)"].apply(self.saves)
         let toBuy = saves.filter { $0.purchased != true }
         let bought = saves.filter { $0.purchased == true }
+        let shown = searching ? (matches?.pick(saves) ?? []) : toBuy + bought
         ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     ScreenHeader(title: name, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
-                    if saves.isEmpty { EmptyNote(symbol: "bag", text: "Nothing here yet. Move a save here from Review or its own screen.") }
-                    SaveGrid(saves: toBuy, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
-                    if !bought.isEmpty {
-                        Text("Purchased").font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
-                        SaveGrid(saves: bought, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                    if saves.isEmpty {
+                        EmptyNote(symbol: "bag", text: "Nothing here yet. Move a save here from Review or its own screen.")
+                    } else {
+                        PageSearchField(placeholder: "Search \(name)", query: $query)
+                    }
+                    if searching {
+                        PageSearchResults(query: query, matches: matches, saves: saves, place: name, zoom: zoom,
+                                          selecting: selecting, selected: $selected, onSelect: startSelecting)
+                    } else {
+                        SaveGrid(saves: toBuy, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                        if !bought.isEmpty {
+                            Text("Purchased").font(KSFont.name(.title2)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                            SaveGrid(saves: bought, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                        }
                     }
                 }
                 .padding(.horizontal, 18).padding(.bottom, selecting ? 140 : 40)
             }
             .clearsTabBar()
+            .scrollDismissesKeyboard(.immediately)
             if selecting {
-                SaveSelectionBar(all: (toBuy + bought).map(\.id), selected: $selected, selecting: $selecting)
+                SaveSelectionBar(all: shown.map(\.id), selected: $selected, selecting: $selecting)
                     .transition(KSMotion.rise(reduce: reduce))
             }
         }
@@ -142,6 +170,7 @@ struct CollectionScreen: View {
             }
         }
         .onChange(of: saves.isEmpty) { _, empty in if empty { selecting = false } }
+        .pageSearch(query, in: self.saves, matches: $matches)
         .sheet(isPresented: $editing) {
             if let c = try? model.library?.collections().first(where: { $0.id == id }) {
                 CollectionEditor(collection: c) { deleted in if deleted { dismiss() } }

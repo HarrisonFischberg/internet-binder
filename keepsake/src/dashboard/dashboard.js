@@ -645,6 +645,10 @@ function renderToolbar() {
   document.title = `${title} · Internet Binder`;
   if (isGrid) {
     $('searchInput').value = state.search;
+    // On a collection or Lifestyle view the box searches that page only, so it says so.
+    const scoped = r.name === 'c' || r.name === 'kind';
+    $('searchInput').placeholder = scoped ? `Search ${title}  ( / )` : 'Search your saves  ( / )';
+    $('searchInput').setAttribute('aria-label', scoped ? `Search ${title}` : 'Search');
     // Typing in Home's search box lands here; keep the caret in the toolbar's box.
     if (state.focusSearch) {
       state.focusSearch = false;
