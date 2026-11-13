@@ -132,6 +132,8 @@ final class LibraryModel {
     var workShowing = false
     /// A file is being imported (read and merged): the progress screen says so while it takes a while.
     var importing = false
+    /// An import that failed or was refused while Settings is up: the sheet covers the toast, so it says so in an alert.
+    var settingsProblem: String?
     /// Which screen presents it: Settings while its sheet is open (a cover can't go over a sheet from below).
     var workHost = WorkHost.root
     enum WorkHost { case root, settings }
@@ -338,7 +340,7 @@ final class LibraryModel {
 
     func importFile(_ url: URL) async {
         guard let library else { return }
-        guard !importing else { return show("An import is already running") }
+        guard !importing else { return importFailed("An import is already running") }
         let scoped = url.startAccessingSecurityScopedResource()
         importing = true
         workEnd = nil
@@ -365,10 +367,15 @@ final class LibraryModel {
             if workShowing { workEnd = WorkEnd(title: "All done", text: text) }
             Haptic.saved()
         } catch {
-            show(error.localizedDescription)
+            importFailed(error.localizedDescription)
             if workShowing { workEnd = WorkEnd(title: "Stopped", text: error.localizedDescription) }
-            Haptic.refused()
         }
+    }
+
+    private func importFailed(_ text: String) {
+        show(text)
+        if workHost == .settings && !workShowing { settingsProblem = text }
+        Haptic.refused()
     }
 
     /// Saves a link from the clipboard the way the Share Sheet does.

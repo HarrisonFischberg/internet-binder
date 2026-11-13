@@ -136,6 +136,8 @@ struct SettingsScreen: View {
             }
             // Settings is a sheet over the app's toast: a failed export says so here.
             .alert(exportFailed ?? "", isPresented: Binding(get: { exportFailed != nil }, set: { if !$0 { exportFailed = nil } })) {}
+            // The same for an import that fails fast or is refused (LibraryModel.importFile).
+            .alert(model.settingsProblem ?? "", isPresented: Binding(get: { model.settingsProblem != nil }, set: { if !$0 { model.settingsProblem = nil } })) {}
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { r in if case .success(let url) = r { Task { await model.importFile(url) } } }
             .sheet(isPresented: $erasing) { EraseSheet() }
             // The progress screen opens over Settings while it's up (Fix everything, turning sync on).
