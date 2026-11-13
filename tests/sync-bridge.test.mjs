@@ -166,6 +166,27 @@ test('replace import: with sync on its removals would delete from iCloud; with s
   assert.ok(!items.some((c) => c.key === s.other.id), 'the save the file lacked is left alone in iCloud');
 });
 
+test('turning sync off waits for a round already running, so nothing removed afterwards goes up as a deletion', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const s = setup({ onPush: () => gate });
+  await s.db.put('items', [{ id: 'a' }]);
+  s.local.set(SYNC_KEY, { on: true, cursor: 0, aiRev: 0 });
+  const round = s.bridge.run();
+  await new Promise((r) => setTimeout(r, 20)); // the round is pushing
+  let off = false;
+  const turningOff = s.bridge.setOn(false).then(() => { off = true; });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(off, false, 'waits for the round');
+  assert.equal(s.local.get(SYNC_KEY).on, false, 'but no new round can start meanwhile');
+  release();
+  await round;
+  await turningOff;
+  assert.equal(off, true);
+  assert.equal(s.local.get(SYNC_KEY).status, '', 'the finished round doesn\'t leave a status behind');
+  assert.deepEqual(await s.db.syncPending(), []);
+});
+
 test('changes go to the Mac app in batches of a few megabytes', () => {
   const big = { store: 'items', key: 'x', body: { image: 'x'.repeat(3 * 1024 * 1024) } };
   assert.equal(batches([big, big, { store: 'items', key: 'y', body: {} }]).length, 2);

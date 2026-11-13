@@ -146,8 +146,12 @@ export function createSyncBridge({ db, store, local, send }) {
         await setState({ on: true, cursor: 0, aiRev: ai ? 1 : 0, status: 'syncing' });
         return this.run();
       }
-      await db.syncReset();
+      // Off first, so no new round starts; then wait out a round already running, whose push would
+      // otherwise send what is removed next (a replace import, Erase) to iCloud as deletions.
       await setState({ on: false, status: '', aiRev: 0 });
+      if (running) await running.catch(() => {});
+      await db.syncReset();
+      await setState({ status: '' });
       try { await send({ type: 'off' }); } catch { /* the app is gone: nothing to forget */ }
       return state();
     },
