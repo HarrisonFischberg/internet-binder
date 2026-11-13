@@ -404,8 +404,45 @@ function suggestionsOf(classification) {
     .slice(0, 3).map((a) => ({ id: a.isNew && a.taxonomyKey ? `new:${a.taxonomyKey}` : a.collectionId, name: a.collectionName }));
 }
 
+// Saves made in a tab (its floating button, the context menu), which that tab's toast may undo for a while.
+const UNDO_WINDOW_MS = 10 * 60 * 1000;
+async function justSaved() {
+  const all = (await chrome.storage.session.get(SESSION_KEYS.justSaved))?.[SESSION_KEYS.justSaved] || {};
+  const now = Date.now();
+  return Object.fromEntries(Object.entries(all).filter(([, v]) => v && now - v.at < UNDO_WINDOW_MS));
+}
+// One read-change-write of the list at a time, so two tabs saving together both keep their Undo.
+let justSavedQueue = Promise.resolve();
+const oneAtATime = (fn) => (justSavedQueue = justSavedQueue.then(fn, fn));
+async function noteJustSaved(tabId, itemId) {
+  if (!tabId || typeof itemId !== 'string') return;
+  return oneAtATime(() => rememberJustSaved(tabId, itemId));
+}
+async function rememberJustSaved(tabId, itemId) {
+  try {
+    await chrome.storage.session.set({ [SESSION_KEYS.justSaved]: { ...(await justSaved()), [itemId]: { tabId, at: Date.now() } } });
+  } catch {
+    /* the page's Undo is refused then; the save can still be deleted from Internet Binder */
+  }
+}
+function takeJustSaved(tabId, itemId) {
+  return oneAtATime(() => forgetJustSaved(tabId, itemId));
+}
+async function forgetJustSaved(tabId, itemId) {
+  try {
+    const all = await justSaved();
+    if (typeof itemId !== 'string' || !all[itemId] || all[itemId].tabId !== tabId) return false;
+    delete all[itemId];
+    await chrome.storage.session.set({ [SESSION_KEYS.justSaved]: all });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function showPageToast(tabId, res, product) {
   try {
+    if (res && res.ok && !res.duplicate && res.item) await noteJustSaved(tabId, res.item.id);
     await chrome.scripting.executeScript({ target: { tabId }, files: ['src/content/tokens-content.js', 'src/content/toast.js'] });
     const collections = res.ok && !res.duplicate ? (await store.getCollections()).map((c) => ({ id: c.id, name: c.name })) : [];
     const look = await pageLook();
@@ -875,7 +912,9 @@ async function handleMessage(msg, sender) {
     }
     case MSG.SAVE_ITEM: {
       if (!msg.product || typeof msg.product !== 'object') throw new Error('Nothing to save.');
-      return saveProduct(msg.product, { collectionId: msg.collectionId || null, force: !!msg.force, source: msg.source || (sender.tab ? 'floating' : 'toolbar'), classification: msg.classification || null, note: msg.note || '', learn: msg.learn === 'strong' ? 'strong' : 'light', instant: !!msg.instant, deferAi: !!msg.deferAi, confirmed: !!msg.confirmed });
+      const res = await saveProduct(msg.product, { collectionId: msg.collectionId || null, force: !!msg.force, source: msg.source || (sender.tab ? 'floating' : 'toolbar'), classification: msg.classification || null, note: msg.note || '', learn: msg.learn === 'strong' ? 'strong' : 'light', instant: !!msg.instant, deferAi: !!msg.deferAi, confirmed: !!msg.confirmed });
+      if (!fromExtensionPage && sender.tab && res && res.ok && !res.duplicate && res.item) await noteJustSaved(sender.tab.id, res.item.id);
+      return res;
     }
     case MSG.UPDATE_ITEM: {
       const item = await store.getItem(msg.itemId);
@@ -916,6 +955,7 @@ async function handleMessage(msg, sender) {
       return { ok: true, item: await store.getItem(item.id) };
     }
     case MSG.FILL_ITEM: {
+      if (!fromExtensionPage) throw new Error('Not allowed.');
       queueFill(msg.itemId, { review: !!msg.review, understand: !!msg.understand });
       return { ok: true };
     }
@@ -950,12 +990,15 @@ async function handleMessage(msg, sender) {
       return startPlaceLookups();
     }
     case MSG.FILL_KIND: {
+      if (!fromExtensionPage) throw new Error('Not allowed.');
       const ids = (await store.getItems()).filter((i) => kindOf(i) === msg.kind && !i.deletedAt).map((i) => i.id);
       for (const id of ids) queueFill(id);
       return { ok: true, count: ids.length };
     }
     case MSG.UNDO_SAVE: {
-      // Undoing a save that just happened removes it outright (it never reaches the Trash).
+      // Undoing a save that just happened removes it outright (it never reaches the Trash). A page (its
+      // toast's Undo) may only undo a save that same tab just made, never delete any id it names.
+      if (!fromExtensionPage && !(sender.tab && (await takeJustSaved(sender.tab.id, msg.itemId)))) throw new Error('Not allowed.');
       await store.deleteForever([msg.itemId]);
       return { ok: true };
     }

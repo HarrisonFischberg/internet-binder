@@ -254,6 +254,8 @@ export function classifyCapture(product, kind, details, ctx) {
 // confirmed: you were shown where it goes (the toolbar's "Where does it live?") and saved it there.
 export async function saveCapture(store, rawProduct, { collectionId = null, force = false, source = 'toolbar', classification: given = null, note = '', learn = 'light', instant = false, deferAi = false, confirmed = false } = {}, { enrich = () => {}, fill = () => {} } = {}) {
   const product = normalizeProduct(rawProduct);
+  // A capture is always a new save: an id from the caller (a page's content script) would overwrite that save.
+  delete product.id;
   if (!force) {
     const existing = await store.findByUrl(product.canonicalUrl || product.url);
     if (existing) {

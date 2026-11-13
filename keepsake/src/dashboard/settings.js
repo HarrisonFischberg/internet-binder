@@ -1,6 +1,6 @@
 // Settings, Optional AI and Privacy views for the dashboard.
 
-import { LIMITS, STYLES, ICONS } from '../shared/storage.js';
+import { LIMITS, STYLES, ICONS, validateExport } from '../shared/storage.js';
 import { iconPath } from '../toolbar/icon.js';
 import { MSG } from '../shared/messages.js';
 import { el, clear, pluralize } from '../shared/util.js';
@@ -332,8 +332,10 @@ function categorizationSection(ctx) {
       top.length ? el('div', { class: 'chips' }, top.map((x) => el('span', { class: 'chip', title: `weight ${x.weight}` }, [`${x.term} → ${x.collectionName}`]))) : el('p', { class: 'help' }, ['Nothing learned yet. Move an item between collections and Internet Binder will pick up the pattern.']),
       retailers.length ? el('p', { class: 'help' }, ['Retailer habits: ' + retailers.map((x) => `${x.host} → ${x.collectionName}`).join(' · ')]) : null,
       el('div', { class: 'actions-row' }, [el('button', { type: 'button', class: 'btn btn-sm', disabled: !termCount && !retailers.length, onClick: async () => {
-        const ok = await UI.confirmDialog({ title: 'Clear learned preferences?', message: 'Internet Binder forgets every word and retailer habit it picked up from your moves. Your collections and their keywords are kept.', confirmLabel: 'Clear', danger: true });
-        if (ok) await ctx.store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
+        // Undo instead of "Are you sure?": the toast puts back what was learned (as iOS does).
+        const { learnedKeywords, retailerPrefs, corrections } = await ctx.store.getPrefs();
+        await ctx.store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
+        UI.toast('Cleared what Internet Binder learned from your moves. Your collections and keywords are kept.', { action: { label: 'Undo', onClick: () => ctx.store.updatePrefs({ learnedKeywords, retailerPrefs, corrections }) } });
       } }, ['Clear learned preferences'])]),
     ]);
     box.append(learnedBox);
@@ -466,12 +468,23 @@ function dataSection(ctx) {
       } catch {
         throw new Error('That file is not valid JSON.');
       }
+      let syncStopped = false;
       if (importMode === 'replace') {
-        const ok = await UI.typedConfirm({ title: 'Replace everything?', message: 'All current collections, items and learned preferences will be replaced by the file’s contents.', word: 'REPLACE', confirmLabel: 'Replace' });
+        // A bad file is refused before anything changes (sync included).
+        validateExport(payload);
+        const ok = await UI.typedConfirm({ title: 'Replace everything?', message: syncCapable()
+          ? 'All current collections, items and learned preferences in this browser will be replaced by the file’s contents. If sync with iCloud is on, it turns off first, so nothing is deleted from iCloud or your other devices. Turning sync on again later combines this browser’s library with what’s in iCloud.'
+          : 'All current collections, items and learned preferences will be replaced by the file’s contents.', word: 'REPLACE', confirmLabel: 'Replace' });
         if (!ok) return;
+        syncStopped = await stopSyncFirst('replaced');
       }
-      const res = await ctx.store.importJSON(payload, { mode: importMode });
-      UI.toast(`Imported ${pluralize(res.addedItems, 'item', 'items')} and ${pluralize(res.addedCollections, 'collection', 'collections')}${res.skippedItems ? ` (${res.skippedItems} duplicates skipped)` : ''}.`, { duration: 6000 });
+      let res;
+      try {
+        res = await ctx.store.importJSON(payload, { mode: importMode });
+      } catch (e) {
+        throw syncStopped ? new Error(`${String((e && e.message) || e)} Sync with iCloud is now off.`) : e;
+      }
+      UI.toast(`Imported ${pluralize(res.addedItems, 'item', 'items')} and ${pluralize(res.addedCollections, 'collection', 'collections')}${res.skippedItems ? ` (${res.skippedItems} duplicates skipped)` : ''}.${syncStopped ? ' Sync with iCloud is now off.' : ''}`, { duration: 6000 });
     } catch (e) {
       UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 7000 });
     }
@@ -510,13 +523,17 @@ function dataSection(ctx) {
     el('div', { class: 'divider' }),
     el('div', { class: 'actions-row' }, [
       el('button', { type: 'button', class: 'btn btn-danger', onClick: async () => {
-        const syncing = syncCapable() && ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on === true;
+        const syncing = await syncIsOn();
         const ok = await UI.typedConfirm({ title: 'Delete all local data?', message: syncing
           ? 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here.'
           : 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Export first if you want a backup.', word: 'DELETE', confirmLabel: 'Delete everything' });
         if (!ok) return;
-        // Erasing here never erases iCloud: sync stops first.
-        if (syncing) await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on: false }).catch(() => null);
+        // Erasing here never erases iCloud: sync stops first, and nothing is erased if it can't.
+        try {
+          await stopSyncFirst('deleted');
+        } catch (e) {
+          return UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 7000 });
+        }
         await ctx.store.clearAll();
         try { await chrome.storage.session.clear(); } catch { /* fine */ }
         try { await clearScanStore(); } catch { /* fine */ }
@@ -528,6 +545,33 @@ function dataSection(ctx) {
       el('span', { class: 'help' }, ['Erases everything Internet Binder stored. Cannot be undone.']),
     ]),
   ]);
+}
+
+const syncIsOn = async () => syncCapable() && ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on === true;
+
+// Before Replace or Erase (Safari): sync stops first, after a round already running finishes, so nothing
+// removed next reaches iCloud. Read again after the dialog (another tab may have turned it on). Also sent
+// when it is already off, in case an earlier try stopped halfway (the worker saved "off" and ended before
+// clearing what was pending). Undecided (null) is left alone: no round runs then, and turning sync on
+// clears what is pending first. Resolves whether sync was on; throws, changing nothing, if it can't stop.
+async function stopSyncFirst(what) {
+  if (!syncCapable()) return false;
+  let on;
+  try { on = ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on ?? null; } catch { on = true; }
+  if (on === null) return false;
+  const waiting = UI.toast('Turning off sync with iCloud… If a sync is running, this waits for it to finish.', { duration: 600000 });
+  let res = null;
+  try {
+    res = await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on: false });
+  } catch {
+    /* the background didn't answer */
+  } finally {
+    if (waiting) waiting();
+  }
+  const stopped = res && res.ok === true && !(res.sync && res.sync.on === true);
+  // Already off: that was only tidying up (no round runs while off, and turning on clears what is pending).
+  if (!stopped && on !== false) throw new Error(`Couldn’t turn off sync with iCloud, so nothing was ${what}. Try again.`);
+  return on === true;
 }
 
 function formatBytes(n) {

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
 import { idbBackend } from '../keepsake/src/shared/db.js';
 import { createSyncBridge, batches, SYNC_KEY } from '../keepsake/src/shared/syncBridge.js';
+import { createStore, memoryBackend } from '../keepsake/src/shared/storage.js';
 
 let n = 0;
 function setup({ onPush, onPull } = {}) {
@@ -131,6 +132,59 @@ test('turning sync off forgets what was pending and tells the Mac app; on again 
   await s.bridge.setOn(true);
   assert.deepEqual(s.native.got.filter((c) => c.store === 'items').map((c) => c.key), ['b'], 'a deletion made while off never reaches iCloud');
   assert.equal(s.local.get(SYNC_KEY).on, true);
+});
+
+// "Import (replace all)" removes everything the file lacks. The dashboard turns sync off first (as Erase
+// does), so those removals stay on this Mac instead of deleting the saves from iCloud and the iPhone.
+test('replace import: with sync on its removals would delete from iCloud; with sync turned off first, none go up', async () => {
+  const library = async () => {
+    const s = setup();
+    const store = createStore(memoryBackend(), s.db);
+    await store.init();
+    const kept = await store.addItem({ title: 'Lamp', url: 'https://a.example/lamp' });
+    const other = await store.addItem({ title: 'Saved on the iPhone too', url: 'https://a.example/rug' });
+    await s.bridge.setOn(true);
+    const file = { format: 'keepsake-export', schemaVersion: (await store.getAll()).meta.schemaVersion, items: { [kept.id]: await store.getItem(kept.id) }, collections: {} };
+    return { ...s, store, file, other };
+  };
+  const pendingItems = async (db) => (await db.syncPending()).filter((p) => p.store === 'items').map((p) => p.key);
+
+  // Why the guard is needed: the journal marks every removal for iCloud while sync is on.
+  const risky = await library();
+  await risky.store.importJSON(risky.file, { mode: 'replace' });
+  assert.ok((await pendingItems(risky.db)).includes(risky.other.id), 'the removal is pending while sync is on');
+
+  const s = await library();
+  await s.bridge.setOn(false);
+  await s.store.importJSON(s.file, { mode: 'replace' });
+  assert.deepEqual((await s.store.getItems()).map((i) => i.title), ['Lamp']);
+  assert.equal(s.native.offs, 1, 'the Mac app was told sync is off');
+  s.native.got = [];
+  await s.bridge.setOn(true);
+  const items = s.native.got.filter((c) => c.store === 'items');
+  assert.deepEqual(items.filter((c) => c.body === null), [], 'turning sync back on deletes nothing in iCloud');
+  assert.ok(!items.some((c) => c.key === s.other.id), 'the save the file lacked is left alone in iCloud');
+});
+
+test('turning sync off waits for a round already running, so nothing removed afterwards goes up as a deletion', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const s = setup({ onPush: () => gate });
+  await s.db.put('items', [{ id: 'a' }]);
+  s.local.set(SYNC_KEY, { on: true, cursor: 0, aiRev: 0 });
+  const round = s.bridge.run();
+  await new Promise((r) => setTimeout(r, 20)); // the round is pushing
+  let off = false;
+  const turningOff = s.bridge.setOn(false).then(() => { off = true; });
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(off, false, 'waits for the round');
+  assert.equal(s.local.get(SYNC_KEY).on, false, 'but no new round can start meanwhile');
+  release();
+  await round;
+  await turningOff;
+  assert.equal(off, true);
+  assert.equal(s.local.get(SYNC_KEY).status, '', 'the finished round doesn\'t leave a status behind');
+  assert.deepEqual(await s.db.syncPending(), []);
 });
 
 test('changes go to the Mac app in batches of a few megabytes', () => {

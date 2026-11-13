@@ -1127,3 +1127,102 @@ test('Settings: Send Debug Logs opens an email to support with the note, version
   assert.match(body, /App: Internet Binder \d/);
   assert.match(section.textContent, /Your email app is opening/);
 });
+
+test('Settings: Clear learned preferences clears at once and offers Undo, which puts it all back', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const col = (await store.getCollections())[0];
+  const learned = { learnedKeywords: { lantern: { [col.id]: 3 } }, retailerPrefs: { 'shop.example': { [col.id]: 2 } }, corrections: [{ at: 1 }] };
+  await store.updatePrefs(learned);
+  await afterChange();
+  await go('#settings');
+  await until(() => [...view().querySelectorAll('button')].some((b) => b.textContent === 'Clear learned preferences' && !b.disabled));
+  [...view().querySelectorAll('button')].find((b) => b.textContent === 'Clear learned preferences').click();
+  await afterChange();
+  assert.ok(!window.document.querySelector('.modal-overlay'), 'no "Are you sure?"');
+  assert.deepEqual((await store.getPrefs()).learnedKeywords, {});
+  [...window.document.querySelectorAll('.toast-action')].find((b) => b.textContent === 'Undo').click();
+  await afterChange();
+  const back = await store.getPrefs();
+  assert.deepEqual([back.learnedKeywords, back.retailerPrefs, back.corrections], [learned.learnedKeywords, learned.retailerPrefs, learned.corrections]);
+});
+
+// Last: it replaces the whole library. Safari with iCloud sync (the fake gains nativeMessaging).
+test('Settings: Import (replace all) in Safari checks the file first, turns sync off first (even if turned on meanwhile), and says so', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const before = await store.addItem({ title: 'Saved on the iPhone too', url: 'https://replace.example/rug' });
+  const file = await store.exportJSON();
+  file.items = { [before.id]: { ...file.items[before.id], title: 'From the backup' } };
+  const sent = [];
+  let onSyncOff = async () => ({ ok: false, error: 'The Mac app didn’t answer.' });
+  const real = { send: chrome.runtime.sendMessage, manifest: chrome.runtime.getManifest, native: chrome.runtime.sendNativeMessage, set: chrome.storage.local.set };
+  chrome.runtime.getManifest = () => ({ ...real.manifest(), permissions: [...(real.manifest().permissions || []), 'nativeMessaging'] });
+  chrome.runtime.sendNativeMessage = () => {};
+  chrome.runtime.sendMessage = async (msg) => { sent.push(msg); return msg.type === 'keepsake:sync-set' ? onSyncOff() : { ok: true }; };
+  const setSync = (st) => chrome.storage.local.set({ keepsake_sync: st });
+  const toasts = () => [...window.document.querySelectorAll('.toast:not(.toast-out) .toast-text')].map((t) => t.textContent).join(' | ');
+  // Picks the file, then (if the dialog opens) runs duringDialog, types REPLACE and confirms.
+  const replace = async (content, duringDialog = async () => {}) => {
+    window.document.querySelectorAll('.toast').forEach((t) => t.remove());
+    await go('#settings');
+    [...view().querySelectorAll('button')].find((b) => b.textContent === 'Import (replace all)').click();
+    const input = view().querySelector('input[type=file]');
+    Object.defineProperty(input, 'files', { value: [new window.File([content], 'backup.json', { type: 'application/json' })], configurable: true });
+    input.dispatchEvent(new window.Event('change'));
+    await until(() => window.document.querySelector('.modal input') || window.document.querySelector('.toast-danger'));
+    const modal = window.document.querySelector('.modal');
+    if (!modal) return '';
+    const text = modal.textContent;
+    await duringDialog();
+    window.document.querySelector('.modal input').value = 'REPLACE';
+    [...window.document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Replace').click();
+    await afterChange();
+    return text;
+  };
+  try {
+    await setSync({ on: true });
+    // Not an export: refused before the dialog, and sync is left on.
+    assert.equal(await replace(JSON.stringify({ hello: 'world' })), '');
+    assert.match(toasts(), /not an Internet Binder export/);
+    assert.deepEqual(sent, [], 'sync was not touched');
+
+    // Sync can't be turned off: nothing replaced.
+    const dialog = await replace(JSON.stringify(file));
+    assert.match(dialog, /If sync with iCloud is on, it turns off first, so nothing is deleted from iCloud or your other devices\. Turning sync on again later combines this browser’s library with what’s in iCloud\./);
+    assert.deepEqual(sent.map((m) => [m.type, m.on]), [['keepsake:sync-set', false]]);
+    assert.equal((await store.getItem(before.id)).title, 'Saved on the iPhone too', 'nothing was replaced');
+    assert.match(toasts(), /Couldn’t turn off sync with iCloud, so nothing was replaced/);
+
+    // Off when the dialog opened, turned on in another tab meanwhile: still turned off first, with a status while it waits.
+    sent.length = 0;
+    await setSync({ on: false });
+    let release;
+    let statusSeen = '';
+    onSyncOff = () => new Promise((r) => { release = () => r({ ok: true, sync: { on: false } }); });
+    const replacing = replace(JSON.stringify(file), () => setSync({ on: true }));
+    await until(() => release);
+    await until(() => /Turning off sync with iCloud/.test(toasts()));
+    statusSeen = toasts();
+    assert.equal((await store.getItem(before.id)).title, 'Saved on the iPhone too', 'nothing replaced while sync is still stopping');
+    release();
+    await replacing;
+    assert.match(statusSeen, /Turning off sync with iCloud… If a sync is running, this waits for it to finish\./);
+    assert.equal(sent[0].type, 'keepsake:sync-set', 'sync turns off before anything is removed');
+    assert.equal((await store.getItem(before.id)).title, 'From the backup');
+    assert.match(toasts(), /Imported .* Sync with iCloud is now off\./);
+
+    // Sync turned off, then the import itself fails: the error says sync is now off.
+    sent.length = 0;
+    await setSync({ on: true });
+    file.items[before.id].title = 'Second backup';
+    onSyncOff = async () => { chrome.storage.local.set = async () => { throw new Error('Disk full.'); }; return { ok: true, sync: { on: false } }; };
+    await replace(JSON.stringify(file));
+    chrome.storage.local.set = real.set;
+    assert.match(toasts(), /Sync with iCloud is now off\./);
+  } finally {
+    Object.assign(chrome.runtime, { sendMessage: real.send, getManifest: real.manifest, sendNativeMessage: real.native });
+    chrome.storage.local.set = real.set;
+    await chrome.storage.local.remove('keepsake_sync');
+  }
+});

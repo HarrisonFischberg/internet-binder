@@ -420,6 +420,61 @@ test('context menu save: extracts the page, saves, shows a toast', async () => {
   F.state.executeScript = async () => [{ result: null }];
 });
 
+// Content scripts are less trusted than extension pages (audit S1): a page may undo only what that tab just
+// saved, and may not start fill-ins (which can use the user's paid AI key).
+test('a page can undo only the save that same tab just made; fill-ins are for extension pages only', async () => {
+  const mine = await F.send({ type: MSG.SAVE_ITEM, product: tent, instant: true }, pageTab);
+  const other = await F.send({ type: MSG.SAVE_ITEM, product: { ...tent, url: 'https://shop.example/stove' }, instant: true }, popup);
+  const otherTab = { tab: { id: 8, url: 'https://evil.example/' }, url: 'https://evil.example/' };
+  assert.equal((await F.send({ type: MSG.UNDO_SAVE, itemId: other.item.id }, pageTab)).error, 'Not allowed.', 'not a save this tab made');
+  assert.equal((await F.send({ type: MSG.UNDO_SAVE, itemId: mine.item.id }, otherTab)).error, 'Not allowed.', 'not from another tab');
+  assert.ok((await items())[mine.item.id] && (await items())[other.item.id]);
+  assert.equal((await F.send({ type: MSG.UNDO_SAVE, itemId: mine.item.id }, pageTab)).ok, true, 'the floating card\'s Undo');
+  assert.equal((await items())[mine.item.id], undefined);
+  assert.equal((await F.send({ type: MSG.UNDO_SAVE, itemId: other.item.id }, popup)).ok, true, 'the popup (an extension page) still can');
+
+  assert.equal((await F.send({ type: MSG.FILL_KIND, kind: 'recipe' }, pageTab)).error, 'Not allowed.');
+  assert.equal((await F.send({ type: MSG.FILL_ITEM, itemId: 'x' }, pageTab)).error, 'Not allowed.');
+  assert.equal((await F.send({ type: MSG.FILL_KIND, kind: 'recipe' }, popup)).ok, true);
+});
+
+test('a page cannot pick the id of its save: another save is never overwritten, nor undone by the page', async () => {
+  const victim = await F.send({ type: MSG.SAVE_ITEM, product: { ...tent, url: 'https://shop.example/victim' }, instant: true }, popup);
+  const before = (await items())[victim.item.id];
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: { ...tent, id: victim.item.id, title: 'Overwritten', url: 'https://evil.example/x' }, force: true, instant: true }, pageTab);
+  assert.equal(res.ok, true);
+  assert.notEqual(res.item.id, victim.item.id, 'a new save with its own id');
+  assert.deepEqual((await items())[victim.item.id], before, 'the other save is untouched');
+  assert.equal((await F.send({ type: MSG.UNDO_SAVE, itemId: victim.item.id }, pageTab)).error, 'Not allowed.');
+  assert.ok((await items())[victim.item.id]);
+});
+
+test('context menu save: the toast\'s Undo in the page removes that save', async () => {
+  F.state.executeScript = async (opts) => (opts.files && opts.files[0] === 'src/extract/extract.js' ? [{ result: { ...tent } }] : [{ result: null }]);
+  F.calls.executeScript.length = 0;
+  const tab = { id: 3, url: tent.url };
+  for (const fn of F.listeners.menu) await fn({ menuItemId: 'keepsake-save', pageUrl: tent.url }, tab);
+  const saved = Object.values(await items())[0];
+  const show = F.calls.executeScript.find((c) => c.args && c.args[0] && c.args[0].kind === 'saved');
+  // Run the toast's own code as the page's content script would, with a stand-in toast.
+  const shown = [];
+  const realSend = F.chrome.runtime.sendMessage;
+  let answered;
+  const done = new Promise((r) => { answered = r; });
+  globalThis.__keepsakeToast = { show: (o) => shown.push(o) };
+  F.chrome.runtime.sendMessage = (m, cb) => F.send(m, { tab, url: tab.url }).then((res) => { cb && cb(res); answered(res); });
+  try {
+    show.func(...show.args);
+    shown[0].actions.find((a) => a.label === 'Undo').onClick();
+    assert.equal((await done).ok, true);
+  } finally {
+    F.chrome.runtime.sendMessage = realSend;
+    delete globalThis.__keepsakeToast;
+    F.state.executeScript = async () => [{ result: null }];
+  }
+  assert.equal((await items())[saved.id], undefined);
+});
+
 // --- Optional AI after the save (fixes audit A1, A2) ----------------------------------------------
 async function aiOn() {
   const st = F.local.keepsake_settings;

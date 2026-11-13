@@ -204,8 +204,8 @@ struct WorkScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduce
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private enum Phase: Equatable { case ai, sync, finished }
-    private var phase: Phase { model.aiRun != nil ? .ai : model.syncRun != nil ? .sync : .finished }
+    private enum Phase: Equatable { case ai, sync, importing, finished }
+    private var phase: Phase { model.aiRun != nil ? .ai : model.syncRun != nil ? .sync : model.importing ? .importing : .finished }
 
     var body: some View {
         ZStack {
@@ -217,7 +217,7 @@ struct WorkScreen: View {
                     heading
                     if phase != .finished {
                         VStack(spacing: 14) {
-                            progress
+                            if phase == .importing { ProgressView().controlSize(.large).accessibilityLabel("Importing") } else { progress }
                             Text(note).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.center)
                                 .frame(maxWidth: .infinity)
                         }
@@ -245,6 +245,7 @@ struct WorkScreen: View {
         switch phase {
         case .ai: model.aiRun?.mapping == true ? "Finding your places" : model.aiRun?.imported == true ? "Reading your imports" : model.aiRun?.total == model.saves.count ? "Fixing your library" : "Fixing with AI"
         case .sync: "Copying to iCloud"
+        case .importing: "Importing your saves"
         case .finished: model.workEnd?.title ?? "All done"
         }
     }
@@ -260,6 +261,8 @@ struct WorkScreen: View {
             return names.isEmpty ? "Your AI is reading…" : "Reading " + names.map { "“\($0)”" }.formatted(.list(type: .and))
         case .sync:
             return "Encrypted on this iPhone first, so Apple stores it but can't read it."
+        case .importing:
+            return "Reading the file and adding what isn't here yet. Saves already here are skipped."
         case .finished:
             return model.workEnd?.text ?? "Everything it was doing is finished."
         }
@@ -289,6 +292,8 @@ struct WorkScreen: View {
             CardFan(saves: saves).accessibilityHidden(true)
         case .sync:
             CloudSpin().accessibilityHidden(true)
+        case .importing:
+            CloudSpin(symbol: "square.and.arrow.down").accessibilityHidden(true)
         case .finished:
             Badge(symbol: model.workEnd?.title == "Paused" ? "pause" : model.workEnd?.title == "Stopped" ? "stop" : "checkmark")
                 .accessibilityHidden(true)
@@ -367,7 +372,7 @@ struct WorkScreen: View {
                     model.workShowing = false
                 }
                     .accessibilityIdentifier("workDone")
-            case .ai, .sync:
+            case .ai, .sync, .importing:
                 PrimarySlab("Work in background", symbol: "arrow.down.right.and.arrow.up.left") { model.workShowing = false }
                     .accessibilityIdentifier("workInBackground")
                     .accessibilityHint("Closes this screen. It keeps going, even if you leave the app.")
@@ -385,6 +390,7 @@ struct WorkScreen: View {
     private var note: String {
         switch phase {
         case .sync: "Keeps going if you leave the app. If iOS pauses it, the rest goes up next time you open Internet Binder."
+        case .importing: "Keep Internet Binder open until it's done. Closing this screen doesn't stop it."
         default: model.aiRun?.imported == true || model.aiRun?.mapping == true
             ? "Keeps going if you leave the app. If iOS pauses it, the rest stay waiting: run it again to carry on."
             : "Keeps going if you leave the app. If iOS pauses it, Home offers to finish the rest."
@@ -537,6 +543,7 @@ private struct FlipAway: ViewModifier, Animatable {
 /// iCloud while it sends: the cloud spins round on its axis every few seconds, two arcs circle it, and
 /// little pages rise into it. Reduce Motion keeps it still.
 private struct CloudSpin: View {
+    var symbol = "icloud.and.arrow.up"
     @Environment(\.ks) private var t
     @Environment(\.accessibilityReduceMotion) private var reduce
 
@@ -550,7 +557,7 @@ private struct CloudSpin: View {
                 ZStack {
                     Circle().fill(t.accent).frame(width: 150, height: 150)
                         .overlay { Circle().strokeBorder(t.line, lineWidth: t.outline) }
-                    Image(systemName: "icloud.and.arrow.up")
+                    Image(systemName: symbol)
                         .font(.system(size: 56, weight: .semibold))
                         .foregroundStyle(t.onAccent)
                 }

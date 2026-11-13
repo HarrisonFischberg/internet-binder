@@ -22,6 +22,8 @@ struct SettingsScreen: View {
     @State private var lookups: [String: Bool] = ["places": false, "media": false, "books": false]
     @State private var consent: Consent?
     @State private var exportDoc: ExportDocument?
+    @State private var exporting = false
+    @State private var exportFailed: String?
     @State private var importing = false
     @State private var erasing = false
     @State private var testResult: String?
@@ -101,7 +103,14 @@ struct SettingsScreen: View {
                 } footer: { Text("Every change AI made, with Undo.") }
                 Section("Your library") {
                     NavigationLink("Trash") { TrashScreen() }
-                    Button("Export library", systemImage: "square.and.arrow.up") { Task { await export() } }
+                    Button { Task { await export() } } label: {
+                        if exporting {
+                            Label { Text("Exporting…") } icon: { ProgressView() }
+                        } else {
+                            Label("Export library", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    .disabled(exporting || exportDoc != nil)
                     Button("Import from Chrome", systemImage: "square.and.arrow.down") { importing = true }
                 }
                 SendDebugLogsSection()
@@ -121,7 +130,14 @@ struct SettingsScreen: View {
             .task { await load() }
             .sheet(item: $consent) { c in ConsentSheet(consent: c) { accepted in Task { await decide(c, accepted) } } }
             .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }), document: exportDoc, contentType: .json,
-                          defaultFilename: "internet-binder-export-\(Date.now.formatted(.iso8601.year().month().day()))") { _ in exportDoc = nil }
+                          defaultFilename: "internet-binder-export-\(Date.now.formatted(.iso8601.year().month().day()))") { r in
+                exportDoc = nil
+                if case .failure(let e) = r, (e as? CocoaError)?.code != .userCancelled { Haptic.refused(); exportFailed = "Couldn't save the export. Try again." }
+            }
+            // Settings is a sheet over the app's toast: a failed export says so here.
+            .alert(exportFailed ?? "", isPresented: Binding(get: { exportFailed != nil }, set: { if !$0 { exportFailed = nil } })) {}
+            // The same for an import that fails fast or is refused (LibraryModel.importFile).
+            .alert(model.settingsProblem ?? "", isPresented: Binding(get: { model.settingsProblem != nil }, set: { if !$0 { model.settingsProblem = nil } })) {}
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { r in if case .success(let url) = r { Task { await model.importFile(url) } } }
             .sheet(isPresented: $erasing) { EraseSheet() }
             // The progress screen opens over Settings while it's up (Fix everything, turning sync on).
@@ -359,8 +375,15 @@ struct SettingsScreen: View {
     }
 
     private func export() async {
-        guard let data = try? await model.library?.exportData() else { return }
-        exportDoc = ExportDocument(data: data)
+        guard !exporting, let library = model.library else { return }
+        exporting = true
+        defer { exporting = false }
+        do {
+            exportDoc = ExportDocument(data: try await library.exportData())
+        } catch {
+            Haptic.refused()
+            exportFailed = "Couldn't export. Try again."
+        }
     }
 }
 

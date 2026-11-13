@@ -67,8 +67,11 @@ private struct PageSearchRunner: ViewModifier {
             let q = query.trimmingCharacters(in: .whitespaces)
             guard !q.isEmpty, let library = model.library else { matches = nil; return }
             try? await Task.sleep(for: .milliseconds(120))
-            guard !Task.isCancelled, let r = try? await library.search(q, within: ids) else { return }
-            matches = PageMatches(ids: r.items.map(\.id), query: r.query, corrected: r.corrected)
+            guard !Task.isCancelled else { return }
+            let r = try? await library.search(q, within: ids)
+            guard !Task.isCancelled else { return }
+            // A failed search shows no matches rather than the last query's.
+            matches = r.map { PageMatches(ids: $0.items.map(\.id), query: $0.query, corrected: $0.corrected) } ?? PageMatches(ids: [], query: q, corrected: false)
         }
     }
 }

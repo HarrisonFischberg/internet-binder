@@ -205,6 +205,7 @@ export function toast(message, { action = null, duration = action ? 8000 : 5000,
     el('button', { type: 'button', class: 'btn btn-icon btn-quiet toast-close', 'aria-label': 'Dismiss', onClick: () => dismiss() }, [closeIcon()]),
   ]);
   const dismiss = () => {
+    clearTimeout(timer);
     node.classList.add('toast-out');
     setTimeout(() => node.remove(), 180);
   };
