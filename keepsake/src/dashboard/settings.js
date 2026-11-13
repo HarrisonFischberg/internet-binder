@@ -332,8 +332,10 @@ function categorizationSection(ctx) {
       top.length ? el('div', { class: 'chips' }, top.map((x) => el('span', { class: 'chip', title: `weight ${x.weight}` }, [`${x.term} → ${x.collectionName}`]))) : el('p', { class: 'help' }, ['Nothing learned yet. Move an item between collections and Internet Binder will pick up the pattern.']),
       retailers.length ? el('p', { class: 'help' }, ['Retailer habits: ' + retailers.map((x) => `${x.host} → ${x.collectionName}`).join(' · ')]) : null,
       el('div', { class: 'actions-row' }, [el('button', { type: 'button', class: 'btn btn-sm', disabled: !termCount && !retailers.length, onClick: async () => {
-        const ok = await UI.confirmDialog({ title: 'Clear learned preferences?', message: 'Internet Binder forgets every word and retailer habit it picked up from your moves. Your collections and their keywords are kept.', confirmLabel: 'Clear', danger: true });
-        if (ok) await ctx.store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
+        // Undo instead of "Are you sure?": the toast puts back what was learned (as iOS does).
+        const { learnedKeywords, retailerPrefs, corrections } = await ctx.store.getPrefs();
+        await ctx.store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
+        UI.toast('Cleared what Internet Binder learned from your moves. Your collections and keywords are kept.', { action: { label: 'Undo', onClick: () => ctx.store.updatePrefs({ learnedKeywords, retailerPrefs, corrections }) } });
       } }, ['Clear learned preferences'])]),
     ]);
     box.append(learnedBox);

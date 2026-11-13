@@ -1128,6 +1128,25 @@ test('Settings: Send Debug Logs opens an email to support with the note, version
   assert.match(section.textContent, /Your email app is opening/);
 });
 
+test('Settings: Clear learned preferences clears at once and offers Undo, which puts it all back', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const col = (await store.getCollections())[0];
+  const learned = { learnedKeywords: { lantern: { [col.id]: 3 } }, retailerPrefs: { 'shop.example': { [col.id]: 2 } }, corrections: [{ at: 1 }] };
+  await store.updatePrefs(learned);
+  await afterChange();
+  await go('#settings');
+  await until(() => [...view().querySelectorAll('button')].some((b) => b.textContent === 'Clear learned preferences' && !b.disabled));
+  [...view().querySelectorAll('button')].find((b) => b.textContent === 'Clear learned preferences').click();
+  await afterChange();
+  assert.ok(!window.document.querySelector('.modal-overlay'), 'no "Are you sure?"');
+  assert.deepEqual((await store.getPrefs()).learnedKeywords, {});
+  [...window.document.querySelectorAll('.toast-action')].find((b) => b.textContent === 'Undo').click();
+  await afterChange();
+  const back = await store.getPrefs();
+  assert.deepEqual([back.learnedKeywords, back.retailerPrefs, back.corrections], [learned.learnedKeywords, learned.retailerPrefs, learned.corrections]);
+});
+
 // Last: it replaces the whole library. Safari with iCloud sync on (the fake gains nativeMessaging).
 test('Settings: Import (replace all) with iCloud sync on says so, turns sync off first, and replaces nothing if it can\'t', async () => {
   const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
