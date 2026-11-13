@@ -411,15 +411,24 @@ async function justSaved() {
   const now = Date.now();
   return Object.fromEntries(Object.entries(all).filter(([, v]) => v && now - v.at < UNDO_WINDOW_MS));
 }
+// One read-change-write of the list at a time, so two tabs saving together both keep their Undo.
+let justSavedQueue = Promise.resolve();
+const oneAtATime = (fn) => (justSavedQueue = justSavedQueue.then(fn, fn));
 async function noteJustSaved(tabId, itemId) {
   if (!tabId || typeof itemId !== 'string') return;
+  return oneAtATime(() => rememberJustSaved(tabId, itemId));
+}
+async function rememberJustSaved(tabId, itemId) {
   try {
     await chrome.storage.session.set({ [SESSION_KEYS.justSaved]: { ...(await justSaved()), [itemId]: { tabId, at: Date.now() } } });
   } catch {
     /* the page's Undo is refused then; the save can still be deleted from Internet Binder */
   }
 }
-async function takeJustSaved(tabId, itemId) {
+function takeJustSaved(tabId, itemId) {
+  return oneAtATime(() => forgetJustSaved(tabId, itemId));
+}
+async function forgetJustSaved(tabId, itemId) {
   try {
     const all = await justSaved();
     if (typeof itemId !== 'string' || !all[itemId] || all[itemId].tabId !== tabId) return false;

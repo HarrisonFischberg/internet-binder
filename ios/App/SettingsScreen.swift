@@ -132,7 +132,7 @@ struct SettingsScreen: View {
             .fileExporter(isPresented: Binding(get: { exportDoc != nil }, set: { if !$0 { exportDoc = nil } }), document: exportDoc, contentType: .json,
                           defaultFilename: "internet-binder-export-\(Date.now.formatted(.iso8601.year().month().day()))") { r in
                 exportDoc = nil
-                if case .failure = r { Haptic.refused(); exportFailed = "Couldn't save the export. Try again." }
+                if case .failure(let e) = r, (e as? CocoaError)?.code != .userCancelled { Haptic.refused(); exportFailed = "Couldn't save the export. Try again." }
             }
             // Settings is a sheet over the app's toast: a failed export says so here.
             .alert(exportFailed ?? "", isPresented: Binding(get: { exportFailed != nil }, set: { if !$0 { exportFailed = nil } })) {}
