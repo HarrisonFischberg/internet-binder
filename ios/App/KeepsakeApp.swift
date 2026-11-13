@@ -130,6 +130,8 @@ final class LibraryModel {
     }
     /// The progress screen for a long run (Fix everything, imports, iCloud's first copy) is up.
     var workShowing = false
+    /// A file is being imported (read and merged): the progress screen says so while it takes a while.
+    var importing = false
     /// Which screen presents it: Settings while its sheet is open (a cover can't go over a sheet from below).
     var workHost = WorkHost.root
     enum WorkHost { case root, settings }
@@ -336,18 +338,35 @@ final class LibraryModel {
 
     func importFile(_ url: URL) async {
         guard let library else { return }
+        guard !importing else { return show("An import is already running") }
         let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        importing = true
+        workEnd = nil
+        // A small file is in before the screen would finish opening; a big one (up to 150 MB) shows progress.
+        let cover = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            if !Task.isCancelled, self?.importing == true { self?.workShowing = true }
+        }
+        defer {
+            cover.cancel()
+            importing = false
+            if scoped { url.stopAccessingSecurityScopedResource() }
+        }
         do {
             let before = saves.count
-            _ = try await library.importExport(try Data(contentsOf: url), replace: false)
+            // Read off the main actor: a big export would freeze the app while it loads.
+            let data = try await Task.detached(priority: .userInitiated) { try Data(contentsOf: url) }.value
+            _ = try await library.importExport(data, replace: false)
             await reload()
             let added = max(0, saves.count - before)
             // Imported saves don't go to your AI provider by themselves: Home offers Run AI on them.
-            show(added == 0 ? "Nothing new to import: those saves are already here" : "Imported \(added) \(added == 1 ? "save" : "saves")\(aiReady ? ". Run AI on them from Home when you like" : "")")
+            let text = added == 0 ? "Nothing new to import: those saves are already here" : "Imported \(added) \(added == 1 ? "save" : "saves")\(aiReady ? ". Run AI on them from Home when you like" : "")"
+            show(text)
+            if workShowing { workEnd = WorkEnd(title: "All done", text: text) }
             Haptic.saved()
         } catch {
             show(error.localizedDescription)
+            if workShowing { workEnd = WorkEnd(title: "Stopped", text: error.localizedDescription) }
             Haptic.refused()
         }
     }
