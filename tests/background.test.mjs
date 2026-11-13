@@ -438,6 +438,17 @@ test('a page can undo only the save that same tab just made; fill-ins are for ex
   assert.equal((await F.send({ type: MSG.FILL_KIND, kind: 'recipe' }, popup)).ok, true);
 });
 
+test('a page cannot pick the id of its save: another save is never overwritten, nor undone by the page', async () => {
+  const victim = await F.send({ type: MSG.SAVE_ITEM, product: { ...tent, url: 'https://shop.example/victim' }, instant: true }, popup);
+  const before = (await items())[victim.item.id];
+  const res = await F.send({ type: MSG.SAVE_ITEM, product: { ...tent, id: victim.item.id, title: 'Overwritten', url: 'https://evil.example/x' }, force: true, instant: true }, pageTab);
+  assert.equal(res.ok, true);
+  assert.notEqual(res.item.id, victim.item.id, 'a new save with its own id');
+  assert.deepEqual((await items())[victim.item.id], before, 'the other save is untouched');
+  assert.equal((await F.send({ type: MSG.UNDO_SAVE, itemId: victim.item.id }, pageTab)).error, 'Not allowed.');
+  assert.ok((await items())[victim.item.id]);
+});
+
 test('context menu save: the toast\'s Undo in the page removes that save', async () => {
   F.state.executeScript = async (opts) => (opts.files && opts.files[0] === 'src/extract/extract.js' ? [{ result: { ...tent } }] : [{ result: null }]);
   F.calls.executeScript.length = 0;
