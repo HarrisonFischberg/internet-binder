@@ -38,4 +38,6 @@ export const SESSION_KEYS = {
   fillJob: 'keepsake_fillJob',
   // Finding places on the map (Lookups, no AI): { id, total, done, found, running, finishedAt }.
   placeLookup: 'keepsake_placeLookup',
+  // Saves a page's toast may still undo: { [itemId]: { tabId, at } } (UNDO_SAVE from a content script).
+  justSaved: 'keepsake_justSaved',
 };
