@@ -467,8 +467,16 @@ function dataSection(ctx) {
         throw new Error('That file is not valid JSON.');
       }
       if (importMode === 'replace') {
-        const ok = await UI.typedConfirm({ title: 'Replace everything?', message: 'All current collections, items and learned preferences will be replaced by the file’s contents.', word: 'REPLACE', confirmLabel: 'Replace' });
+        const syncing = await syncIsOn();
+        const ok = await UI.typedConfirm({ title: 'Replace everything?', message: syncing
+          ? 'All current collections, items and learned preferences in this browser will be replaced by the file’s contents. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here alongside the file’s contents.'
+          : 'All current collections, items and learned preferences will be replaced by the file’s contents.', word: 'REPLACE', confirmLabel: 'Replace' });
         if (!ok) return;
+        // Replacing here never deletes from iCloud: sync stops first, and nothing is replaced if it can't.
+        if (syncing) {
+          const res = await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on: false }).catch(() => null);
+          if (!res || res.ok !== true || (res.sync && res.sync.on === true)) throw new Error('Couldn’t turn off sync with iCloud, so nothing was replaced. Try again.');
+        }
       }
       const res = await ctx.store.importJSON(payload, { mode: importMode });
       UI.toast(`Imported ${pluralize(res.addedItems, 'item', 'items')} and ${pluralize(res.addedCollections, 'collection', 'collections')}${res.skippedItems ? ` (${res.skippedItems} duplicates skipped)` : ''}.`, { duration: 6000 });
@@ -510,7 +518,7 @@ function dataSection(ctx) {
     el('div', { class: 'divider' }),
     el('div', { class: 'actions-row' }, [
       el('button', { type: 'button', class: 'btn btn-danger', onClick: async () => {
-        const syncing = syncCapable() && ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on === true;
+        const syncing = await syncIsOn();
         const ok = await UI.typedConfirm({ title: 'Delete all local data?', message: syncing
           ? 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here.'
           : 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Export first if you want a backup.', word: 'DELETE', confirmLabel: 'Delete everything' });
@@ -529,6 +537,8 @@ function dataSection(ctx) {
     ]),
   ]);
 }
+
+const syncIsOn = async () => syncCapable() && ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on === true;
 
 function formatBytes(n) {
   n = Number(n) || 0;

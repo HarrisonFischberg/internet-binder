@@ -1127,3 +1127,48 @@ test('Settings: Send Debug Logs opens an email to support with the note, version
   assert.match(body, /App: Internet Binder \d/);
   assert.match(section.textContent, /Your email app is opening/);
 });
+
+// Last: it replaces the whole library. Safari with iCloud sync on (the fake gains nativeMessaging).
+test('Settings: Import (replace all) with iCloud sync on says so, turns sync off first, and replaces nothing if it can\'t', async () => {
+  const { createStore, chromeBackend, idbBackend } = await import('../keepsake/src/shared/storage.js');
+  const store = createStore(chromeBackend(), idbBackend());
+  const before = await store.addItem({ title: 'Saved on the iPhone too', url: 'https://replace.example/rug' });
+  const file = await store.exportJSON();
+  file.items = { [before.id]: { ...file.items[before.id], title: 'From the backup' } };
+  const sent = [];
+  let syncOff = { ok: false, error: 'The Mac app didn’t answer.' };
+  const real = { send: chrome.runtime.sendMessage, manifest: chrome.runtime.getManifest, native: chrome.runtime.sendNativeMessage };
+  chrome.runtime.getManifest = () => ({ ...real.manifest(), permissions: [...(real.manifest().permissions || []), 'nativeMessaging'] });
+  chrome.runtime.sendNativeMessage = () => {};
+  chrome.runtime.sendMessage = async (msg) => { sent.push(msg); return msg.type === 'keepsake:sync-set' ? syncOff : { ok: true }; };
+  await chrome.storage.local.set({ keepsake_sync: { on: true } });
+  const replace = async () => {
+    await go('#settings');
+    [...view().querySelectorAll('button')].find((b) => b.textContent === 'Import (replace all)').click();
+    const input = view().querySelector('input[type=file]');
+    Object.defineProperty(input, 'files', { value: [new window.File([JSON.stringify(file)], 'backup.json', { type: 'application/json' })], configurable: true });
+    input.dispatchEvent(new window.Event('change'));
+    await until(() => window.document.querySelector('.modal input'));
+    const text = window.document.querySelector('.modal').textContent;
+    window.document.querySelector('.modal input').value = 'REPLACE';
+    [...window.document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Replace').click();
+    await afterChange();
+    return text;
+  };
+  try {
+    const dialog = await replace();
+    assert.match(dialog, /Sync with iCloud turns off first, so iCloud and your other devices keep theirs/);
+    assert.deepEqual(sent.map((m) => [m.type, m.on]), [['keepsake:sync-set', false]]);
+    assert.equal((await store.getItem(before.id)).title, 'Saved on the iPhone too', 'sync could not be turned off, so nothing was replaced');
+    assert.match(window.document.body.textContent, /Couldn’t turn off sync with iCloud, so nothing was replaced/);
+
+    sent.length = 0;
+    syncOff = { ok: true, sync: { on: false } };
+    await replace();
+    assert.equal(sent[0].type, 'keepsake:sync-set', 'sync turns off before anything is removed');
+    assert.equal((await store.getItem(before.id)).title, 'From the backup');
+  } finally {
+    Object.assign(chrome.runtime, { sendMessage: real.send, getManifest: real.manifest, sendNativeMessage: real.native });
+    await chrome.storage.local.remove('keepsake_sync');
+  }
+});
