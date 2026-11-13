@@ -226,6 +226,25 @@ test('collections: same-name dedupe, similar allowed on request, limit enforced'
   assert.notEqual(c.collection.id, a.collection.id);
 });
 
+// Sync merges collections whose names match this way (SyncDedupe), so a rename may not create such a pair.
+test('renaming a collection to another one\'s name (give or take case, "my", "&") is refused; other edits still work', async () => {
+  const { store } = await fresh();
+  const books = (await store.createCollection({ name: 'Books' })).collection;
+  const reads = (await store.createCollection({ name: 'Reads' })).collection;
+  const food = (await store.createCollection({ name: 'Food & Drink' })).collection;
+  const ideas = (await store.createCollection({ name: 'Ideas' })).collection;
+  await assert.rejects(store.updateCollection(reads.id, { name: 'My Books' }), /“Books” already exists/);
+  await assert.rejects(store.updateCollection(reads.id, { name: 'food and drink' }), /“Food & Drink” already exists/);
+  await assert.rejects(store.updateCollection(reads.id, { name: 'My Ideas' }), /“Ideas” already exists/, 'filler-only names still match the way sync does');
+  assert.equal((await store.getCollection(reads.id)).name, 'Reads');
+  assert.equal((await store.updateCollection(books.id, { name: 'books' })).name, 'books', 'its own name, recased');
+  assert.equal((await store.updateCollection(reads.id, { name: 'Bookshelf' })).name, 'Bookshelf');
+  // A pair from before this rule (or from an import) can still be edited when the name is sent unchanged.
+  const twin = (await store.createCollection({ name: 'Food and Drink' }, { allowSimilar: true })).collection;
+  assert.deepEqual((await store.updateCollection(twin.id, { name: 'Food and Drink', pinned: true })).pinned, true);
+  assert.ok(food && ideas);
+});
+
 test('deleting a collection sends its items to Review (or to moveTo), and forgets learned weights', async () => {
   const { store } = await fresh();
   const [home, clothing] = await store.getCollections();

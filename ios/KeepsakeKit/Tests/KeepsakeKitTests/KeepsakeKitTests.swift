@@ -294,6 +294,20 @@ struct CaptureTests {
         #expect(try await lib.deleteCollections(["missing"]) == nil)
     }
 
+    /// A rename that sync would merge into another collection (SyncDedupe) is refused with a message.
+    @Test func renameIntoAnotherCollectionsNameIsRefused() async throws {
+        let lib = try library()
+        let books = try await lib.createCollection(named: "Books")
+        let reads = try await lib.createCollection(named: "Reads")
+        await #expect(throws: CoreError.failed("“Books” already exists.")) {
+            try await lib.updateCollection(reads.id, ["name": "My Books", "keywords": [String](), "pinned": false])
+        }
+        #expect(try lib.collections().first { $0.id == reads.id }?.name == "Reads")
+        try await lib.updateCollection(books.id, ["name": "Books", "pinned": true])
+        try lib.core.database.mergeDuplicates()
+        #expect(try lib.collections().filter { [books.id, reads.id].contains($0.id) }.count == 2)
+    }
+
     @Test func sameLinkTwiceIsADuplicate() async throws {
         let lib = try library()
         let p = Library.sharedProduct(url: "https://example.com/a?utm_source=x", title: "A", text: nil)

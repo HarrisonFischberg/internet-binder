@@ -2642,11 +2642,17 @@ function collectionNameField(col) {
     const name = sanitizeText(input.value, 80);
     if (!name) return revert();
     if (name === col.name) return sync();
+    try {
+      await store.updateCollection(col.id, { name });
+    } catch (e) {
+      UI.toast(String((e && e.message) || e), { kind: 'danger' });
+      input.focus();
+      return;
+    }
     col.name = name;
     input.value = name;
     sync();
     input.blur();
-    await store.updateCollection(col.id, { name });
   };
   input.addEventListener('input', sync);
   input.addEventListener('keydown', (e) => {

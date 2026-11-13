@@ -198,6 +198,7 @@ struct CollectionEditor: View {
     @State private var words: CollectionWords?
     @State private var allBuiltIn = false
     @State private var failed = false
+    @State private var failMessage = "Couldn't save. Try again."
 
     var body: some View {
         NavigationStack {
@@ -222,6 +223,8 @@ struct CollectionEditor: View {
                             let words = keywords.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                             do { try await model.library?.updateCollection(collection.id, ["name": name, "keywords": words, "pinned": pinned]) } catch {
                                 Haptic.refused()
+                                // A name another collection already has is refused with the shared store's message.
+                                failMessage = (error as? CoreError).flatMap(\.errorDescription) ?? "Couldn't save. Try again."
                                 failed = true
                                 return
                             }
@@ -240,7 +243,7 @@ struct CollectionEditor: View {
                 pinned = collection.pinned ?? false
             }
             .task { words = try? await model.library?.words(forCollection: collection.id) }
-            .alert("Couldn't save. Try again.", isPresented: $failed) {}
+            .alert(failMessage, isPresented: $failed) {}
         }
         // What you typed isn't lost to a stray swipe down: Cancel or Save closes it.
         .interactiveDismissDisabled(name != collection.name || keywords != (collection.keywords ?? []).joined(separator: ", ") || pinned != (collection.pinned ?? false))
