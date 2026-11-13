@@ -1,6 +1,6 @@
 // Settings, Optional AI and Privacy views for the dashboard.
 
-import { LIMITS, STYLES, ICONS } from '../shared/storage.js';
+import { LIMITS, STYLES, ICONS, validateExport } from '../shared/storage.js';
 import { iconPath } from '../toolbar/icon.js';
 import { MSG } from '../shared/messages.js';
 import { el, clear, pluralize } from '../shared/util.js';
@@ -468,20 +468,23 @@ function dataSection(ctx) {
       } catch {
         throw new Error('That file is not valid JSON.');
       }
+      let syncStopped = false;
       if (importMode === 'replace') {
-        const syncing = await syncIsOn();
-        const ok = await UI.typedConfirm({ title: 'Replace everything?', message: syncing
-          ? 'All current collections, items and learned preferences in this browser will be replaced by the file’s contents. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here alongside the file’s contents.'
+        // A bad file is refused before anything changes (sync included).
+        validateExport(payload);
+        const ok = await UI.typedConfirm({ title: 'Replace everything?', message: syncCapable()
+          ? 'All current collections, items and learned preferences in this browser will be replaced by the file’s contents. If sync with iCloud is on, it turns off first, so nothing is deleted from iCloud or your other devices. Turning sync on again later combines this browser’s library with what’s in iCloud.'
           : 'All current collections, items and learned preferences will be replaced by the file’s contents.', word: 'REPLACE', confirmLabel: 'Replace' });
         if (!ok) return;
-        // Replacing here never deletes from iCloud: sync stops first, and nothing is replaced if it can't.
-        if (syncing) {
-          const res = await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on: false }).catch(() => null);
-          if (!res || res.ok !== true || (res.sync && res.sync.on === true)) throw new Error('Couldn’t turn off sync with iCloud, so nothing was replaced. Try again.');
-        }
+        syncStopped = await stopSyncFirst('replaced');
       }
-      const res = await ctx.store.importJSON(payload, { mode: importMode });
-      UI.toast(`Imported ${pluralize(res.addedItems, 'item', 'items')} and ${pluralize(res.addedCollections, 'collection', 'collections')}${res.skippedItems ? ` (${res.skippedItems} duplicates skipped)` : ''}.`, { duration: 6000 });
+      let res;
+      try {
+        res = await ctx.store.importJSON(payload, { mode: importMode });
+      } catch (e) {
+        throw syncStopped ? new Error(`${String((e && e.message) || e)} Sync with iCloud is now off.`) : e;
+      }
+      UI.toast(`Imported ${pluralize(res.addedItems, 'item', 'items')} and ${pluralize(res.addedCollections, 'collection', 'collections')}${res.skippedItems ? ` (${res.skippedItems} duplicates skipped)` : ''}.${syncStopped ? ' Sync with iCloud is now off.' : ''}`, { duration: 6000 });
     } catch (e) {
       UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 7000 });
     }
@@ -525,8 +528,12 @@ function dataSection(ctx) {
           ? 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Sync with iCloud turns off first, so iCloud and your other devices keep theirs: turn sync back on to bring them back here.'
           : 'Every collection, item, learned preference, setting and stored API key will be erased from this browser. Export first if you want a backup.', word: 'DELETE', confirmLabel: 'Delete everything' });
         if (!ok) return;
-        // Erasing here never erases iCloud: sync stops first.
-        if (syncing) await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on: false }).catch(() => null);
+        // Erasing here never erases iCloud: sync stops first, and nothing is erased if it can't.
+        try {
+          await stopSyncFirst('deleted');
+        } catch (e) {
+          return UI.toast(String((e && e.message) || e), { kind: 'danger', duration: 7000 });
+        }
         await ctx.store.clearAll();
         try { await chrome.storage.session.clear(); } catch { /* fine */ }
         try { await clearScanStore(); } catch { /* fine */ }
@@ -541,6 +548,31 @@ function dataSection(ctx) {
 }
 
 const syncIsOn = async () => syncCapable() && ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on === true;
+
+// Before Replace or Erase (Safari): sync stops first, after a round already running finishes, so nothing
+// removed next reaches iCloud. Read again after the dialog (another tab may have turned it on). Also sent
+// when it is already off, in case an earlier try stopped halfway (the worker saved "off" and ended before
+// clearing what was pending). Undecided (null) is left alone: no round runs then, and turning sync on
+// clears what is pending first. Resolves whether sync was on; throws, changing nothing, if it can't stop.
+async function stopSyncFirst(what) {
+  if (!syncCapable()) return false;
+  let on;
+  try { on = ((await chrome.storage.local.get(SYNC_KEY))[SYNC_KEY] || {}).on ?? null; } catch { on = true; }
+  if (on === null) return false;
+  const waiting = UI.toast('Turning off sync with iCloud… If a sync is running, this waits for it to finish.', { duration: 600000 });
+  let res = null;
+  try {
+    res = await chrome.runtime.sendMessage({ type: MSG.SYNC_SET, on: false });
+  } catch {
+    /* the background didn't answer */
+  } finally {
+    if (waiting) waiting();
+  }
+  const stopped = res && res.ok === true && !(res.sync && res.sync.on === true);
+  // Already off: that was only tidying up (no round runs while off, and turning on clears what is pending).
+  if (!stopped && on !== false) throw new Error(`Couldn’t turn off sync with iCloud, so nothing was ${what}. Try again.`);
+  return on === true;
+}
 
 function formatBytes(n) {
   n = Number(n) || 0;
