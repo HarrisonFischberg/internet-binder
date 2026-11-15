@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import KeepsakeKit
 import KeepsakeUI
+import os
 
 /// The Share Sheet way in. Saves first (one tap, no waiting), then a card shows where it went: flick
 /// the slip to put it somewhere else, add a note, or undo. Stays open until you tap Done (or Undo).
@@ -28,7 +29,54 @@ final class ShareViewController: UIViewController {
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(host.view)
         host.didMove(toParent: self)
+        ShareTrace.note(state.session, "opened")
+        // From the first moment: if iOS takes the sheet away before Done, a notice still says what happened.
+        state.keepNoticeReady()
         state.capture = Task { [state] in await state.save(items: extensionContext?.inputItems as? [NSExtensionItem] ?? []) }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        state.onScreen = true
+        ShareTrace.note(state.session, "appeared")
+    }
+
+    /// The sheet went without Done or Undo (the app it was shared from took it down): the standby
+    /// notice is no longer pushed back, so "Saved to …" arrives in a few seconds.
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        state.onScreen = false
+        ShareTrace.note(state.session, state.closing ? "gone" : "gone without Done or Undo")
+    }
+
+    override func didReceiveMemoryWarning() {
+        super.didReceiveMemoryWarning()
+        ShareTrace.note(state.session, "memory warning")
+    }
+}
+
+/// A short diary of what each opening of the share sheet did (opened, saved, gone, and how much memory
+/// was left), kept beside the library. The sheet sometimes closes by itself and leaves no crash report,
+/// so this is what says whether iOS stopped it or the app it was shared from took it down. Only these
+/// words and times: never a link, a title or anything else from a save. The newest ~300 lines are kept.
+enum ShareTrace {
+    private static let queue = DispatchQueue(label: "com.harrisonfischberg.keepsake.share.trace", qos: .utility)
+    private static let file = (try? RecordDatabase.defaultPath()).map {
+        URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("share-trace.log")
+    }
+    private static let logger = Logger(subsystem: "com.harrisonfischberg.keepsake.share", category: "sheet")
+
+    static func note(_ session: String, _ event: String) {
+        let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(session.prefix(6)) \(event) (\(os_proc_available_memory() >> 20) MB left)"
+        logger.notice("\(line, privacy: .public)")
+        queue.async {
+            guard let file else { return }
+            var text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+            text += line + "\n"
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+            if lines.count > 300 { text = lines.suffix(200).joined(separator: "\n") + "\n" }
+            try? Data(text.utf8).write(to: file, options: .atomic)
+        }
     }
 }
 
@@ -57,9 +105,49 @@ final class ShareState {
     /// Done or Undo was tapped: the sheet is on its way out, so a second tap does nothing.
     private(set) var closing = false
     private var library: Library?
+    /// The sheet is showing. Off it (and not closing by Done or Undo), the standby notice is left to arrive.
+    var onScreen = true
+    /// This opening of the sheet, for its standby notice (SaveNotice.standby).
+    let session = UUID().uuidString
+    private var standby: Task<Void, Never>?
+
+    /// What the standby notice should say now; nil when there's nothing to say (a duplicate, a failure).
+    private var standbyNow: SaveNotice.Standby? {
+        switch phase {
+        case .saving: .notSavedYet
+        case .saved: save.map { .saved(id: $0.id, title: $0.title, destination: destinationLabel) }
+        case .duplicate, .failed: nil
+        }
+    }
+
+    /// Keeps one notice a few seconds ahead for as long as the sheet is open (SaveNotice.standby): if
+    /// iOS closes the sheet by itself, the notice is what tells you the save went through.
+    func keepNoticeReady() {
+        guard standby == nil else { return }
+        standby = Task { [weak self] in
+            guard await SaveNotice.allowed() else { return }
+            while !Task.isCancelled, let self {
+                await self.pushNoticeBack()
+                try? await Task.sleep(for: SaveNotice.standbyBeat)
+            }
+        }
+    }
+
+    private func pushNoticeBack() async {
+        guard onScreen || closing, standby?.isCancelled == false, let what = standbyNow else { return }
+        await SaveNotice.standby(session, what)
+    }
+
+    /// Done, Undo, a duplicate or a failure: no standby notice any more.
+    private func endNotice() async {
+        standby?.cancel()
+        await standby?.value
+        SaveNotice.endStandby(session)
+    }
 
     func save(items: [NSExtensionItem]) async {
         let shared = await SharedContent.read(from: items)
+        ShareTrace.note(session, "read what was shared")
         do {
             let library = try Library(tidy: false)
             ThumbnailStore.shared.use(library)
@@ -86,13 +174,25 @@ final class ShareState {
                     ?? result.destination.flatMap { $0.isEmpty ? nil : $0 }
                     ?? (dup.hasOwnView ? KindStyle(dup.kind).plural : "Review")
                 phase = .duplicate
+                ShareTrace.note(session, "already saved")
+                await endNotice()
                 return
             }
-            guard let s = result.save else { phase = .failed("Internet Binder couldn't read what was shared."); return }
+            guard let s = result.save else {
+                phase = .failed("Internet Binder couldn't read what was shared.")
+                await endNotice()
+                return
+            }
             save = s
+            // Where it went, as far as the save itself says (the exact name follows below).
+            destinationLabel = s.hasOwnView ? KindStyle(s.kind).plural
+                : (s.collectionId ?? "").isEmpty ? "Review" : (result.destination ?? "")
+            phase = .saved
+            ShareTrace.note(session, "saved")
+            // It's in the library: from here the standby notice says so, before anything else is read or drawn.
+            await pushNoticeBack()
             Haptic.saved()
             Haptic.readyFiled()
-            phase = .saved
             destinations = (try? await library.destinations()) ?? []
             shelfPreview = (try? library.shelf(excluding: s.id)) ?? Library.Shelf()
             waiting = (try? library.waiting(excluding: s.id)) ?? Library.Waiting()
@@ -107,7 +207,9 @@ final class ShareState {
             UIAccessibility.post(notification: .announcement, argument: "Saved to \(destinationLabel)")
         } catch {
             phase = .failed(error.localizedDescription)
+            ShareTrace.note(session, "failed")
             Haptic.refused()
+            await endNotice()
         }
     }
 
@@ -180,10 +282,12 @@ final class ShareState {
     func undo() {
         guard !closing else { return }
         closing = true
+        ShareTrace.note(session, "Undo")
         Haptic.undo()
         guard let save, let library else { finish(); return }
         // The save is gone before the sheet is; telling iCloud can wait for the moment after.
         Task {
+            await endNotice()
             try? await library.undoSave(save.id)
             closeThen { [self] in await sendToICloud(save.id) }
         }
@@ -210,12 +314,15 @@ final class ShareState {
     func done() {
         guard !closing else { return }
         closing = true
+        ShareTrace.note(session, "Done")
         // A firm press you can't miss; the sheet goes as soon as it has played.
         Haptic.filed()
         let note = note.trimmingCharacters(in: .whitespaces), capture = capture
         closeThen { [self] in
             // Done while it still says Saving: let the save land first instead of dropping it.
             await capture?.value
+            // The real notice comes next, so the standby one goes.
+            await endNotice()
             guard let save, let library else { return }
             let kept: Bool
             if case .saved = phase { kept = true } else { kept = false }

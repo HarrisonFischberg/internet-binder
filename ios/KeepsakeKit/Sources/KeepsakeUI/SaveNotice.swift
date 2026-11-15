@@ -44,6 +44,59 @@ public enum SaveNotice {
         try? await center.add(request)
     }
 
+    // MARK: while the share sheet is open
+
+    /// How far ahead the standby notice is kept, and how often the open sheet pushes it back.
+    public static let standbyDelay: TimeInterval = 4
+    public static let standbyBeat: Duration = .milliseconds(1500)
+
+    /// Notices are on in Settings and iOS allows them.
+    public static func allowed() async -> Bool {
+        guard enabled else { return false }
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        return status == .authorized || status == .provisional || status == .ephemeral
+    }
+
+    /// What the standby notice says: the save and where it went, or that nothing was saved yet.
+    public enum Standby: Equatable, Sendable {
+        case notSavedYet
+        case saved(id: String, title: String, destination: String)
+    }
+
+    /// The share sheet's safety net. iOS can close a share sheet without a word (it stops an extension
+    /// that uses too much memory, and the app you shared from can take the sheet down with its own),
+    /// and then nothing told you whether the save went through. So while the sheet is open, one notice
+    /// is always waiting a few seconds ahead, and the sheet keeps pushing it back (`standbyBeat`). If the
+    /// sheet goes without Done or Undo, the pushing stops and the notice arrives: "Saved to …", or that
+    /// it didn't save and to share it again. Done and Undo take it away (`endStandby`).
+    /// `session` names one opening of the sheet; a later call with the same one replaces the notice.
+    public static func standby(_ session: String, _ what: Standby) async {
+        let c = UNMutableNotificationContent()
+        switch what {
+        case .notSavedYet:
+            c.title = "Not saved yet"
+            c.body = "Internet Binder closed before it could finish. Share it again to save it."
+        case .saved(let id, let title, let destination):
+            c.title = destination.isEmpty ? "Saved to Internet Binder" : "Saved to \(destination)"
+            c.body = title
+            c.userInfo = ["link": link(id).absoluteString]
+        }
+        c.threadIdentifier = "saves"
+        let request = UNNotificationRequest(identifier: standbyID(session), content: c,
+                                            trigger: UNTimeIntervalNotificationTrigger(timeInterval: standbyDelay, repeats: false))
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Done or Undo: the standby notice isn't needed (and one that already arrived, because the sheet sat
+    /// behind another app for a while, makes way for the real one).
+    public static func endStandby(_ session: String) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [standbyID(session)])
+        center.removeDeliveredNotifications(withIdentifiers: [standbyID(session)])
+    }
+
+    static func standbyID(_ session: String) -> String { "share-\(session)" }
+
     /// Asks iOS once (later calls return the answer already given). True when allowed.
     @discardableResult
     public static func ask() async -> Bool {
