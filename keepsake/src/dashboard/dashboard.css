@@ -4120,6 +4120,21 @@ a.watch-service:hover {
   }
 }
 
+/* Safari: a card in the column grid flashes black when hover makes it (or its buttons) a compositing
+   layer, which a transform or an opacity transition does. There the card keeps its shadow and border
+   change, without the 1px lift, and its buttons appear without the fade. */
+.safari .grid .card,
+.safari .grid .card:hover,
+.safari .grid .card:focus-within {
+  transform: none;
+  transition: box-shadow var(--t-med) var(--ease);
+}
+
+.safari .grid .card .card-actions,
+.safari .grid .card .card-actions .btn-icon {
+  transition: none;
+}
+
 /* List layout: a 56 px thumb on the left */
 .save-list {
   display: flex;
