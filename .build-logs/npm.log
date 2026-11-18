@@ -1,0 +1,860 @@
+
+> test
+> node --test "tests/**/*.test.mjs"
+
+✔ errors: a bad key stops the run, a 429 or overload waits, anything else skips that save (13.337834ms)
+✔ queue: a 429 waits and tries the same save again; at most two at a time (75.079ms)
+✔ queue: a bad key stops at once; saves not reached are left for the next run (0.393958ms)
+✔ queue: a provider that keeps saying it is busy pauses the run instead of knocking forever (0.310292ms)
+✔ queue: a save the provider keeps refusing is skipped after a few tries; one it can’t read is skipped at once (0.366542ms)
+✔ queue: Pause stops between saves (3.039083ms)
+✔ store: needsAi is kept, listed newest first, and cleared on an update (120.839208ms)
+✔ store: an imported backup waits for Run AI; a save your provider already read does not (3.680083ms)
+✔ store: once, saves stuck waiting for the AI tidy and Instagram imports never read join the queue (15.001625ms)
+✔ after-save work: only the newest few pending saves are tidied; the rest wait for Run AI (6.645791ms)
+✔ after-save work: a flagged Lifestyle save gets its Lookups but is not sent to your AI provider (1.89375ms)
+✔ readImported: a save your provider read loses its flag; one it failed on keeps it for the next run (883.632292ms)
+✔ a product gets a tidier title, the confirmed price and a collection from Review (156.922084ms)
+✔ fields you edited, a title just chosen, and a missing price stay (0.298833ms)
+✔ moving a filed save needs more certainty; your own filing is never moved; Review scope only files Review (0.800375ms)
+✔ a broken picture is replaced from the live page (1.585875ms)
+✔ apply logs what changed; undo puts it back, and a deleted collection sends it to Review (24.241375ms)
+✔ install: starter data, context menu, welcome page (709.055542ms)
+✔ save: a confident product is filed and its default collection is created on demand (14355.419083ms)
+✔ save: the same page again is reported as a duplicate; force saves a copy (21771.97ms)
+✔ save: an unsure instant save waits in Review with the best guess suggested (230.826542ms)
+✔ save: choosing a collection overrides the suggestion, is marked manual, and teaches (196.732458ms)
+✔ undoing a save removes it outright (it does not go to the Trash) (9.874667ms)
+✔ update: moving learns; only allowed fields can be patched (16.598375ms)
+✔ a suggestion chip can file into a default collection that does not exist yet (32.243125ms)
+✔ the capture card on the page loads the design tokens first and follows the chosen style (532.341917ms)
+✔ a recipe page is saved as a recipe in its own view (no collection, not Review), with no price (394.206375ms)
+✔ collections are for shopping: a recipe matching a collection keyword still stays out of it (31.017958ms)
+✔ with AI on, recipes are not sent for the product tidy (61.885833ms)
+✔ a workout page with an exercise list is saved as a workout in its own view (416.518708ms)
+✔ workout gear with a price stays a product; a caption that lists exercises is a workout (30.666583ms)
+✔ a restaurant page is saved as a place with its address and hours, with no price (19.709958ms)
+✔ a Google Maps link is saved as a place named from the link (22.32725ms)
+✔ videos and articles: a YouTube link is a video with its length; an og:type article gets a reading time (583.530292ms)
+✔ films and books: a Movie page and a Book page are saved to their views; a book for sale stays a product (247.550375ms)
+✔ the popup’s “where would this go?” knows kinds: a YouTube video is saved to Videos (its view), not Review (popup without AI) (38.513875ms)
+✔ a film or book site title page is saved as a film/show or book even with no data on the page (11.977458ms)
+✔ fill-in: a place saved with lookups on gets its address and pin; with lookups off nothing is sent (208.113916ms)
+✔ places with no pin are found on the map without asking; one not found is not searched again until it changes (4417.720459ms)
+✔ with AI on: a post your provider recognises as a place becomes one, named, logged with Undo (486.750334ms)
+✔ with AI on: a place you filed yourself is read for that kind, and a kind you chose is never changed (572.778958ms)
+✔ one click on an Instagram reel: its own caption is read, so it saves as the place, with the address (181.392416ms)
+✔ a business’s own site with an address and hours is a place named after the site; an office address alone is not (17.82575ms)
+✔ smoke-test fixes: a review of one venue is the place (named from the title), a salon listing is a place, a Facebook page is a link (27.981666ms)
+✔ a sparse page with nothing to sell is saved as a link; a shop page stays a product (199.704541ms)
+✔ privileged messages are refused from web-page contexts (13.092916ms)
+✔ open dashboard only accepts plain hashes (5.876916ms)
+✔ context menu on a restricted page does nothing (7.391ms)
+✔ context menu save: extracts the page, saves, shows a toast (7.605125ms)
+✔ with AI on, the save is stored before any network call and answers without waiting (135.985792ms)
+✔ AI on, provider down: the save stays with the local result and is marked complete (10.642167ms)
+✔ an AI-tidied title keeps the captured title and is logged with undo data (fixes A2) (153.26625ms)
+✔ a title edited or a collection chosen while AI was working is never overwritten (451.584042ms)
+✔ a save left pending (worker stopped) is finished on the next pickup (143.493583ms)
+✔ with AI off, saves are complete straight away and nothing is sent (6.7875ms)
+✔ business profiles: an Instagram profile or Facebook page for a business is a place; a person’s is a link (16.591583ms)
+✔ a business home page with no address: a place when it says what it is and where (a lookup finds the rest); a brand is not (11.030208ms)
+✔ a venue listing’s labeled Address block with its city is a place, even with no phone or day names (11.105166ms)
+✔ fill-in with AI on: an imported Instagram place that says nothing about where it is gets a name and city (252.525583ms)
+✔ Places review: the caption is read again first; then your AI provider names the place and its state (157.790125ms)
+✔ a fill-in batch runs one save at a time, keeps its progress in session storage, counts places that leave review, and stops (173.778667ms)
+✔ a fill-in batch can’t be started from a web page (6.42675ms)
+✔ Check with AI on the Places list: a place missing its city or state gets them; its name and street stay; a complete place isn’t sent (32.071791ms)
+✔ instagram scan: thumbnails arrive one by one into IndexedDB; the post list and its messages stay small (42.718209ms)
+✔ instagram scan: a new scan starts even when an older one left the session area full (5.856958ms)
+✔ instagram scan: 289 posts reported every second fit a session area that never frees what it wrote (1456.037833ms)
+✔ instagram: "Import all collections" opens each collection in turn and merges its posts, noting their collections (154.09825ms)
+✔ instagram: stopping "Import all collections" keeps what was found and skips the rest (21.022541ms)
+✔ instagram scan: Safari without instagram.com access sends no tab address; reports from the scan's own tab still count (3.566834ms)
+✔ bulk import from open tabs: with AI on, nothing goes to your provider; the save is flagged for Run AI (140.582708ms)
+✔ Run AI on imported saves: reads the flagged saves you picked, clears their flag, reports progress; a bad key pauses it (211.655292ms)
+✔ manifest is MV3 with a semver version (1.467666ms)
+✔ description fits both stores (Safari allows 112 characters, Chrome 132) (0.191333ms)
+✔ every file the manifest references exists (0.373916ms)
+✔ permissions stay least-privilege (changes here need a privacy review) (0.855083ms)
+✔ extension pages CSP forbids remote and inline script (0.171417ms)
+✔ every JS file parses (11143.95875ms)
+✔ no HTML-string or eval APIs (one reviewed constant SVG allowed) (81.861875ms)
+✔ HTML pages load only local scripts and have no inline scripts or styles (1.708792ms)
+✔ the release package excludes dev tooling (tests and package.json live outside keepsake/) (167.726416ms)
+✔ the dashboard boots without errors (1175.7725ms)
+✔ route #home renders (102.058708ms)
+✔ route #all renders (84.209ms)
+✔ route #favorites renders (64.981792ms)
+✔ route #purchased renders (140.385166ms)
+✔ route #trash renders (133.348666ms)
+✔ route #collections renders (280.289167ms)
+✔ route #import renders (62.628417ms)
+✔ route #settings renders (695.48775ms)
+✔ route #ai renders (282.7795ms)
+✔ route #ailog renders (63.779041ms)
+✔ route #privacy renders (64.915167ms)
+✔ route #welcome renders (66.357958ms)
+✔ an empty library shows the first-run empty state (113.21575ms)
+✔ sample data appears in the Library and Review (2341.688292ms)
+✔ deleting from Review moves the save to Trash, with Undo, and Trash can restore it (684.96575ms)
+✔ the Style setting restyles the page (Nocturne by default, no attribute; old styles move over) (2240.840417ms)
+✔ Review rows offer numbered suggestions and file with a number key (25733.045417ms)
+✔ Import recipe from a link: an empty recipe gets the page's recipe, on the same save, with Undo (2843.510833ms)
+✔ recipes get their own view, a kind badge, and a recipe panel (3547.083834ms)
+✔ workouts open into the workout view: exercises, a goal, check-in with undo (3926.098458ms)
+✔ switching an Instagram save to Workout fills in the exercises its caption lists (1512.095084ms)
+✔ places: a list by state (or country) and city, Places review for the rest, the place view with maps links, Been, and editing the address drops the pin (3363.496667ms)
+✔ a place Fix with AI could not tell apart: the place view lists the choices with their sources; This one applies it, None of these clears them (2530.6865ms)
+✔ videos open into a view with their length and a Watch link; editing the length is checked (2540.952625ms)
+✔ tags: filter chips in a view, pills on cards, edited in Edit details; the Lifestyle group folds the kind views (1596.306667ms)
+✔ films and books: a list to scroll, to-watch first; tick to move; the view shows the facts (1672.866666ms)
+✔ Sort: every collection and Lifestyle view opens newest first, and each keeps its own choice (979.878916ms)
+✔ redesign: card anatomy, kind and status filters with removable chips, list layout (1200.508125ms)
+✔ search: ranked results, a corrected query offered, and "/" focuses the box (1267.185167ms)
+✔ Home: Come back to shows old saves you haven’t opened; opening one clears it; it can be turned off (2288.799ms)
+✔ save detail: History lists the save, the first title, and AI changes with Undo (2005.179417ms)
+✔ toasts: Alt+Z presses the newest Undo; an Undo toast pauses while pointed at (139.510417ms)
+✖ Collections fold: closed, only pinned collections (and the one you’re on) stay listed; remembered (951.6605ms)
+✖ groups sort by size: the Lifestyle menu and the sidebar collections list most saves first, a tie A–Z (470.754958ms)
+✖ Refresh: the toolbar button and ⌘R read the library again and redraw in place (499.738958ms)
+✔ Privacy lives in Settings as a dialog; the menu has no Privacy row; Trash is last (516.991333ms)
+✔ Library has two tabs, Saves and Collections; both keep Library highlighted (278.279292ms)
+✔ save anywhere: Move to… puts a save into a Lifestyle view (details worked out) or back into a collection (3806.644209ms)
+✔ an unknown collection route says so (456.860042ms)
+✔ Instagram import: one button; a “Restaurants” collection goes to Places, named and pinned from each post; then where everything went (1550.878458ms)
+✔ Instagram import: already-saved posts are skipped; without instagram.com access posts still import; the summary counts each destination and Review (18159.779125ms)
+✔ Settings: instagram.com access has a Grant access button that asks the browser, explains where to allow it if declined, and flips to Granted (620.865042ms)
+✔ background checks: a progress bar under the header with Stop, then what changed; Check with AI only where saves are, with AI on (2234.279042ms)
+✔ Places review: Fix sends exactly the places waiting there, so the progress total matches the tab’s count (891.575042ms)
+✔ Select sits beside Check with AI; Select all, ⌘A and Delete work inside a collection, with one Undo (3103.036417ms)
+✔ right-click on a card opens its menu at the pointer, with Select and Copy link (2565.732375ms)
+✔ Collections page: select collections and delete them; Undo puts them back with their saves (3143.583667ms)
+✔ a collection’s Delete offers keep-the-saves or delete-them-too, no confirm dialog, with Undo (1419.638208ms)
+✔ Settings: Send Debug Logs opens an email to support with the note, version and browser (70.204459ms)
+✔ a version 1 database (M1) gains goals and checkins and keeps every save (9.977209ms)
+✔ a database from a newer Internet Binder still opens (rolled back to this build) (3.019541ms)
+✔ a write that fails partway keeps none of its records (31.970291ms)
+✔ three token sets from the brand kit: nocturne, paper and chromatic, with identical roles (4.333416ms)
+✔ the extension ships the generated tokens unchanged (run replica/design/build_tokens.py after editing tokens) (1.198333ms)
+✔ extension pages load tokens.css before base.css (2.716791ms)
+✔ WCAG AA contrast: chromatic.json (1.352667ms)
+✔ WCAG AA contrast: nocturne.json (1.246292ms)
+✔ WCAG AA contrast: paper.json (0.414417ms)
+✔ extract: JSON-LD Product wins (title, price, currency, brand, image, category) (588.043292ms)
+✔ extract: Open Graph fallback (368.985708ms)
+✔ extract: a page with no product data is marked sparse and keeps the page title (88.806167ms)
+✔ extract: canonical link and selection hint (104.884709ms)
+✔ extract: an Instagram post whose og:url is the /<user>/reel/ form keeps its head (Safari gets a bare "Instagram" title) (399.143125ms)
+✔ instagram: post page parsed from meta tags; javascript: and instagram links rejected (8.806875ms)
+✔ instagram: login wall detected (13.901834ms)
+✔ instagram: titles from captions (6.430458ms)
+✔ AI cleanup: only prices present in the input survive, only existing collections are accepted (7.62275ms)
+✔ AI find online: links not in the search results are dropped (1.391ms)
+✔ AI: remote thumbnails are never forwarded; only local data: images are (0.322042ms)
+✔ AI: payload preview and provider origin (0.110333ms)
+✔ AI: missing key and provider errors are reported, not swallowed (0.442167ms)
+✔ extract: a page reached without a reload ignores the previous page’s tags (YouTube in-app navigation) (615.046167ms)
+✔ extract: structured data wrapped in CDATA comments is still read (a film page) (10.815208ms)
+✔ extract: an Instagram reel reached from the grid: its own caption from the page data (not the grid’s), or from the screen (31.939ms)
+✔ extract: a restaurant’s own site with no place data: its visible address block, phone and hours (9.90025ms)
+✔ extract: a listing’s Address block (city and postcode on their own lines) and time-only hours (8.123625ms)
+✔ extract: an Instagram profile’s name and bio (only from its own head tags), and a Facebook page’s Intro (447.057167ms)
+✔ extract: a home page with no address: the business’s name, about, phone and a locations link (276.968708ms)
+✔ instagram: a post’s location tag keeps its street, city and pin (48.583916ms)
+✔ AI models: Claude Haiku 5.5 at medium effort is the default, and effort only goes to listed Claude models (0.421166ms)
+✔ a post that tells the reader where to file it is never filed there, even with real words as evidence (14.59325ms)
+✔ a stand-in title or the collection list is never evidence (3.931ms)
+✔ a caption past the device limit still leaves the whole collection list in what the model reads (15.766166ms)
+✔ when not every collection fits in what the device model reads, its pick goes to Review (12.750875ms)
+✔ evidence counts only when it is really in the save (3.356916ms)
+✔ a checked answer moves the save, with Undo-able provenance (20.242458ms)
+✔ an unknown collection, made-up reasons or "not sure" never file; Review gets the reason (1.449417ms)
+✔ what you filed, Lifestyle saves and (Review-only runs) filed saves stay put (1.516167ms)
+✔ a caption that tells the AI where to file it is quoted text, not proof of a topic (1.79625ms)
+✔ fileSave on the device: reads, checks, files and logs with Undo (1284.590458ms)
+✔ a stand-in title ("Reel by @someone") is not evidence (0.210208ms)
+✔ Apple Intelligence on its own files only where the sorter agrees (31.626833ms)
+✔ a numbered list of AI tools is not a recipe (293.066208ms)
+✔ a kettlebell workout ending in "📌 Save this" is a workout, not a place (56.022666ms)
+✔ a recipe that is a comment away is a recipe; a cafe post with 📍 is still a place (36.977709ms)
+✔ a location tag on a post about AI tools does not make it a place (475.030167ms)
+✔ "training a model" is not a workout (0.840125ms)
+✔ a collection named for a topic gets that topic’s posts, and Technology doesn’t take them (7227.884625ms)
+✔ moves on Instagram saves never teach "everything from instagram.com goes here" (8.760334ms)
+✔ a post’s title is its first line, without the next one run on (1.313625ms)
+✔ the AI calling a reel "a video" doesn’t pull an AI post out of your collections (4.619541ms)
+✔ the AI can’t make a post about AI a recipe, a workout or a product (1.172ms)
+✔ a caption that tells the sorter where to file it does not decide the collection (451.113041ms)
+✔ a post on X, Reddit or Pinterest with no price is a link, not a product; a shop page still is (1.400875ms)
+✔ recipes and routines in other languages are read as recipes and workouts (7.583167ms)
+✔ a link-only Instagram share waits in Review, named for what it is and saying why (260.244209ms)
+✔ days: local calendar days, across month ends and daylight saving (42.981125ms)
+✔ makeGoal: sane numbers, end date from weeks, plans bounded and sorted (5.778916ms)
+✔ frequency progress: this week, the week strip, one count per day, neutral missed-week note (0.612375ms)
+✔ a plan changes a week’s target and is shown as the next step (0.446917ms)
+✔ target progress: best so far, reached on the first check-in that hits it (14.108667ms)
+✔ scan: each captured thumbnail is sent once on its own; progress reports carry no pictures (1409.475042ms)
+✔ import: a save gets the thumbnail the scan stored, else Instagram's link (1193.762083ms)
+✔ adapter: the Saved overview lists each collection once, "All posts" included, Instagram's own folders left out (471.850417ms)
+✔ import all collections: each Instagram collection becomes a group; recipes still go to Recipes; loose posts are sorted (36995.815542ms)
+✔ import: nothing is sent to your AI provider; every post is flagged for Run AI (22.39375ms)
+✔ durations: ISO 8601 and plain text (50.460541ms)
+✔ recipe from schema.org: ingredients, HowToStep and HowToSection steps, yield and times (2.669708ms)
+✔ recipe from a caption with headings (5.8635ms)
+✔ recipe from a caption without headings (quantity-led lines) (3.879834ms)
+✔ Instagram spacer lines are not steps (0.255917ms)
+✔ ordinary captions are not recipes (0.102541ms)
+✔ kind from structured-data types (0.149375ms)
+✔ older saves get a kind; an Instagram caption with ingredients becomes a recipe (6.108083ms)
+✔ key facts and sanitizing (0.335667ms)
+✔ extract: a JSON-LD recipe page (1038.4175ms)
+✔ extract: a microdata recipe page (550.569625ms)
+✔ imported recipe text: HTML entities decoded (also double-encoded), words left alone (49.782ms)
+✔ workouts: exercise lines in the ways people write them (171.599042ms)
+✔ workouts: a caption with rounds and rest; recipe captions never become workouts (28.691625ms)
+✔ workout details are sanitized: bad exercises dropped, numbers bounded (0.156ms)
+✔ workouts: prose under a page heading names the exercise; sentences are never names (2.507084ms)
+✔ workouts: an Instagram caption flattened to one line, names listed once, numbers given for all (4.552875ms)
+✔ workouts: check-mark bullets with muscles in brackets, numbers in sentences, Instagram quote marks (0.603208ms)
+✔ places: schema.org restaurant, opening hours, maps links read from the link itself (222.635584ms)
+✔ videos and articles: platform from the link, lengths, reading time, and an article with a video stays an article (9.682792ms)
+✔ topics: guessed from title, channel and description; whole words only; tags cleaned (902.011958ms)
+✔ films, shows and books from schema.org; numbers and ISBNs checked (0.831333ms)
+✔ search: every word must match; title beats note beats text; one typo forgiven (165.471583ms)
+✔ film and book sites: a title page is a film/show or a book; home, lists and reviews are not (39.728875ms)
+✔ places from captions: "📍 Name" with the address on the next line, or glued on when line breaks are lost (93.37675ms)
+✔ places: an "Address:" line is the address, never the name; the place’s @handle nearby names it (155.481542ms)
+✔ maps search links with the address in them: name, street, city and state (4.078792ms)
+✔ addressFromLine: a street with its city run on, an address with the country, or an area alone (0.546833ms)
+✔ placeFromProfile: business profiles are places (name, address or area); bloggers and bands are not (55.931708ms)
+✔ placeFromHome: says what it is (a bakery, a skate shop) and where (a city, a phone, a locations link) (133.991166ms)
+✔ kindForCollectionName: an Instagram collection named for a Lifestyle view goes there (15.52775ms)
+✔ placeFromPost: the caption names the place, the location tag gives its street, city and pin; a city-only tag is the area (18.405208ms)
+✔ moving an imported Instagram post into Places: named from its location tag, with the tag’s street, city and pin (48.252834ms)
+✔ tidyStreet: a number written after the street, or with a slash, is put where it belongs (0.86425ms)
+✔ Instagram: a listed kettlebell complex is a workout, not a recipe (177.71ms)
+✔ Instagram: a routine that is only in the video is still a workout, with no exercises made up (16.710625ms)
+✔ Instagram: recipes and other posts with a workout word stay what they are (0.797125ms)
+held-out accuracy: 40% → 55% (half the saves filed) → 80% (all)
+✔ sorting gets better as you file: held-out saves land right far more often (42712.452375ms)
+✔ kept suggestions teach too: filing the same saves again with every one kept keeps it right (3163.473792ms)
+✔ kept suggestions are quiet: one move outweighs a kept suggestion, and moving it back takes it back (0.393125ms)
+✔ a word you file everywhere does not drag saves anywhere; a word you file in one place does (9.98225ms)
+✔ a shop you file everywhere counts for less than one you file in one place (11.468459ms)
+✔ store.confirmFiling learns once per save, and never for a save you moved (147.158916ms)
+✔ saving where the toolbar suggested teaches the sorter; an instant save nobody looked at does not (397.473333ms)
+✔ learnFromSaves is the same as keeping each save where it is, one by one (773.743875ms)
+✔ store.learnFromLibrary teaches from what you already filed, once, skipping moves, Review and samples (62.467958ms)
+✔ your keyword beats a collection you do not have yet (21.6175ms)
+✔ everyday words and post boilerplate are never learned; hashtags are (0.456334ms)
+✔ posts you keep as Workouts teach the kind; a new post like them becomes one, others stay links (1.14025ms)
+✔ a kind you change teaches it; changing it back unteaches it (0.615208ms)
+✔ saving a post: the learned kind files it, a recipe the rules read is never overridden (68.658625ms)
+✔ updateItem with a new kind teaches the sorter; learnFromLibrary learns kinds once, even after collections (152.324125ms)
+✔ every app’s link is known by its site, with the post’s id (22.727583ms)
+✔ the requests ask each site only for the shared post, its public data first (0.949959ms)
+✔ a YouTube video keeps its description, channel, length and date (755.769083ms)
+✔ jsonAfter reads a script’s object with braces inside its strings (0.991167ms)
+✔ a TikTok keeps its caption, creator, date, length and tagged place, and is filed by what it says (760.321084ms)
+✔ a short TikTok link is followed to the video, then its embed is asked for (11.838417ms)
+✔ a TikTok photo post keeps its pictures (0.505584ms)
+✔ a Reddit post keeps its title, text, subreddit, picture and the poster’s own recipe comment (280.406958ms)
+✔ a Reddit link post keeps where it links; a gallery keeps every picture (4.947542ms)
+✔ Reddit blocked the data: the embed or the page still give the title (48.810042ms)
+✔ a Bluesky post keeps its whole links, pictures and the post it answers (9.88075ms)
+✔ a pin keeps its description, picture, board and the page it came from (275.1135ms)
+✔ Threads and Facebook posts are read from their link preview (73.758333ms)
+✔ Vimeo, SoundCloud and Spotify keep their title, maker and length (65.640667ms)
+✔ any page shared from an app is read from its own tags and schema.org data (1.407334ms)
+✔ a product page keeps its price; an article its author and date (0.934042ms)
+✔ sign-in walls, bot checks and app-name titles are not what the link is about (0.930208ms)
+✔ a thin page that offers oEmbed has it asked for (0.839625ms)
+✔ the same post shared from different links is one save (0.227291ms)
+✔ a short link’s save keeps the post’s own address (0.216084ms)
+✔ nothing read: the post says why only the link was saved (1.852208ms)
+✔ sameName: tidied, contained or mostly the same words; not just one shared word (4.149375ms)
+✔ places: only a result with the same name is used, and only its own fields (3.672958ms)
+✔ films: the entity that is a film with the same title (and year), with labels for director and genre (1.214625ms)
+✔ books: Open Library result with the same title; cover and ISBN from it (0.397584ms)
+✔ fillMissing never replaces what you or the page filled in (0.211208ms)
+✔ places: a new place OpenStreetMap doesn’t know by name is found by the address the post gave (same street and number only) (0.969292ms)
+✔ places: a name with no street, city or area is never looked up (it could be a shop of that name anywhere) (0.184583ms)
+✔ places: a pin with no street address gets the address at that pin (4.809791ms)
+✔ places: a result in another city is never used, and a name that matches places far apart gets no pin (0.5845ms)
+✔ places: a street written with its direction short ("S. Lumpkin St.") matches it spelled out (0.414792ms)
+✔ places: a pin OpenStreetMap only knows the street for is marked approximate, and keeps the address you gave (3.666625ms)
+✔ nothing registered (Chrome): AI needs your key, as before (12.357333ms)
+✔ a device model that is ready makes AI available with no key; one that is not ready does not (0.19175ms)
+✔ keyFor: work that runs by itself never uses your key while the device model is there (0.107084ms)
+✔ without a key the device model reads the save and nothing is sent; with your key your provider does (6.137625ms)
+✔ the device model failing with no key is an error, so the save stays as it was (12.59825ms)
+✔ a product with no key: the device model names it without a search, and no shop page is made up (8.075125ms)
+✔ cleanup with the device model files into your own collections only (13.055709ms)
+✔ understandItem after a save (deviceOnly): Apple Intelligence reads it even with your key set, and nothing is sent (1039.252542ms)
+✔ understandItem with no key and no device model does nothing (0.627833ms)
+✔ tidySave with only the device model: a new save is read and tidied with no key at all (4.065959ms)
+✔ prefersKey: only with the switch on and a usable key (0.079208ms)
+✔ Prefer my Claude key: a new save goes to your provider, not the device model (1.56925ms)
+✔ Prefer my Claude key off: a new save stays on the device even with your key set (0.82625ms)
+✔ the device model: examples it copied are dropped, a second object after the answer is ignored, and it gets the note (0.280083ms)
+✔ your provider is not sent the device note (0.162166ms)
+✔ place check: address stated in the post, OpenStreetMap agrees (36.375208ms)
+✔ place check: name and city, one match (1.465833ms)
+✔ place check: a chain with two branches in the city: you choose (1.263917ms)
+✔ place check: a name and nothing about where: nothing is looked up (6.484375ms)
+✔ place check: a round-up of three places is not one place (0.400959ms)
+✔ place check: OpenStreetMap only knows that name in another city (0.466833ms)
+✔ place check: the web answer invents an address and a URL the search never returned (0.948542ms)
+✔ place check: web search finds it and a cited page states the address (OpenStreetMap off) (1.843666ms)
+✔ place check: web search and OpenStreetMap agree: address and pin (4.414584ms)
+✔ place check: only a location tag, no city: candidates to choose, nothing applied (2.354291ms)
+✔ place check: a caption that tells the AI what address to give (1.133458ms)
+✔ place check: details you typed are never overwritten (0.896583ms)
+✔ place check: the same place twice in OpenStreetMap (a node and a building) is one place (1.005833ms)
+✔ place check: name and area match but OpenStreetMap's name is a different business (0.704459ms)
+✔ place check: a chain with three branches in the city: you choose among them (3.90225ms)
+✔ place check: a chain branch named by its street in the caption: that branch (1.766875ms)
+✔ place check: a chain with no city: nothing is looked up (0.785ms)
+✔ place check: a chain with branches in two states, the caption says the state (0.761375ms)
+✔ place check: a chain branch in OpenStreetMap only in another city: not this one (5.22025ms)
+✔ place check: web search finds two branches of a chain: you choose (62.9135ms)
+✔ place check: same name in two cities: the caption says which (135.193459ms)
+✔ place check: same name, OpenStreetMap only has the other city (0.383333ms)
+✔ place check: same name in Portland, Oregon and Portland, Maine: the caption says Maine (3.374ms)
+✔ place check: Portland with no state, two Portlands in OpenStreetMap: you choose (0.707417ms)
+✔ place check: a name in another country than the caption: not verified (0.303125ms)
+✔ place check: a closed venue OpenStreetMap no longer lists: nothing applied (1.766125ms)
+✔ place check: web search says it closed and cites nothing for the address (0.415375ms)
+✔ place check: a closed venue whose name a different business now has: not that business (0.247125ms)
+✔ place check: a pop-up at a market: OpenStreetMap only knows the market, not the pop-up (0.174667ms)
+✔ place check: a one-night supper club with no address (0.235042ms)
+✔ place check: a food truck with a usual corner: no pin from the model (0.338042ms)
+✔ place check: the address is only in the caption and OpenStreetMap agrees (0.341542ms)
+✔ place check: the address only in the caption, OpenStreetMap has nothing: the caption’s address stays, no pin (0.267375ms)
+✔ place check: an address with no name in the caption: nothing is guessed (0.186042ms)
+✔ place check: the caption’s address disagrees with OpenStreetMap’s branch: not verified (0.606333ms)
+✔ place check: Lookups off and no key: the caption’s address stays, nothing is looked up (0.210042ms)
+✔ place check: the caption names Naples, the tag says New York: Naples (0.266042ms)
+✔ place check: a tag in one city, a different city in the caption, OpenStreetMap only the tag’s: not verified (0.238542ms)
+✔ place check: the tag is a venue, the caption names a different venue: not either alone (0.183208ms)
+✔ place check: a tag that is a whole city only: nothing to verify (0.1545ms)
+✔ place check: London: name, street and postcode in the caption, OpenStreetMap agrees (0.256959ms)
+✔ place check: Paris: OpenStreetMap writes the house number after the street (0.236ms)
+✔ place check: Tokyo: name and ward, OpenStreetMap has one match (2.54375ms)
+✔ place check: Berlin: German address order (2.046334ms)
+✔ place check: Mexico City: OpenStreetMap writes Ciudad de México (0.529917ms)
+✔ place check: Sydney: a name in the city, OpenStreetMap agrees (0.715417ms)
+✔ place check: two venues in one caption: not one place (1.287417ms)
+✔ place check: a top-5 list with five pins: nothing looked up (0.451833ms)
+✔ place check: a numbered list of cafes with no pins: not one place (2.527333ms)
+✔ place check: a trip itinerary with three pins (0.424208ms)
+✔ place check: a caption that tells the AI to use an address (0.403209ms)
+✔ place check: a web answer with a URL the search never returned (1.777125ms)
+✔ place check: a web answer’s phone and hours that no cited page states are never written (1.288334ms)
+✔ place check: a web candidate with a different name than the post: not verified (0.668208ms)
+✔ place check: the same café as a node and as its building: one place (0.581625ms)
+✔ place check: a name only, with no city or area: nothing looked up (0.380166ms)
+✔ place check: a tagged account and a city: found by the account’s name (0.412167ms)
+✔ place check: Lookups off and no key: no request at all (33.476417ms)
+✔ place check: a park with a name and city (136.116834ms)
+⚠ place check: a hiking trail with only a region (2.83425ms) # a park name as the city: OpenStreetMap gives the nearest town, so only the state matches; it waits for you instead (safe, not ideal)
+✔ place check: a hotel with two properties of the same name in one city: you choose (2.554666ms)
+✔ place check: a museum name and city, OpenStreetMap agrees (1.103291ms)
+✔ place check: OpenStreetMap and the web find the same restaurant under two names and two spellings of the street (live run, 2026-10-30): one place (10.830584ms)
+✔ place check: the web writes the street the local way ('Durango 200'), OpenStreetMap '200 Calle Durango' (live run, 2026-10-30): one place (2.257875ms)
+✔ choosing one of the places applies it as yours and clears the choices (3.525167ms)
+✔ Find on the map: only a confirmed place gets a pin; one tried with the same clues waits (17.839042ms)
+✔ stateCode, ZIP and city: the forms a state is written in (4.544667ms)
+✔ placeState: from the state field, the ZIP, the end of the street, the city, then what the post says (14.956416ms)
+✔ placeNamed: a title of its own; not the start of its caption, an address, a city, or a phrase (341.941375ms)
+✔ placeFromText: captions as they come from a saved post’s grid (one line, emoji, handles, labels) (247.454ms)
+✔ popup: opening it never saves; Open dashboard is in the header and it asks where the page lives (4893.977709ms)
+✔ popup: Lifestyle, then Videos, then a tidier title, then Save (5334.958916ms)
+✔ popup: opening it again on a saved video shows that save, not the duplicate preview (983.451417ms)
+✔ popup: Not sure goes to Review with a note, and Undo comes back to the start (21621.789708ms)
+✔ popup: a new collection is named right on the sheet (4748.287333ms)
+✔ popup: the collection search hides other collections and names a new one (255.189458ms)
+✔ popup: the collection search sets accents aside, as on the iPhone (236.665375ms)
+✔ popup: a page already saved goes to the editor to update it or save a copy, with its price (398.582125ms)
+✔ popup: a saved post moved into Places becomes a place named from its caption (609.1635ms)
+✔ popup: an Instagram post with 📍 in its caption is guessed as a place, named from it (345.94425ms)
+✔ popup: the Saved overview asks for instagram.com access up front, and the hint goes once it is granted (249.196625ms)
+✔ AI off, no key: a save sends nothing (1435.676125ms)
+✔ a key stored with AI turned off is never used (7.8535ms)
+✔ a bulk import asks nothing of your provider until you start Run AI (122.568834ms)
+✔ with the device model ready, work that runs by itself stays on the device even with a key (203.163416ms)
+✔ the place check reaches only the hosts its settings allow (217.954375ms)
+✔ a kind learned from your posts is decided on the device: no request (154.136166ms)
+✔ safari: every Chrome file ships unchanged, except background.js and manifest.json (21.114666ms)
+✔ safari: manifest is Chrome's without the Chrome-only keys (0.513917ms)
+✔ safari: the bundled background is a classic script that starts and listens (765.016333ms)
+✔ safari: the Mac app ships every top-level Chrome file, at Chrome's version (5.296833ms)
+✔ normalizeUrl: tracking parameters are ignored, product parameters kept (3.731375ms)
+✔ normalizeUrl: two Facebook videos or photos, or two Google Maps places, are not the same save (35.399833ms)
+✔ normalizeUrl: marketplace and Instagram keys (0.119959ms)
+✔ normalizeUrl: non-web URLs give no key (0.087417ms)
+✔ cleanUrl keeps the path, drops tracking (16.822666ms)
+✔ isRestrictedUrl and openableUrl (16.590542ms)
+✔ parsePrice: common formats (93.315542ms)
+✔ parsePrice: plain numbers are read whole (fixed in 1.4: ¥1200 used to read as 120) (0.136708ms)
+⚠ parsePrice: Swiss apostrophe thousands (36.546667ms) # known limitation: CHF 1’200 reads as 1
+⚠ parsePrice: multi-buy text (42.321041ms) # known limitation: "2 for $10" reads as 2
+✔ sanitizers reject script URLs and strip control characters (0.472625ms)
+✔ deepMerge and prettyRetailer (0.272417ms)
+✔ starter collections are Home Decor, Clothing, Technology (19.385375ms)
+✔ classify golden: Two-person ultralight backpacking tent (24136.210458ms)
+✔ classify golden: Noise-cancelling over-ear headphones (10117.9015ms)
+✔ classify golden: Enameled cast iron Dutch oven, 5.5 qt (22.730375ms)
+✔ classify golden: Waxed cotton field jacket (2.517375ms)
+✔ classify golden: Ceramic bedside lamp with linen shade (1.15225ms)
+✔ classify golden: Cordless brushless drill driver kit 18V (0.850125ms)
+✔ classify: no signals goes to Review instead of guessing (0.6645ms)
+✔ classify: threshold above the score sends to Review with a suggestion (1.875708ms)
+✔ classify: a user keyword wins and makes Internet Binder at least 85% sure (2.810125ms)
+✔ classify: the same user keyword on two collections goes to Review (4.071125ms)
+✔ classify: a matching Instagram collection name is a direct hit (1.633208ms)
+✔ learnFromCorrection teaches terms and retailer; strong weighs more; forgetCollection moves weights (0.925375ms)
+✔ learnedSummary and collectionWords show what files saves where, minus your own keywords (86.1685ms)
+✔ corrections history is capped at 200 (154.565541ms)
+✔ collection name similarity (22.503834ms)
+✔ mostFirst: most saves first, a tie A–Z (case and numbers read naturally) (1.323708ms)
+✔ ingredient lines split into amount and name (4.467416ms)
+✔ each step gets the ingredients it names (0.095375ms)
+✔ later steps carry earlier ones (0.054917ms)
+✔ group words, and ingredients no step names (0.249542ms)
+✔ highlights mark the words that name an ingredient (0.10775ms)
+▶ storage on memory
+  ✔ init on an empty profile creates meta, settings and the three starter collections (103.112417ms)
+  ✔ init is idempotent and keeps user data (6.298125ms)
+  ✔ items: add, update keeps createdAt, sanitizes input (4.599ms)
+  ✔ saves stored with HTML entities are decoded once on init; nothing else changes (294.3095ms)
+  ✔ workout goals: create, check in, end and restore; deleting the workout for good takes them along (56.65475ms)
+  ✔ ended goals are purged with the Trash after 30 days, with their check-ins (6.90225ms)
+  ✔ export and import carry goals and check-ins; a goal follows its workout to the save already here (20.984875ms)
+  ✔ the automatic kind collections (Videos, Recipes…) are removed once; their saves stay, in their views (2.94125ms)
+  ✔ makeItem: types and defaults (0.701542ms)
+  ✔ duplicate detection ignores tracking parameters (0.864208ms)
+  ✔ moveItems learns, marks manual and clears Review (5.434875ms)
+  ✔ collections: same-name dedupe, similar allowed on request, limit enforced (0.788792ms)
+  ✔ deleting a collection sends its items to Review (or to moveTo), and forgets learned weights (2.942292ms)
+  ✔ deleting several collections at once can be undone exactly (1.066292ms)
+  ✔ deleting collections with their saves sends the saves to the Trash, and Undo brings them back (1.795375ms)
+  ✔ merging collections moves items and carries the name over as an alias (1.51225ms)
+  ✔ reorderCollections puts listed ids first (0.392959ms)
+  ✔ export never contains the API key or the AI log (0.533667ms)
+  ✔ import merge: dedupes collections by name and items by URL, reports counts (0.748334ms)
+  ✔ export writes the cover picture once and import puts it back in the gallery (1.099ms)
+  ✔ import replace wipes existing items and keeps the API key (0.627333ms)
+  ✔ import replace keeps this device's AI endpoint, so a file cannot redirect the stored key (21.331875ms)
+  ✔ import replace that stops halfway keeps the library that was there (24.240417ms)
+  ✔ import: a goal on a second copy of a link in the same file follows it to the copy that is kept (3.360209ms)
+  ✔ import replace removes what the file does not have, including the Trash, goals and check-ins (1.527125ms)
+  ✔ validateExport rejects foreign or future files (0.142959ms)
+  ✔ validateExport sanitizes hostile content (28.927792ms)
+  ✔ validateExport enforces item and collection limits (36.063291ms)
+  ✔ migration 1 -> 2 folds rules into collection keywords (0.241709ms)
+  ✔ a v1 export with rules imports into v2 keywords (0.6565ms)
+  ✔ init upgrades old per-feature AI settings to the single switch (13.315416ms)
+  ✔ init moves a library that never set AI up from the old OpenAI default to Claude Haiku 5.5, once (16.629041ms)
+  ✔ Instagram import history: trashed posts stay remembered; deleting forever frees the post (0.799042ms)
+  ✔ AI log: append, mark undone, capped at 3000 on the next start (328.858667ms)
+  ✔ clearAll removes every Internet Binder key and record, including the secret, the AI log and the v2 copy (7.075041ms)
+  ✔ sample data loads into the right collections and leaves one item in Review (282.436208ms)
+  ✔ item limit is enforced (17456.586125ms)
+  ✔ writes from one store instance are serialized (54.737084ms)
+  ✔ two store instances writing at once both land (fixes audit A5) (24.146709ms)
+  ✔ concurrent edits to different fields of one item from two contexts both survive (53.279625ms)
+  ✔ migration v2 -> v3 copies every save, collection, preference, history and log entry (148.032042ms)
+  ✔ migration runs once; later edits are not overwritten by a second init (65.120041ms)
+  ✔ a library migrated by an earlier version loses its leftover v2 copy on the next start (200.484958ms)
+  ✔ a v1 library (rules) migrates straight to v3 (0.317208ms)
+  ✔ trash: delete hides, restore returns, collection gone sends to Review (28.395042ms)
+  ✔ trash: purge removes only saves older than 30 days (2.465166ms)
+  ✔ trash is exported and restored by import (1.274334ms)
+  ✔ a restored save keeps its last edit time; an invalid one becomes now (7.229625ms)
+  ✔ a caption that lists exercises with no Ingredients heading is a workout, here as in a save and an import (331.202291ms)
+  ✔ AI change log: each entry is its own record; the old single list is split once and kept to the newest 3,000 (1094.089375ms)
+  ✔ hand-edited fields are recorded; machine edits are not (21.708166ms)
+  ✔ pending saves are listed until finished (53.899875ms)
+  ✔ a full disk gives a clear error and loses nothing already saved (8.583667ms)
+  ✔ changes are announced to listeners (0.338917ms)
+  ✔ an Instagram post keeps its location tag (bounded, a pin only with both real coordinates); older saves without one are unchanged (0.348416ms)
+✔ storage on memory (20907.100584ms)
+▶ storage on idb
+  ✔ init on an empty profile creates meta, settings and the three starter collections (726.634209ms)
+  ✔ init is idempotent and keeps user data (871.038417ms)
+  ✔ items: add, update keeps createdAt, sanitizes input (465.296042ms)
+  ✔ saves stored with HTML entities are decoded once on init; nothing else changes (236.613042ms)
+  ✔ workout goals: create, check in, end and restore; deleting the workout for good takes them along (62.543667ms)
+  ✔ ended goals are purged with the Trash after 30 days, with their check-ins (51.792291ms)
+  ✔ export and import carry goals and check-ins; a goal follows its workout to the save already here (94.012584ms)
+  ✔ the automatic kind collections (Videos, Recipes…) are removed once; their saves stay, in their views (15.094084ms)
+  ✔ makeItem: types and defaults (0.986458ms)
+  ✔ duplicate detection ignores tracking parameters (3.918333ms)
+  ✔ moveItems learns, marks manual and clears Review (6.643042ms)
+  ✔ collections: same-name dedupe, similar allowed on request, limit enforced (4.86875ms)
+  ✔ deleting a collection sends its items to Review (or to moveTo), and forgets learned weights (227.878167ms)
+  ✔ deleting several collections at once can be undone exactly (448.6075ms)
+  ✔ deleting collections with their saves sends the saves to the Trash, and Undo brings them back (18.925458ms)
+  ✔ merging collections moves items and carries the name over as an alias (7.069333ms)
+  ✔ reorderCollections puts listed ids first (4.852958ms)
+  ✔ export never contains the API key or the AI log (198.804666ms)
+  ✔ import merge: dedupes collections by name and items by URL, reports counts (188.371417ms)
+  ✔ export writes the cover picture once and import puts it back in the gallery (298.166209ms)
+  ✔ import replace wipes existing items and keeps the API key (109.487958ms)
+  ✔ import replace keeps this device's AI endpoint, so a file cannot redirect the stored key (7.589125ms)
+  ✔ import replace that stops halfway keeps the library that was there (8.569709ms)
+  ✔ import: a goal on a second copy of a link in the same file follows it to the copy that is kept (10.179583ms)
+  ✔ import replace removes what the file does not have, including the Trash, goals and check-ins (341.578417ms)
+  ✔ validateExport rejects foreign or future files (0.74975ms)
+  ✔ validateExport sanitizes hostile content (1.132708ms)
+  ✔ validateExport enforces item and collection limits (0.690958ms)
+  ✔ migration 1 -> 2 folds rules into collection keywords (0.08ms)
+  ✔ a v1 export with rules imports into v2 keywords (4.061792ms)
+  ✔ init upgrades old per-feature AI settings to the single switch (1.866334ms)
+  ✔ init moves a library that never set AI up from the old OpenAI default to Claude Haiku 5.5, once (10.006958ms)
+  ✔ Instagram import history: trashed posts stay remembered; deleting forever frees the post (286.267542ms)
+  ✔ AI log: append, mark undone, capped at 3000 on the next start (1909.196459ms)
+  ✔ clearAll removes every Internet Binder key and record, including the secret, the AI log and the v2 copy (16.391125ms)
+  ✔ sample data loads into the right collections and leaves one item in Review (286.673458ms)
+  ✔ item limit is enforced (180396.007541ms)
+  ✔ writes from one store instance are serialized (88.493625ms)
+  ✔ two store instances writing at once both land (fixes audit A5) (322.197708ms)
+  ✔ concurrent edits to different fields of one item from two contexts both survive (142.186875ms)
+  ✔ migration v2 -> v3 copies every save, collection, preference, history and log entry (425.194292ms)
+  ✔ migration runs once; later edits are not overwritten by a second init (342.00475ms)
+  ✔ a library migrated by an earlier version loses its leftover v2 copy on the next start (256.056ms)
+  ✔ a v1 library (rules) migrates straight to v3 (510.854708ms)
+  ✔ trash: delete hides, restore returns, collection gone sends to Review (747.025375ms)
+  ✔ trash: purge removes only saves older than 30 days (168.974542ms)
+  ✔ trash is exported and restored by import (346.336584ms)
+  ✔ a restored save keeps its last edit time; an invalid one becomes now (892.188958ms)
+  ✔ a caption that lists exercises with no Ingredients heading is a workout, here as in a save and an import (510.021959ms)
+  ✔ AI change log: each entry is its own record; the old single list is split once and kept to the newest 3,000 (19879.470875ms)
+  ✔ hand-edited fields are recorded; machine edits are not (254.172375ms)
+  ✔ pending saves are listed until finished (98.4265ms)
+  ✔ a full disk gives a clear error and loses nothing already saved (0.68025ms)
+  ✔ changes are announced to listeners (97.709292ms)
+  ✔ an Instagram post keeps its location tag (bounded, a pin only with both real coordinates); older saves without one are unchanged (89.250625ms)
+✔ storage on idb (212546.678083ms)
+✔ the journal marks synced records, with a revision, and leaves the AI undo log out (379.575459ms)
+✔ Chrome (no journal) marks nothing (43.034625ms)
+✔ a new install turns sync on; a Mac with a library waits to be asked (11.463416ms)
+✔ a round sends what changed, clears it, and writes what came from iCloud without marking it (40.313708ms)
+✔ an edit made while a round is running stays pending, and isn't overwritten by iCloud (9.070833ms)
+✔ an edit saved just as iCloud's version arrives is skipped in the same write, not overwritten (3.991291ms)
+✔ AI settings go up when changed here and come down when changed on the iPhone (3.60775ms)
+✔ turning sync off forgets what was pending and tells the Mac app; on again sends everything (36.193875ms)
+✔ changes go to the Mac app in batches of a few megabytes (322.237958ms)
+✔ a link in Kitchen that is a recipe moves to Recipes with its ingredients and steps, read from the caption (238.077459ms)
+✔ a recipe that is only in the video: what the provider drafted is marked, even when it says it read it (218.7345ms)
+✔ a workout reel with a drafted routine is a Workout, marked as drafted (145.0855ms)
+✔ a restaurant: city, state and cuisine are kept; a street address, phone or hours the post never gave are not (132.652333ms)
+✔ what the save already said stays; the answer only fills the gaps (214.893375ms)
+✔ never moved: saves you filed or put in a view yourself, details you wrote, and unsure answers (3.345083ms)
+✔ a title you wrote stays; a web page keeps its own title unless it is a site name (6.376167ms)
+✔ statedShare: how much of a list the text states (1.435084ms)
+✔ pageText: a page's schema.org recipe is written out, then its text without scripts or menus (4.024667ms)
+✔ pagesToRead: caption links and a web save's own page, never social sites or a product (93.293458ms)
+✔ contextFor: the caption, tag and a stored thumbnail go; a remote image link does not (1.401792ms)
+✔ understandWithAI: one request with the image; the answer is normalised (4.024167ms)
+✔ understandItem: reads a save once, applies the answer with Undo, and reads it again when asked (139.124083ms)
+✔ productFromHtml: a shop page's schema.org product, without a DOM (81.87325ms)
+✔ planProduct: a post becomes a product named and priced from its shop page, with the AI summary alongside (133.506875ms)
+✔ planProduct: unsure, no page, or your own edits: only what is safe changes (0.453834ms)
+✔ understandItem: a post of a product is read from its picture, searched, and filled from its shop page (33.027334ms)
+✔ understandProductWithAI: a link the search never returned is dropped (0.43ms)
+✔ planTitle: a book gets its summary, pages and cover; what the page said stays (0.60225ms)
+✔ planTitle: a show gets seasons and where to watch, dated; unsure answers and pictures you have change nothing (0.494041ms)
+✔ titlePicture: the schema.org or Open Graph cover, never a logo (0.704416ms)
+✔ understandTitleWithAI: links and services the search never showed are dropped (0.775792ms)
+✔ understandItem: a book saved from Open Library is searched, filled in and given its cover (Walden) (86.014166ms)
+✔ the device model copying the format ("1 quantity + APPLE FRITTER COFFEE CAKE") or naming the dish is not an ingredient (0.244042ms)
+✔ thin recipes: fewer than three ingredients or one step; yours and a page's own recipe are never replaced (0.076125ms)
+✔ recipeFromHtml reads the page's own schema.org recipe and site name (39.794375ms)
+✔ planRecipe: the page's recipe goes on the card, labelled as based on it, with its link; unsure or unlinked finds do nothing (78.957042ms)
+✔ findRecipeWithAI: a link the search never returned is dropped; no key or a custom endpoint never searches (0.46475ms)
+✔ understandItem: a Reel that only shows the dish gets a close recipe from the web, with Undo (1.4085ms)
+✔ recipeLink: a pasted address works with or without https, inside other words too; anything else is refused (0.189167ms)
+✔ recipePageText: a long food blog starts near its recipe card, not at the story (10.711334ms)
+✔ importRecipeFromLink: the page's own recipe card fills the same save, no AI needed, labelled with the link, with Undo (4.786041ms)
+✔ importRecipeFromLink: a page with no recipe card is read by AI; without AI, or with no recipe, it says so and changes nothing (4.928792ms)
+✔ importRecipeFromLink: a bad address, a social post or a page that won't open changes nothing (0.406083ms)
+✔ the post id is read from every address X uses, and the link has no tracking (1.989708ms)
+✔ the requests ask X for this post only, embed data first (0.509084ms)
+✔ a text post: its words with links written out, creator, date and hashtags (2.920708ms)
+✔ pictures and a video: every photo kept, the video poster as the picture (0.570166ms)
+✔ a quote and a thread: the quoted post and the earlier post are part of what it says (0.232ms)
+✔ a long post reads its full text, and a link card names the page (0.641375ms)
+✔ the oEmbed answer is enough when the embed data is missing; a removed post says nothing (0.778417ms)
+✔ a title is the first line that says something, else who posted it (0.78625ms)
+✔ a recipe posted on X saves as a Recipe with its ingredients, picture and post record (19.669833ms)
+✔ a place named with 📍 on X is a Place; a workout thread is a Workout (513.520709ms)
+✔ only the link (X did not answer): Review, named for what it is, saying why (400.811125ms)
+✔ the AI reads the post: caption, creator, hashtags, and the page it links to (125.702917ms)
+✔ a post on X opened in Safari: X’s own page title is replaced by the post’s (0.537459ms)
+✔ short ids, glued t.co links and quote marks are read cleanly (0.282ms)
+✔ why only the link was saved: the switch is off, or X had nothing (0.469916ms)
+ℹ tests 589
+ℹ suites 2
+ℹ pass 583
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 3
+ℹ duration_ms 246389.645959
+
+✖ failing tests:
+
+test at tests/dashboard.test.mjs:713:1
+✖ Collections fold: closed, only pinned collections (and the one you’re on) stay listed; remembered (951.6605ms)
+  AssertionError [ERR_ASSERTION]: only the pinned one
+  + actual - expected
+  
+  + []
+  - [
+  -   'Home Decor'
+  - ]
+  
+      at TestContext.<anonymous> (file:///Users/harrison/projects/internet-binder-tf1112/tests/dashboard.test.mjs:728:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ 'Home Decor' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/dashboard.test.mjs:740:1
+✖ groups sort by size: the Lifestyle menu and the sidebar collections list most saves first, a tie A–Z (470.754958ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'Home Decor'
+  -   'Camping & Outdoors'
+    ]
+  
+      at TestContext.<anonymous> (file:///Users/harrison/projects/internet-binder-tf1112/tests/dashboard.test.mjs:751:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'Home Decor' ],
+    expected: [ 'Camping & Outdoors' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/dashboard.test.mjs:756:1
+✖ Refresh: the toolbar button and ⌘R read the library again and redraw in place (499.738958ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Refreshed/. Input:
+  
+  '\n' +
+    '  Skip to content\n' +
+    '  \n' +
+    '    \n' +
+    '      \n' +
+    '    \n' +
+    '    \n' +
+    '\n' +
+    '    \n' +
+    '      \n' +
+    '        \n' +
+    '        \n' +
+    '        Internet Binder\n' +
+    '      \n' +
+    '\n' +
+    '      \n' +
+    '        \n' +
+    '          \n' +
+    '          Home\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '          Library50\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '          Favorites3\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '          Purchased2\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '          Review4\n' +
+    '        \n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '            \n' +
+    '            Lifestyle\n' +
+    '            \n' +
+    '          \n' +
+    '          \n' +
+    '            Places13Recipes5Videos4Workouts4Books3Films & shows3Articles1\n' +
+    '            Save a recipe, place, video, workout, article, film or book and it shows up here.\n' +
+    '          \n' +
+    '        \n' +
+    '      \n' +
+    '\n' +
+    '      \n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '            \n' +
+    '            Collections\n' +
+    '          \n' +
+    '          \n' +
+    '            \n' +
+    '          \n' +
+    '          \n' +
+    '            \n' +
+    '          \n' +
+    '        \n' +
+    '        \n' +
+    '        Home Decor4\n' +
+    '        Pin one to keep it on top\n' +
+    '        \n' +
+    '      \n' +
+    '\n' +
+    '      \n' +
+    '        \n' +
+    '          \n' +
+    '          Instagram import\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '          Import from tabs\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '          Settings\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '          Trash\n' +
+    '        \n' +
+    '      \n' +
+    '    \n' +
+    '\n' +
+    '    \n' +
+    '      \n' +
+    '        \n' +
+    '          Library\n' +
+    '          50 items\n' +
+    '          \n' +
+    '          ✦ Check with AI\n' +
+    '          Select\n' +
+    '        \n' +
+    '        \n' +
+    '          \n' +
+    '            \n' +
+    '            \n' +
+    '          \n' +
+    '          \n' +
+    '            \n' +
+    '          \n' +
+    '        \n' +
+    '      \n' +
+    '\n' +
+    '      \n' +
+    '\n' +
+    '      \n' +
+    '        Tick saves to move or delete\n' +
+    '        Select all\n' +
+    '        Move to…\n' +
+    '        Favorite\n' +
+    '        Find products (AI)\n' +
+    '        Delete\n' +
+    '      \n' +
+    '\n' +
+    "      SavesCollections · 10Products16Places13Recipes5Videos4Articles1Workouts4Films & shows3Books3Links1Any statusTo doDoneAny sourceSaved from a pageInstagramAny site or shopClearwater SkinCopper Lane KitchenExampleExample StoreFilms ExampleGoogle MapsHarbor & HaleHist ShopInstagramLamp ShopLetterboxdNorth Ridge OutfittersNorthline LuggageOpen LibraryOverland Supply Co.Riverbend BooksStrong at HomeStudio FenneThe Daily GrindTrail NotesWeeknight KitchenWorkbench DepotYoutubeNewest firstOldest firstTitle A–ZPrice: low to highPrice: high to lowAll tagsCoffee1Modding1Outdoors1Shoes1Travel1Video games1WorkoutStrong at Home10-minute core3 exercises · 10 min · Core12V roof fan with rain sensor, fits ProMasterOverland Supply Co.12V roof fan with rain sensor, fits ProMaster$289.00Van BuildA FilmFilm or showFilms ExampleA Film1999 · FilmWatchedRiverbend BooksA Pattern Language — hardcover, 1977 edition$68.00Books & MediaA ShowFilm or showExampleA Show2019 · Series · 3 seasonsWatchedVideoTrail NotesA weekend in the North CascadesTrail Notes · 12:34TravelOutdoorsAlpha bookBookExampleAlpha bookApple crateExampleApple crateHome DecorApple fritter coffee cakeRecipeInstagramApple fritter coffee cakePlaceGoogle MapsBasecamp BoulderingSeattle · climbing gymBrass desk lampLamp ShopBrass desk lamp$89.00Needs a collectionNorthline LuggageCarry-on suitcase with front laptop pocket$275.00TravelWorkbench DepotCordless brushless drill driver kit, 18V$159.00ToolsCopper Lane KitchenEnameled cast iron Dutch oven, 5.5 qt$199.00“Wait for the autumn sale.”KitchenExample DeliPlaceExampleExample DeliAustinRecipeWeeknight KitchenFluffy buttermilk pancakes9 ingredients · 25 minWorkoutStrong at HomeFull-body strength in 30 minutes5 exercises · 30 min · Full bodyGTA mod with one promptVideoYoutubeGTA mod with one promptVideo gamesModdingStudio FenneHand-thrown ceramic bedside lamp with linen shade$148.00Home DecorHarbour CaféPlaceExampleHarbour CaféBathArticleThe Daily GrindHow to brew better coffee at homeThe Daily Grind · 6 min readCoffeeHow to sharpen a knifeVideoYoutubeHow to sharpen a knifeExample Channel · 1:05:00WatchedInstagram postWorkoutInstagramInstagram post3 exercisesJoe's PizzaPlaceInstagramJoe's PizzaNew YorkPlaceGoogle MapsLantern CoffeeSeattle · cafeLeg dayWorkoutExampleLeg day2 exercises · 20 minLemon tartRecipeExampleLemon tart2 ingredientsCookedLittle KitchenPlaceExampleLittle KitchenBristol · GeorgianBeenFilm or showLetterboxdMetropolis1927 · FilmClearwater SkinMineral SPF 40 daily moisturizer$32.00Personal CareMiso butter noodlesRecipeExampleMiso butter noodles2 ingredients · 15 minCookedLink@slowmorningsMorning light, kitchen cornerNeeds a collectionNobu MalibuPlaceInstagramNobu MalibuOld forgotten tentExampleOld forgotten tent$199.00Needs a collectionRecipeWeeknight KitchenRainbow chickpea bowl9 ingredients · 20 minPlaceGoogle MapsRye & Ember BakerySeattle · bakery“Get the seeded rye before 10.”PlaceGoogle MapsShoyu HouseSeattle · Ramen · $$PlaceGoogle MapsSlice of BelltownSeattle · Pizza · $$Sneaker rotationVideoYoutubeSneaker rotationShoesSomewherePlaceExampleSomewherePlaceGoogle MapsSprinkle Donut Co.Seattle · Donuts · $Example StoreThis title is intentionally very long to test how the dashboard wraps and truncates titles that run on and on without a natural break point in sightHome DecorTIDY title!!! | ShopHist ShopTIDY title!!! | ShopNeeds a collectionPlaceGoogle MapsTwo Scoops CreamerySeattle · ice creamTwo-person ultralight backpacking tentExampleTwo-person ultralight backpacking tentCamping & OutdoorsNorth Ridge OutfittersTwo-person ultralight backpacking tent$329.00Camping & OutdoorsWaldenBookOpen LibraryWaldenHenry David Thoreau · 1854Harbor & HaleWaxed cotton field jacket, olive$245.00ClothingZebra mugExampleZebra mugHome DecorZulu bookBookExampleZulu book\n" +
+    '    \n' +
+    '  \n' +
+    '\n' +
+    '  \n' +
+    '  AI change undone. Reopen the details to see it.\n' +
+    '\n' +
+    '  \n' +
+    '  \n' +
+    '\n' +
+    '\n'
+  
+      at TestContext.<anonymous> (file:///Users/harrison/projects/internet-binder-tf1112/tests/dashboard.test.mjs:764:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "\n  Skip to content\n  \n    \n      \n    \n    \n\n    \n      \n        \n        \n        Internet Binder\n      \n\n      \n        \n          \n          Home\n        \n        \n          \n          Library50\n        \n        \n          \n          Favorites3\n        \n        \n          \n          Purchased2\n        \n        \n          \n          Review4\n        \n        \n        \n          \n            \n            Lifestyle\n            \n          \n          \n            Places13Recipes5Videos4Workouts4Books3Films & shows3Articles1\n            Save a recipe, place, video, workout, article, film or book and it shows up here.\n          \n        \n      \n\n      \n        \n        \n          \n            \n            Collections\n          \n          \n            \n          \n          \n            \n          \n        \n        \n        Home Decor4\n        Pin one to keep it on top\n        \n      \n\n      \n        \n          \n          Instagram import\n        \n        \n          \n          Import from tabs\n        \n        \n          \n          Settings\n        \n        \n          \n          Trash\n        \n      \n    \n\n    \n      \n        \n          Library\n          50 items\n          \n          ✦ Check with AI\n          Select\n        \n        \n          \n            \n            \n          \n          \n            \n          \n        \n      \n\n      \n\n      \n        Tick saves to move or delete\n        Select all\n        Move to…\n        Favorite\n        Find products (AI)\n        Delete\n      \n\n      SavesCollections · 10Products16Places13Recipes5Videos4Articles1Workouts4Films & shows3Books3Links1Any statusTo doDoneAny sourceSaved from a pageInstagramAny site or shopClearwater SkinCopper Lane KitchenExampleExample StoreFilms ExampleGoogle MapsHarbor & HaleHist ShopInstagramLamp ShopLetterboxdNorth Ridge OutfittersNorthline LuggageOpen LibraryOverland Supply Co.Riverbend BooksStrong at HomeStudio FenneThe Daily GrindTrail NotesWeeknight KitchenWorkbench DepotYoutubeNewest firstOldest firstTitle A–ZPrice: low to highPrice: high to lowAll tagsCoffee1Modding1Outdoors1Shoes1Travel1Video games1WorkoutStrong at Home10-minute core3 exercises · 10 min · Core12V roof fan with rain sensor, fits ProMasterOverland Supply Co.12V roof fan with rain sensor, fits ProMaster$289.00Van BuildA FilmFilm or showFilms ExampleA Film1999 · FilmWatchedRiverbend BooksA Pattern Language — hardcover, 1977 edition$68.00Books & MediaA ShowFilm or showExampleA Show2019 · Series · 3 seasonsWatchedVideoTrail NotesA weekend in the North CascadesTrail Notes · 12:34TravelOutdoorsAlpha bookBookExampleAlpha bookApple crateExampleApple crateHome DecorApple fritter coffee cakeRecipeInstagramApple fritter coffee cakePlaceGoogle MapsBasecamp BoulderingSeattle · climbing gymBrass desk lampLamp ShopBrass desk lamp$89.00Needs a collectionNorthline LuggageCarry-on suitcase with front laptop pocket$275.00TravelWorkbench DepotCordless brushless drill driver kit, 18V$159.00ToolsCopper Lane KitchenEnameled cast iron Dutch oven, 5.5 qt$199.00“Wait for the autumn sale.”KitchenExample DeliPlaceExampleExample DeliAustinRecipeWeeknight KitchenFluffy buttermilk pancakes9 ingredients · 25 minWorkoutStrong at HomeFull-body strength in 30 minutes5 exercises · 30 min · Full bodyGTA mod with one promptVideoYoutubeGTA mod with one promptVideo gamesModdingStudio FenneHand-thrown ceramic bedside lamp with linen shade$148.00Home DecorHarbour CaféPlaceExampleHarbour CaféBathArticleThe Daily GrindHow to brew better coffee at homeThe Daily Grind · 6 min readCoffeeHow to sharpen a knifeVideoYoutubeHow to sharpen a knifeExample Channel · 1:05:00WatchedInstagram postWorkoutInstagramInstagram post3 exercisesJoe's PizzaPlaceInstagramJoe's PizzaNew YorkPlaceGoogle MapsLantern CoffeeSeattle · cafeLeg dayWorkoutExampleLeg day2 exercises · 20 minLemon tartRecipeExampleLemon tart2 ingredientsCookedLittle KitchenPlaceExampleLittle KitchenBristol · GeorgianBeenFilm or showLetterboxdMetropolis1927 · FilmClearwater SkinMineral SPF 40 daily moisturizer$32.00Personal CareMiso butter noodlesRecipeExampleMiso butter noodles2 ingredients · 15 minCookedLink@slowmorningsMorning light, kitchen cornerNeeds a collectionNobu MalibuPlaceInstagramNobu MalibuOld forgotten tentExampleOld forgotten tent$199.00Needs a collectionRecipeWeeknight KitchenRainbow chickpea bowl9 ingredients · 20 minPlaceGoogle MapsRye & Ember BakerySeattle · bakery“Get the seeded rye before 10.”PlaceGoogle MapsShoyu HouseSeattle · Ramen · $$PlaceGoogle MapsSlice of BelltownSeattle · Pizza · $$Sneaker rotationVideoYoutubeSneaker rotationShoesSomewherePlaceExampleSomewherePlaceGoogle MapsSprinkle Donut Co.Seattle · Donuts · $Example StoreThis title is intentionally very long to test how the dashboard wraps and truncates titles that run on and on without a natural break point in sightHome DecorTIDY title!!! | ShopHist ShopTIDY title!!! | ShopNeeds a collectionPlaceGoogle MapsTwo Scoops CreamerySeattle · ice creamTwo-person ultralight backpacking tentExampleTwo-person ultralight backpacking tentCamping & OutdoorsNorth Ridge OutfittersTwo-person ultralight backpacking tent$329.00Camping & OutdoorsWaldenBookOpen LibraryWaldenHenry David Thoreau · 1854Harbor & HaleWaxed cotton field jacket, olive$245.00ClothingZebra mugExampleZebra mugHome DecorZulu bookBookExampleZulu book\n    \n  \n\n  \n  AI change undone. Reopen the details to see it.\n\n  \n  \n\n\n",
+    expected: /Refreshed/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/place-resolve.test.mjs:11:3
+⚠ place check: a hiking trail with only a region (2.83425ms) # a park name as the city: OpenStreetMap gives the nearest town, so only the state matches; it waits for you instead (safe, not ideal)
+  AssertionError [ERR_ASSERTION]: outcome review, expected verified; no pin
+      at TestContext.<anonymous> (file:///Users/harrison/projects/internet-binder-tf1112/tests/place-resolve.test.mjs:14:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests/shared.test.mjs:64:1
+⚠ parsePrice: Swiss apostrophe thousands (36.546667ms) # known limitation: CHF 1’200 reads as 1
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   amount: 1,
+  -   amount: 1200,
+      currency: 'CHF'
+    }
+  
+      at TestContext.<anonymous> (file:///Users/harrison/projects/internet-binder-tf1112/tests/shared.test.mjs:65:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { amount: 1, currency: 'CHF' },
+    expected: { amount: 1200, currency: 'CHF' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at tests/shared.test.mjs:68:1
+⚠ parsePrice: multi-buy text (42.321041ms) # known limitation: "2 for $10" reads as 2
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  2 !== 10
+  
+      at TestContext.<anonymous> (file:///Users/harrison/projects/internet-binder-tf1112/tests/shared.test.mjs:69:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 10,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+EXIT 1

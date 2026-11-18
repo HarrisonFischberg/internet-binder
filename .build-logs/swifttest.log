@@ -1,0 +1,329 @@
+Fetching https://github.com/groue/GRDB.swift.git from cache
+Fetched https://github.com/groue/GRDB.swift.git from cache (2.38s)
+Computing version for https://github.com/groue/GRDB.swift.git
+Computed https://github.com/groue/GRDB.swift.git at 7.11.1 (4.73s)
+Creating working copy for https://github.com/groue/GRDB.swift.git
+Working copy of https://github.com/groue/GRDB.swift.git resolved at 7.11.1
+Building for debugging...
+[Computing dependencies]
+[Provisioning 4 / 12]
+[Constructing description]
+[Pre-planning 1 / 272]
+[Planning 129 / 272]
+[Planning deferred tasks]
+[Constructing 1 / 589]
+[7 / 126]
+[7 / 126] GRDBSQLite
+[11 / 126]
+[49 / 126] KeepsakeKit_KeepsakeKitTests
+[69 / 126] KeepsakeKit_KeepsakeKit
+[73 / 126]
+[80 / 126] KeepsakeKit_KeepsakeKit
+[82 / 126]
+[83 / 127] GRDB
+[92 / 175]
+[93 / 175]
+[97 / 175]
+[100 / 175]
+[102 / 175]
+[104 / 175]
+[108 / 175]
+[110 / 175]
+[113 / 175]
+[116 / 175]
+[118 / 175]
+[119 / 175]
+[120 / 175]
+[131 / 175] GRDB
+[132 / 175] GRDB
+[138 / 176]
+[138 / 176] GRDB
+[138 / 176] KeepsakeKit
+[145 / 202]
+[146 / 202]
+[149 / 202]
+[150 / 202]
+[151 / 202]
+[151 / 202] GRDB
+[152 / 202]
+[153 / 202]
+[161 / 202] KeepsakeKit
+[162 / 202] KeepsakeKit
+[164 / 202] KeepsakeKit
+[165 / 202] KeepsakeKit
+[171 / 203]
+[171 / 203] KeepsakeKit
+[171 / 203] KeepsakeUI
+[175 / 214] KeepsakeUI
+[177 / 214] KeepsakeUI
+[178 / 214] KeepsakeUI
+[181 / 214] KeepsakeUI
+[182 / 214] KeepsakeUI
+[184 / 214] KeepsakeUI
+[192 / 214] GRDB
+[192 / 214] KeepsakeKit
+[193 / 214] KeepsakeKit
+[195 / 214] KeepsakeKit
+[197 / 214] KeepsakeUI
+[199 / 214]
+[203 / 215] KeepsakeKitTests-product
+[203 / 215]
+[204 / 215] KeepsakeKitTests-product
+[213 / 244]
+[214 / 244]
+[215 / 244]
+[216 / 244]
+[217 / 244]
+[218 / 244]
+[220 / 244]
+[221 / 244]
+[223 / 244]
+[224 / 244]
+[233 / 244] KeepsakeKitTests-product
+[238 / 244] KeepsakeKitTests-product
+/Users/harrison/projects/internet-binder-tf1112/ios/KeepsakeKit/Tests/KeepsakeKitTests/KeepsakeKitTests.swift:102:21: [1;33mwarning: [1;39mresult of call to 'callJSON(_:argsJSON:)' is unused[0;0m [#]8;;https://docs.swift.org/compiler/documentation/diagnostics/no-usage\NoUsage]8;;\]
+ [0;36m100 |[0;0m         let b = try KeepsakeCore(database: try tempDatabase())
+ [0;36m101 |[0;0m         try await b.call("store.init")
+ [0;36m102 |[0;0m         try await b.callJSON("store.importJSON", argsJSON: "[\(first), {\"mode\":\"replace\"}]")
+     [0;36m|[0;0m                     `- [1;33mwarning: [1;39mresult of call to 'callJSON(_:argsJSON:)' is unused[0;0m [#]8;;https://docs.swift.org/compiler/documentation/diagnostics/no-usage\NoUsage]8;;\]
+ [0;36m103 |[0;0m         let second = try json(Data(try await b.callJSON("store.exportJSON").utf8))
+ [0;36m104 |[0;0m         let original = try json(Data(first.utf8))
+
+[#NoUsage]: <https://docs.swift.org/compiler/documentation/diagnostics/no-usage>
+[240 / 244] KeepsakeKitTests-product
+[241 / 244] KeepsakeKitTests-product
+[241 / 244]
+[242 / 244] KeepsakeKitTests-product
+[243 / 244]
+Build complete! (223.18 sec)
+Test Suite 'All tests' started at 2026-11-11 22:47:14.803.
+Test Suite 'All tests' passed at 2026-11-11 22:47:14.809.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.006) seconds
+◇ Test run started.
+↳ Testing Library Version: 2403
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "Network only where you turned it on" started.
+◇ Suite "Widget snapshot" started.
+◇ Suite "Card facts" started.
+◇ Suite "Screens list what Chrome lists" started.
+◇ Suite "Ingredients for each cooking step" started.
+◇ Suite "Sealer matches WebCrypto" started.
+◇ Suite "Collections" started.
+◇ Suite "Pictures stay out of lists" started.
+◇ Suite "Capture follows Chrome's rules" started.
+◇ Suite AppleEvalTests started.
+◇ Suite "Swift copies match the shared code" started.
+◇ Suite "Performance at 5,000 saves" started.
+◇ Suite "Settings and secrets" started.
+◇ Suite "Shared rules in JavaScriptCore" started.
+◇ Suite "Where saves go" started.
+◇ Suite "iCloud sync" started.
+◇ Suite "iCloud sync: Safari's copy on the Mac" started.
+◇ Suite "Two processes, one library" started.
+◇ Suite "iCloud sync: first meeting" started.
+◇ Suite "Chrome export, both ways" started.
+◇ Suite "Sound setting's tick" started.
+◇ Test aiWithoutPermissionIsRefused() started.
+◇ Test allowlistFollowsSettings() started.
+◇ Test nothingLeavesWhenEverythingIsOff() started.
+◇ Test placesLookupFillsThePin() started.
+◇ Test checkInShowsInTheSnapshot() started.
+◇ Test shareSheetLibrarySkipsTheTidyUp() started.
+◇ Test everySaveGetsChromesKeyFact() started.
+◇ Test reviewQueue() started.
+◇ Test searchRanksAndCorrectsLikeChrome() started.
+◇ Test filedLibraryTeachesTheSorterOnce() started.
+◇ Test placesByStateAndReview() started.
+◇ Test goalsAndCheckIns() started.
+◇ Test shareSheetChoicesTeachTheSorter() started.
+◇ Test editsAreProtectedAndMovesLearn() started.
+◇ Test groupWordsAndLeftovers() started.
+◇ Test laterStepsCarryEarlierOnes() started.
+◇ Test eachStepGetsWhatItNames() started.
+◇ Test highlightsNameTheIngredients() started.
+◇ Test vectors() started.
+◇ Test amounts() started.
+◇ Test rejectsBadPairingCodes() started.
+◇ Test deletingSendsSavesToReview() started.
+◇ Test keywordsFileNewSaves() started.
+◇ Test purgeTrashStillRemovesOldSaves() started.
+◇ Test listsCarryAMarkerAndThePictureIsReadOnItsOwn() started.
+◇ Test importRecipeFromLinkFillsTheSaveAndUndoPutsItBack() started.
+◇ Test linkReadingCanBeTurnedOff() started.
+◇ Test sharedTikTokShortLinkIsReadAndFiledByWhatItSays() started.
+◇ Test bigPagesAreTrimmedToWhatIsRead() started.
+◇ Test pageDataMakesAProduct() started.
+◇ Test addressDecidesTheKind() started.
+◇ Test bareLinkStaysALink() started.
+◇ Test itemsRevisionMovesOnEveryWrite() started.
+◇ Test fixWithAIFilesAReviewSaveWithUndo() started.
+◇ Test sharedXPostIsReadLikeInstagram() started.
+◇ Test deleteCollectionsUndoes() started.
+◇ Test sameLinkTwiceIsADuplicate() started.
+◇ Test sharedInstagramReelIsReadLikeChrome() started.
+◇ Test emptyMeansNothingOutsideTheTrash() started.
+◇ Test searchWithinOnePage() started.
+◇ Test appleIntelligenceEvaluation() started.
+◇ Test stepIngredients() started.
+◇ Test claudeModelsAndEfforts() started.
+➜ Test libraryOpensFast() skipped.
+◇ Test secretNeverReachesSQLiteOrExport() started.
+◇ Test glanceMatchesTheWholeLibrary() started.
+◇ Test intoAPlaceThenIntoACollection() started.
+◇ Test undoRemovesOutright() started.
+◇ Test lifestyleFirstThenCollections() started.
+◇ Test waitingCountsWhatsInReview() started.
+◇ Test goldenClassification() started.
+◇ Test shelfHoldsAFewPerGroupAndCountsThemAll() started.
+◇ Test aKeyTheKeychainWontKeepIsNeverUsed() started.
+◇ Test aSaveEditedBeforeItsPicturesOpenSendsThemBackSealed() started.
+◇ Test aChangeMadeWhileSendingStaysPending() started.
+◇ Test theAIUndoLogStaysOnItsDevice() started.
+◇ Test trashUndoAndEmptyingTheTrash() started.
+◇ Test aiSettingsSyncButTheKeyNeverDoes() started.
+◇ Test recordNames() started.
+◇ Test storedPicturesTravelApartFromTheRecord() started.
+◇ Test editsToDifferentFieldsBothSurvive() started.
+◇ Test pendingCountFallsAsRecordsGoUp() started.
+◇ Test learnedWordsMergeAndForgetTravels() started.
+◇ Test cloudKitRecordsRoundTripSealed() started.
+◇ Test keysConvergeOnTheSmallestId() started.
+◇ Test aSaveOnThePhoneShowsUpOnTheMac() started.
+◇ Test turningSyncBackOnAfterAnEraseKeepsICloud() started.
+◇ Test pullsComeInBatches() started.
+◇ Test pendingKnowsDeletionsWithoutReadingBodies() started.
+◇ Test aRecordSafariHeldBackIsMergedWhenItArrives() started.
+◇ Test aiSettingsGoBothWays() started.
+◇ Test learnedWordsFromBothSidesCountOnce() started.
+◇ Test aSaveFromSafariGoesToThePhone() started.
+◇ Test anEditSafariHadNotSeenIsMergedNotOverwritten() started.
+◇ Test turningSyncOffInSafariForgetsTheCopy() started.
+◇ Test aSaveFromThePhoneGoesToSafariOnce() started.
+◇ Test concurrentUpdatesDontLoseWrites() started.
+◇ Test appAndExtensionSeeEachOthersSaves() started.
+◇ Test whatTheSorterLearnedMovesWithTheMergedCollection() started.
+◇ Test theSameLinkSavedOnBothBecomesOneSave() started.
+◇ Test trashAndLinklessSavesStayApart() started.
+◇ Test safarisCopyHandsTheMergeToTheExtension() started.
+◇ Test oneRoadtripsWithEverySave() started.
+◇ Test exportReimportsLosslessly() started.
+◇ Test importMatchesChrome() started.
+◇ Test rejectsWhatChromeRejects() started.
+◇ Test storesRecordsWithQueryableColumns() started.
+◇ Test instagramLoginWallStaysALink() started.
+◇ Test aHandEditBeatsANewerAIResult() started.
+◇ Test avFoundationPlaysIt() started.
+◇ Test isAShortSoftWav() started.
+✔ Test allowlistFollowsSettings() passed after 2.463 seconds.
+✔ Test groupWordsAndLeftovers() passed after 2.478 seconds.
+✔ Test laterStepsCarryEarlierOnes() passed after 2.479 seconds.
+✔ Test eachStepGetsWhatItNames() passed after 2.479 seconds.
+✔ Test highlightsNameTheIngredients() passed after 2.479 seconds.
+✔ Test amounts() passed after 2.479 seconds.
+✔ Test rejectsBadPairingCodes() passed after 2.479 seconds.
+✔ Test vectors() passed after 2.479 seconds.
+✔ Test appleIntelligenceEvaluation() passed after 2.478 seconds.
+✔ Suite "Performance at 5,000 saves" passed after 2.498 seconds.
+✔ Test aChangeMadeWhileSendingStaysPending() passed after 2.525 seconds.
+✔ Test aiSettingsSyncButTheKeyNeverDoes() passed after 2.525 seconds.
+✔ Test aSaveEditedBeforeItsPicturesOpenSendsThemBackSealed() passed after 2.525 seconds.
+✔ Test bigPagesAreTrimmedToWhatIsRead() passed after 2.526 seconds.
+✔ Test aKeyTheKeychainWontKeepIsNeverUsed() passed after 2.591 seconds.
+✔ Test pendingCountFallsAsRecordsGoUp() passed after 2.591 seconds.
+✔ Test recordNames() passed after 2.599 seconds.
+✔ Test cloudKitRecordsRoundTripSealed() passed after 2.816 seconds.
+✔ Test storedPicturesTravelApartFromTheRecord() passed after 2.816 seconds.
+✔ Test theAIUndoLogStaysOnItsDevice() passed after 2.816 seconds.
+✔ Test keysConvergeOnTheSmallestId() passed after 2.816 seconds.
+✔ Test editsToDifferentFieldsBothSurvive() passed after 2.816 seconds.
+✔ Test trashUndoAndEmptyingTheTrash() passed after 2.817 seconds.
+✔ Test pendingKnowsDeletionsWithoutReadingBodies() passed after 2.817 seconds.
+✔ Test turningSyncBackOnAfterAnEraseKeepsICloud() passed after 2.817 seconds.
+✔ Test aiSettingsGoBothWays() passed after 2.817 seconds.
+✔ Test aSaveOnThePhoneShowsUpOnTheMac() passed after 2.818 seconds.
+✔ Test aRecordSafariHeldBackIsMergedWhenItArrives() passed after 2.818 seconds.
+✔ Test aSaveFromThePhoneGoesToSafariOnce() passed after 2.817 seconds.
+✔ Test whatTheSorterLearnedMovesWithTheMergedCollection() passed after 2.818 seconds.
+✔ Test anEditSafariHadNotSeenIsMergedNotOverwritten() passed after 2.818 seconds.
+✔ Test aSaveFromSafariGoesToThePhone() passed after 2.818 seconds.
+✔ Test learnedWordsMergeAndForgetTravels() passed after 2.819 seconds.
+✔ Test aiWithoutPermissionIsRefused() passed after 2.822 seconds.
+✔ Test avFoundationPlaysIt() passed after 1.694 seconds.
+✔ Test isAShortSoftWav() passed after 1.693 seconds.
+✔ Suite "Ingredients for each cooking step" passed after 2.824 seconds.
+✔ Suite "Sealer matches WebCrypto" passed after 2.824 seconds.
+✔ Suite AppleEvalTests passed after 2.824 seconds.
+✔ Suite "Sound setting's tick" passed after 2.823 seconds.
+✔ Test trashAndLinklessSavesStayApart() passed after 2.942 seconds.
+✔ Test turningSyncOffInSafariForgetsTheCopy() passed after 2.964 seconds.
+✔ Test theSameLinkSavedOnBothBecomesOneSave() passed after 3.208 seconds.
+✔ Test safarisCopyHandsTheMergeToTheExtension() passed after 3.216 seconds.
+✔ Test oneRoadtripsWithEverySave() passed after 3.382 seconds.
+✔ Suite "iCloud sync: first meeting" passed after 3.387 seconds.
+✔ Test linkReadingCanBeTurnedOff() passed after 3.411 seconds.
+✔ Test stepIngredients() passed after 3.490 seconds.
+✔ Test claudeModelsAndEfforts() passed after 3.510 seconds.
+✔ Suite "Swift copies match the shared code" passed after 3.514 seconds.
+✔ Test aHandEditBeatsANewerAIResult() passed after 3.107 seconds.
+✔ Suite "iCloud sync" passed after 3.520 seconds.
+✔ Test learnedWordsFromBothSidesCountOnce() passed after 3.751 seconds.
+✔ Test emptyMeansNothingOutsideTheTrash() passed after 4.015 seconds.
+✔ Test secretNeverReachesSQLiteOrExport() passed after 4.167 seconds.
+✔ Suite "Settings and secrets" passed after 4.171 seconds.
+✔ Test itemsRevisionMovesOnEveryWrite() passed after 4.490 seconds.
+✔ Test searchWithinOnePage() passed after 4.530 seconds.
+✔ Test lifestyleFirstThenCollections() passed after 4.691 seconds.
+✔ Test goalsAndCheckIns() passed after 5.176 seconds.
+✔ Test placesByStateAndReview() passed after 5.323 seconds.
+✔ Test deleteCollectionsUndoes() passed after 5.980 seconds.
+✔ Test appAndExtensionSeeEachOthersSaves() passed after 6.020 seconds.
+✔ Test reviewQueue() passed after 6.028 seconds.
+✔ Test listsCarryAMarkerAndThePictureIsReadOnItsOwn() passed after 6.064 seconds.
+✔ Test sharedTikTokShortLinkIsReadAndFiledByWhatItSays() passed after 6.201 seconds.
+✔ Test searchRanksAndCorrectsLikeChrome() passed after 6.203 seconds.
+✔ Test checkInShowsInTheSnapshot() passed after 6.411 seconds.
+✔ Suite "Widget snapshot" passed after 6.414 seconds.
+✔ Test storesRecordsWithQueryableColumns() passed after 6.530 seconds.
+✔ Test editsAreProtectedAndMovesLearn() passed after 6.560 seconds.
+✔ Test rejectsWhatChromeRejects() passed after 6.591 seconds.
+✔ Test instagramLoginWallStaysALink() passed after 6.690 seconds.
+✔ Test filedLibraryTeachesTheSorterOnce() passed after 6.796 seconds.
+✔ Test importMatchesChrome() passed after 6.808 seconds.
+✔ Test purgeTrashStillRemovesOldSaves() passed after 6.847 seconds.
+✔ Suite "Pictures stay out of lists" passed after 6.850 seconds.
+✔ Test concurrentUpdatesDontLoseWrites() passed after 7.035 seconds.
+✔ Suite "Two processes, one library" passed after 7.039 seconds.
+✔ Test fixWithAIFilesAReviewSaveWithUndo() passed after 7.317 seconds.
+✔ Test shareSheetLibrarySkipsTheTidyUp() passed after 7.402 seconds.
+✔ Test undoRemovesOutright() passed after 7.758 seconds.
+✔ Test bareLinkStaysALink() passed after 7.839 seconds.
+✔ Test importRecipeFromLinkFillsTheSaveAndUndoPutsItBack() passed after 7.876 seconds.
+✔ Test waitingCountsWhatsInReview() passed after 7.964 seconds.
+✔ Test sharedXPostIsReadLikeInstagram() passed after 8.144 seconds.
+✔ Test everySaveGetsChromesKeyFact() passed after 8.233 seconds.
+✔ Suite "Card facts" passed after 8.235 seconds.
+✔ Test glanceMatchesTheWholeLibrary() passed after 8.231 seconds.
+✔ Test placesLookupFillsThePin() passed after 8.334 seconds.
+✔ Test intoAPlaceThenIntoACollection() passed after 8.639 seconds.
+✔ Test deletingSendsSavesToReview() passed after 8.645 seconds.
+✔ Test sameLinkTwiceIsADuplicate() passed after 8.803 seconds.
+✔ Test sharedInstagramReelIsReadLikeChrome() passed after 8.852 seconds.
+✔ Test addressDecidesTheKind() passed after 9.190 seconds.
+✔ Test nothingLeavesWhenEverythingIsOff() passed after 9.281 seconds.
+✔ Suite "Network only where you turned it on" passed after 9.284 seconds.
+✔ Test exportReimportsLosslessly() passed after 9.507 seconds.
+✔ Suite "Chrome export, both ways" passed after 9.511 seconds.
+✔ Test shelfHoldsAFewPerGroupAndCountsThemAll() passed after 10.170 seconds.
+✔ Suite "Where saves go" passed after 10.175 seconds.
+✔ Test pullsComeInBatches() passed after 12.026 seconds.
+✔ Suite "iCloud sync: Safari's copy on the Mac" passed after 12.030 seconds.
+✔ Test pageDataMakesAProduct() passed after 12.622 seconds.
+✔ Suite "Capture follows Chrome's rules" passed after 12.627 seconds.
+✔ Test keywordsFileNewSaves() passed after 14.461 seconds.
+✔ Suite "Collections" passed after 14.464 seconds.
+✔ Test goldenClassification() passed after 14.994 seconds.
+✔ Suite "Shared rules in JavaScriptCore" passed after 14.998 seconds.
+✔ Test shareSheetChoicesTeachTheSorter() passed after 15.069 seconds.
+✔ Suite "Screens list what Chrome lists" passed after 15.071 seconds.
+✔ Test run with 91 tests in 21 suites passed after 15.072 seconds.
+EXIT 0
