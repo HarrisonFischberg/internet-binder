@@ -1,0 +1,27 @@
+version: 2
+# Findings reviewed by hand on Oct 25 2026 (Internet Binder thread "Find iOS speed-up skills").
+# Scan each skill with: skillspector scan .claude/skills/<skill> --baseline .claude/skills/.skillspector-baseline.yaml
+rules:
+  - id: "AST4"
+    path: "scripts/*"
+    reason: "Reviewed: subprocess calls use fixed argument lists for local Apple tools (xctrace, otool, atos), no shell, no network."
+  - id: "LP3"
+    reason: "Reviewed: adding allowed-tools would pre-approve commands in Claude Code (more access, not less), so the skills leave it out on purpose."
+  - id: "AE1"
+    message: "*references/latest-apis.md*"
+    reason: "Reviewed by hand: plain Markdown API list, no hidden/format characters, no HTML comments, no encoded blobs, only an example.com sample URL."
+  - id: "AE1"
+    message: "*references/iphone-duo.md*"
+    reason: "Reviewed by hand: plain Markdown, no hidden/format characters, links only to developer.apple.com and rocketsim.app."
+  - id: "MP3"
+    path: "references/modifier-patterns.md"
+    reason: "False positive: 'reset state' describes SwiftUI view identity, not agent memory."
+  - id: "P4"
+    path: "references/latest-apis.md"
+    reason: "False positive: SwiftUI accessibility API guidance."
+  - id: "RA2"
+    path: "references/macos-scenes.md"
+    reason: "False positive: MenuBarExtra / Info.plist documentation, no persistence mechanism."
+  - id: "EA3"
+    path: "references/state-management.md"
+    reason: "False positive: 'not limited to' lists SwiftUI property wrappers."
