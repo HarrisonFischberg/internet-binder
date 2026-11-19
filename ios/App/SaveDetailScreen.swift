@@ -71,8 +71,9 @@ struct SaveDetailScreen: View {
                     if current.kind == "recipe" {
                         Button("Import Recipe from Link", systemImage: "link") { linkSheet = true }
                     }
-                    if !current.needsCollection {
+                    if current.autoFiled {
                         Button("Not this kind", systemImage: "arrow.uturn.backward.circle") { model.notThisKind(current) }
+                            .disabled(model.notThisKindBusy.contains(current.id))
                     }
                     Menu("Move to…", systemImage: "folder") {
                         Button("New collection…", systemImage: "plus") { model.newCollectionFor = [current.id] }
@@ -196,12 +197,13 @@ struct SaveDetailScreen: View {
             HStack {
                 KindLabel(kind: current.kind)
                 Spacer()
-                if !current.needsCollection {
+                if current.autoFiled {
                     Button { model.notThisKind(current) } label: {
                         Text("Not this kind").font(.subheadline.weight(.semibold)).foregroundStyle(t.accent).frame(minHeight: 44)
                     }
                     .accessibilityLabel("Not this kind")
-                    .accessibilityHint("Takes it out of \(KindStyle(current.kind).label) and moves it to Review.")
+                    .disabled(model.notThisKindBusy.contains(current.id))
+                    .accessibilityHint("Moves it out of \(KindStyle(current.kind).label) to Review. You can undo it.")
                 }
             }
             Text(current.title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)

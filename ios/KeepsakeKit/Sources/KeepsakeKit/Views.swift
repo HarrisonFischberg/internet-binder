@@ -191,14 +191,16 @@ extension Library {
     /// Sends saves to Review, for when you're not sure where they go.
     public func toReview(_ ids: [String]) async throws { try await prepare(); try await core.call("views.toReview", [ids]) }
 
-    /// "Not this kind": drops the wrong category, files the save in Review and teaches the sorter.
-    /// Returns the fields that put it back (for Undo).
-    public func notThisKind(_ id: String) async throws -> [String: Any] {
+    /// "Not this kind": drops the wrong category and files the save in Review. The sorter is told too, which
+    /// only helps for social posts the rules called a link. Returns the token `undoNotThisKind` takes.
+    public func notThisKind(_ id: String) async throws -> Any {
         try await prepare()
-        let rec = try database.get("items", id).flatMap { try JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] } ?? [:]
-        let back = Dictionary(uniqueKeysWithValues: ["kind", "collectionId", "details", "needsReview"].map { ($0, rec[$0] ?? NSNull()) })
-        try await core.call("views.notThisKind", [id])
-        return back
+        return try await core.call("views.notThisKind", [id]) as Any
+    }
+
+    /// Puts the save back as it was, and the sorter's lessons with it.
+    public func undoNotThisKind(_ id: String, _ token: Any) async throws {
+        try await core.call("views.undoNotThisKind", [id, token])
     }
 
     /// Undo right after a save: it's removed outright, never reaching the Trash.

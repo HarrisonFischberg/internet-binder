@@ -219,9 +219,9 @@ struct SaveMenu: View {
                 model.show("Link copied")
             }
         }
-        if !save.needsCollection {
+        if save.autoFiled {
             Button("Not this kind", systemImage: "arrow.uturn.backward.circle") { model.notThisKind(save) }
-                .accessibilityHint("Takes it out of its category and moves it to Review.")
+                .disabled(model.notThisKindBusy.contains(save.id))
         }
         if model.aiReady {
             Button("Fix with AI", systemImage: "sparkles") { Task { await model.fixWithAI([save]) } }

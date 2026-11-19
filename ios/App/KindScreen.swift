@@ -233,15 +233,16 @@ extension LibraryModel {
         }
     }
 
-    /// "Not this kind" on an auto-filed save: it goes to Review and the sorter learns; Undo puts it back.
+    /// "Not this kind" on an auto-filed save: it goes to Review and the sorter is told; Undo puts it back.
     func notThisKind(_ save: Save) {
-        guard let lib = library else { return }
+        guard let lib = library, notThisKindBusy.insert(save.id).inserted else { return }
         Task {
-            guard let back = try? await lib.notThisKind(save.id) else { return failed("Couldn't move it to Review. Try again.") }
+            defer { notThisKindBusy.remove(save.id) }
+            guard let token = try? await lib.notThisKind(save.id) else { return failed("Couldn't move it to Review. Try again.") }
             Haptic.settled()
             refresh()
             show("Moved to Review") {
-                try? await lib.update(save.id, back)
+                try? await lib.undoNotThisKind(save.id, token)
                 self.refresh()
             }
         }

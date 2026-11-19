@@ -20,6 +20,8 @@ public struct Save: Identifiable, Hashable, Sendable, Decodable {
     public let status: String?
     public let captureState: String?
     public let needsReview: Bool?
+    public let userFields: [String]?
+    public let categorizationSource: String?
     /// Brought in by an import and not read by your AI provider yet: waits for Run AI on imported saves.
     public let needsAi: Bool?
     public let createdAt: String?
@@ -65,6 +67,11 @@ public struct Save: Identifiable, Hashable, Sendable, Decodable {
 
     /// Every kind but products and links has its own Lifestyle view (kinds.js hasOwnView).
     public var hasOwnView: Bool { kind != "product" && kind != "link" }
+
+    /// Filed by the sorter or your AI, not by you (filing.js filedByYou) and not waiting in Review: "Not this kind" applies.
+    public var autoFiled: Bool {
+        !needsCollection && categorizationSource != "manual" && userFields?.contains("kind") != true && userFields?.contains("collectionId") != true
+    }
 
     /// In Review (kinds.js needsCollection): no collection, and no Lifestyle view of its own.
     public var needsCollection: Bool { (collectionId ?? "").isEmpty && !hasOwnView }
