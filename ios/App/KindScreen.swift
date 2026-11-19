@@ -233,6 +233,20 @@ extension LibraryModel {
         }
     }
 
+    /// "Not this kind" on an auto-filed save: it goes to Review and the sorter learns; Undo puts it back.
+    func notThisKind(_ save: Save) {
+        guard let lib = library else { return }
+        Task {
+            guard let back = try? await lib.notThisKind(save.id) else { return failed("Couldn't move it to Review. Try again.") }
+            Haptic.settled()
+            refresh()
+            show("Moved to Review") {
+                try? await lib.update(save.id, back)
+                self.refresh()
+            }
+        }
+    }
+
     /// Fix with AI for any saves (one, a collection, a Lifestyle view, everything): your provider reads each
     /// again, a product from its picture and its shop page, and a save in Review is filed when it's sure.
     /// A few at a time, so the bar at the bottom can count and Stop works. One Undo takes back the whole run.

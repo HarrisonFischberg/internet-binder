@@ -948,6 +948,20 @@ struct CollectionTests {
         #expect(saved.collectionId == col.id, "the keyword files it")
     }
 
+    @Test func notThisKindMovesToReviewTeachesAndUndoes() async throws {
+        let lib = try library()
+        let s = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://www.instagram.com/p/abc/", title: "Best coffee shops in Seattle", text: nil)).save)
+        try await lib.put([s.id], in: "kind:recipe")
+        #expect(try #require(try lib.save(s.id)).kind == "recipe")
+        let back = try await lib.notThisKind(s.id)
+        let after = try #require(try lib.save(s.id))
+        #expect(after.needsCollection && after.kind != "recipe", "the wrong kind is gone and it waits in Review")
+        let prefs = try await lib.core.call("store.getPrefs") as! [String: Any]
+        #expect(!(prefs["learnedKinds"] as? [String: Any] ?? [:]).isEmpty, "the sorter learns the correction")
+        try await lib.update(s.id, back)
+        #expect(try #require(try lib.save(s.id)).kind == "recipe", "Undo puts the kind back")
+    }
+
     @Test func deletingSendsSavesToReview() async throws {
         let lib = try library()
         let col = try await lib.createCollection(named: "Gifts")

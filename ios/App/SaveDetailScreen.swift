@@ -71,6 +71,9 @@ struct SaveDetailScreen: View {
                     if current.kind == "recipe" {
                         Button("Import Recipe from Link", systemImage: "link") { linkSheet = true }
                     }
+                    if !current.needsCollection {
+                        Button("Not this kind", systemImage: "arrow.uturn.backward.circle") { model.notThisKind(current) }
+                    }
                     Menu("Move to…", systemImage: "folder") {
                         Button("New collection…", systemImage: "plus") { model.newCollectionFor = [current.id] }
                         ForEach(destinations) { d in
@@ -190,7 +193,17 @@ struct SaveDetailScreen: View {
 
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 6) {
-            KindLabel(kind: current.kind)
+            HStack {
+                KindLabel(kind: current.kind)
+                Spacer()
+                if !current.needsCollection {
+                    Button { model.notThisKind(current) } label: {
+                        Text("Not this kind").font(.subheadline.weight(.semibold)).foregroundStyle(t.accent).frame(minHeight: 44)
+                    }
+                    .accessibilityLabel("Not this kind")
+                    .accessibilityHint("Takes it out of \(KindStyle(current.kind).label) and moves it to Review.")
+                }
+            }
             Text(current.title).font(KSFont.display()).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
                 .fixedSize(horizontal: false, vertical: true)
             if let fact = current.fact, !fact.isEmpty { Text(fact).font(.subheadline).foregroundStyle(t.inkMuted) }

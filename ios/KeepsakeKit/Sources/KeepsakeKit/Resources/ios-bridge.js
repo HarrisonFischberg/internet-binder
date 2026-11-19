@@ -600,6 +600,15 @@
         await store.updateItem(id, patch, { by: 'kind' });
       }
     },
+    // "Not this kind": the wrong category goes and the save waits in Review (toReview). A social post's
+    // old kind is taught down (learnKindFromCorrection; pages say what they are, so only posts learn).
+    async notThisKind(id) {
+      const it = await store.getItem(id);
+      if (!it) return;
+      await this.toReview([id]);
+      const now = await store.getItem(id);
+      await store.setPrefs(K.categorizer.learnKindFromCorrection(now, it.kind, now.kind, await store.getPrefs()));
+    },
     // Undoing a save that just happened removes it outright (background.js UNDO_SAVE).
     async undoSave(id) { await store.deleteForever([id]); },
     // Done on the share card with the save still where Internet Binder put it: the sorter learns a little.
