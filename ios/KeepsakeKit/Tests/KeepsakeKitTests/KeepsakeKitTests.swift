@@ -948,6 +948,69 @@ struct CollectionTests {
         #expect(saved.collectionId == col.id, "the keyword files it")
     }
 
+    private func rawItem(_ lib: Library, _ id: String) throws -> [String: Any] {
+        try json(Data(try #require(try lib.database.get("items", id)).utf8))
+    }
+    private func learnedKinds(_ lib: Library) async throws -> NSDictionary {
+        let prefs = try await lib.core.call("store.getPrefs") as! [String: Any]
+        return (prefs["learnedKinds"] as? [String: Any] ?? [:]) as NSDictionary
+    }
+
+    // A recipe the rules read: auto-filed, details kept for Undo, the sorter told, nothing else changed by Undo.
+    @Test func notThisKindOnAnAutoFiledLifestyleSaveUndoesExactly() async throws {
+        let lib = try library()
+        let page: [String: Any] = ["url": "https://www.instagram.com/p/abc/", "title": "Best coffee shops in Seattle", "isInstagram": true,
+                                   "description": "Recipe: cold brew. Ingredients: coffee, water", "schemaTypes": ["Recipe"],
+                                   "recipe": ["ingredients": ["coffee", "water"], "steps": ["Steep", "Strain"]]]
+        let s = try #require(try await lib.capture(product: page).save)
+        let before = try rawItem(lib, s.id)
+        try #require(s.kind == "recipe")
+        #expect(s.autoFiled)
+        let prefsBefore = try await learnedKinds(lib)
+        let token = try await lib.notThisKind(s.id)
+        let moved = try #require(try lib.save(s.id))
+        #expect(moved.needsCollection && moved.kind != "recipe" && !moved.autoFiled)
+        #expect(try await learnedKinds(lib) != prefsBefore, "the sorter is told")
+        try await lib.undoNotThisKind(s.id, token)
+        let after = try rawItem(lib, s.id)
+        for k in ["kind", "collectionId", "needsReview", "userFields", "details", "understoodAt"] {
+            #expect(NSDictionary(dictionary: [k: before[k] ?? NSNull()]) == NSDictionary(dictionary: [k: after[k] ?? NSNull()]), "\(k) restored")
+        }
+        #expect(try await learnedKinds(lib) == prefsBefore, "the lessons go back too")
+        #expect(try #require(try lib.save(s.id)).autoFiled)
+    }
+
+    @Test func notThisKindOnACollectionSaveGoesToReview() async throws {
+        let lib = try library()
+        let col = try await lib.createCollection(named: "Cookware")
+        try await lib.updateCollection(col.id, ["keywords": ["skillet"]])
+        let page: [String: Any] = ["url": "https://shop.example.com/p/9", "title": "Cast iron skillet 26 cm", "price": "$45.00", "schemaTypes": ["Product"]]
+        let s = try #require(try await lib.capture(product: page).save)
+        try #require(s.collectionId == col.id)
+        #expect(s.autoFiled)
+        let token = try await lib.notThisKind(s.id)
+        let moved = try #require(try lib.save(s.id))
+        #expect(moved.collectionId == nil && moved.needsCollection)
+        try await lib.undoNotThisKind(s.id, token)
+        #expect(try #require(try lib.save(s.id)).collectionId == col.id)
+    }
+
+    @Test func notThisKindIsNotOfferedOnHandFiledSaves() async throws {
+        let lib = try library()
+        let col = try await lib.createCollection(named: "Gifts")
+        let a = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/a", title: "A thing", text: nil)).save)
+        try await lib.put([a.id], in: col.id)
+        #expect(try #require(try lib.save(a.id)).autoFiled == false, "moved by you into a collection")
+        let b = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://example.com/b", title: "A place", text: nil)).save)
+        try await lib.put([b.id], in: "kind:place")
+        #expect(try #require(try lib.save(b.id)).autoFiled == false, "kind picked by you")
+    }
+
+    @Test func notThisKindOnAMissingSaveThrows() async throws {
+        let lib = try library()
+        await #expect(throws: (any Error).self) { _ = try await lib.notThisKind("nope") }
+    }
+
     @Test func deletingSendsSavesToReview() async throws {
         let lib = try library()
         let col = try await lib.createCollection(named: "Gifts")

@@ -90,6 +90,8 @@ final class LibraryModel {
     private(set) var aiBackup = false
     /// A Fix with AI run in progress (one save, a collection, a Lifestyle view or everything).
     var aiRun: AIRun?
+    /// Saves a Not this kind is working on: a second tap waits.
+    var notThisKindBusy: Set<String> = []
     struct AIRun: Equatable {
         var done: Int
         let total: Int
