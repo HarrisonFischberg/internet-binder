@@ -219,6 +219,10 @@ struct SaveMenu: View {
                 model.show("Link copied")
             }
         }
+        if save.autoFiled {
+            Button("Not this kind", systemImage: "arrow.uturn.backward.circle") { model.notThisKind(save) }
+                .disabled(model.notThisKindBusy.contains(save.id))
+        }
         if model.aiReady {
             Button("Fix with AI", systemImage: "sparkles") { Task { await model.fixWithAI([save]) } }
                 .disabled(model.aiRun != nil)

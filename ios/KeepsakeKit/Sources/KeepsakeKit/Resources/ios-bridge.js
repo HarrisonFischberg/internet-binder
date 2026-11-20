@@ -600,6 +600,26 @@
         await store.updateItem(id, patch, { by: 'kind' });
       }
     },
+    // "Not this kind": the wrong category goes and the save waits in Review (as toReview does). Returns an
+    // undo token (the save's fields and the sorter's kind lessons as they were) for undoNotThisKind.
+    // A social post's kind is taught down (learnKindFromCorrection): it only helps where the rules said link.
+    async notThisKind(id) {
+      const it = await store.getItem(id);
+      if (!it) throw new Error('Save not found');
+      const token = { fields: { kind: it.kind, collectionId: it.collectionId ?? null, details: it.details || {}, needsReview: it.needsReview === true,
+        userFields: it.userFields || [], understoodAt: it.understoodAt ?? null }, learnedKinds: (await store.getPrefs()).learnedKinds || {} };
+      const patch = { collectionId: null, needsReview: true };
+      if (K.kinds.hasOwnView(K.kinds.kindOf(it))) Object.assign(patch, { kind: K.kinds.shoppingKindFor(it), details: {} });
+      const lesson = K.categorizer.learnKindFromCorrection({ ...it, ...patch }, it.kind, patch.kind || it.kind, { learnedKinds: token.learnedKinds }).learnedKinds;
+      await store.updatePrefs({ learnedKinds: lesson });
+      try { await store.updateItem(id, patch, { by: 'kind' }); } catch (e) { await store.updatePrefs({ learnedKinds: token.learnedKinds }); throw e; }
+      return token;
+    },
+    // Puts the save back exactly (by 'undo': no relearning, userFields as they were) and the lessons with it.
+    async undoNotThisKind(id, token) {
+      await store.updateItem(id, token.fields, { by: 'undo' });
+      await store.updatePrefs({ learnedKinds: token.learnedKinds });
+    },
     // Undoing a save that just happened removes it outright (background.js UNDO_SAVE).
     async undoSave(id) { await store.deleteForever([id]); },
     // Done on the share card with the save still where Internet Binder put it: the sorter learns a little.
