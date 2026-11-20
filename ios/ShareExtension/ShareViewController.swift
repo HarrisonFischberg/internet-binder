@@ -13,6 +13,17 @@ import os
 /// the save is only finished (and its "Saved to …" notification sent) from Done.
 final class ShareViewController: UIViewController {
     private let state = ShareState()
+    private var watching: [NSObjectProtocol] = []
+
+    deinit {
+        watching.forEach(NotificationCenter.default.removeObserver)
+        ShareTrace.note(state.session, "let go")
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        ShareTrace.note(state.session, state.closing ? "going" : "going without Done or Undo")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -29,7 +40,13 @@ final class ShareViewController: UIViewController {
         host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(host.view)
         host.didMove(toParent: self)
-        ShareTrace.note(state.session, "opened")
+        ShareTrace.opens += 1
+        ShareTrace.note(state.session, "opened (share \(ShareTrace.opens) in this process, running \(Int(ProcessInfo.processInfo.systemUptime - ShareTrace.began)) s)")
+        // What the app it was shared from did just before a sheet went: stepped back, or left the screen.
+        for (name, word) in [(NSNotification.Name.NSExtensionHostWillResignActive, "host stepped back"), (.NSExtensionHostDidBecomeActive, "host active"),
+                             (.NSExtensionHostDidEnterBackground, "host left the screen"), (.NSExtensionHostWillEnterForeground, "host coming back")] {
+            watching.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [session = state.session] _ in ShareTrace.note(session, word) })
+        }
         // From the first moment: if iOS takes the sheet away before Done, a notice still says what happened.
         state.keepNoticeReady()
         state.capture = Task { [state] in await state.save(items: extensionContext?.inputItems as? [NSExtensionItem] ?? []) }
@@ -64,6 +81,10 @@ enum ShareTrace {
     private static let file = (try? RecordDatabase.defaultPath()).map {
         URL(fileURLWithPath: $0).deletingLastPathComponent().appendingPathComponent("share-trace.log")
     }
+    /// How many times the sheet has opened in this process (iOS keeps the extension around between shares),
+    /// and when the process started.
+    static var opens = 0
+    static let began = ProcessInfo.processInfo.systemUptime
     private static let logger = Logger(subsystem: "com.harrisonfischberg.keepsake.share", category: "sheet")
 
     static func note(_ session: String, _ event: String) {
