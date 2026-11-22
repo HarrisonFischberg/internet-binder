@@ -124,7 +124,7 @@ Requires Chrome 121 or newer. Edge, Brave and other Chromium browsers use the sa
 
 ### Safari on the Mac
 
-The Safari version is the same extension inside a small Mac app (`safari/Keepsake/`). You need macOS 14 or newer, Xcode and Node 20+.
+The Safari version is the same extension inside a small Mac app (`safari/Keepsake/`), free on the [Mac App Store](https://apps.apple.com/app/id6825188819). To build it yourself, you need macOS 14 or newer, Xcode and Node 20+.
 
 1. Open `safari/Keepsake/Keepsake.xcodeproj` in Xcode.
 2. Pick the **Keepsake** scheme and your Mac, set your own team under *Signing & Capabilities* if Xcode asks, then **Run**. Each build runs `node safari/build.mjs` first, which copies `keepsake/` into `safari/dist/` as a Safari-ready build.
@@ -133,7 +133,7 @@ The Safari version is the same extension inside a small Mac app (`safari/Keepsak
 
 ### iPhone and iPad
 
-The app, its Share Extension and its widgets live in `ios/` (iOS 27 or newer). It isn't on the App Store yet, so you build it with Xcode:
+The app, its Share Extension and its widgets live in `ios/` (iOS 27 or newer). Get it free on the [App Store](https://apps.apple.com/app/id6825188819). To build it yourself with Xcode instead:
 
 1. Open `ios/Keepsake.xcodeproj` in Xcode.
 2. Pick the **Keepsake** scheme and a simulator or your own device. On a device, set your own team under *Signing & Capabilities* (the App Group needs one).
