@@ -509,6 +509,22 @@ struct ViewsTests {
         return lib
     }
 
+    /// Wish List: what's still to buy from every collection, never what's bought; hiding takes one off it.
+    @Test func wishListGathersWhatIsLeftToBuy() async throws {
+        let lib = try await imported()
+        let list = try await lib.wishList()
+        #expect(!list.rows.isEmpty)
+        #expect(list.rows.allSatisfy { $0.item.purchased != true && !$0.item.hasOwnView && $0.state == "unchecked" })
+        #expect(list.keyReady == false, "no key: nothing can be looked up")
+        #expect(list.toCheck.count == list.rows.count)
+        let first = try #require(list.rows.first)
+        try await lib.setWishHidden([first.id], true)
+        let after = try await lib.wishList()
+        #expect(after.rows.count == list.rows.count - 1)
+        #expect(after.hidden.map(\.id) == [first.id])
+        await #expect(throws: (any Error).self) { try await lib.findDeals(first.id) }
+    }
+
     var expected: [String: Any] { get throws { try json(fixture("views-expected")) } }
 
     @Test func reviewQueue() async throws {

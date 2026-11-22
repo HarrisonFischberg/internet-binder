@@ -13,7 +13,7 @@ struct SplitRootView: View {
     @State private var appearance = false
     @State private var dropTarget: String?
 
-    enum Section: Hashable { case home, library, search, review, places, kind(String), collections, collection(String, String) }
+    enum Section: Hashable { case home, library, search, review, places, kind(String), collections, collection(String, String), wishList }
 
     var body: some View {
         NavigationSplitView {
@@ -37,6 +37,7 @@ struct SplitRootView: View {
                     }
                 }
                 SwiftUI.Section("Collections") {
+                    Label("Wish List", systemImage: "gift").tag(Section.wishList)
                     ForEach(collections) { c in
                         Label(c.name, systemImage: "bag").tag(Section.collection(c.id, c.name))
                             .listRowBackground(dropTarget == c.id ? t.accent.opacity(0.15) : nil)
@@ -62,6 +63,7 @@ struct SplitRootView: View {
                 case .kind(let k): KindScreen(kind: k, zoom: zoom)
                 case .collections: CollectionsScreen(zoom: zoom)
                 case .collection(let id, let name): CollectionScreen(id: id, name: name, zoom: zoom)
+                case .wishList: WishListScreen(zoom: zoom)
                 }
             }
             .id(section)

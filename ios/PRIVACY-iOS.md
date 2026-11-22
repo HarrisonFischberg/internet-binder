@@ -38,6 +38,13 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
   *Understanding a book, film or show* lets the provider search the web for the title (with your country,
   for where it streams), then reads one page about it (the save's own page, else one the search returned),
   without cookies, for its cover or poster.
+- **Wish List: Find deals**, only when you tap Find deals on a save or Check all, and only with your own AI
+  key (Anthropic or OpenAI; Apple Intelligence can't search the web, so without a key nothing is sent):
+  the product's name, brand, model, colour or size, the price and shop it was saved from, its shop link,
+  the currency and your country go to your chosen provider, which searches the web for current prices.
+  Each store page its search returned (five at most) is then fetched once over https without cookies, for
+  the price in that page's structured product data. The stores, prices and links found are kept on the
+  save, on your devices and in your own iCloud if sync is on. Nothing runs by itself.
 - **Import recipe from a link**, only when you paste a link into it on a recipe: that one page, fetched once over
   https without cookies, for its recipe card (schema.org Recipe). When the page has none, its visible text
   (up to 12,000 characters) and the dish's name are read by Apple Intelligence on the device, or, with no
