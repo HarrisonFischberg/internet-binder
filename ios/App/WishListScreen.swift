@@ -60,16 +60,16 @@ struct WishListScreen: View {
                         } else {
                             if !canFind { keyNote(list) }
                             if canFind { checkAll }
-                            if canFind || rows.contains(where: { $0.state == "found" }) {
-                                Text("Prices are what each store showed when it was checked. Another size or colour, shipping, tax and coupons can change them, so confirm on the store's page before you buy.")
-                                    .font(.footnote).foregroundStyle(t.inkMuted)
-                            }
                             LazyVStack(spacing: 14) {
                                 ForEach(rows) { row in
                                     WishRow(row: row, zoom: zoom, canFind: canFind, open: Binding(
                                         get: { open.contains(row.id) },
                                         set: { on in if on { open.insert(row.id) } else { open.remove(row.id) } }))
                                 }
+                            }
+                            if rows.contains(where: { $0.state == "found" }) {
+                                Text("Prices are what each store showed when it was checked. Another size or colour, shipping, tax and coupons can change them, so confirm on the store's page before you buy.")
+                                    .font(.footnote).foregroundStyle(t.inkMuted)
                             }
                         }
                         if !list.hidden.isEmpty { hidden(list.hidden) }
@@ -137,8 +137,8 @@ struct WishListScreen: View {
             Text(list.keyReady ? "Finding deals needs Anthropic or OpenAI" : "Finding deals uses your own AI key")
                 .font(.headline).foregroundStyle(t.ink)
             Text(list.keyReady
-                 ? "Your custom AI endpoint can't search the web. Switch to Anthropic or OpenAI in Settings and the Find deals buttons appear here."
-                 : "It searches the web for each product, which Apple Intelligence can't do. Add an Anthropic or OpenAI key in Settings and the Find deals buttons appear here.")
+                 ? "Your custom endpoint can't search the web. Switch to Anthropic or OpenAI in Settings."
+                 : "Add an Anthropic or OpenAI key in Settings to search stores for each product.")
                 .font(.subheadline).foregroundStyle(t.inkMuted)
             Button("Open Settings") { settings = true }
                 .buttonStyle(.bordered).frame(minHeight: 44)
@@ -281,20 +281,30 @@ private struct WishRow: View {
                     offerRow(offer)
                 }
             }
-            HStack(spacing: 16) {
-                Text(checked).font(.footnote).foregroundStyle(t.inkMuted)
-                Spacer(minLength: 0)
-                if row.offers.count > 1 {
-                    Button(open ? "Show less" : "All \(row.offers.count) stores") { open.toggle() }
-                        .font(.footnote.weight(.semibold)).frame(minHeight: 44)
-                        .accessibilityIdentifier("wishList.stores")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    Text(checked).font(.footnote).foregroundStyle(t.inkMuted).lineLimit(1)
+                    Spacer(minLength: 0)
+                    footerButtons
                 }
-                if canFind {
-                    Button("Check again") { Task { await model.findDeals([save.id]) } }
-                        .font(.footnote.weight(.semibold)).frame(minHeight: 44)
-                        .disabled(running)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(checked).font(.footnote).foregroundStyle(t.inkMuted)
+                    HStack(spacing: 16) { footerButtons; Spacer(minLength: 0) }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private var footerButtons: some View {
+        if row.offers.count > 1 {
+            Button(open ? "Show less" : "All \(row.offers.count) stores") { open.toggle() }
+                .font(.footnote.weight(.semibold)).frame(minHeight: 44)
+                .accessibilityIdentifier("wishList.stores")
+        }
+        if canFind {
+            Button("Check again") { Task { await model.findDeals([save.id]) } }
+                .font(.footnote.weight(.semibold)).frame(minHeight: 44)
+                .disabled(running)
         }
     }
 
@@ -319,7 +329,6 @@ private struct WishRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressStyle())
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(offer.store), \(offer.price)\(offer.lowest ? ", lowest price" : "")")
         .accessibilityValue(detail)
         .accessibilityHint("Opens the store's page")

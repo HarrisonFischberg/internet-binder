@@ -435,6 +435,8 @@ export async function findDealsWithAI(input, settings, apiKey) {
   }
 }
 
+// Review, comparison and search pages show other products' prices.
+const NOT_A_LISTING = /\/(reviews?|compare|comparison|search)(\/|\?|$)|[?&](q|query|k)=/i;
 const hostOfUrl = (url) => { try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
 
 // The search result this address is (same host and path), exactly as the search returned it, or ''.
@@ -467,7 +469,7 @@ export function dealsAnswer(p, seen, input = {}) {
     // A number, or a plain "$259.00" / "259". Anything else ("1.299,00", "from 99") isn't guessed at.
     const price = typeof o.price === 'number' ? o.price : /^\s*[^\d\s]{0,3}\s*\d+(\.\d{1,2})?\s*[A-Za-z]{0,3}\s*$/.test(String(o.price ?? '')) ? Number(String(o.price).replace(/[^0-9.]/g, '')) : NaN;
     const currency = cut(o.currency, 8).toUpperCase() || want;
-    if (!host || !/^https:/i.test(url)) continue;
+    if (!host || !/^https:/i.test(url) || NOT_A_LISTING.test(url)) continue;
     if (!Number.isFinite(price) || price <= 0) continue;
     if (want && currency !== want) continue;
     if (saved !== null && price < saved * DEAL_FLOOR) continue;

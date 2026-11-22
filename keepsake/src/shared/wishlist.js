@@ -20,6 +20,8 @@ import { findDealsWithAI, supportsWebLookup, usableKey, DEAL_FLOOR } from '../ai
 export const DEALS_CONFIDENCE = 0.5;
 // Check all leaves alone what was checked this recently; older results are called out as old.
 export const DEALS_FRESH_HOURS = 12;
+// A store page's price more than this far from the search result's is another variant, so it isn't trusted.
+export const DEAL_PAGE_DRIFT = 0.25;
 export const DEALS_OLD_HOURS = 48;
 // A store page's price this far under the search result's price is taken for another variant's.
 export const CONFIRM_FLOOR = 0.8;
@@ -74,12 +76,25 @@ export function dealsToCheck(items, now = Date.now()) {
   return (items || []).filter(onWishList).filter((i) => hoursSince(i.deals?.checkedAt, now) > DEALS_FRESH_HOURS);
 }
 
-// An offer after reading the store's own page (pure). The page's published price wins and marks the offer
-// confirmed; a page with no price, another currency, or a price so low it must be another item leaves the
-// search result's price as it was, unconfirmed.
-export function confirmOffer(offer, page, saved = null) {
+// Model-like words in a title: anything with a digit (XM5, V15, 9, 5.5, 16GB), minus years. A store page whose
+// own title lacks one of them is a different model or size (a Clifton 11 for a Clifton 9).
+const modelWords = (title) => [...new Set(String(title || '').toLowerCase().replace(/[()\[\],]/g, ' ').split(/\s+/)
+  .map((w) => w.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '').replace(/-/g, '')).filter((w) => /\d/.test(w) && !/^(19|20)\d\d$/.test(w) && !/^\$?\d+(\.\d\d)?$/.test(w) || /^\d{1,2}(\.\d)?$/.test(w)))];
+export function pageIsOtherModel(page, title) {
+  const seen = String(page?.title || page?.name || '').toLowerCase().replace(/&(#\d+|#x[0-9a-f]+|\w+);/g, ' ');
+  if (!seen.trim() || !/\d/.test(seen)) return false;   // no digits on the page's title: nothing to compare
+  const flat = seen.replace(/[\s-]+/g, '');
+  return modelWords(title).some((w) => (/^\d+$/.test(w) ? !new RegExp(`(^|[^0-9.])${w}([^0-9]|\\.(?!\\d)|$)`).test(seen) : !flat.includes(w.replace(/\s/g, ''))));
+}
+
+// An offer after reading the store's own page (pure), or null when that page is another model than the
+// saved product's. The page's published price wins and marks the offer confirmed; a page with no price,
+// another currency, a price so low it must be another item, or one far from the search result's (another
+// variant or bundle on the same page) leaves the search result's price as it was, unconfirmed.
+export function confirmOffer(offer, page, saved = null, title = '') {
   const out = { ...offer, confirmed: false };
   if (!page) return out;
+  if (title && pageIsOtherModel(page, title)) return null;
   if (page.availability === 'out_of_stock') out.outOfStock = true;
   const price = Number(page.price);
   if (!Number.isFinite(price) || price <= 0) return out;
@@ -88,6 +103,8 @@ export function confirmOffer(offer, page, saved = null) {
   // A page that prices several variants, or a page price well under the search result's, is most likely
   // the cheapest variant's "from" price: not this item's, so nothing is confirmed.
   if (page.priceVaries || price < offer.price * CONFIRM_FLOOR) return out;
+  // The other way: a page price far above the search result's is another variant or bundle too.
+  if (price > offer.price * (1 + DEAL_PAGE_DRIFT)) return out;
   return { ...out, price: Math.round(price * 100) / 100, currency: offer.currency || page.currency || '', confirmed: true };
 }
 
@@ -130,11 +147,12 @@ export async function findDeals(store, id, { fetchShopPage = async () => null, r
     } catch {
       /* unreadable: the search result's price stands, unconfirmed */
     }
-    return confirmOffer(o, page, input.amount);
+    return confirmOffer(o, page, input.amount, input.title);
   })) : [];
+  const kept = offers.filter(Boolean);
   const deals = {
-    checkedAt: at.toISOString(), product: found.product, offers: sortOffers(offers),
-    empty: offers.length ? '' : sure ? 'none' : 'unsure', provider: found.provider, model: found.model, usage: found.usage,
+    checkedAt: at.toISOString(), product: found.product, offers: sortOffers(kept),
+    empty: kept.length ? '' : sure ? 'none' : 'unsure', provider: found.provider, model: found.model, usage: found.usage,
   };
   // by 'deals': not an edit of yours, so no field is marked as hand-edited.
   const next = await store.updateItem(id, { deals }, { by: 'deals' });

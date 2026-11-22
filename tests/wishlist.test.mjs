@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
-import { onWishList, hiddenFromWishList, wishList, dealsToCheck, dealSummary, confirmOffer, dealsInput, findDeals, setWishHidden, sortOffers } from '../keepsake/src/shared/wishlist.js';
+import { onWishList, hiddenFromWishList, wishList, dealsToCheck, dealSummary, confirmOffer, dealsInput, findDeals, setWishHidden, sortOffers, pageIsOtherModel } from '../keepsake/src/shared/wishlist.js';
 import { dealsAnswer, findDealsWithAI } from '../keepsake/src/ai/provider.js';
 import { createStore, memoryRecordBackend, makeItem, sanitizeDeals } from '../keepsake/src/shared/storage.js';
 
@@ -234,4 +234,25 @@ test('hiding takes a save off the list and keeps its deals; deals survive a roun
   assert.equal('wishHidden' in it, false);
   assert.equal(sanitizeDeals({ offers: [] }), null, 'no time checked: not kept');
   assert.equal('deals' in makeItem({ title: 'x' }), false, 'saves without deals stay as they were');
+});
+
+test('a store page for another model or size is dropped, and a page price far from the search price is not trusted', () => {
+  const o = offer('Runshop', 116, {});
+  const hoka = "Hoka Clifton 9 men's running shoes";
+  assert.equal(confirmOffer(o, { title: "Men's HOKA Clifton 11 Neutral Road Shoe", price: 154.95, currency: 'USD' }, 145, hoka), null);
+  assert.equal(confirmOffer(o, { title: "Men's HOKA Clifton 9 | Runshop", price: 115, currency: 'USD' }, 145, hoka).confirmed, true);
+  assert.equal(pageIsOtherModel({ title: 'Kindle Paperwhite 16 GB | Amazon' }, 'Kindle Paperwhite 16GB (2024)'), false, 'years and spacing do not matter');
+  assert.equal(pageIsOtherModel({ title: 'Sony WH-1000XM4 headphones' }, 'Sony WH-1000XM5 headphones black'), true);
+  assert.equal(pageIsOtherModel({ title: '' }, hoka), false, 'a page with no title says nothing');
+  assert.equal(pageIsOtherModel({ title: 'Signature Round Dutch Oven | Le Creuset' }, 'Le Creuset Signature 5.5 qt Dutch oven'), false, 'a title with no number cannot disagree');
+  const far = confirmOffer(offer('Abt', 849), { title: 'Dyson V15 Detect', price: 599.99, currency: 'USD' }, 749.99, 'Dyson V15 Detect vacuum');
+  assert.equal(far.confirmed, false);
+  assert.equal(far.price, 849, 'the search result stands');
+});
+
+test('review, comparison and search pages are not offers', () => {
+  const urls = ['https://shop.example/site/reviews/arc-2', 'https://shop.example/compare/arc-2', 'https://shop.example/s?q=arc+2', 'https://shop.example/p/arc-2'];
+  const offers = urls.map((url, i) => ({ store: `S${i}`, price: 250 + i, currency: 'USD', url }));
+  const kept = dealsAnswer({ product: 'Arc 2', offers, confidence: 0.9 }, new Set(urls), { currency: 'USD', amount: 279 }).offers;
+  assert.deepEqual(kept.map((o) => o.url), ['https://shop.example/p/arc-2']);
 });
