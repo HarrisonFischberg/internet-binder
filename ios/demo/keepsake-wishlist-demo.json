@@ -1,7 +1,7 @@
 {
  "format": "keepsake-export",
  "schemaVersion": 3,
- "exportedAt": "2026-11-22T23:15:36.911Z",
+ "exportedAt": "2026-11-22T23:26:01.693Z",
  "collections": {
   "8dee3644-aea5-4235-b06e-c9813a9fccc5": {
    "id": "8dee3644-aea5-4235-b06e-c9813a9fccc5",
@@ -28,7 +28,7 @@
    "sortOrder": 1,
    "pinned": false,
    "createdAt": "2026-10-16T04:50:12.689Z",
-   "updatedAt": "2026-11-22T23:15:36.894Z"
+   "updatedAt": "2026-11-22T23:26:01.678Z"
   },
   "fab403ae-7c26-46d3-9471-1deefb8e39ed": {
    "id": "fab403ae-7c26-46d3-9471-1deefb8e39ed",
@@ -56,7 +56,7 @@
    "sortOrder": 2,
    "pinned": false,
    "createdAt": "2026-10-16T04:50:12.691Z",
-   "updatedAt": "2026-11-22T23:15:36.894Z"
+   "updatedAt": "2026-11-22T23:26:01.678Z"
   },
   "97163dcf-c125-4d66-937a-ec40707a54ef": {
    "id": "97163dcf-c125-4d66-937a-ec40707a54ef",
@@ -83,7 +83,7 @@
    "sortOrder": 3,
    "pinned": false,
    "createdAt": "2026-10-16T04:50:12.691Z",
-   "updatedAt": "2026-11-22T23:15:36.894Z"
+   "updatedAt": "2026-11-22T23:26:01.678Z"
   },
   "c28b2b94-8039-40fd-a8c1-454437ffae86": {
    "id": "c28b2b94-8039-40fd-a8c1-454437ffae86",
@@ -102,7 +102,7 @@
    "sortOrder": 4,
    "pinned": true,
    "createdAt": "2026-10-16T04:50:12.692Z",
-   "updatedAt": "2026-11-22T23:15:36.894Z"
+   "updatedAt": "2026-11-22T23:26:01.678Z"
   },
   "59c8f697-b645-4f7a-88be-9d78330680c7": {
    "id": "59c8f697-b645-4f7a-88be-9d78330680c7",
@@ -120,7 +120,7 @@
    "sortOrder": 5,
    "pinned": false,
    "createdAt": "2026-10-16T04:50:12.692Z",
-   "updatedAt": "2026-11-22T23:15:36.894Z"
+   "updatedAt": "2026-11-22T23:26:01.678Z"
   },
   "576ddc10-586e-4359-ad9d-e2d873f6ba9c": {
    "id": "576ddc10-586e-4359-ad9d-e2d873f6ba9c",
@@ -138,7 +138,7 @@
    "sortOrder": 6,
    "pinned": false,
    "createdAt": "2026-10-16T04:50:12.692Z",
-   "updatedAt": "2026-11-22T23:15:36.894Z"
+   "updatedAt": "2026-11-22T23:26:01.678Z"
   }
  },
  "items": {
@@ -1548,7 +1548,7 @@
    "needsReview": false,
    "previousCollections": [],
    "deals": {
-    "checkedAt": "2026-11-22T22:55:36.907Z",
+    "checkedAt": "2026-11-22T23:06:01.690Z",
     "product": "Glass pour-over coffee maker, 6 cup",
     "offers": [
      {
@@ -1608,7 +1608,7 @@
    "needsAi": true,
    "deletedAt": null,
    "createdAt": "2026-10-15T10:00:00.000Z",
-   "updatedAt": "2026-11-22T23:15:36.907Z"
+   "updatedAt": "2026-11-22T23:26:01.690Z"
   },
   "19a2fe9c-b081-48f0-ac7d-3944d4b0b7ce": {
    "id": "19a2fe9c-b081-48f0-ac7d-3944d4b0b7ce",
@@ -1645,7 +1645,7 @@
    "needsReview": false,
    "previousCollections": [],
    "deals": {
-    "checkedAt": "2026-11-22T22:55:36.907Z",
+    "checkedAt": "2026-11-22T23:06:01.690Z",
     "product": "Stoneware mugs, set of 4",
     "offers": [
      {
@@ -1684,7 +1684,7 @@
    "needsAi": true,
    "deletedAt": null,
    "createdAt": "2026-10-05T15:00:00.000Z",
-   "updatedAt": "2026-11-22T23:15:36.908Z"
+   "updatedAt": "2026-11-22T23:26:01.691Z"
   },
   "1df7b084-265f-40bb-83a8-5c7fb489a91e": {
    "id": "1df7b084-265f-40bb-83a8-5c7fb489a91e",
@@ -1815,7 +1815,7 @@
    "needsReview": true,
    "previousCollections": [],
    "deals": {
-    "checkedAt": "2026-11-22T22:55:36.907Z",
+    "checkedAt": "2026-11-22T23:06:01.690Z",
     "product": "Adjustable desk lamp",
     "offers": [],
     "empty": "none",
@@ -1833,7 +1833,7 @@
    "needsAi": true,
    "deletedAt": null,
    "createdAt": "2026-10-14T12:00:00.000Z",
-   "updatedAt": "2026-11-22T23:15:36.908Z"
+   "updatedAt": "2026-11-22T23:26:01.691Z"
   },
   "3fd3524e-a9f3-4eb4-80b2-3352fe104381": {
    "id": "3fd3524e-a9f3-4eb4-80b2-3352fe104381",
@@ -1881,7 +1881,7 @@
    "needsAi": true,
    "deletedAt": null,
    "createdAt": "2026-10-12T11:00:00.000Z",
-   "updatedAt": "2026-11-22T23:15:36.908Z"
+   "updatedAt": "2026-11-22T23:26:01.691Z"
   },
   "3b796b64-0e49-46be-8459-f809ea7be2b8": {
    "id": "3b796b64-0e49-46be-8459-f809ea7be2b8",

@@ -659,7 +659,7 @@
     // results stay. Each store page the search found is read once without cookies (__native.fetchPage).
     async findDeals(id) {
       const r = await K.wishlist.findDeals(store, id, { fetchShopPage: aiDeps.fetchShopPage });
-      return { state: r.summary.state, offers: r.summary.offers.length, usage: r.item.deals?.usage || null };
+      return { state: r.summary.state, offers: r.skipped ? 0 : r.summary.offers.length, usage: r.item.deals?.usage || null };
     },
     async setWishHidden(ids, hidden) { await K.wishlist.setWishHidden(store, ids, hidden); },
     // A workout's goals with their progress (goals.js goalProgress), and today's check-ins so a second

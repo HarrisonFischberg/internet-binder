@@ -538,11 +538,17 @@ export function productFromHtml(html, baseUrl = '') {
   let currency = '';
   let availability = '';
   const offers = product ? [].concat(product.offers || []).flatMap((o) => (o && o.offers ? [o, ...[].concat(o.offers)] : [o])) : [];
+  // Every price the page's offers state: more than one (a variant each, or a "from" price) means the page
+  // alone can't say what this exact item costs (priceVaries; Wish List then doesn't call a price confirmed).
+  const stated = new Set();
+  let ranged = false;
   for (const o of offers.slice(0, 20)) {
     if (!o || typeof o !== 'object') continue;
     const cur = String(o.priceCurrency || o.priceSpecification?.priceCurrency || '').toUpperCase();
+    if (o.lowPrice !== undefined && o.lowPrice !== null && o.lowPrice !== '' && String(o.lowPrice) !== String(o.highPrice ?? o.lowPrice)) ranged = true;
     for (const v of [o.price, o.lowPrice, o.priceSpecification?.price]) {
       const p = parsePrice(v, cur);
+      if (p && p.amount > 0) stated.add(p.amount);
       if (price === null && p && p.amount > 0) { price = p.amount; currency = cur || p.currency || ''; }
     }
     if (!availability && o.availability) availability = /outofstock|soldout|discontinued/i.test(String(o.availability)) ? 'out_of_stock' : /instock|limitedavailability|preorder/i.test(String(o.availability)) ? 'in_stock' : '';
@@ -576,6 +582,7 @@ export function productFromHtml(html, baseUrl = '') {
     sku: product ? text(product.sku || product.mpn || product.model?.name || product.model || '').slice(0, 60) : '',
     price,
     currency,
+    priceVaries: ranged || stated.size > 1,
     availability,
     image: abs(product ? [].concat(product.image || [])[0] : null) || abs(meta('og:image')),
     siteName: meta('og:site_name').slice(0, 80),

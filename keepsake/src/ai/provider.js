@@ -437,6 +437,22 @@ export async function findDealsWithAI(input, settings, apiKey) {
 
 const hostOfUrl = (url) => { try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
 
+// The search result this address is (same host and path), exactly as the search returned it, or ''.
+function seenUrl(url, seen) {
+  if (!url) return '';
+  if (seen.has(url)) return url;
+  try {
+    const u = new URL(url);
+    for (const s of seen) {
+      try {
+        const v = new URL(s);
+        if (v.hostname === u.hostname && v.pathname.replace(/\/$/, '') === u.pathname.replace(/\/$/, '')) return s;
+      } catch { /* skip */ }
+    }
+  } catch { /* not a URL */ }
+  return '';
+}
+
 // The provider's answer, cut down to what can be shown (pure; exported for its tests).
 export function dealsAnswer(p, seen, input = {}) {
   const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
@@ -445,11 +461,13 @@ export function dealsAnswer(p, seen, input = {}) {
   const byStore = new Map();
   for (const o of (Array.isArray(p.offers) ? p.offers : []).slice(0, 12)) {
     if (!o || typeof o !== 'object') continue;
-    const url = cut(o.url, 1000);
+    // The address the search returned, not the model's copy of it (which could carry another query string).
+    const url = seenUrl(cut(o.url, 1000), seen);
     const host = hostOfUrl(url);
-    const price = typeof o.price === 'number' ? o.price : Number(String(o.price ?? '').replace(/[^0-9.]/g, ''));
+    // A number, or a plain "$259.00" / "259". Anything else ("1.299,00", "from 99") isn't guessed at.
+    const price = typeof o.price === 'number' ? o.price : /^\s*[^\d\s]{0,3}\s*\d+(\.\d{1,2})?\s*[A-Za-z]{0,3}\s*$/.test(String(o.price ?? '')) ? Number(String(o.price).replace(/[^0-9.]/g, '')) : NaN;
     const currency = cut(o.currency, 8).toUpperCase() || want;
-    if (!host || !/^https:/i.test(url) || !urlVerified(url, seen)) continue;
+    if (!host || !/^https:/i.test(url)) continue;
     if (!Number.isFinite(price) || price <= 0) continue;
     if (want && currency !== want) continue;
     if (saved !== null && price < saved * DEAL_FLOOR) continue;

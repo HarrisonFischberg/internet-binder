@@ -20,7 +20,7 @@ final class WishListTests: XCTestCase {
         XCTAssertTrue(link.waitForExistence(timeout: 10))
         for _ in 0..<6 where !link.isHittable { app.swipeUp() }
         link.tap()
-        XCTAssertTrue(app.staticTexts["Wish List"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label ENDSWITH 'from all your collections.'")).firstMatch.waitForExistence(timeout: 5))
     }
 
     func shot(_ name: String) {

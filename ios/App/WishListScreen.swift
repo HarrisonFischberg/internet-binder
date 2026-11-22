@@ -87,7 +87,8 @@ struct WishListScreen: View {
             Text("Your AI provider searches the web for each one, using your key. Every item is a few searches, so a long list uses more of your key's credit. Keep the app open while it runs. You can stop any time.")
         }
         .sheet(isPresented: $settings, onDismiss: { Task { await model.refreshAIReady(); await load() } }) { SettingsScreen() }
-        .task(id: "\(model.saves.count)|\(model.dealsChanged)") { await load() }
+        // model.saves changes when any save does (a price, Purchased, a sync from another device).
+        .task(id: "\(model.savesChanged)|\(model.dealsChanged)") { await load() }
         .onAppear { Task { await load() } }
     }
 
@@ -354,7 +355,7 @@ private struct WishRow: View {
 
     /// "Checked 2 hours ago", and a nudge when that was days ago.
     private var checked: String {
-        guard let s = row.checkedAt, let date = Self.iso.date(from: s) else { return "" }
+        guard let s = row.checkedAt, let date = Self.iso.date(from: s) ?? ISO8601DateFormatter().date(from: s) else { return "" }
         return "Checked \(date.formatted(.relative(presentation: .named)))" + (row.old ? ". Prices may have moved." : "")
     }
 }
@@ -367,8 +368,9 @@ extension LibraryModel {
         guard let lib = library, !ids.isEmpty, dealRun == nil else { return }
         dealRun = DealRun(total: ids.count)
         // A long list takes minutes: the screen stays on while it runs.
-        if ids.count > 1 { UIApplication.shared.isIdleTimerDisabled = true }
-        defer { UIApplication.shared.isIdleTimerDisabled = false }
+        let keptAwake = ids.count > 1 && !UIApplication.shared.isIdleTimerDisabled
+        if keptAwake { UIApplication.shared.isIdleTimerDisabled = true }
+        defer { if keptAwake { UIApplication.shared.isIdleTimerDisabled = false } }
         var found = 0, failed = 0
         var problem = ""
         var fatal = false
@@ -388,6 +390,8 @@ extension LibraryModel {
                         dealRun?.waiting = true
                         for _ in 0..<30 where dealRun?.stopping != true { try? await Task.sleep(for: .seconds(1)) }
                         dealRun?.waiting = false
+                        // Stop during the wait: no more requests.
+                        if dealRun?.stopping == true { trying = false }
                     } else {
                         failed += 1
                         problem = message

@@ -59,6 +59,20 @@ test('the provider answer keeps only links the search returned, real prices, one
   assert.equal(r.product, 'Soundfield Arc 2 (black)');
 });
 
+test('a price written another way is not guessed at, and the link kept is the one the search returned', () => {
+  const offers = [offer('Euro', '1.299,00'), offer('From', 'from 99'), offer('Ok', '$259.00', { url: 'https://ok.example/arc-2?utm=evil' })];
+  const r = dealsAnswer({ offers, confidence: 0.9 }, new Set(['https://euro.example/arc-2', 'https://from.example/arc-2', 'https://ok.example/arc-2']), { currency: 'USD' });
+  assert.deepEqual(r.offers.map((o) => [o.store, o.price, o.url]), [['Ok', 259, 'https://ok.example/arc-2']]);
+});
+
+test('a page with a price per variant, or a "from" price, says its price varies', async () => {
+  const { productFromHtml } = await import('../keepsake/src/shared/understand.js');
+  const page = (offers) => `<script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'X', offers })}</script>`;
+  assert.equal(productFromHtml(page({ '@type': 'AggregateOffer', lowPrice: 499, highPrice: 899, priceCurrency: 'USD' })).priceVaries, true);
+  assert.equal(productFromHtml(page([{ '@type': 'Offer', price: 499, priceCurrency: 'USD' }, { '@type': 'Offer', price: 899, priceCurrency: 'USD' }])).priceVaries, true);
+  assert.equal(productFromHtml(page({ '@type': 'Offer', price: 199.99, priceCurrency: 'USD' })).priceVaries, false);
+});
+
 test('with no currency on the save, the most common currency among the offers stands', () => {
   const offers = [offer('A', 100), offer('B', 90, { currency: 'GBP' }), offer('C', 110)];
   const r = dealsAnswer({ offers, confidence: 0.9 }, seenFor(offers), {});
@@ -72,6 +86,8 @@ test("a store page's own price wins and marks the offer confirmed; an odd page l
   assert.equal(confirmOffer(o, { price: 199.99, currency: 'USD' }, 279).confirmed, true);
   assert.equal(confirmOffer(o, { price: 199.99, currency: 'CAD' }, 279).confirmed, false, 'another currency');
   assert.equal(confirmOffer(o, { price: 12, currency: 'USD' }, 279).price, 229, 'far too low: another item on that page');
+  assert.equal(confirmOffer(offer('Bigbox', 899), { price: 499, currency: 'USD', priceVaries: true }, 899).price, 899, 'a page that prices several variants confirms nothing');
+  assert.equal(confirmOffer(o, { price: 150, currency: 'USD' }, null).confirmed, false, "well under the search price: another variant's");
   const gone = confirmOffer(o, { price: 229, currency: 'USD', availability: 'out_of_stock' }, 279);
   assert.equal(gone.outOfStock, true);
   assert.deepEqual(sortOffers([gone, offer('Other', 240)]).map((x) => x.store), ['Other', 'Bigbox'], 'in stock comes first');
@@ -89,6 +105,7 @@ test('what a row says: unchecked, a saving against the saved price, nothing lowe
   assert.equal(found.old, false);
   const dearer = dealSummary(product({ deals: { checkedAt, offers: [offer('Other', 289)] } }), now);
   assert.equal(dearer.saving, null);
+  assert.equal(dealSummary(product({ currency: '', deals: { checkedAt, offers: [offer('Other', 100)] } }), now).saving, null, 'no currency on the save: nothing to compare');
   assert.equal(dealSummary(product({ price: null, deals: { checkedAt, offers: [offer('Other', 289)] } }), now).saving, null);
   assert.equal(dealSummary(product({ deals: { checkedAt, offers: [], empty: 'unsure' } }), now).state, 'unsure');
   assert.equal(dealSummary(product({ deals: { checkedAt, offers: [] } }), now).state, 'none');
@@ -184,6 +201,20 @@ test('Find deals needs your own key and a provider that can search; nothing is s
     await assert.rejects(findDeals(custom, (await custom.addItem(product())).id, {}), /web search/);
     await assert.rejects(findDealsWithAI({ title: 'x' }, { ai: { provider: 'anthropic' } }, ''), /API key/);
     assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('Find deals sends nothing for a save hidden or bought since you asked', async () => {
+  const store = await newStore();
+  const { id } = await store.addItem(product({ purchased: true }));
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('nothing should be sent'); };
+  try {
+    const r = await findDeals(store, id, {});
+    assert.equal(r.skipped, true);
+    assert.equal('deals' in (await store.getItem(id)), false);
   } finally {
     globalThis.fetch = realFetch;
   }

@@ -21,6 +21,8 @@ export const DEALS_CONFIDENCE = 0.5;
 // Check all leaves alone what was checked this recently; older results are called out as old.
 export const DEALS_FRESH_HOURS = 12;
 export const DEALS_OLD_HOURS = 48;
+// A store page's price this far under the search result's price is taken for another variant's.
+export const CONFIRM_FLOOR = 0.8;
 
 // On the Wish List: something to buy (a product anywhere, or a page saved into a collection), not bought
 // yet, not in the Trash and not taken off the list by you.
@@ -50,7 +52,8 @@ export function dealSummary(item, now = Date.now()) {
   const offers = sortOffers(deals.offers);
   const best = offers.find((o) => !o.outOfStock) || null;
   const saved = Number.isFinite(item.price) && item.price > 0 ? item.price : null;
-  const comparable = best && saved !== null && (!item.currency || !best.currency || item.currency === best.currency);
+  // Only prices in the same, known currency can be compared.
+  const comparable = best && saved !== null && !!item.currency && item.currency === best.currency;
   const saving = comparable && best.price < saved ? Math.round((saved - best.price) * 100) / 100 : null;
   return {
     state: offers.length ? 'found' : deals.empty === 'unsure' ? 'unsure' : 'none',
@@ -82,6 +85,9 @@ export function confirmOffer(offer, page, saved = null) {
   if (!Number.isFinite(price) || price <= 0) return out;
   if (page.currency && offer.currency && page.currency !== offer.currency) return out;
   if (saved !== null && price < saved * DEAL_FLOOR) return out;
+  // A page that prices several variants, or a page price well under the search result's, is most likely
+  // the cheapest variant's "from" price: not this item's, so nothing is confirmed.
+  if (page.priceVaries || price < offer.price * CONFIRM_FLOOR) return out;
   return { ...out, price: Math.round(price * 100) / 100, currency: offer.currency || page.currency || '', confirmed: true };
 }
 
@@ -93,7 +99,8 @@ export function dealsInput(item, { region = '', today = '' } = {}) {
   return {
     title: item.title || '', listing: d.shopTitle || '', brand: d.brand || '', model: d.model || '',
     specs: (d.specs || []).filter((s) => /^(colou?r|size|capacity|storage|style|edition|version|material)$/i.test(s.label || '')),
-    price: saved !== null ? formatPrice(saved, item.currency) : '', amount: saved, currency: item.currency || '',
+    // amount (what offers are measured against) only with its currency: a bare number can't be compared.
+    price: saved !== null ? formatPrice(saved, item.currency) : '', amount: item.currency ? saved : null, currency: item.currency || '',
     retailer: d.shopName || (social ? '' : item.retailer || ''), url: d.shopUrl || (social ? '' : item.url || ''),
     region, today,
   };
@@ -105,6 +112,8 @@ export function dealsInput(item, { region = '', today = '' } = {}) {
 export async function findDeals(store, id, { fetchShopPage = async () => null, region = '', now = () => new Date() } = {}) {
   const item = await store.getItem(id);
   if (!item || item.deletedAt) throw new Error('That save is gone.');
+  // Hidden or bought since you asked (Check all was still running): nothing is sent for it.
+  if (!onWishList(item)) return { item, summary: dealSummary(item), skipped: true };
   const settings = await store.getSettings();
   const key = usableKey(settings, await store.getSecret('aiApiKey'));
   if (!key) throw new Error('Finding deals uses your own AI key. Add one in Settings first.');

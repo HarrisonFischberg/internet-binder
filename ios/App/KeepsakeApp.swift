@@ -59,8 +59,12 @@ final class LibraryModel {
         didSet {
             index = SaveIndex(saves)
             reviewCount = index.review.count
+            savesChanged &+= 1
         }
     }
+    /// Moves whenever any save changes (a price, Purchased, a sync from another device), for screens that
+    /// read their own view of the library (the Wish List).
+    private(set) var savesChanged = 0
     /// The groupings screens draw from, worked out once per library change rather than on every redraw.
     private(set) var index = SaveIndex([])
     private(set) var reviewCount = 0
