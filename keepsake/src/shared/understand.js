@@ -236,7 +236,7 @@ export function titlePicture(html, baseUrl = '') {
 }
 
 const today = () => nowIso().slice(0, 10);
-const regionNow = () => { try { return (new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region || 'US').toUpperCase(); } catch { return 'US'; } };
+export const regionNow = () => { try { return (new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region || 'US').toUpperCase(); } catch { return 'US'; } };
 
 // The change the provider's title answer (and the picture found on a page about it) makes to a save (pure).
 export function planTitle(item, ai, picture = '', { on = today() } = {}) {

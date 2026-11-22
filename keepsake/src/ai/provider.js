@@ -13,6 +13,8 @@
 //   4. Understanding a save (every save and import while AI is on, and Fix with AI):
 //      its title, caption or description, hashtags, location tag, site, the
 //      text of pages it links to and its locally stored thumbnail.
+//   5. Wish List "Find deals", only when you ask: the product's name, brand, model, saved price, shop and
+//      link, for the provider's web search (findDealsWithAI).
 // Nothing else leaves the browser: no cookies, no account data, no history.
 //
 // On iPhone and iPad, Apple Intelligence reads saves on the device (setLocalModel, registered by the app):
@@ -297,7 +299,10 @@ async function findViaAnthropic(cfg, apiKey, userText, imageDataUrl, controller,
       for (const r of Array.isArray(block.content) ? block.content : []) if (r && r.url) seen.add(r.url);
     }
   }
-  return { text, seen, cited };
+  // What the request used, for Wish List's "what a lookup costs" (tokens and searches; no prices here).
+  const u = data.usage || {};
+  const usage = { inputTokens: Number(u.input_tokens) || 0, outputTokens: Number(u.output_tokens) || 0, searches: Number(u.server_tool_use?.web_search_requests) || 0 };
+  return { text, seen, cited, usage };
 }
 
 async function findViaOpenAI(cfg, apiKey, userText, imageDataUrl, controller, { system = FIND_SYSTEM, maxTokens = 1200 } = {}) {
@@ -321,7 +326,9 @@ async function findViaOpenAI(cfg, apiKey, userText, imageDataUrl, controller, { 
     }
   }
   if (!text && typeof data.output_text === 'string') text = data.output_text;
-  return { text, seen };
+  const u = data.usage || {};
+  const usage = { inputTokens: Number(u.input_tokens) || 0, outputTokens: Number(u.output_tokens) || 0, searches: (data.output || []).filter((o) => o.type === 'web_search_call').length };
+  return { text, seen, usage };
 }
 
 function urlVerified(url, seen) {
@@ -372,6 +379,94 @@ export async function findProductOnline(post, settings, apiKey) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// --- Wish List: where one product is cheapest right now ---------------------------------------------------
+// Only when you ask (Find deals, Check all). Sends the product's name, brand, model, saved price, shop and
+// link; the provider searches the web and answers with stores and prices. Nothing here is trusted as is:
+// a link must be one the search returned (urlVerified), a price must be a positive number in the currency
+// you pay in, one offer per store, and a price far below what you saved it at is taken for another item
+// (an accessory, a refill) and dropped. src/shared/wishlist.js then reads each store's own page for its price.
+export const DEAL_SEARCHES = 4;
+export const DEAL_OFFERS = 5;
+// Below this share of the saved price an offer is taken for a different item, not a sale.
+export const DEAL_FLOOR = 0.3;
+
+const DEALS_SYSTEM = `You find where one specific product can be bought for the lowest price right now. The shopper saved it to a wish list and wants today's prices at different stores, sales included.
+Search the web (at most ${DEAL_SEARCHES} searches) for current prices of exactly this product at online stores that sell to the shopper's country.
+Return ONLY JSON: {"product":"the exact product you priced: brand, model and variant","offers":[{"store":"the store's name","price":number,"currency":"ISO code","url":"","title":"the listing's title","sale":"what the store calls the offer, e.g. Black Friday deal, or empty","note":"one short caveat, or empty"}],"confidence":0-1}
+Rules:
+- The same product only: same brand and model, and the same size, colour or version when the save states one. A different model, a bundle, a multipack, a refill, a case or another accessory is not an offer.
+- New items sold by the store itself or the brand. Leave out used, refurbished and open-box items, auctions, and listings where you cannot tell who sells it.
+- price is what one costs to buy now, as the search result shows it, in that listing's currency. Never estimate or work a price out. Not a monthly instalment, not a price per unit, not a members-only or coupon price, not the low end of a range for other variants. If a result shows no price, leave that store out.
+- url is the exact address of that store's page for this product, copied from your search results. Never a search page, a category page or a price comparison site.
+- One offer per store, up to 6 stores, lowest price first. Fewer real offers are better than doubtful ones.
+- confidence is how sure you are that you priced exactly the product the shopper saved. If you cannot tell which product this is, return an empty offers list and a low confidence.`;
+
+export async function findDealsWithAI(input, settings, apiKey) {
+  const cfg = providerConfig(settings);
+  if (!apiKey) throw new Error('Add your API key in Settings first.');
+  if (!supportsWebLookup(settings)) throw new Error('Finding deals needs Anthropic or OpenAI: a custom endpoint has no web search.');
+  const cut = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const text = [
+    `Product: ${cut(input.title, 200)}`,
+    input.listing && input.listing !== input.title ? `Listed in its shop as: ${cut(input.listing, 200)}` : '',
+    input.brand ? `Brand: ${cut(input.brand, 60)}` : '',
+    input.model ? `Model: ${cut(input.model, 60)}` : '',
+    ...(input.specs || []).slice(0, 6).map((sp) => `${cut(sp.label, 40)}: ${cut(sp.value, 80)}`),
+    input.price ? `Saved at: ${cut(input.price, 40)}${input.retailer ? ` from ${cut(input.retailer, 80)}` : ''}` : input.retailer ? `Saved from: ${cut(input.retailer, 80)}` : '',
+    input.url ? `Saved link: ${cut(input.url, 300)}` : '',
+    input.currency ? `The shopper pays in ${cut(input.currency, 8)}: only stores that sell in ${cut(input.currency, 8)}.` : '',
+    input.region ? `The shopper's country: ${cut(input.region, 8)}.` : '',
+    `Today is ${cut(input.today || new Date().toISOString().slice(0, 10), 10)}.`,
+  ].filter(Boolean).join('\n');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000);
+  try {
+    const opts = { system: DEALS_SYSTEM, maxTokens: 1500, searches: DEAL_SEARCHES };
+    const { text: out, seen, usage } = cfg.provider === 'anthropic'
+      ? await findViaAnthropic(cfg, apiKey, text, '', controller, opts)
+      : await findViaOpenAI(cfg, apiKey, text, '', controller, opts);
+    const parsed = parseJsonBlock(out);
+    if (!parsed || typeof parsed !== 'object') throw new Error('The provider didn’t return a usable answer.');
+    return { ...dealsAnswer(parsed, seen, input), provider: cfg.provider, model: cfg.model, usage: usage || null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const hostOfUrl = (url) => { try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
+
+// The provider's answer, cut down to what can be shown (pure; exported for its tests).
+export function dealsAnswer(p, seen, input = {}) {
+  const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+  const want = String(input.currency || '').toUpperCase();
+  const saved = Number(input.amount) > 0 ? Number(input.amount) : null;
+  const byStore = new Map();
+  for (const o of (Array.isArray(p.offers) ? p.offers : []).slice(0, 12)) {
+    if (!o || typeof o !== 'object') continue;
+    const url = cut(o.url, 1000);
+    const host = hostOfUrl(url);
+    const price = typeof o.price === 'number' ? o.price : Number(String(o.price ?? '').replace(/[^0-9.]/g, ''));
+    const currency = cut(o.currency, 8).toUpperCase() || want;
+    if (!host || !/^https:/i.test(url) || !urlVerified(url, seen)) continue;
+    if (!Number.isFinite(price) || price <= 0) continue;
+    if (want && currency !== want) continue;
+    if (saved !== null && price < saved * DEAL_FLOOR) continue;
+    const offer = { store: cut(o.store, 60) || host, url, host, price: Math.round(price * 100) / 100, currency, title: cut(o.title, 160), sale: cut(o.sale, 60), note: cut(o.note, 140) };
+    const had = byStore.get(host);
+    if (!had || offer.price < had.price) byStore.set(host, offer);
+  }
+  // With no currency on the save, the answers' most common one stands: prices in two currencies can't be ranked.
+  let list = [...byStore.values()];
+  if (!want && list.length) {
+    const count = new Map();
+    for (const o of list) count.set(o.currency, (count.get(o.currency) || 0) + 1);
+    const top = [...count.entries()].sort((x, y) => y[1] - x[1])[0][0];
+    list = list.filter((o) => o.currency === top);
+  }
+  const offers = list.sort((a, b) => a.price - b.price).slice(0, DEAL_OFFERS);
+  return { product: cut(p.product, 200), offers, confidence: Math.max(0, Math.min(1, Number(p.confidence) || 0)) };
 }
 
 // --- Cleanup: tidy titles, confirm prices, pick collections --------------------------------------
