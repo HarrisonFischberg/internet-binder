@@ -137,4 +137,23 @@ final class WishListTests: XCTestCase {
         XCTAssertTrue(app.buttons["All 4 stores"].exists)
         shot("save-prices")
     }
+
+    /// The button at the top right of something to buy: the ways to give it more to go on, with the
+    /// sheet where a store link is pasted.
+    func testImproveMenuOffersAProductLink() {
+        let app = launch()
+        openWishList(app)
+        let save = app.buttons["Glass pour-over coffee maker, 6 cup"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        let improve = app.buttons["save.improve"].firstMatch
+        XCTAssertTrue(improve.waitForExistence(timeout: 5))
+        improve.tap()
+        XCTAssertTrue(app.buttons["Name the Exact Product…"].waitForExistence(timeout: 5))
+        shot("save-improve-menu")
+        app.buttons["Add Product Link…"].tap()
+        XCTAssertTrue(app.textFields["productLink.field"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["productLink.add"].isEnabled)
+        shot("save-product-link")
+    }
 }

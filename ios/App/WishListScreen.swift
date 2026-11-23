@@ -518,6 +518,156 @@ struct DealPanel: View {
     }
 }
 
+/// The button at the top right of something to buy: the ways to give it more to go on. Fix with AI reads
+/// the save again, Find Deals looks for prices, Add Product Link takes the store page you paste, and Name
+/// the Exact Product says which one it is in your words.
+struct ProductHelpMenu: View {
+    let save: Save
+    @Environment(LibraryModel.self) private var model
+    @State private var one: WishList.One?
+    @State private var naming: WishList.Row?
+    @State private var linking = false
+
+    private var canFind: Bool { one?.keyReady == true && one?.searchReady == true }
+
+    var body: some View {
+        Menu {
+            if model.aiReady {
+                Button("Fix with AI", systemImage: "sparkles") { Task { await model.fixWithAI([save]) } }
+                    .disabled(model.aiRun != nil)
+            }
+            if canFind, one?.row != nil {
+                Button("Find Deals", systemImage: "tag") { Task { await model.findDeals([save.id]) } }
+                    .disabled(model.dealRun != nil)
+            }
+            Button("Add Product Link…", systemImage: "link") { linking = true }
+            if let row = one?.row {
+                Button("Name the Exact Product…", systemImage: "pencil") { naming = row }
+                    .disabled(model.dealRun != nil)
+            }
+        } label: {
+            Label("Improve", systemImage: "sparkles")
+        }
+        .accessibilityHint("Ways to add what's missing: a store link, the exact product, prices, or another read by AI.")
+        .accessibilityIdentifier("save.improve")
+        .task(id: "\(save.id)|\(model.savesChanged)|\(model.dealsChanged)") {
+            guard let lib = model.library, let next = try? await lib.wishRow(save.id) else { return }
+            if next != one { one = next }
+        }
+        .sheet(item: $naming) { row in
+            WishNameSheet(row: row, canFind: canFind && model.dealRun == nil)
+        }
+        .sheet(isPresented: $linking) { ProductLinkSheet(save: save) }
+    }
+}
+
+/// Add Product Link: paste the product's page in a store. The page is read once, without AI, and becomes
+/// the save's shop page; its name, price and picture fill in what the save was missing. Undo on the toast.
+private struct ProductLinkSheet: View {
+    let save: Save
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+    @Environment(\.dismiss) private var dismiss
+    @State private var link = ""
+    @State private var working = false
+    @State private var problem = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Paste the product's page from a store. Its name, price and picture fill in what this save is missing, and Find deals then knows exactly which product you mean. You can undo it.")
+                    .font(.subheadline).foregroundStyle(t.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    TextField("https://", text: $link)
+                        .keyboardType(.URL).textContentType(.URL)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .submitLabel(.go)
+                        .focused($focused)
+                        .onSubmit { start() }
+                        .disabled(working)
+                        .foregroundStyle(t.ink)
+                        .padding(.horizontal, 16).frame(minHeight: 52)
+                        .background(t.well, in: Capsule())
+                        .overlay(Capsule().strokeBorder(focused ? t.accent : t.rule, lineWidth: focused ? 1.5 : 1))
+                        .accessibilityLabel("Product link")
+                        .accessibilityIdentifier("productLink.field")
+                    // The system Paste button reads the clipboard only when tapped, so iOS never asks to allow it.
+                    PasteButton(payloadType: URL.self) { urls in
+                        if let url = urls.first { link = url.absoluteString; start() }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
+                    .tint(t.accentForWhiteGlyph)
+                    .disabled(working)
+                    .accessibilityLabel("Paste the link you copied")
+                }
+                if !problem.isEmpty {
+                    Label(problem, systemImage: "exclamationmark.circle")
+                        .font(.subheadline).foregroundStyle(t.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("productLink.problem")
+                }
+                Spacer(minLength: 0)
+                PrimarySlab(working ? "Reading the page…" : "Add Link", symbol: "link", kind: "product") { start() }
+                    .overlay(alignment: .leading) {
+                        if working { ProgressView().tint(t.onPrimary).padding(.leading, 24).accessibilityHidden(true) }
+                    }
+                    .disabled(!working && link.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityIdentifier("productLink.add")
+            }
+            .padding(20)
+            .background(TableBackground())
+            .navigationTitle("Add Product Link")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(working) } }
+        }
+        .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled(working)
+        .onAppear { focused = true }
+    }
+
+    private func start() {
+        guard !working, let lib = model.library else { return }
+        let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        working = true
+        problem = ""
+        Task {
+            defer { working = false }
+            do {
+                let r = try await lib.linkProduct(save.id, link: text)
+                guard r.ok else {
+                    problem = r.error ?? "Couldn't read that page."
+                    Haptic.warning()
+                    return
+                }
+                Haptic.settled()
+                model.refresh()
+                model.dealsChanged += 1
+                dismiss()
+                let site = r.site ?? "the store"
+                let said = r.read == true
+                    ? "Linked to \(site)" + ((r.price ?? "").isEmpty ? "" : ": \(r.price ?? "")")
+                    : "Linked to \(site). It wouldn't share its details, so only the link was added."
+                if let id = r.logId {
+                    model.show(said) {
+                        try? await lib.undoAI([id])
+                        model.refresh()
+                        model.dealsChanged += 1
+                    }
+                } else {
+                    model.show(said)
+                }
+            } catch {
+                problem = error.localizedDescription
+            }
+        }
+    }
+}
+
 /// Where you say exactly which product a save is: brand, model, size, colour. Find deals searches for
 /// these words instead of the save's title, which doesn't change.
 private struct WishNameSheet: View {

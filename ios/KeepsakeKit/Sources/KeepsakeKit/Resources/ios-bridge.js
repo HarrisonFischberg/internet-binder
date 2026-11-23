@@ -473,6 +473,15 @@
         return { ok: false, error: /\((401|403|429)\)|API key/i.test(msg) ? `Your AI provider didn’t answer: ${msg}` : msg || 'Something went wrong.' };
       }
     },
+    // Add product link: the store page you pasted becomes this save's shop page (understand.js
+    // linkProductPage). Read once, without cookies; no AI. { ok, error, site, read, price, logId } for Undo.
+    async linkProduct(id, link) {
+      try {
+        return await K.understand.linkProductPage(store, id, link, { fetchPage: viaNative('fetchAskedPage') });
+      } catch (e) {
+        return { ok: false, error: String((e && e.message) || e) || 'Something went wrong.' };
+      }
+    },
     // Optional AI is on with a key: your provider backs Apple Intelligence up.
     async aiBackupReady() {
       const settings = await store.getSettings();

@@ -64,7 +64,11 @@ struct SaveDetailScreen: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { dock }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if model.aiReady {
+            if canBuy && !isPurchased {
+                // Something to buy: one button for every way to give it more to go on (a store link, the
+                // exact product, prices, another read by AI).
+                ToolbarItem(placement: .primaryAction) { ProductHelpMenu(save: current) }
+            } else if model.aiReady {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: [current], what: "it") }
             }
             ToolbarItem(placement: .primaryAction) {

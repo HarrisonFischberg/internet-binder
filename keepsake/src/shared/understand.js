@@ -592,6 +592,80 @@ export function productFromHtml(html, baseUrl = '') {
   };
 }
 
+// "Add product link": the store page you paste becomes this save's shop page, read once without cookies
+// and without AI. Its own name, price (only when the save has none), picture (the same), brand, specs and
+// stock go on the save, and Find deals then knows exactly which product it is. A page the store won't
+// let apps read is still linked, with nothing else changed. { ok, error, site, read, price, logId } for Undo.
+export async function linkProductPage(store, id, link, { fetchPage = async () => null } = {}) {
+  const url = recipeLink(link);
+  if (!url) return { ok: false, error: 'That doesn’t look like a web address. Paste the link to the product’s page in a store.' };
+  if (SOCIAL.test(hostOf(url))) return { ok: false, error: 'That’s a social post, not a store page. Paste the link to the product’s page in a store.' };
+  const item = await store.getItem(id);
+  if (!item || item.deletedAt) return { ok: false, error: 'That save no longer exists.' };
+  if (hasOwnView(kindOf(item))) return { ok: false, error: 'This save isn’t something to buy.' };
+  let html = null;
+  try { html = await fetchPage(url); } catch { html = null; }
+  const read = html ? productFromHtml(html, url) : null;
+  const page = read && (read.structured || read.price !== null) ? read : null;
+  const current = await store.getItem(id);
+  if (!current || current.deletedAt) return { ok: false, error: 'That save no longer exists.' };
+  const { patch, changes, site } = planLinkedProduct(current, url, page);
+  if (!changes.length) return { ok: true, site, read: !!page, price: '', logId: null, same: true };
+  const before = Object.fromEntries(LOGGED.filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
+  await store.updateItem(id, patch, { by: 'ai' });
+  const logId = uid();
+  await store.appendAiLog([{ id: logId, runId: `link-product-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: `From the store page you added (${site}).`, undone: false }]);
+  return { ok: true, site, read: !!page, price: 'price' in patch ? formatPrice(patch.price, patch.currency) || String(patch.price) : '', logId };
+}
+
+// The change a store page you linked makes to a save (pure). page: productFromHtml's answer, or null when
+// the page couldn't be read (the link alone is kept).
+export function planLinkedProduct(item, url, page = null) {
+  const mine = new Set(item.userFields || []);
+  const current = kindOf(item);
+  const old = current === 'product' ? item.details || {} : {};
+  const site = page?.siteName || prettyRetailer(hostnameOf(url));
+  const patch = {};
+  const changes = [];
+  if (current !== 'product') {
+    patch.kind = 'product';
+    changes.push({ field: 'kind', from: kindInfo(current).label, to: kindInfo('product').label });
+  }
+  const details = sanitizeDetails('product', {
+    ...old,
+    brand: page?.brand || old.brand || '',
+    model: page?.sku || old.model || '',
+    category: page?.category || old.category || '',
+    specs: page?.specs?.length ? page.specs : old.specs || [],
+    shopUrl: url,
+    shopName: site,
+    shopTitle: page?.title || '',
+    shopDescription: page?.description || '',
+    availability: page?.availability || '',
+    source: old.source === 'you' ? 'you' : page ? 'page' : old.source || '',
+  });
+  if (JSON.stringify(details) !== JSON.stringify(old)) {
+    patch.details = details;
+    changes.push({ field: 'shop page', from: old.shopName || '—', to: site });
+  }
+  const name = page?.name || '';
+  const renames = isPostSave(item) || item.type === 'inspiration' || genericTitle(item.title) || current !== 'product';
+  if (name.length >= 3 && name !== item.title && !mine.has('title') && renames) {
+    patch.title = name;
+    changes.push({ field: 'title', from: item.title, to: name });
+  }
+  if (page && page.price !== null && !page.priceVaries && (item.price === null || item.price === undefined) && !mine.has('price')) {
+    patch.price = page.price;
+    patch.currency = page.currency || item.currency || '';
+    changes.push({ field: 'price', from: 'none', to: formatPrice(patch.price, patch.currency) || String(patch.price) });
+  }
+  if (page?.image && !item.image) {
+    patch.image = page.image;
+    changes.push({ field: 'picture', from: 'none', to: site });
+  }
+  return { patch, changes, site };
+}
+
 // Shopping saves the provider reads as a product: anything already a product, a post or link saved into
 // a collection (collections are for shopping), or a post the first read says is one thing to buy.
 // A post about AI or code (by its own words) is about a topic: not one thing to buy, a dish or a workout,

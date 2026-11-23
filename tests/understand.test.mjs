@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
 import { undoFixes } from '../keepsake/src/shared/aiFix.js';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink } from '../keepsake/src/shared/understand.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink, linkProductPage } from '../keepsake/src/shared/understand.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
@@ -444,6 +444,38 @@ test('importRecipeFromLink: the page\'s own recipe card fills the same save, no 
   await undoFixes(store, [log]);
   const back = await store.getItem(it.id);
   assert.deepEqual([back.title, back.details.ingredients, back.details.basedOn], [it.title, ['1 apple fritter coffee cake'], undefined]);
+});
+
+test('linkProductPage: the store page you paste becomes the save\'s shop page, fills what is missing, with Undo; an unreadable page is still linked', async () => {
+  const store = await linkStore();
+  const it = await store.addItem(post('obsessed with this mug ☕', { kind: 'product', collectionId: null }));
+  const page = `<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Stoneware Mug 12 oz', brand: { name: 'Brewhaus' }, image: 'https://brewhaus.example.com/mug.jpg', offers: { price: '24.00', priceCurrency: 'USD', availability: 'https://schema.org/InStock' } })}</script></head></html>`;
+  const read = [];
+  const r = await linkProductPage(store, it.id, 'brewhaus.example.com/mug', { fetchPage: async (u) => { read.push(u); return page; } });
+  assert.deepEqual([r.ok, r.read, r.site, r.price], [true, true, 'Brewhaus', '$24.00']);
+  assert.deepEqual(read, ['https://brewhaus.example.com/mug']);
+  const saved = await store.getItem(it.id);
+  assert.deepEqual([saved.title, saved.price, saved.currency, saved.details.shopUrl, saved.details.shopName, saved.details.brand, saved.details.availability],
+    ['Stoneware Mug 12 oz', 24, 'USD', 'https://brewhaus.example.com/mug', 'Brewhaus', 'Brewhaus', 'in_stock']);
+  const log = (await store.getAiLog()).at(-1);
+  assert.equal(log.id, r.logId);
+  await undoFixes(store, [log]);
+  const back = await store.getItem(it.id);
+  assert.deepEqual([back.title, back.price ?? null, back.details?.shopUrl], [it.title, null, undefined]);
+
+  // A store that won't be read: the link is kept, the title and price stay as they were.
+  const r2 = await linkProductPage(store, it.id, 'https://www.target.com/p/mug', { fetchPage: async () => null });
+  assert.deepEqual([r2.ok, r2.read, r2.price], [true, false, '']);
+  const linked = await store.getItem(it.id);
+  assert.deepEqual([linked.title, linked.price ?? null, linked.details.shopUrl], [it.title, null, 'https://www.target.com/p/mug']);
+
+  // Not a link, or a social post: nothing changes.
+  assert.equal((await linkProductPage(store, it.id, 'the blue one')).ok, false);
+  assert.equal((await linkProductPage(store, it.id, 'https://www.instagram.com/p/abc/')).ok, false);
+  // A saved price of your own is never replaced.
+  const priced = await store.addItem(post('lamp', { kind: 'product', collectionId: null, price: 80, currency: 'USD' }));
+  await linkProductPage(store, priced.id, 'brewhaus.example.com/mug', { fetchPage: async () => page });
+  assert.equal((await store.getItem(priced.id)).price, 80);
 });
 
 test('importRecipeFromLink: a page with no recipe card is read by AI; without AI, or with no recipe, it says so and changes nothing', async () => {
