@@ -221,7 +221,8 @@ final class ScreenshotTests: XCTestCase {
             sleep(5)
             XCTAssertTrue(collections.exists, "the share sheet closed by itself")
             // A bare link can't be sorted, so it waits in Review with three homes to tap (the demo's most used).
-            XCTAssertTrue(safari.staticTexts["Somewhere else"].exists, "no picks for a save it wasn't sure about")
+            // Only the first pass: it files the save in a collection, which teaches the sorter that host for the dark pass.
+            if mode == .light { XCTAssertTrue(safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Somewhere else'")).firstMatch.waitForExistence(timeout: 3), "no picks for a save it wasn't sure about") }
             try shoot(safari, folder, "\(tag)-share-libraries")
             // A swipe down doesn't close it either.
             safari.buttons["Done"].firstMatch.swipeDown()
