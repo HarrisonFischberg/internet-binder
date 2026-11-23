@@ -518,17 +518,17 @@ struct ViewsTests {
         #expect(list.keyReady == false, "no key: nothing can be looked up")
         #expect(list.toCheck.count == list.rows.count)
         let first = try #require(list.rows.first)
+        // Without a key a lookup says so; nothing has been looked up, so no spend. Naming a product shows on its row.
+        await #expect(throws: (any Error).self) { try await lib.findDeals(first.id) }
+        #expect(list.spend.lookups == 0 && list.spend.usd == 0)
+        try await lib.setWishName(first.id, "The exact model, in blue")
+        #expect(try await lib.wishList().rows.first { $0.id == first.id }?.wishName == "The exact model, in blue")
+        #expect(try await lib.removeOffer(first.id, url: "https://nowhere.example/p") == nil, "no such offer: nothing to undo")
         try await lib.setWishHidden([first.id], true)
         let after = try await lib.wishList()
         #expect(after.rows.count == list.rows.count - 1)
         #expect(after.hidden.map(\.id) == [first.id])
-        await #expect(throws: (any Error).self) { try await lib.findDeals(first.id) }
-        // Nothing looked up yet: no spend, and naming a product shows on its row.
-        #expect(after.spend.lookups == 0 && after.spend.usd == 0)
-        let second = try #require(after.rows.first)
-        try await lib.setWishName(second.id, "The exact model, in blue")
-        #expect(try await lib.wishList().rows.first { $0.id == second.id }?.wishName == "The exact model, in blue")
-        #expect(try await lib.removeOffer(second.id, url: "https://nowhere.example/p") == nil, "no such offer: nothing to undo")
+        #expect(try await lib.findDeals(first.id) == 0, "hidden since you asked: nothing is sent for it")
     }
 
     var expected: [String: Any] { get throws { try json(fixture("views-expected")) } }

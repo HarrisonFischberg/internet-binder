@@ -392,22 +392,25 @@ private struct WishRow: View {
         let detail = [offer.outOfStock ? "Out of stock" : nil, offer.sale.isEmpty ? nil : offer.sale,
                       offer.confirmed ? "Price on the store's page" : "Price from search results"].compactMap { $0 }.joined(separator: " · ")
         let warning = "Unusually low, and not a store we know. Check it before you buy."
-        return HStack(alignment: .center, spacing: 0) {
+        return HStack(alignment: .top, spacing: 0) {
             Button {
                 if let url = URL(string: offer.url) { openURL(url) }
             } label: {
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(offer.store).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
-                        Text(detail).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading)
-                        if offer.doubt {
-                            Label(warning, systemImage: "exclamationmark.triangle.fill")
-                                .font(.footnote.weight(.medium)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(offer.store).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                            Text(detail).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading)
                         }
+                        Spacer(minLength: 8)
+                        Text(offer.price).font(offer.lowest ? .headline : .subheadline.weight(.medium)).foregroundStyle(offer.outOfStock ? t.inkMuted : t.ink)
+                            .monospacedDigit().strikethrough(offer.outOfStock)
                     }
-                    Spacer(minLength: 8)
-                    Text(offer.price).font(offer.lowest ? .headline : .subheadline.weight(.medium)).foregroundStyle(offer.outOfStock ? t.inkMuted : t.ink)
-                        .monospacedDigit().strikethrough(offer.outOfStock)
+                    if offer.doubt {
+                        Label(warning, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote.weight(.medium)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                            .padding(.bottom, 6)
+                    }
                 }
                 .frame(minHeight: 52)
                 .contentShape(Rectangle())
@@ -426,7 +429,7 @@ private struct WishRow: View {
             }
             .accessibilityLabel("More for \(offer.store), \(save.title)")
             .accessibilityIdentifier("wishList.offerMenu")
-            .padding(.trailing, -10)
+            .padding(.trailing, -10).padding(.top, 4)
         }
     }
 
