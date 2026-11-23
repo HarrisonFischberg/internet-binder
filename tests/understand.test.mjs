@@ -525,11 +525,16 @@ test('linkProductPage rewrite: a link where you say which product it is rebuilds
     r = await linkProductPage(store, it.id, 'brewhaus.example.com/mug', { fetchPage: async () => page, rewrite: true });
     assert.deepEqual([r.ok, r.ai, (await store.getItem(it.id)).title], [true, false, 'Stoneware Mug 12 oz']);
     assert.match(r.aiError, /401/);
-    // Nothing readable and no answer: nothing changes.
-    const was = JSON.stringify(await store.getItem(it.id));
-    r = await linkProductPage(store, it.id, 'https://nowhere.example.com/x', { fetchPage: async () => null, rewrite: true });
-    assert.equal(r.ok, false);
-    assert.equal(JSON.stringify(await store.getItem(it.id)), was);
+    // Nothing readable and no answer: only the link is kept; the name, price and picture stay.
+    const was = await store.getItem(it.id);
+    r = await linkProductPage(store, it.id, 'https://blocked.example.com/x', { fetchPage: async () => null, rewrite: true });
+    assert.deepEqual([r.ok, r.read, r.ai], [true, false, false]);
+    const now = await store.getItem(it.id);
+    assert.deepEqual([now.title, now.price, now.image, now.details.shopUrl], [was.title, was.price, was.image, 'https://blocked.example.com/x']);
+    // The page can't be read and the provider's search lands on another site: its answer isn't used.
+    globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ name: 'Some Other Mug', listing: { url: 'https://elsewhere.example.org/mug', price: 5, currency: 'USD' }, confidence: 0.95 }) }] }), json: async () => ({ content: [{ type: 'text', text: JSON.stringify({ name: 'Some Other Mug', listing: { url: 'https://elsewhere.example.org/mug', price: 5, currency: 'USD' }, confidence: 0.95 }) }] }) });
+    r = await linkProductPage(store, it.id, 'https://blocked.example.com/y', { fetchPage: async () => null, rewrite: true });
+    assert.deepEqual([r.ok, r.ai, (await store.getItem(it.id)).title], [true, false, was.title]);
   } finally {
     globalThis.fetch = real;
   }

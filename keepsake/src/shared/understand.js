@@ -599,7 +599,8 @@ export function productFromHtml(html, baseUrl = '') {
 // rewrite (the link typed where you say which product it is): you are saying "this page IS the product",
 // so the card is rebuilt from it: the page's name, price and picture replace the save's, and your AI
 // (Apple Intelligence, or your key: you asked) reads the page for the summary, features and specs. Without
-// AI, or when it fails, the page's own facts still go on (aiError says why). Your own words for the
+// AI, or when it fails, the page's own facts still go on (aiError says why); with neither a readable page
+// nor a sure answer, only the link is kept, as without rewrite. Your own words for the
 // product (wishName) are dropped: the page says it better.
 export async function linkProductPage(store, id, link, { fetchPage = async () => null, rewrite = false } = {}) {
   const url = recipeLink(link);
@@ -626,25 +627,32 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
           title: page?.name || read?.title || current.title || '', description: read?.description || '', site: read?.siteName || prettyRetailer(hostnameOf(url)),
           url, price: page && page.price !== null ? formatPrice(page.price, page.currency) || String(page.price) : '',
           pages: html ? [{ url, text: pageText(html) }] : [], image: '',
+          // The page's text is in hand: nothing is searched, so the answer can't wander to another product.
+          linked: true, noSearch: !!html,
         }, settings, key);
+        // The page couldn't be read, so the provider searched: its answer counts only when the page it
+        // found is on the site you linked.
+        if (!html && siteKey(ai.listing?.url) !== siteKey(url)) ai = { ...ai, confidence: 0 };
       } catch (e) {
         aiError = String((e && e.message) || e);
       }
     }
-    if (!page && !(ai && ai.confidence >= PRODUCT_CONFIDENCE)) {
-      return { ok: false, error: aiError ? `Couldn’t read that page, and your AI didn’t answer: ${aiError}` : 'Couldn’t read a product from that page. Check the link, or try the product’s page in another store.' };
-    }
   }
+  // Nothing to rebuild the card from (the page wouldn't be read and no AI was sure): only the link is kept.
+  const rebuild = rewrite && (!!page || (!!ai && ai.confidence >= PRODUCT_CONFIDENCE));
   const latest = rewrite ? await store.getItem(id) : current;
   if (!latest || latest.deletedAt) return { ok: false, error: 'That save no longer exists.' };
-  const { patch, changes, site } = planLinkedProduct(latest, url, page, { ai, rewrite });
-  if (!changes.length) return { ok: true, site, read: !!page, ai: !!ai, aiError, title: latest.title, price: '', logId: null, same: true };
+  const { patch, changes, site } = planLinkedProduct(latest, url, page, { ai, rewrite: rebuild });
+  if (!changes.length) return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: latest.title, price: '', logId: null, same: true };
   const before = Object.fromEntries([...LOGGED, 'deals', 'dealSkip', 'wishName'].filter((f) => f in patch).map((f) => [f, latest[f] === undefined ? null : latest[f]]));
   await store.updateItem(id, patch, { by: 'ai' });
   const logId = uid();
   await store.appendAiLog([{ id: logId, runId: `link-product-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: ai?.reason || `From the store page you added (${site}).`, undone: false }]);
-  return { ok: true, site, read: !!page, ai: !!ai, aiError, title: patch.title || latest.title, price: 'price' in patch ? formatPrice(patch.price, patch.currency) || String(patch.price) : '', logId };
+  return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: patch.title || latest.title, price: 'price' in patch ? formatPrice(patch.price, patch.currency) || String(patch.price) : '', logId };
 }
+
+// A link's site, for telling whether two addresses are the same shop ("www." aside).
+const siteKey = (u) => hostnameOf(u || '').toLowerCase().replace(/^www\./, '');
 
 // A linked page's specs with the AI's added (the page's own win), or what was there.
 function linkedSpecs(page, sure, old) {
@@ -706,6 +714,12 @@ export function planLinkedProduct(item, url, page = null, { ai = null, rewrite =
   }
   const unpriced = item.price === null || item.price === undefined;
   const newPrice = page && page.price !== null && !page.priceVaries && (rewrite || !mine.has('price')) && (unpriced || (rewrite && (page.price !== item.price || (page.currency || '') !== (item.currency || ''))));
+  const listed = rewrite && !page && sure?.listing?.price != null && sure.listing.price !== item.price ? sure.listing : null;
+  if (listed) {
+    patch.price = listed.price;
+    patch.currency = listed.currency || item.currency || '';
+    changes.push({ field: 'price', from: unpriced ? 'none' : formatPrice(item.price, item.currency) || String(item.price), to: formatPrice(patch.price, patch.currency) || String(patch.price) });
+  }
   if (newPrice) {
     patch.price = page.price;
     patch.currency = page.currency || item.currency || '';

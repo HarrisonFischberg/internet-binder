@@ -579,7 +579,7 @@ private struct ProductLinkSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Paste the product's page from a store. This save is rewritten from it: the page's name, price and picture, with details read by \(model.aiReady ? "your AI" : "the app"). Find deals then knows exactly which product you mean. You can undo it.")
+                Text("Paste the product's page from a store. This save is rewritten from it: the page's name, price and picture\(model.aiReady ? ", with a summary and details written by your AI" : ""). Find deals then knows exactly which product you mean. You can undo it.")
                     .font(.subheadline).foregroundStyle(t.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
@@ -693,7 +693,7 @@ private struct WishNameSheet: View {
                     Text("Exactly which product?")
                 } footer: {
                     Text(isLink
-                         ? "That's a link. The page is read and this save is rewritten from it: its name, price and picture, with details read by \(model.aiReady ? "your AI" : "the app"). Prices found before are cleared. You can undo it."
+                         ? "That's a link. The page is read and this save is rewritten from it: its name, price and picture\(model.aiReady ? ", with a summary and details written by your AI" : ""). Prices found before are cleared. You can undo it."
                          : "Type the model and the size or colour you want, and Find deals searches for those words. Or paste a link to the product's page, and the save is rewritten from that page.")
                         .accessibilityIdentifier("wishList.nameFooter")
                 }
@@ -710,7 +710,8 @@ private struct WishNameSheet: View {
             }
             .navigationTitle("Name the product").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(working) }
+                // Cancel stays live while a page is read: the read carries on and its result shows as a toast.
+                ToolbarItem(placement: .cancellationAction) { Button(working ? "Close" : "Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if isLink {
                         Button("Read this page") { readLink() }
@@ -725,7 +726,6 @@ private struct WishNameSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .interactiveDismissDisabled(working)
         .onAppear { text = current; focused = true }
     }
 
@@ -758,12 +758,17 @@ private extension String {
 }
 
 /// Tells a link from a product's name in the "which product" field: one run of text with no spaces that
-/// starts with http(s), or looks like a site with a path ("store.com/p/123"). "Sony WH-1000XM6" is a name.
+/// looks like a site with a path ("store.com/p/123"), or any text with an http(s) address in it.
+/// "Sony WH-1000XM6" and "3.5mm/USB" are names.
 enum ProductLinkText {
     static func isLink(_ text: String) -> Bool {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        // A link pasted with words around it ("look https://… so good") is still a link.
+        if t.range(of: #"https?://[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}"#, options: .regularExpression) != nil { return true }
         guard !t.isEmpty, !t.contains(where: \.isWhitespace) else { return false }
-        return t.range(of: #"^(https?://[a-z0-9-]+(\.[a-z0-9-]+)+([/?#]\S*)?|[a-z0-9-]+(\.[a-z0-9-]+)+/\S*)$"#, options: .regularExpression) != nil
+        // The last part of the site's name is letters only (".com"), which a size or version ("3.5mm/USB") isn't.
+        return t.range(of: #"^(https?://)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}([/?#]\S*)?$"#, options: .regularExpression) != nil
+            && (t.hasPrefix("http") || t.contains("/"))
     }
 }
 
@@ -838,8 +843,6 @@ extension LibraryModel {
         })
     }
 
-    /// Says exactly which product a save is, for Find deals; the save's own title stays. Prices found
-    /// under the old name are dropped, and `find` looks again straight away.
     /// Rewrites a save from the product page you gave (Add Product Link, or a link typed where you say which
     /// product it is): the page's name, price and picture, details read by your AI. Returns what went wrong,
     /// or nil when it worked (a toast with Undo says what changed).
@@ -854,8 +857,13 @@ extension LibraryModel {
             let site = r.site ?? "the store"
             var said = "Updated from \(site)"
             if let price = r.price, !price.isEmpty { said += ": \(price)" }
-            if r.read != true { said = "Updated with what your AI found for \(site). The page itself couldn't be read." }
-            else if let why = r.aiError, !why.isEmpty { said += ". Your AI didn't answer, so only the page's own details were used." }
+            if r.read != true {
+                said = r.ai == true
+                    ? "Updated with what your AI found on \(site). The page itself couldn't be read, so check the price and picture."
+                    : "Linked to \(site). The page couldn't be read, so only the link was added."
+            } else if !(r.aiError ?? "").isEmpty {
+                said += ". Your AI didn't answer, so only the page's own details were used."
+            }
             if let id = r.logId {
                 show(said) { @MainActor in
                     try? await lib.undoAI([id])
@@ -871,6 +879,8 @@ extension LibraryModel {
         }
     }
 
+    /// Says exactly which product a save is, for Find deals; the save's own title stays. Prices found
+    /// under the old name are dropped, and `find` looks again straight away.
     func setWishName(_ save: Save, _ name: String, find: Bool) async {
         guard let lib = library else { return }
         try? await lib.setWishName(save.id, name)
