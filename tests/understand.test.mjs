@@ -567,6 +567,11 @@ test('a product link teaches: the account\'s shop is remembered, its other uncon
   assert.deepEqual(shopHintsFor(fan, prefs).map((h) => [h.site, h.by]), [['brewhaus.example.com', 'brand']]);
   assert.deepEqual(shopHintsFor({ ...fan, instagram: { caption: 'haul', creator: 'x', hashtags: ['BrewHaus'] } }, prefs).map((h) => h.by), ['brand']);
   assert.deepEqual(relatedToLesson([fan], mug, prefs.productShops[0]), ['fan']);
+  assert.deepEqual(shopHintsFor({ ...fan, instagram: { caption: "Brewhaus's new mugs. Love Brewhaus.", creator: 'x', hashtags: [] } }, prefs).map((h) => h.by), ['brand']);
+  // A brand that is an everyday word counts only as a hashtag or as the brand on the card.
+  const away = { productShops: [{ creator: 'c', site: 'away.com', brand: 'Away' }] };
+  assert.deepEqual(shopHintsFor({ instagram: { caption: 'Giving away this lamp', creator: 'x' } }, away), []);
+  assert.deepEqual(shopHintsFor({ instagram: { caption: 'new carry-on', creator: 'x', hashtags: ['away'] } }, away).map((h) => h.by), ['brand']);
   // A short brand ("On") is also a word: it never matches by name.
   assert.deepEqual(shopHintsFor({ instagram: { caption: 'on my way', creator: 'x' } }, { productShops: [{ creator: 'c', site: 's.com', brand: 'On' }] }), []);
   assert.deepEqual(shopHintsFor({ instagram: { creator: 'someoneelse' } }, prefs), []);
@@ -625,6 +630,32 @@ test('a product a shop page matched is filed by what it is, not by what the post
   assert.equal((await store.getItem(it.id)).collectionId, tech.id);
 });
 
+test('a new product post that a read matches to a shop page is filed by the product, and the tidy is told the shop, not Instagram', async () => {
+  const store = await linkStore();
+  const cols = await store.getCollections();
+  const tech = cols.find((c) => c.name === 'Technology');
+  const clothing = cols.find((c) => c.name === 'Clothing');
+  const it = await store.addItem(post('the tech in this foam is unreal, best gadget for your feet', { id: 'bondi', kind: 'product', collectionId: tech.id }));
+  await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await store.setSecret('aiApiKey', 'sk');
+  const real = globalThis.fetch;
+  const shopPage = `<html><head><meta property="og:site_name" content="Fleet Feet"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'HOKA Bondi 8', brand: { name: 'HOKA' }, category: 'Running Shoes', offers: { price: '123.75', priceCurrency: 'USD' } })}</script></head></html>`;
+  try {
+    globalThis.fetch = async () => {
+      const text = JSON.stringify({ kind: 'product', name: 'HOKA Bondi 8', brand: 'HOKA', category: 'Running Shoes', summary: 'A max cushion running shoe.', listing: { url: 'https://www.fleetfeet.com/bondi-8', title: 'HOKA Bondi 8', retailer: 'Fleet Feet', price: 123.75, currency: 'USD' }, confidence: 0.95, title: 'HOKA Bondi 8', details: {}, drafted: [], reason: 'the shoe in the picture' });
+      const content = [{ type: 'web_search_tool_result', content: [{ url: 'https://www.fleetfeet.com/bondi-8' }] }, { type: 'text', text }];
+      return { ok: true, status: 200, text: async () => JSON.stringify({ content }), json: async () => ({ content }) };
+    };
+    await understandItem(store, it.id, { force: true }, { fetchShopPage: async () => shopPage });
+  } finally {
+    globalThis.fetch = real;
+  }
+  const saved = await store.getItem(it.id);
+  assert.deepEqual([saved.details.shopName, saved.collectionId, saved.categorizationSource], ['Fleet Feet', clothing.id, 'local']);
+  const view = cleanupView(saved);
+  assert.deepEqual([view.retailer, view.productType], ['Fleet Feet', 'Running Shoes']);
+});
+
 test('a link on a save you filed yourself teaches the sorter that shop and product, and the next product from the shop follows', async () => {
   const store = await linkStore();
   const made = await store.createCollection({ name: 'Marathon kit' });
@@ -639,6 +670,12 @@ test('a link on a save you filed yourself teaches the sorter that shop and produ
   assert.ok(prefs.retailerPrefs['fleetfeet.com'][mine.id] > 0);
   assert.ok(prefs.learnedKeywords.zephyr[mine.id] > 0);
   // The same page linked again teaches nothing more.
+  await linkProductPage(store, it.id, 'https://www.fleetfeet.com/bondi-8', { fetchPage: async () => page('Zephyr Glide 8'), rewrite: true });
+  assert.equal((await store.getPrefs()).retailerPrefs['fleetfeet.com'][mine.id], prefs.retailerPrefs['fleetfeet.com'][mine.id]);
+  // Undo takes the lesson back; linking again teaches it once more.
+  await undoFixes(store, [(await store.getAiLog()).find((e) => e.id === r.logId)]);
+  const undone = await store.getPrefs();
+  assert.deepEqual([undone.retailerPrefs['fleetfeet.com'], undone.learnedKeywords.zephyr], [undefined, undefined]);
   await linkProductPage(store, it.id, 'https://www.fleetfeet.com/bondi-8', { fetchPage: async () => page('Zephyr Glide 8'), rewrite: true });
   assert.equal((await store.getPrefs()).retailerPrefs['fleetfeet.com'][mine.id], prefs.retailerPrefs['fleetfeet.com'][mine.id]);
   // Another product read from that shop, waiting in Review: it joins the first.

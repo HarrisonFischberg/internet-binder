@@ -34,7 +34,7 @@
 // from its text, and fills in the same save, labelled "Recipe from <site>" with the link.
 
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
-import { isSocialHost, classify, AUTO_FILE_CONFIDENCE, learnFromCorrection, normalizeText } from './categorizer.js';
+import { isSocialHost, classify, AUTO_FILE_CONFIDENCE, learnFromCorrection } from './categorizer.js';
 import { REFILE_CONFIDENCE } from './aiFix.js';
 import { guessTopics } from './topics.js';
 import { mentionsFood, isWorkoutPost, kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, isPostSave, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
@@ -673,18 +673,22 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
     related = relatedToLesson(await store.getItems(), latest, lesson);
   }
   const learned = lesson ? { creator: lesson.creator, lessonSite: lesson.site, lessonBrand: lesson.brand, related } : { creator: '', lessonSite: '', lessonBrand: '', related: [] };
-  // A save you filed yourself, now with its real name and shop: the sorter learns that this product and
-  // this shop go in that collection (as much as moving a save teaches), so the next product
-  // read from the same shop is filed with it. Once per shop page: linking the same page again teaches nothing.
-  const after = { ...latest, ...patch };
-  if (rebuild && after.collectionId && !after.needsReview && filedByYou(latest) && siteKey(latest.details?.shopUrl) !== siteKey(url)) {
-    await store.updatePrefs(sorterLesson(await store.getPrefs(), productFacts(after), after.collectionId));
-  }
   if (!changes.length) return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: latest.title, price: '', logId: null, same: true, ...learned };
   const before = Object.fromEntries([...LOGGED, 'deals', 'dealSkip', 'wishName'].filter((f) => f in patch).map((f) => [f, latest[f] === undefined ? null : latest[f]]));
   await store.updateItem(id, patch, { by: 'ai' });
+  // A save you filed yourself, now with its real name and shop: the sorter learns that this product and
+  // this shop go in that collection (as much as moving a save teaches), so the next product read from the
+  // same shop is filed with it. Once per page: the same page linked again changes nothing and teaches
+  // nothing. Undo takes the lesson back (the log entry's `taught`, aiFix.js undoFixes).
+  const after = { ...latest, ...patch };
+  let taught = null;
+  if (rebuild && after.collectionId && !after.needsReview && filedByYou(latest) && (latest.details?.shopUrl || '') !== url) {
+    const facts = productFacts(after);
+    taught = { title: facts.title, host: facts.host, collectionId: after.collectionId };
+    await store.updatePrefs(sorterLesson(await store.getPrefs(), taught, after.collectionId));
+  }
   const logId = uid();
-  await store.appendAiLog([{ id: logId, runId: `link-product-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: ai?.reason || `From the store page you added (${site}).`, undone: false }]);
+  await store.appendAiLog([{ id: logId, runId: `link-product-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: ai?.reason || `From the store page you added (${site}).`, undone: false, ...(taught ? { taught } : {}) }]);
   return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: patch.title || latest.title, price: 'price' in patch ? formatPrice(patch.price, patch.currency) || String(patch.price) : '', logId, ...learned };
 }
 
@@ -745,15 +749,23 @@ function sorterLesson(prefs, facts, collectionId) {
   return { learnedKeywords: next.learnedKeywords, retailerPrefs: next.retailerPrefs };
 }
 
-// Does the save's own text name this brand? Whole words, four letters or more ("On" and "Gap" are also words).
+// Brands that are also everyday words: "giving away this lamp" isn't about Away. These count only as a
+// hashtag or as the brand already on the card.
+const WORD_BRANDS = new Set('away coach target apple everyday guess shell dove tide always express united stance keen fossil orange white black blue green gold silver rose pink mango champion diesel supreme ordinary cotton linen nature fresh simple modern classic basic original outdoor columbia casper parachute caterpillar'.split(' '));
+// Letters and digits only, lower case, single spaces ("Nike's" and "Nike." are both "nike").
+const brandWords = (t) => String(t || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[’']s\b/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+// Does the save name this brand? Its hashtags or the brand on its card, or (four letters or more, and not
+// an everyday word) whole words of its own text.
 function mentionsBrand(item, brand) {
-  const b = normalizeText(brand);
+  const b = brandWords(brand);
   if (b.length < 4) return false;
   const ig = item?.instagram || {};
-  const text = normalizeText([item?.title, ig.caption, item?.description, item?.details?.brand].filter(Boolean).join(' \n '));
-  if (` ${text} `.includes(` ${b} `)) return true;
-  const tag = b.replace(/\s+/g, '');
-  return (Array.isArray(ig.hashtags) ? ig.hashtags : []).some((h) => normalizeText(h).replace(/\s+/g, '') === tag);
+  const tag = b.replace(/ /g, '');
+  if (brandWords(item?.details?.brand) === b) return true;
+  if ((Array.isArray(ig.hashtags) ? ig.hashtags : []).some((h) => brandWords(h).replace(/ /g, '') === tag)) return true;
+  if (WORD_BRANDS.has(b)) return false;
+  return ` ${brandWords([item?.title, ig.caption, item?.description].filter(Boolean).join(' \n '))} `.includes(` ${b} `);
 }
 
 // Who posted a save (an Instagram or X account), lower case, or ''.
