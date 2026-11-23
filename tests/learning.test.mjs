@@ -235,3 +235,90 @@ test('updateItem with a new kind teaches the sorter; learnFromLibrary learns kin
   assert.equal(learnedKindOf(igPost('Fried chicken spot #nycfood #friedchicken'), await store.getPrefs())?.kind, 'place');
   assert.equal(await store.learnFromLibrary(), 0);
 });
+
+// --- learning faster: recent moves, the account a post is from, a caption's words (2026-11-23) ----
+import { recentLessons, creatorTerm } from '../keepsake/src/shared/categorizer.js';
+
+const DAY = 864e5;
+
+test('one move ends an old habit: the next save like it follows the move at once', () => {
+  // Five kettles kept in Desk (a habit), then one moved out of Desk into Coffee setup.
+  let p = emptyPrefs();
+  for (let i = 0; i < 5; i++) p = learnFromConfirmation({ title: `Gooseneck kettle no ${i}` }, desk.id, p);
+  const before = classify({ title: 'Gooseneck kettle matte' }, { collections, prefs: p });
+  assert.equal(before.collectionId || before.suggested?.collectionId, desk.id, 'the habit decides until you say otherwise');
+  p = learnFromCorrection({ title: 'Gooseneck kettle copper' }, desk.id, coffee.id, p);
+  const after = classify({ title: 'Gooseneck kettle matte' }, { collections, prefs: p });
+  assert.equal(after.collectionId, coffee.id, 'filed where you just moved one like it');
+  assert.ok(after.confidence >= 0.75, `sure enough to file without asking (${after.confidence})`);
+  // Long after, with nothing fresh, the move still holds: the old habit lost its grip when you moved it.
+  const later = classify({ title: 'Gooseneck kettle matte' }, { collections, prefs: p, now: Date.now() + 400 * DAY });
+  assert.equal(later.collectionId || later.suggested?.collectionId, coffee.id);
+});
+
+test('recent moves count more than old ones, and fade with time', () => {
+  const p = learnFromCorrection({ title: 'Titanium camp stove' }, null, camp.id, emptyPrefs());
+  const at = Date.parse(p.corrections[0].at);
+  const has = () => true;
+  assert.equal(recentLessons(p, at, has).get('camp stove').fresh, 1);
+  assert.ok(Math.abs(recentLessons(p, at + 30 * DAY, has).get('camp stove').fresh - 0.5) < 0.01, 'half as fresh after a month');
+  assert.equal(recentLessons(p, at + 365 * DAY, has).size, 0, 'an old move is only what it taught');
+  const score = (now) => classify({ title: 'Camp stove windscreen' }, { collections, prefs: p, now }).alternatives.find((a) => a.collectionId === camp.id).score;
+  assert.ok(score(at) > score(at + 60 * DAY), 'a fresh move pulls harder');
+  assert.ok(score(at + 60 * DAY) > score(at + 365 * DAY));
+});
+
+test('a recent move only speaks for saves like the one you moved (two shared words, or the same account)', () => {
+  const p = learnFromCorrection({ title: 'Black leather wallet' }, null, clothes.id, emptyPrefs());
+  const at = Date.parse(p.corrections[0].at);
+  assert.equal(recentLessons(p, at, (t) => t === 'black').size, 0, 'one shared word is not "like it"');
+  assert.ok(recentLessons(p, at, (t) => ['leather wallet', 'leather', 'wallet'].includes(t)).has('wallet'));
+  // The newest move with a word speaks for it, whatever order a merged library lists them in.
+  const two = { corrections: [
+    { at: new Date(at).toISOString(), to: 'new', terms: ['camp stove', 'camp', 'stove'] },
+    { at: new Date(at - 5 * DAY).toISOString(), to: 'old', terms: ['camp stove', 'camp', 'stove'] },
+  ] };
+  assert.equal(recentLessons(two, at, has2).get('stove').to, 'new');
+  function has2() { return true; }
+});
+
+test('the account a post is from is learned: move one post, and the next from that account follows', async () => {
+  const store = await freshStore();
+  const { collection: food } = await store.createCollection({ name: 'Dinner ideas' });
+  const post = (caption, creator, n) => ({ ...igPost(caption), url: `https://www.instagram.com/p/${n}/`, canonicalUrl: `https://www.instagram.com/p/${n}/`, instagram: { ...igPost(caption).instagram, creator } });
+  const first = await saveCapture(store, post('Tuesday night, nothing fancy', 'thatchef', 'a1'), { instant: true });
+  assert.equal(first.item.collectionId, null, 'nothing to go on yet: Review');
+  await store.moveItems([first.item.id], food.id, { learn: 'light' });
+  assert.equal((await store.getPrefs()).learnedKeywords['@thatchef'][food.id], 1);
+  const next = await saveCapture(store, post('Back at it with something new', 'thatchef', 'a2'), { instant: true });
+  assert.equal(next.item.collectionId, food.id, 'the next post from @thatchef goes where you put the last one');
+  assert.match(next.item.categorizationReason, /you file posts from @thatchef here/);
+  const other = await saveCapture(store, post('Back at it with something new', 'someoneelse', 'a3'), { instant: true });
+  assert.equal(other.item.collectionId, null, 'another account’s post is not “like it”');
+  assert.equal(creatorTerm({ instagram: { creator: '@That.Chef' } }), '@that.chef');
+  assert.equal(creatorTerm({ instagram: { creator: 'not a handle!' } }), '');
+});
+
+test('an account whose posts you turn into Workouts teaches the kind', () => {
+  const by = (caption) => ({ ...igPost(caption), instagram: { ...igPost(caption).instagram, creator: 'coachkim' } });
+  const prefs = learnKindFromCorrection({ ...by('Try this tomorrow morning'), kind: 'workout' }, 'link', 'workout', emptyPrefs());
+  assert.equal(learnedKindOf(by('Something different today'), prefs)?.kind, 'workout');
+  assert.equal(learnedKindOf(igPost('Something different today'), prefs), null);
+});
+
+test('a post is not filed on one everyday learned word; a product’s one word still names it', () => {
+  let p = emptyPrefs();
+  p = learnFromCorrection(igPost('One step at a time on the trail'), null, camp.id, p, { strong: true });
+  const post = classify(igPost('The first step is admitting it'), { collections, prefs: p, now: Date.now() + 400 * DAY });
+  assert.equal(post.isInbox, true, 'waits in Review');
+  assert.equal(post.suggested?.collectionId, camp.id, 'with the guess as its suggestion');
+  let q = emptyPrefs();
+  q = learnFromCorrection({ title: 'Headlamp rechargeable 400 lumen', host: 'shop.example' }, null, camp.id, q, { strong: true });
+  assert.equal(classify({ title: 'Headlamp waterproof', host: 'shop.example' }, { collections, prefs: q }).collectionId, camp.id);
+});
+
+test('a caption’s telling words are learned, not only its first line; contractions never are', () => {
+  const terms = salientTerms(igPost('You’ll love this one\nSlow braised short ribs with polenta, I’ll send the recipe'));
+  assert.ok(terms.includes('braised') && terms.includes('polenta'));
+  for (const w of ["you'll", "i'll", 'send']) assert.ok(!terms.includes(w), w);
+});

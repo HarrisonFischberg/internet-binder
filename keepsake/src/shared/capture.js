@@ -5,11 +5,12 @@
 // through the enrich/fill hooks.
 
 import { classify, learnFromCorrection, learnedKindOf, isSocialHost, AUTO_FILE_CONFIDENCE } from './categorizer.js';
-import { parsePrice, sanitizeText } from './util.js';
+import { parsePrice, sanitizeText, nowIso, prettyRetailer, hostnameOf } from './util.js';
 import { parsePostBundle } from '../instagram/post.js';
 import { isXPost, parseXPost, xPostRecord, xPostUrl } from './xPost.js';
 import { parseLink, mergeLinkRead } from './linkReader.js';
-import { isKind, kindInfo, hasOwnView, detailsForKind, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, isRecipePost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
+import { screenshotFacts } from './screenshot.js';
+import { isKind, kindInfo, hasOwnView, detailsForKind, sanitizeDetails, placeFromText, genericTitle, kindFromSchemaTypes, recipeFromSchema, recipeFromText, workoutFromText, looksLikeWorkout, isWorkoutPost, isRecipePost, recipeOrWorkout, placeFromSchema, placeFromMapsUrl, placeFromProfile, placeFromHome, videoPlatform, videoFromCapture, articleFromCapture, isYouTube, titleSite, mediaFromSchema, bookFromSchema } from './kinds.js';
 import { guessTopics } from './topics.js';
 import { aiAvailable, usableKey } from '../ai/provider.js';
 
@@ -54,6 +55,13 @@ export function normalizeProduct(raw) {
   if (p.linkBundle && !p.isInstagram && !p.isXPost) Object.assign(p, mergeLinkRead(p, parseLink(p.linkBundle, p.linkUrl || p.canonicalUrl || p.url)));
   delete p.linkBundle;
   delete p.linkUrl;
+  // A screenshot: what its text, read on the device, says it is (src/shared/screenshot.js).
+  if (p.ocr) {
+    const { text, ...facts } = screenshotFacts(p.ocr);
+    p.isScreenshot = true;
+    if (text) Object.assign(p, facts);
+  }
+  delete p.ocr;
   if (p.price === null || p.price === undefined || p.price === '' || Number.isNaN(Number(p.price))) {
     const parsed = parsePrice(p.priceText || p.price, p.currency);
     if (parsed) {
@@ -94,7 +102,7 @@ const KIND_REASON = {
 export function workoutOf(product) {
   const about = `${product.title || ''} ${product.description || ''}`;
   if (!looksLikeWorkout(about) && !isWorkoutPost(about)) return null;
-  const post = product.isInstagram || product.isXPost || product.isPost;
+  const post = product.isInstagram || product.isXPost || product.isPost || product.isScreenshot;
   const source = post ? 'caption' : 'page';
   // Instagram puts the caption in the page title as well as the description, and either may be cut
   // short: read the longer one first.
@@ -152,7 +160,8 @@ export function kindOfCapture(product) {
   if (product.recipe) return 'recipe';
   // An Instagram post or a post on X: a recipe or workout in the caption, a place when it's tagged with
   // a location or names one with 📍; otherwise a link.
-  if (product.isInstagram || product.isXPost || product.isPost) {
+  // A screenshot's text is read the same way: it is most often a post, or a page's words with no data.
+  if (product.isInstagram || product.isXPost || product.isPost || product.isScreenshot) {
     const found = recipeOrWorkout(product.description, workoutOf(product));
     if (found) return found.kind;
     const about = `${product.title || ''}\n${product.description || ''}`;
@@ -247,6 +256,40 @@ export function classifyCapture(product, kind, details, ctx) {
   return { ...classification, kind };
 }
 
+// The page's own data (what shops and recipe sites publish for search engines) already says what the save
+// is and everything its card shows, so it is finished as it is saved: nothing waits on AI and nothing is
+// sent to it. A recipe with its ingredients and steps; a place with its street, city and state; a product
+// with its name and price that the sorter filed without doubt. Anything less still gets the AI reading
+// it got before, and Fix with AI reads any save again when you ask.
+export function pageSaysEnough(product, kind, details, classification) {
+  if (product.isInstagram || product.isXPost || product.isPost) return false;
+  if (kind === 'recipe') return !!product.recipe && details.source === 'page' && (details.ingredients?.length || 0) >= 2 && (details.steps?.length || 0) >= 1;
+  if (kind === 'place') return !!product.place && !!(details.address && details.locality && details.region);
+  if (kind === 'product') {
+    const structured = product.structuredProduct || kindFromSchemaTypes(product.schemaTypes) === 'product';
+    return !!structured && !!product.title && !genericTitle(product.title) && product.price !== null && product.price !== undefined
+      && !classification.isInbox && classification.confidence >= AUTO_FILE_CONFIDENCE;
+  }
+  return false;
+}
+
+// A product's card, from its own shop page: brand, category, stock, and the page as its shop page.
+export function pageProductDetails(product) {
+  const url = product.canonicalUrl || product.url || '';
+  const crumbs = Array.isArray(product.breadcrumbs) ? product.breadcrumbs.filter(Boolean) : [];
+  return sanitizeDetails('product', {
+    brand: product.brand || '',
+    model: product.sku || '',
+    category: product.schemaCategory || product.productType || (crumbs.length > 1 ? crumbs[crumbs.length - 2] : ''),
+    shopUrl: url,
+    shopName: product.retailer || product.siteName || prettyRetailer(hostnameOf(url)),
+    shopTitle: product.title || '',
+    shopDescription: product.description || '',
+    availability: /out/i.test(String(product.availability || '')) ? 'out_of_stock' : /in.?stock/i.test(String(product.availability || '')) ? 'in_stock' : '',
+    source: 'page',
+  });
+}
+
 // instant: saved with no preview (on-page button, right-click). Then a local pick below
 // AUTO_FILE_CONFIDENCE goes to Review with that pick as the suggestion, like the toolbar.
 // deferAi: part of a bulk import (open tabs). Nothing goes to your AI provider now; the save is flagged
@@ -301,6 +344,10 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
     classification = { ...classification, collectionId: null, collectionName: 'Review', taxonomyKey: null, isNew: false, isInbox: true, suggested: pick, reason: `Not sure (${Math.round(classification.confidence * 100)}%) — maybe ${pick.collectionName}: ${classification.reason}` };
   }
 
+  // What the page itself published is enough: saved complete, with no AI reading to wait for or pay for.
+  const fromPage = !deferAi && pageSaysEnough(product, kind, details, classification);
+  if (fromPage && kind === 'product') details = pageProductDetails(product);
+
   let targetId = collectionId;
   if (typeof targetId === 'string' && targetId.startsWith('new:')) {
     const col = await store.ensureCollectionForTaxonomy(targetId.slice(4));
@@ -324,7 +371,8 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
     kind,
     details,
     ...topicsFor(kind, product, details),
-    captureState: aiWanted ? 'pending' : 'complete',
+    captureState: aiWanted && !fromPage ? 'pending' : 'complete',
+    ...(fromPage ? { understoodAt: nowIso() } : {}),
     needsAi: !!deferAi,
     confidence: userChose ? 1 : classification.confidence,
     categorizationSource: userChose ? 'manual' : 'local',
@@ -343,7 +391,7 @@ export async function saveCapture(store, rawProduct, { collectionId = null, forc
   if (collection && !collection.coverImage && item.image) {
     await store.updateCollection(collection.id, { coverImage: item.image });
   }
-  if (aiWanted) enrich(item.id);
+  if (aiWanted && !fromPage) enrich(item.id);
   if (FILLED_KINDS.includes(kind)) fill(item.id);
   return { ok: true, item, collection, classification: { ...classification, collectionId: targetId, collectionName: collection ? collection.name : classification.collectionName } };
 }

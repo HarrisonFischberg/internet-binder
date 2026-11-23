@@ -57,6 +57,7 @@ const FIELD_WEIGHTS = {
   description: 1,
   caption: 1.2,
   retailer: 1,
+  creator: 3, // the account a post is from, as you've filed its posts ("@thatchef", learned only)
 };
 // Saves that skip any preview (toolbar icon, on-page buttons, right-click) only
 // file an item straight into a collection at or above this confidence.
@@ -277,8 +278,16 @@ function fieldsOf(product) {
     caption: withoutUsage(normalizeText(withoutInstructions(ig.caption))).slice(0, 1000),
     instagramCollection: normalizeText(ig.collectionName),
     retailer: normalizeText([p.retailer, p.host, p.brand].filter(Boolean).join(' ')),
+    creator: creatorTerm(p),
   };
   return fields;
+}
+
+// The account a post is from, as a learned word: "@thatchef". Words never start with @, so it can't be
+// mistaken for one; it's learned and matched whole (salientTerms, collectMatches, learnedKindOf).
+export function creatorTerm(product) {
+  const who = String(product?.instagram?.creator || '').trim().replace(/^@+/, '').toLowerCase();
+  return /^[\p{L}\p{N}._-]{2,60}$/u.test(who) ? `@${who}` : '';
 }
 
 // Everyday words and social-post boilerplate. They turn up in posts of every kind, so learning them
@@ -292,12 +301,17 @@ const COMMON_WORDS = new Set(('i me my mine we us our you your yours he him his 
   'good great better best bad really actually literally just even also still ever never always again here there about into over after before ' +
   'out up down off then now yet back far much many little lot lots every first last next well right ' +
   'yall ya yeah yes okay ok lol omg wow love like follow followers comment comments link bio dm share save saved post posts reel reels video ' +
-  'videos watch part fyp foryou foryoupage explore explorepage viral viralreels trending reelsinstagram instagram instagood insta tiktok').split(/\s+/));
-const learnable = (t) => t.length >= 3 && !COMMON_WORDS.has(t) && !t.split(' ').every((w) => COMMON_WORDS.has(w));
+  'videos watch part fyp foryou foryoupage explore explorepage viral viralreels trending reelsinstagram instagram instagood insta tiktok ' +
+  'but because while though although unless until whether if else maybe perhaps might must may shall cannot across around through during ' +
+  'send sent click tap swipe drop below above check tag tagged repost credit via').split(/\s+/));
+// Contractions ("i'll", "you'll", "isn't", and "it'" once its s is stemmed off) are everyday words too.
+const everyday = (w) => COMMON_WORDS.has(w) || w.includes("'");
+const learnable = (t) => t.length >= 3 && !everyday(t) && !t.split(' ').every(everyday);
 
+const CAPTION_TERMS = 12;
 export function salientTerms(product, max = 12) {
   const title = product?.title || '';
-  const toks = tokenize(title).map(stem).filter((t) => t.length >= 3 && !COMMON_WORDS.has(t));
+  const toks = tokenize(title).map(stem).filter((t) => t.length >= 3 && !everyday(t));
   const terms = [];
   const seen = new Set();
   for (let i = 0; i < toks.length; i++) {
@@ -321,7 +335,15 @@ export function salientTerms(product, max = 12) {
   // A post's hashtags are the creator's own labels (#legday, #vanlife): the words most likely to turn
   // up on the next post that belongs in the same place. A post's title is only its caption's first line.
   const tags = (Array.isArray(product?.instagram?.hashtags) ? product.instagram.hashtags : []).map((h) => stem(normalizeText(h).replace(/\s+/g, ''))).filter((t) => learnable(t) && !STOPWORDS.has(t) && !seen.has(t));
-  return [...terms.slice(0, max), ...[...new Set(tags)].slice(0, 8)];
+  const who = creatorTerm(product);
+  // A post's caption says more than its first line (the title): its first few telling words are learned
+  // too, so one move teaches enough for the next post like it to be recognised.
+  const body = [];
+  for (const t of tokenize(String(product?.instagram?.caption || '').slice(0, 600)).map(stem)) {
+    if (body.length >= CAPTION_TERMS) break;
+    if (t.length >= 4 && !everyday(t) && !seen.has(t) && !body.includes(t)) body.push(t);
+  }
+  return [...terms.slice(0, max), ...[...new Set(tags)].slice(0, 8), ...body, ...(who ? [who] : [])];
 }
 
 // --- scoring ---------------------------------------------------------------------
@@ -379,8 +401,16 @@ function taughtElsewhere(matched, candidateId, learned) {
   return claimed(stems.join(' ')) || (stems.length > 1 && stems.every(claimed));
 }
 
-function collectMatches(candidate, candidateIndex, fields, prefs) {
+function collectMatches(candidate, candidateIndex, fields, prefs, recent = new Map()) {
   const matches = [];
+  // What a learned word is worth here: its weight, more while your latest move of a save with that word
+  // is fresh and came here, less while it's fresh and went somewhere else (recentLessons).
+  const learnedHere = (g) => {
+    const w = learnedWeight((prefs?.learnedKeywords || {})[g], candidate.id);
+    const last = recent.get(g);
+    if (!last || !(w > 0)) return w;
+    return last.to === candidate.id ? w + RECENT_WEIGHT * last.fresh : w * (1 - last.fresh);
+  };
   const learnedWords = prefs?.learnedKeywords || {};
   const hasLearned = Object.keys(learnedWords).length > 0;
   const add = (field, keyword, matched, weight, kind) => {
@@ -391,6 +421,12 @@ function collectMatches(candidate, candidateIndex, fields, prefs) {
   for (const [field, text] of Object.entries(fields)) {
     if (!text) continue;
     if (field === 'retailer') continue; // handled by retailer preferences
+    if (field === 'creator') {
+      // Posts from an account you've filed before: the account is the word.
+      const w = candidate.id ? learnedHere(text) : 0;
+      if (w > 0) add(field, text, text, w, 'learned');
+      continue;
+    }
     for (const kw of candidate.strong) {
       const m = matchKeyword(kw, text);
       if (m) add(field, kw, m, KW_WEIGHT.strong, candidate.topic?.has(kw) ? 'topic' : 'strong');
@@ -421,8 +457,8 @@ function collectMatches(candidate, candidateIndex, fields, prefs) {
       for (let i = 0; i < stems.length - 1; i++) grams.add(`${stems[i]} ${stems[i + 1]}`);
       for (const g of grams) {
         if (!learnable(g)) continue;
-        const entry = learned[g];
-        const w = learnedWeight(entry, candidate.id);
+        if (!learned[g]) continue;
+        const w = learnedHere(g);
         if (w > 0) add(field, g, g, w, 'learned');
       }
     }
@@ -472,8 +508,15 @@ export function classify(product, context = {}) {
 
   // 2. Keyword scoring.
   let all = [];
+  // The save's own words, as learned words are written (stems and pairs of them), and its account.
+  const own = new Set(fields.creator ? [fields.creator] : []);
+  for (const f of ['title', 'description', 'caption', 'alt']) {
+    const stems = tokenize(fields[f] || '').map(stem);
+    stems.forEach((t, i) => { own.add(t); if (i < stems.length - 1) own.add(`${t} ${stems[i + 1]}`); });
+  }
+  const recent = recentLessons(prefs, context.now, (t) => own.has(t));
   candidates.forEach((cand, i) => {
-    all = all.concat(collectMatches(cand, i, fields, prefs));
+    all = all.concat(collectMatches(cand, i, fields, prefs, recent));
   });
   all = applyDominance(all);
   // A collection named for a topic owns that topic's words: "Claude" says your AI collection, not
@@ -497,7 +540,7 @@ export function classify(product, context = {}) {
   const topicHits = candidates.map(() => new Set());
   const seen = new Set();
   const tally = (m) => {
-    const key = `${m.candidateIndex}|${m.field}|${m.keyword}`;
+        const key = `${m.candidateIndex}|${m.field}|${m.keyword}`;
     if (seen.has(key)) return;
     seen.add(key);
     const fw = FIELD_WEIGHTS[m.field] || 1;
@@ -581,6 +624,17 @@ export function classify(product, context = {}) {
   // topic ("Claude Code", "AI agent", "prompts"), with no close rival, say what the save is about.
   else if (top.topicHits >= 3 && rivalry <= top.score * 0.25) confidence = Math.max(confidence, 0.8);
 
+  // A post is filed on more than one everyday word. Its text is a caption, where a single learned word
+  // ("step", "guess") turns up by chance; a product's title is its name, where one word ("headlamp") says
+  // what it is. So a post needs two different words for the winner, or one that names it outright (your
+  // keyword, the collection's name or topic, a built-in strong word, the account it's from). Otherwise the
+  // pick waits in Review as the suggestion.
+  if ((product?.instagram || isSocialHost(product?.host || '')) && top.userScore === 0 && top.topicHits === 0) {
+    const mine = all.filter((m) => candidates[m.candidateIndex] === top.cand);
+    const words = new Set(mine.filter((m) => !(m.kind === 'learned' && m.keyword.includes(' '))).map((m) => m.keyword));
+    const named = mine.some((m) => m.field === 'creator' || m.kind === 'strong' || m.kind === 'name' || m.field === 'instagramCollection');
+    if (words.size < 2 && !named) confidence = Math.min(confidence, threshold - 0.05);
+  }
   const reason = describeWhy(top.why);
   if (confidence < threshold) {
     return finish({
@@ -610,6 +664,10 @@ function describeWhy(why) {
       parts.push(`you usually file items from ${w.matched} here`);
       continue;
     }
+    if (w.field === 'creator') {
+      parts.push(`you file posts from ${w.matched} here`);
+      continue;
+    }
     const label = { title: 'title', description: 'description', schemaCategory: 'category', productType: 'the store’s product type', tags: 'tags', breadcrumbs: 'breadcrumbs', alt: 'image text', cardText: 'card text', caption: 'caption', instagramCollection: 'Instagram collection' }[w.field] || w.field;
     if (!byField.has(label)) byField.set(label, []);
     const tag = w.kind === 'learned' ? ' (learned)' : w.kind === 'user' ? ' (your keyword)' : '';
@@ -630,6 +688,34 @@ function learnedWeight(entry, collectionId) {
   if (!(w > 0)) return 0;
   const total = Object.values(entry).reduce((sum, v) => sum + (v > 0 ? v : 0), 0);
   return Math.min(MAX_LEARNED_WEIGHT, w) * (w / total);
+}
+
+// Your latest moves count for more than old habits. A save "like one you just moved" shares at least two
+// of that save's words (a phrase counts: "sleeping bag" is the phrase and both words), or is from the same
+// account. For each such word, the newest move that had it (prefs.corrections, the log of moves): where
+// it went and how fresh it is, 1 just after the move and halving every RECENT_HALF_LIFE_DAYS. While
+// fresh, the word pulls harder toward where you just put it and its older pull elsewhere is held back, so
+// the next save like the one you moved follows it at once instead of after several more moves. Nothing
+// new is stored: as the move ages, the learned weights alone decide again.
+// `has(term)` says whether the save being sorted has a learned word.
+const RECENT_HALF_LIFE_DAYS = 30;
+const RECENT_WEIGHT = 2;
+export function recentLessons(prefs, now = Date.now(), has = () => true) {
+  const out = new Map();
+  const log = Array.isArray(prefs?.corrections) ? prefs.corrections : [];
+  const at = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+  for (const c of log) {
+    if (!c || !c.to || !Array.isArray(c.terms)) continue;
+    const then = Date.parse(c.at);
+    if (Number.isNaN(then)) continue;
+    const fresh = 0.5 ** (Math.max(0, at - then) / (RECENT_HALF_LIFE_DAYS * 864e5));
+    if (fresh < 0.05) continue;
+    const shared = c.terms.filter((t) => typeof t === 'string' && has(t));
+    if (shared.length < 2 && !shared.some((t) => t.startsWith('@'))) continue;
+    // The newest move with the word speaks for it (a library merged from two devices isn't in time order).
+    for (const t of shared) if (!(out.get(t)?.then >= then)) out.set(t, { to: c.to, fresh, then });
+  }
+  return out;
 }
 
 // How much one choice teaches. A move or a pick at save time is a clear lesson; keeping the suggestion
@@ -673,7 +759,9 @@ function teach(next, product, fromId, toId, options) {
   for (const term of terms) {
     const entry = { ...(next.learnedKeywords[term] || {}) };
     entry[toId] = Math.min(MAX_LEARNED_WEIGHT, (entry[toId] || 0) + inc);
-    if (fromId && fromId !== toId && entry[fromId]) entry[fromId] = Math.max(0, entry[fromId] - 0.5 * inc);
+    // Moved out of where it was filed: that collection's hold on the word is halved and then some, so one
+    // move is enough to end an old habit (it used to take as many moves as the habit had saves).
+    if (fromId && fromId !== toId && entry[fromId]) entry[fromId] = Math.max(0, entry[fromId] * (options.confirm ? 1 : 0.5) - 0.5 * inc);
     for (const k of Object.keys(entry)) if (!entry[k]) delete entry[k];
     next.learnedKeywords[term] = entry;
   }
@@ -738,10 +826,13 @@ export function learnedKindOf(product, prefs) {
   const stems = tokenize(`${product.title || ''} ${product.description || ''} ${(product.instagram?.hashtags || []).join(' ')}`).map(stem);
   const grams = new Set(stems);
   for (let i = 0; i < stems.length - 1; i++) grams.add(`${stems[i]} ${stems[i + 1]}`);
+  // The account it's from: a chef's posts you keep turning into Recipes.
+  const who = creatorTerm(product);
+  if (who) grams.add(who);
   const score = {};
   const why = {};
   for (const g of grams) {
-    if (!learnable(g) || !learned[g]) continue;
+    if ((g !== who && !learnable(g)) || !learned[g]) continue;
     for (const k of Object.keys(learned[g])) {
       const w = learnedWeight(learned[g], k);
       if (!(w > 0)) continue;
