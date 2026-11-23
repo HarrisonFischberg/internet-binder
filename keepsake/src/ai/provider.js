@@ -1096,7 +1096,9 @@ export async function understandProductWithAI(input, settings, apiKey) {
       input.post?.from ? `Saved from: ${cut(input.post.from, 80)}` : '',
     ] : []),
     // What earlier links taught: this account's posts have been products from these shops.
-    ...(input.hints || []).slice(0, 3).map((h) => `The person told the app earlier that a post from @${cut(h.creator, 80)} was a product on ${cut(h.site, 120)}${h.shop ? ` (${cut(h.shop, 80)})` : ''}. Posts from one account are often from the same shop: look on that site first, and use it only if this exact product is really there.`),
+    ...(input.hints || []).slice(0, 3).map((h) => h.by === 'brand' && h.brand
+      ? `The person told the app earlier that a ${cut(h.brand, 60)} product they saved was on ${cut(h.site, 120)}${h.shop ? ` (${cut(h.shop, 80)})` : ''}. This save names ${cut(h.brand, 60)} too: look on that site first, and use it only if this exact product is really there.`
+      : `The person told the app earlier that a post from @${cut(h.creator, 80)} was a product on ${cut(h.site, 120)}${h.shop ? ` (${cut(h.shop, 80)})` : ''}. Posts from one account are often from the same shop: look on that site first, and use it only if this exact product is really there.`),
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
   if (!apiKey || !supportsWebLookup(settings) || input.noSearch) {

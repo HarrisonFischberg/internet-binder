@@ -558,7 +558,7 @@
         const collections = await store.getCollections();
         const entries = batch.map((item, n) => {
           const col = item.collectionId ? collections.find((c) => c.id === item.collectionId) : null;
-          return { ref: `i${n}`, item: item.instagram?.caption ? { ...item, description: item.instagram.caption } : item, live: null, currentCollection: col ? col.name : '' };
+          return { ref: `i${n}`, item: K.understand.cleanupView(item), live: null, currentCollection: col ? col.name : '' };
         });
         let results;
         try {

@@ -825,9 +825,9 @@ extension LibraryModel {
             } else {
                 show("Already up to date with \(site)")
             }
-            // Other saves from the same account: offered once the sheet has gone.
+            // Other saves from the same account, or naming the same brand: offered once the sheet has gone.
             if aiReady, r.logId != nil, let related = r.related, !related.isEmpty {
-                let offer = LearnedOffer(ids: related, creator: r.creator ?? "", shop: site)
+                let offer = LearnedOffer(ids: related, creator: r.creator ?? "", brand: r.lessonBrand ?? "", shop: site)
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(0.9))
                     guard self.offerSerial == serial else { return }

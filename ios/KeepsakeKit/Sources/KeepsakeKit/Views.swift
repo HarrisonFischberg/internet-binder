@@ -132,6 +132,7 @@ public struct ProductLink: Decodable, Sendable {
     public let creator: String?
     /// The shop's site the link taught for that account (empty when it taught nothing).
     public let lessonSite: String?
+    public let lessonBrand: String?
     public let related: [String]?
 }
 

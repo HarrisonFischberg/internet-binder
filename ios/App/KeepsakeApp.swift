@@ -32,6 +32,7 @@ struct LearnedOffer: Identifiable, Equatable {
     let id = UUID()
     let ids: [String]
     let creator: String
+    let brand: String
     let shop: String
 }
 

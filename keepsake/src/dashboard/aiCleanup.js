@@ -15,7 +15,7 @@ import { MSG } from '../shared/messages.js';
 import { needsCollection, hasOwnView, kindOf, kindInfo } from '../shared/kinds.js';
 import { planFixes, applyFix, undoFixes, REFILE_CONFIDENCE } from '../shared/aiFix.js';
 import { fileSave } from '../shared/filing.js';
-import { understandItem } from '../shared/understand.js';
+import { understandItem, cleanupView } from '../shared/understand.js';
 import { fetchPage, loadImage } from '../ai/pages.js';
 
 // Saves read with your provider at once: one request each.
@@ -220,8 +220,8 @@ async function runWithProgress(ctx, items, { scope, key, useLive }) {
     }));
     let results;
     try {
-      // Instagram posts are described by their caption; only their collection is decided.
-      const entries = prepared.map((p) => ({ ref: p.ref, item: p.item.instagram?.caption ? { ...p.item, description: p.item.instagram.caption } : p.item, live: p.live, currentCollection: p.currentCollection }));
+      // A product a shop page matched is described by that page; an Instagram post by its caption.
+      const entries = prepared.map((p) => ({ ref: p.ref, item: cleanupView(p.item), live: p.live, currentCollection: p.currentCollection }));
       results = await cleanupWithAI(entries, collections, ctx.state.settings, key);
     } catch (e) {
       const msg = String((e && e.message) || e);

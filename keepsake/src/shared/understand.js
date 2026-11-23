@@ -34,7 +34,8 @@
 // from its text, and fills in the same save, labelled "Recipe from <site>" with the link.
 
 import { uid, nowIso, decodeEntities, parsePrice, prettyRetailer, hostnameOf, formatPrice } from './util.js';
-import { isSocialHost } from './categorizer.js';
+import { isSocialHost, classify, AUTO_FILE_CONFIDENCE, learnFromCorrection, normalizeText } from './categorizer.js';
+import { REFILE_CONFIDENCE } from './aiFix.js';
 import { guessTopics } from './topics.js';
 import { mentionsFood, isWorkoutPost, kindOf, kindInfo, hasOwnView, kindChangePatch, sanitizeDetails, genericTitle, isPostSave, recipeFromSchema, placeFromSchema, titleSite } from './kinds.js';
 import { fillMissing } from './lookups.js';
@@ -654,6 +655,13 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
   const latest = rewrite ? await store.getItem(id) : current;
   if (!latest || latest.deletedAt) return { ok: false, error: 'That save no longer exists.' };
   const { patch, changes, site } = planLinkedProduct(latest, url, page, { ai, rewrite: rebuild });
+  // The card now says what the product really is: it is filed by that, not by what the post's caption
+  // happened to say (planRefile). Part of the same change, so Undo puts the collection back too.
+  if (rebuild) {
+    const refile = planRefile({ ...latest, ...patch }, { collections: await store.getCollections(), prefs: await store.getPrefs(), settings: await store.getSettings() });
+    Object.assign(patch, refile.patch);
+    changes.push(...refile.changes);
+  }
   // What this teaches: posts from this account come from this shop. Later reads of its other posts look
   // there first (shopHintsFor), and the saves of its that no shop page has confirmed yet are offered for
   // another read now (related).
@@ -664,7 +672,14 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
     await store.updatePrefs({ productShops: addProductLesson((await store.getPrefs()).productShops, lesson) });
     related = relatedToLesson(await store.getItems(), latest, lesson);
   }
-  const learned = lesson ? { creator: lesson.creator, lessonSite: lesson.site, related } : { creator: '', lessonSite: '', related: [] };
+  const learned = lesson ? { creator: lesson.creator, lessonSite: lesson.site, lessonBrand: lesson.brand, related } : { creator: '', lessonSite: '', lessonBrand: '', related: [] };
+  // A save you filed yourself, now with its real name and shop: the sorter learns that this product and
+  // this shop go in that collection (as much as moving a save teaches), so the next product
+  // read from the same shop is filed with it. Once per shop page: linking the same page again teaches nothing.
+  const after = { ...latest, ...patch };
+  if (rebuild && after.collectionId && !after.needsReview && filedByYou(latest) && siteKey(latest.details?.shopUrl) !== siteKey(url)) {
+    await store.updatePrefs(sorterLesson(await store.getPrefs(), productFacts(after), after.collectionId));
+  }
   if (!changes.length) return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: latest.title, price: '', logId: null, same: true, ...learned };
   const before = Object.fromEntries([...LOGGED, 'deals', 'dealSkip', 'wishName'].filter((f) => f in patch).map((f) => [f, latest[f] === undefined ? null : latest[f]]));
   await store.updateItem(id, patch, { by: 'ai' });
@@ -674,6 +689,72 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
 }
 
 // --- What a product link teaches -------------------------------------------------------------------
+
+// A collection you chose (or kept when shown) is yours: nothing here moves the save out of it.
+const filedByYou = (item) => item.categorizationSource === 'manual' || (item.userFields || []).includes('collectionId');
+
+// A product as the sorter should see it once a shop page has said what it is: its real name, the shop's
+// category, the brand and the shop, in place of the post's caption (pure). "The tech in this foam is
+// unreal" once filed a running shoe under Technology. A save no shop page has matched is returned as it is.
+export function productFacts(item) {
+  const d = kindOf(item) === 'product' ? item.details || {} : {};
+  if (!d.shopUrl) return item;
+  const album = item.instagram?.collectionName;
+  return {
+    id: item.id, title: item.title || d.shopTitle || '', category: d.category || '', productType: d.category || '', brand: d.brand || '',
+    description: [d.summary, d.shopDescription].filter(Boolean).join(' ').slice(0, 1500), retailer: d.shopName || '', host: siteKey(d.shopUrl), url: d.shopUrl,
+    price: item.price ?? null, currency: item.currency || '',
+    ...(album ? { instagram: { collectionName: album } } : {}),
+  };
+}
+
+// The same, for Fix with AI's filing check (provider.js cleanupWithAI): the shop, its category and what
+// the product is come first; the post's caption follows as what was said about it.
+export function cleanupView(item) {
+  const d = kindOf(item) === 'product' ? item.details || {} : {};
+  const caption = item.instagram?.caption || '';
+  if (!d.shopUrl) return caption ? { ...item, description: caption } : item;
+  const about = [d.brand ? `Brand: ${d.brand}.` : '', d.category ? `Category: ${d.category}.` : '', d.summary || d.shopDescription || '', caption ? `The post said: ${caption}` : ''].filter(Boolean).join(' ');
+  return { ...item, retailer: d.shopName || item.retailer || '', productType: d.category || item.productType || '', description: about || item.description || '' };
+}
+
+// Where a product a shop page has matched belongs, by what it is (pure). The local sorter reads the
+// product's facts; it moves the save only when it is sure (surer still to move one out of a collection
+// than to file one from Review), to a collection you already have, and never one you filed yourself.
+export function planRefile(item, { collections = [], prefs = {}, settings = {} } = {}) {
+  const none = { patch: {}, changes: [] };
+  if (kindOf(item) !== 'product' || !item.details?.shopUrl || filedByYou(item) || item.filingConfirmed || !collections.length) return none;
+  const found = classify(productFacts(item), { collections, prefs: { ...prefs, autoCreateCollections: false }, settings: { ...settings, autoCreateCollections: false } });
+  const filed = !!item.collectionId && !item.needsReview;
+  if (!found.collectionId || found.isNew || found.isInbox || found.collectionId === item.collectionId) return none;
+  if (!collections.some((c) => c.id === found.collectionId)) return none;
+  if (found.confidence < (filed ? Math.max(REFILE_CONFIDENCE, AUTO_FILE_CONFIDENCE) : AUTO_FILE_CONFIDENCE)) return none;
+  const patch = {
+    collectionId: found.collectionId, needsReview: false, categorizationSource: 'local', confidence: found.confidence,
+    categorizationReason: `From the product’s page: ${found.reason || 'best match'}`.slice(0, 300),
+  };
+  if (item.collectionId) patch.previousCollections = [...(item.previousCollections || []), item.collectionId].slice(-20);
+  return { patch, changes: [{ field: 'collection', fromId: item.collectionId || null, toId: found.collectionId, to: found.collectionName || '' }] };
+}
+
+// What the sorter learns from a product you filed yourself (pure): only the parts of prefs it changes.
+function sorterLesson(prefs, facts, collectionId) {
+  // As much as a move teaches: you chose the collection and then said exactly which product it is. (Not
+  // logged as a correction: the list of those is of saves you moved.)
+  const next = learnFromCorrection(facts, null, collectionId, prefs);
+  return { learnedKeywords: next.learnedKeywords, retailerPrefs: next.retailerPrefs };
+}
+
+// Does the save's own text name this brand? Whole words, four letters or more ("On" and "Gap" are also words).
+function mentionsBrand(item, brand) {
+  const b = normalizeText(brand);
+  if (b.length < 4) return false;
+  const ig = item?.instagram || {};
+  const text = normalizeText([item?.title, ig.caption, item?.description, item?.details?.brand].filter(Boolean).join(' \n '));
+  if (` ${text} `.includes(` ${b} `)) return true;
+  const tag = b.replace(/\s+/g, '');
+  return (Array.isArray(ig.hashtags) ? ig.hashtags : []).some((h) => normalizeText(h).replace(/\s+/g, '') === tag);
+}
 
 // Who posted a save (an Instagram or X account), lower case, or ''.
 const creatorOf = (item) => String(item?.instagram?.creator || '').replace(/^@/, '').trim().toLowerCase();
@@ -698,19 +779,22 @@ export function dropProductLesson(lessons, creator, site) {
   return (Array.isArray(lessons) ? lessons : []).filter((l) => l && !(l.creator === creator && l.site === site));
 }
 
-// The shops learned for the account that posted this save, newest first, at most 3 (pure).
+// The shops learned for this save, newest first, at most 3 (pure): the shops of the account that posted
+// it (by: 'account'), and the shops of brands its own words name, whoever posted it (by: 'brand').
 export function shopHintsFor(item, prefs) {
   const creator = creatorOf(item);
-  if (!creator) return [];
-  return (Array.isArray(prefs?.productShops) ? prefs.productShops : []).filter((l) => l && l.creator === creator && l.site)
-    .slice(-3).reverse().map((l) => ({ creator: l.creator, site: l.site, shop: l.shop || '', brand: l.brand || '' }));
+  const seen = new Set();
+  return (Array.isArray(prefs?.productShops) ? prefs.productShops : []).filter((l) => l && l.site).reverse()
+    .map((l) => ({ l, by: creator && l.creator === creator ? 'account' : mentionsBrand(item, l.brand) ? 'brand' : '' }))
+    .filter(({ l, by }) => by && !seen.has(l.site) && seen.add(l.site))
+    .slice(0, 3).map(({ l, by }) => ({ creator: l.creator, site: l.site, shop: l.shop || '', brand: l.brand || '', by }));
 }
 
-// Other saves the lesson may fix (pure): things to buy from the same account that no shop page has
+// Other saves the lesson may fix (pure): things to buy from the same account, or that name the same brand, that no shop page has
 // matched to a shop page yet. Ids, at most 25. (One your AI already matched to some page isn't offered
 // again with every link; Fix with AI on it still gets the hint.)
 export function relatedToLesson(items, item, lesson) {
-  return (items || []).filter((o) => o && o.id !== item.id && !o.deletedAt && !o.purchased && creatorOf(o) === lesson.creator
+  return (items || []).filter((o) => o && o.id !== item.id && !o.deletedAt && !o.purchased && (creatorOf(o) === lesson.creator || mentionsBrand(o, lesson.brand))
     && !hasOwnView(kindOf(o)) && (kindOf(o) === 'product' || isShopping(o))
     && !(kindOf(o) === 'product' && (o.details?.shopUrl || o.details?.source === 'you')))
     .slice(0, 25).map((o) => o.id);
@@ -966,6 +1050,13 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
     const product = planProduct({ ...current, ...patch }, found, page);
     patch = { ...patch, ...product.patch };
     changes = [...changes, ...product.changes];
+    // Newly matched to a shop page: filed by what the product is, not by what the post said (planRefile).
+    const matched = product.patch.details?.shopUrl || '';
+    if (matched && matched !== (current.details?.shopUrl || '')) {
+      const refile = planRefile({ ...current, ...patch }, { collections: await store.getCollections(), prefs: await store.getPrefs(), settings });
+      patch = { ...patch, ...refile.patch };
+      changes = [...changes, ...refile.changes];
+    }
     if (product.patch.kind) kind = 'product';
     else kind = kindOf({ ...current, ...patch });
     reason = found.reason || reason;

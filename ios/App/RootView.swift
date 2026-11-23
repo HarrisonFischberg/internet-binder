@@ -22,8 +22,10 @@ struct RootView: View {
     @State private var tab = "home"
     private func learnedMessage(_ offer: LearnedOffer) -> String {
         let one = offer.ids.count == 1
-        let who = offer.creator.isEmpty ? "the same account" : "@" + offer.creator
-        let what = one ? "One other save from \(who) isn't" : "\(offer.ids.count) other saves from \(who) aren't"
+        var who = offer.creator.isEmpty ? "from the same account" : "from @" + offer.creator
+        // A four-letter brand is the shortest the sorter matches on (understand.js mentionsBrand).
+        if offer.brand.count >= 4 { who += " or naming \(offer.brand)" }
+        let what = one ? "One other save \(who) isn't" : "\(offer.ids.count) other saves \(who) aren't"
         return "\(what) matched to a store page yet. Your AI can read \(one ? "it" : "them") again and look on \(offer.shop) first. Every change can be undone."
     }
     private var learnedTitle: String {
