@@ -156,4 +156,35 @@ final class WishListTests: XCTestCase {
         XCTAssertFalse(app.buttons["productLink.add"].isEnabled)
         shot("save-product-link")
     }
+
+    /// Where you say which product it is also takes a link: the button then reads that page.
+    func testNamingAProductTakesALink() {
+        let app = launch()
+        openWishList(app)
+        let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Glass pour-over coffee maker, 6 cup'")).firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        let improve = app.buttons["save.improve"].firstMatch
+        XCTAssertTrue(improve.waitForExistence(timeout: 5))
+        improve.tap()
+        app.buttons["Name the Exact Product…"].tap()
+        let field = app.textFields["wishList.nameField"].exists ? app.textFields["wishList.nameField"] : app.textViews["wishList.nameField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.press(forDuration: 1.2)
+        if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
+        field.typeText("https://brewhaus.example.com/pour-over")
+        XCTAssertTrue(app.buttons["Read this page"].waitForExistence(timeout: 5))
+        shot("name-with-link")
+    }
+}
+
+extension WishListTests {
+    func rewriteWith(_ app: XCUIApplication, _ link: String) {
+        app.buttons["save.improve"].firstMatch.tap(); app.buttons["Name the Exact Product…"].tap()
+        let f = app.textFields["wishList.nameField"].exists ? app.textFields["wishList.nameField"] : app.textViews["wishList.nameField"]
+        XCTAssertTrue(f.waitForExistence(timeout: 5))
+        f.tap(); f.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 80) + link)
+        app.buttons["wishList.nameSave"].tap()
+    }
 }

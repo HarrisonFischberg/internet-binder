@@ -66,14 +66,33 @@ public final class ThumbnailStore: @unchecked Sendable {
         return img
     }
 
-    /// Loads the picture from its site (as a web page would), keeps a small copy, returns it.
+    /// The memory key for a picture kept from an address on its site: the save and the address, so a save
+    /// whose picture changes (a linked store page's, an undone link) is never drawn from the old one's copy.
+    public static func remoteKey(_ id: String, _ remote: URL) -> String { "\(id)@\(remote.absoluteString)" }
+
+    /// Which address the local copy on disk was made from (nil for a copy made before this was recorded).
+    private func source(_ id: String) -> String? {
+        dir.flatMap { try? String(contentsOf: $0.appendingPathComponent("\(id).src"), encoding: .utf8) }
+    }
+
+    /// Loads the picture from its site (as a web page would), keeps a small copy, returns it. A local copy
+    /// made from another address isn't this save's picture any more: it is read again from the new one.
     public func load(_ id: String, from remote: URL) async -> UIImage? {
-        if let img = cached(id) { return img }
+        let key = Self.remoteKey(id, remote)
+        if let img = cache.object(forKey: key as NSString) { return img }
+        if source(id).map({ $0 == remote.absoluteString }) ?? true, let img = cached(id) {
+            cache.setObject(img, forKey: key as NSString)
+            return img
+        }
         guard let (data, response) = try? await session.data(from: remote),
               (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? false,
               let small = Self.downsample(data, to: 640) else { return nil }
-        if let url = file(id), let jpeg = small.jpegData(compressionQuality: 0.8) { try? jpeg.write(to: url, options: .atomic) }
-        cache.setObject(small, forKey: id as NSString)
+        cache.removeObject(forKey: id as NSString)
+        if let url = file(id), let jpeg = small.jpegData(compressionQuality: 0.8) {
+            try? jpeg.write(to: url, options: .atomic)
+            if let dir { try? remote.absoluteString.write(to: dir.appendingPathComponent("\(id).src"), atomically: true, encoding: .utf8) }
+        }
+        cache.setObject(small, forKey: key as NSString)
         return small
     }
 
@@ -86,6 +105,7 @@ public final class ThumbnailStore: @unchecked Sendable {
     public func remove(_ id: String) {
         cache.removeObject(forKey: id as NSString)
         if let url = file(id) { try? FileManager.default.removeItem(at: url) }
+        if let dir { try? FileManager.default.removeItem(at: dir.appendingPathComponent("\(id).src")) }
     }
 
     /// Decodes straight to at most `side` pixels, ready to draw (ImageIO never decodes the full-size photo,

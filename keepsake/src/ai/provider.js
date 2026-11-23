@@ -1080,10 +1080,12 @@ export async function understandProductWithAI(input, settings, apiKey) {
     ...(input.products || []).slice(0, 5).map((p) => `Tagged product: ${cut(p.name, 160)}${p.retailer ? ` (${cut(p.retailer, 80)})` : ''}`),
     ...(input.pages || []).slice(0, 2).map((pg) => `Linked page ${cut(pg.url, 300)}:\n${cut(pg.text, 3000)}`),
     input.image ? 'The image is the saved thumbnail.' : 'There is no image.',
+    // The person pasted this page to say which product it is: the page decides, nothing else.
+    input.linked ? `The person gave the link above as this product's own page. Build the card for the product on that page only: never another product, model, size or colour. listing.url must be that same link, or empty.` : '',
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
-  if (!apiKey || !supportsWebLookup(settings)) {
-    // No search here (the device model, or a custom endpoint): the text (and image) only, and no shop page.
+  if (!apiKey || !supportsWebLookup(settings) || input.noSearch) {
+    // No search here (the device model, a custom endpoint, or a page already in hand): the text (and image) only, and no shop page.
     const system = PRODUCT_SYSTEM.replace(/SEARCH\n[^\n]*\n/, 'You cannot search the web: leave listing empty and features and specs empty unless the text states them.\n');
     return withReader(cfg, apiKey, async (ask) => productAnswer(parseJsonBlock(await ask({ system, userText: text, imageDataUrl: image, maxTokens: 900 })), null));
   }

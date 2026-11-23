@@ -488,6 +488,58 @@ test('linkProductPage: the store page you paste becomes the save\'s shop page, f
   assert.equal((await store.getItem(priced.id)).price, 80);
 });
 
+test('linkProductPage rewrite: a link where you say which product it is rebuilds the card from that page, with AI details, and Undo', async () => {
+  const store = await linkStore();
+  const it = await store.addItem(post('obsessed with this mug ☕', { kind: 'product', collectionId: null, price: 12, currency: 'USD', image: 'https://cdn.example.com/post.jpg' }));
+  await store.updateItem(it.id, { wishName: 'the blue mug', deals: { checkedAt: '2026-11-20T00:00:00Z', offers: [] } }, { by: 'deals' });
+  const page = `<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Stoneware Mug 12 oz', brand: { name: 'Brewhaus' }, image: 'https://brewhaus.example.com/mug.jpg', offers: { price: '24.00', priceCurrency: 'USD' } })}</script></head><body>Hand-thrown stoneware, dishwasher safe.</body></html>`;
+  const real = globalThis.fetch;
+  try {
+    // No AI: the page's own facts still rewrite the card.
+    let r = await linkProductPage(store, it.id, 'brewhaus.example.com/mug', { fetchPage: async () => page, rewrite: true });
+    assert.deepEqual([r.ok, r.read, r.ai, r.title, r.price], [true, true, false, 'Stoneware Mug 12 oz', '$24.00']);
+    let saved = await store.getItem(it.id);
+    assert.deepEqual([saved.title, saved.price, saved.image, saved.wishName ?? '', saved.deals ?? null], ['Stoneware Mug 12 oz', 24, 'https://brewhaus.example.com/mug.jpg', '', null]);
+    await undoFixes(store, [(await store.getAiLog()).at(-1)]);
+    saved = await store.getItem(it.id);
+    assert.deepEqual([saved.title, saved.price, saved.image, saved.wishName, saved.deals.checkedAt], [it.title, 12, 'https://cdn.example.com/post.jpg', 'the blue mug', '2026-11-20T00:00:00Z']);
+
+    // With a key: the provider reads the page's text (not the post's caption) and adds the summary and features.
+    await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+    await store.setSecret('aiApiKey', 'sk');
+    const bodies = [];
+    globalThis.fetch = async (url, opts) => {
+      bodies.push(opts.body);
+      return { ok: true, status: 200, json: async () => ({ content: [{ type: 'text', text: JSON.stringify({ name: 'Brewhaus Stoneware Mug', brand: 'Brewhaus', category: 'mug', summary: 'A hand-thrown stoneware mug.', features: ['Dishwasher safe'], specs: [{ label: 'Capacity', value: '12 oz' }], confidence: 0.9 }) }] }), text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ name: 'Brewhaus Stoneware Mug', brand: 'Brewhaus', category: 'mug', summary: 'A hand-thrown stoneware mug.', features: ['Dishwasher safe'], specs: [{ label: 'Capacity', value: '12 oz' }], confidence: 0.9 }) }] }) };
+    };
+    r = await linkProductPage(store, it.id, 'brewhaus.example.com/mug', { fetchPage: async () => page, rewrite: true });
+    assert.deepEqual([r.ok, r.ai, r.aiError], [true, true, '']);
+    assert.match(bodies[0], /Hand-thrown stoneware/);
+    assert.doesNotMatch(bodies[0], /obsessed with this mug/);
+    saved = await store.getItem(it.id);
+    assert.deepEqual([saved.title, saved.details.summary, saved.details.features, saved.details.category, saved.details.specs.map((x) => x.label)], ['Stoneware Mug 12 oz', 'A hand-thrown stoneware mug.', ['Dishwasher safe'], 'mug', ['Capacity']]);
+
+    // The provider fails: the page's facts still go on, and it says so.
+    await undoFixes(store, [(await store.getAiLog()).at(-1)]);
+    globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => '{"error":{"message":"bad key"}}', json: async () => ({ error: { message: 'bad key' } }) });
+    r = await linkProductPage(store, it.id, 'brewhaus.example.com/mug', { fetchPage: async () => page, rewrite: true });
+    assert.deepEqual([r.ok, r.ai, (await store.getItem(it.id)).title], [true, false, 'Stoneware Mug 12 oz']);
+    assert.match(r.aiError, /401/);
+    // Nothing readable and no answer: only the link is kept; the name, price and picture stay.
+    const was = await store.getItem(it.id);
+    r = await linkProductPage(store, it.id, 'https://blocked.example.com/x', { fetchPage: async () => null, rewrite: true });
+    assert.deepEqual([r.ok, r.read, r.ai], [true, false, false]);
+    const now = await store.getItem(it.id);
+    assert.deepEqual([now.title, now.price, now.image, now.details.shopUrl], [was.title, was.price, was.image, 'https://blocked.example.com/x']);
+    // The page can't be read and the provider's search lands on another site: its answer isn't used.
+    globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: JSON.stringify({ name: 'Some Other Mug', listing: { url: 'https://elsewhere.example.org/mug', price: 5, currency: 'USD' }, confidence: 0.95 }) }] }), json: async () => ({ content: [{ type: 'text', text: JSON.stringify({ name: 'Some Other Mug', listing: { url: 'https://elsewhere.example.org/mug', price: 5, currency: 'USD' }, confidence: 0.95 }) }] }) });
+    r = await linkProductPage(store, it.id, 'https://blocked.example.com/y', { fetchPage: async () => null, rewrite: true });
+    assert.deepEqual([r.ok, r.ai, (await store.getItem(it.id)).title], [true, false, was.title]);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
 test('importRecipeFromLink: a page with no recipe card is read by AI; without AI, or with no recipe, it says so and changes nothing', async () => {
   const store = await linkStore();
   const it = await store.addItem(post('pasta night', { kind: 'recipe', collectionId: null }));
@@ -531,4 +583,22 @@ test('importRecipeFromLink: a bad address, a social post or a page that won\'t o
   assert.equal(fetched, 0);
   assert.match((await importRecipeFromLink(store, it.id, 'https://gone.example.com/x', { fetchPage })).error, /Couldn’t read that page/);
   assert.equal((await store.getAiLog()).length, 0);
+});
+
+test("productFromHtml: no structured image falls back to og:image, never the page's own address", () => {
+  const page = (image) => `<html><head><meta property="og:image" content="https://cdn.shop.example/a.jpg"><script type="application/ld+json">{"@type":"Product","name":"Shoe 9",${image ? `"image":"${image}",` : ''}"offers":{"price":"10","priceCurrency":"USD"}}</script></head></html>`;
+  assert.equal(productFromHtml(page(''), 'https://shop.example/p/shoe-9').image, 'https://cdn.shop.example/a.jpg');
+  assert.equal(productFromHtml(page('https://shop.example/i.jpg'), 'https://shop.example/p/shoe-9').image, 'https://shop.example/i.jpg', 'a real structured image still wins');
+  const bare = '<html><head><script type="application/ld+json">{"@type":"Product","name":"Shoe 9","offers":{"price":"10","priceCurrency":"USD"}}</script></head></html>';
+  assert.equal(productFromHtml(bare, 'https://shop.example/p/shoe-9').image, '', 'no picture on the page is no picture, not the page itself');
+});
+
+test("linkProductPage: the page's picture is fetched and kept on the device, not stored as an address", async () => {
+  const store = await linkStore();
+  const it = await store.addItem(post('obsessed with this mug ☕', { kind: 'product', collectionId: null }));
+  const page = `<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Stoneware Mug 12 oz', image: 'https://cdn.brewhaus.example.com/mug.jpg', offers: { price: '24.00', priceCurrency: 'USD' } })}</script></head></html>`;
+  const asked = [];
+  await linkProductPage(store, it.id, 'https://brewhaus.example.com/mug', { fetchPage: async () => page, loadImage: async (u) => { asked.push(u); return 'data:image/jpeg;base64,AAAA'; } });
+  assert.deepEqual(asked, ['https://cdn.brewhaus.example.com/mug.jpg']);
+  assert.equal((await store.getItem(it.id)).image, 'data:image/jpeg;base64,AAAA');
 });

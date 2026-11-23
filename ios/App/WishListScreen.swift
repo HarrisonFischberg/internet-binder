@@ -564,8 +564,8 @@ struct ProductHelpMenu: View {
     }
 }
 
-/// Add Product Link: paste the product's page in a store. The page is read once, without AI, and becomes
-/// the save's shop page; its name, price and picture fill in what the save was missing. Undo on the toast.
+/// Add Product Link: paste the product's page in a store. The page is read once and becomes the save's shop
+/// page, and the card is rewritten from it (LibraryModel.rewriteProduct). Undo on the toast.
 private struct ProductLinkSheet: View {
     let save: Save
     @Environment(LibraryModel.self) private var model
@@ -579,7 +579,7 @@ private struct ProductLinkSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Paste the product's page from a store. Its name, price and picture fill in what this save is missing, and Find deals then knows exactly which product you mean. You can undo it.")
+                Text("Paste the product's page from a store. This save is rewritten from it: the page's name, price and picture\(model.aiReady ? ", with a summary and details written by your AI" : ""). Find deals then knows exactly which product you mean. You can undo it.")
                     .font(.subheadline).foregroundStyle(t.inkMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
@@ -633,40 +633,19 @@ private struct ProductLinkSheet: View {
     }
 
     private func start() {
-        guard !working, let lib = model.library else { return }
+        guard !working else { return }
         let text = link.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         working = true
         problem = ""
         Task {
             defer { working = false }
-            do {
-                let r = try await lib.linkProduct(save.id, link: text)
-                guard r.ok else {
-                    problem = r.error ?? "Couldn't read that page."
-                    Haptic.warning()
-                    UIAccessibility.post(notification: .announcement, argument: problem)
-                    return
-                }
-                Haptic.settled()
-                model.refresh()
-                model.dealsChanged += 1
+            if let failed = await model.rewriteProduct(save, from: text) {
+                problem = failed
+                Haptic.warning()
+                UIAccessibility.post(notification: .announcement, argument: failed)
+            } else {
                 dismiss()
-                let site = r.site ?? "the store"
-                let said = r.read == true
-                    ? "Linked to \(site)" + ((r.price ?? "").isEmpty ? "" : ": \(r.price ?? "")")
-                    : "Linked to \(site). No price or details could be read from that page, so only the link was added."
-                if let id = r.logId {
-                    model.show(said) {
-                        try? await lib.undoAI([id])
-                        model.refresh()
-                        model.dealsChanged += 1
-                    }
-                } else {
-                    model.show(said)
-                }
-            } catch {
-                problem = error.localizedDescription
             }
         }
     }
@@ -680,46 +659,92 @@ private struct WishNameSheet: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
+    @State private var working = false
+    @State private var problem = ""
     @FocusState private var focused: Bool
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var current: String { row.wishName.isEmpty ? row.item.title : row.wishName }
+    /// A link instead of a name: the product's own page, which the save is then rewritten from.
+    private var isLink: Bool { ProductLinkText.isLink(trimmed) }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Brand, model, size, colour", text: $text, axis: .vertical)
+                    TextField("Brand, model, size, colour, or a link", text: $text, axis: .vertical)
                         .lineLimit(2...5).focused($focused)
+                        .textInputAutocapitalization(isLink ? .never : .sentences)
+                        .disabled(working)
                         .accessibilityIdentifier("wishList.nameField")
+                    if working {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Reading the page…").foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    if !problem.isEmpty {
+                        Label(problem, systemImage: "exclamationmark.circle")
+                            .font(.subheadline)
+                            .accessibilityIdentifier("wishList.nameProblem")
+                    }
                 } header: {
                     Text("Exactly which product?")
                 } footer: {
-                    Text("Find deals searches for these words, so include the model and the size or colour you want. Your save keeps its own title. Prices found under the old name are cleared.")
+                    Text(isLink
+                         ? "That's a link. The page is read and this save is rewritten from it: its name, price and picture\(model.aiReady ? ", with a summary and details written by your AI" : ""). Prices found before are cleared. You can undo it."
+                         : "Type the model and the size or colour you want, and Find deals searches for those words. Or paste a link to the product's page, and the save is rewritten from that page.")
+                        .accessibilityIdentifier("wishList.nameFooter")
                 }
-                if !row.product.isEmpty && row.product != text {
+                if !row.product.isEmpty && row.product != text && !working {
                     Section("The last search priced it as") {
                         Button(row.product) { text = row.product }.foregroundStyle(.primary)
                     }
                 }
-                if !row.wishName.isEmpty {
+                if !row.wishName.isEmpty && !working {
                     Section {
                         Button("Go back to the save's title") { save(row.item.title, find: false) }
                     }
                 }
             }
-            .navigationTitle("Name the product").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Product name").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                // Cancel stays live while a page is read: the read carries on and its result shows as a toast.
+                ToolbarItem(placement: .cancellationAction) { Button(working ? "Close" : "Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(canFind ? "Save and find deals" : "Save") { save(trimmed, find: canFind) }
-                        .disabled(trimmed.isEmpty || (trimmed == current && row.state != "unsure" && row.state != "unchecked" && row.state != "none"))
-                        .accessibilityIdentifier("wishList.nameSave")
+                    if isLink {
+                        Button("Read this page") { readLink() }
+                            .disabled(working)
+                            .accessibilityIdentifier("wishList.nameSave")
+                    } else {
+                        Button(canFind ? "Save and find deals" : "Save") { save(trimmed, find: canFind) }
+                            .disabled(trimmed.isEmpty || (trimmed == current && row.state != "unsure" && row.state != "unchecked" && row.state != "none"))
+                            .accessibilityIdentifier("wishList.nameSave")
+                    }
                 }
             }
         }
         .presentationDetents([.medium, .large])
         .onAppear { text = current; focused = true }
+    }
+
+    /// A link was typed: the save is rewritten from that page. The sheet stays up while it reads, and
+    /// says why if it can't.
+    private func readLink() {
+        guard !working else { return }
+        working = true
+        problem = ""
+        Task {
+            defer { working = false }
+            if let failed = await model.rewriteProduct(row.item, from: trimmed) {
+                problem = failed
+                Haptic.warning()
+                UIAccessibility.post(notification: .announcement, argument: failed)
+            } else {
+                dismiss()
+            }
+        }
     }
 
     private func save(_ name: String, find: Bool) {
@@ -730,6 +755,21 @@ private struct WishNameSheet: View {
 
 private extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
+}
+
+/// Tells a link from a product's name in the "which product" field: one run of text with no spaces that
+/// looks like a site with a path ("store.com/p/123"), or any text with an http(s) address in it.
+/// "Sony WH-1000XM6" and "3.5mm/USB" are names.
+enum ProductLinkText {
+    static func isLink(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        // A link pasted with words around it ("look https://… so good") is still a link.
+        if t.range(of: #"https?://[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}"#, options: .regularExpression) != nil { return true }
+        guard !t.isEmpty, !t.contains(where: \.isWhitespace) else { return false }
+        // The last part of the site's name is letters only (".com"), which a size or version ("3.5mm/USB") isn't.
+        return t.range(of: #"^(https?://)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}([/?#]\S*)?$"#, options: .regularExpression) != nil
+            && (t.hasPrefix("http") || t.contains("/"))
+    }
 }
 
 extension LibraryModel {
@@ -801,6 +841,42 @@ extension LibraryModel {
             try? await lib.restoreOffer(save.id, undo)
             self.dealsChanged += 1
         })
+    }
+
+    /// Rewrites a save from the product page you gave (Add Product Link, or a link typed where you say which
+    /// product it is): the page's name, price and picture, details read by your AI. Returns what went wrong,
+    /// or nil when it worked (a toast with Undo says what changed).
+    func rewriteProduct(_ save: Save, from link: String) async -> String? {
+        guard let lib = library else { return "The library isn't ready yet. Try again." }
+        do {
+            let r = try await lib.linkProduct(save.id, link: link, rewrite: true)
+            guard r.ok else { return r.error ?? "Couldn't read that page." }
+            Haptic.settled()
+            refresh()
+            dealsChanged += 1
+            let site = r.site ?? "the store"
+            var said = "Updated from \(site)"
+            if let price = r.price, !price.isEmpty { said += ": \(price)" }
+            if r.read != true {
+                said = r.ai == true
+                    ? "Updated with what your AI found on \(site). The page itself couldn't be read, so check the price and picture."
+                    : "Linked to \(site). The page couldn't be read, so only the link was added."
+            } else if !(r.aiError ?? "").isEmpty {
+                said += ". Your AI didn't answer, so only the page's own details were used."
+            }
+            if let id = r.logId {
+                show(said) { @MainActor in
+                    try? await lib.undoAI([id])
+                    self.refresh()
+                    self.dealsChanged += 1
+                }
+            } else {
+                show("Already up to date with \(site)")
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     /// Says exactly which product a save is, for Find deals; the save's own title stays. Prices found
