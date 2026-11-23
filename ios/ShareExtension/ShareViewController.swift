@@ -418,9 +418,11 @@ struct SharedContent {
                     out.url = url.absoluteString
                 } else if out.image == nil, provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
                           let item = try? await provider.loadItem(forTypeIdentifier: UTType.image.identifier) {
+                    // Read no bigger than a screenshot: a full-size photo decoded whole is more memory than
+                    // the share sheet has (ImageCapture.load).
                     if let img = item as? UIImage { out.image = img }
-                    else if let u = item as? URL, let data = try? Data(contentsOf: u) { out.image = UIImage(data: data) }
-                    else if let data = item as? Data { out.image = UIImage(data: data) }
+                    else if let u = item as? URL { out.image = ImageCapture.load(u) }
+                    else if let data = item as? Data { out.image = ImageCapture.load(data) }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
                           let text = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String {
                     // Many apps share a link inside text ("Look at this https://…").

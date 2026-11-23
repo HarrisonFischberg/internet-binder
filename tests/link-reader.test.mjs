@@ -389,3 +389,109 @@ test('nothing read: the post says why only the link was saved', async () => {
   const { item } = await saveCapture(s, mergeLinkRead({ url: 'https://www.tiktok.com/@a/video/7301234567890123456', isPost: true, retailer: 'TikTok', sparse: true }, parseLink({}, 'https://www.tiktok.com/@a/video/7301234567890123456')));
   assert.equal(item.url, 'https://www.tiktok.com/@a/video/7301234567890123456');
 });
+
+// --- the page's own data first: filed and finished without AI (2026-11-23) -------------------------
+import { pageSaysEnough, pageProductDetails } from '../keepsake/src/shared/capture.js';
+import { makeCollection } from '../keepsake/src/shared/storage.js';
+
+const ld = (o) => `<script type="application/ld+json">${JSON.stringify(o)}</script>`;
+const SHOE_PAGE = `<html><head><title>Pegasus 41 Road Running Shoes | Stride Co</title>
+<meta property="og:site_name" content="Stride Co"><meta property="og:image" content="https://stride.example/p41.jpg">
+${ld({ '@context': 'https://schema.org', '@graph': [
+    { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home' }, { '@type': 'ListItem', position: 2, name: 'Running' }, { '@type': 'ListItem', position: 3, item: { name: 'Road Running Shoes' } }] },
+    { '@type': 'Product', name: 'Pegasus 41 Road Running Shoes', brand: { '@type': 'Brand', name: 'Nike' }, category: 'Running Shoes', sku: 'FD2722-002', description: 'A springy daily trainer.',
+      offers: { '@type': 'Offer', price: '139.99', priceCurrency: 'USD', availability: 'https://schema.org/InStock' } },
+  ] })}</head><body></body></html>`;
+
+test('a shop page read from a shared link gives the sorter what the open page gives it: brand, category, breadcrumbs, stock', () => {
+  const f = pageFacts(SHOE_PAGE, 'https://stride.example/p/pegasus-41');
+  assert.equal(f.structuredProduct, true);
+  assert.equal(f.brand, 'Nike');
+  assert.equal(f.category, 'Running Shoes');
+  assert.equal(f.sku, 'FD2722-002');
+  assert.equal(f.availability, 'in_stock');
+  assert.deepEqual(f.breadcrumbs, ['Home', 'Running', 'Road Running Shoes']);
+  assert.equal(f.price, 139.99);
+  // Open Graph product tags stand in when there is no schema.org Product.
+  const og = pageFacts('<head><meta property="og:title" content="Linen shirt"><meta property="product:brand" content="Flax &amp; Co"><meta property="product:category" content="Shirts"><meta property="product:availability" content="out of stock"><meta property="product:price:amount" content="68"></head>', 'https://flax.example/shirt');
+  assert.equal(og.brand, 'Flax & Co');
+  assert.equal(og.category, 'Shirts');
+  assert.equal(og.availability, 'out_of_stock');
+  assert.equal(og.structuredProduct, false);
+});
+
+test('a film or a book page read from a link says what it is; a shop’s product page never does', () => {
+  const film = pageFacts(`<head><title>x</title>${ld({ '@type': 'Movie', name: 'Paddington 2', datePublished: '2017-11-10', director: { name: 'Paul King' }, duration: 'PT1H43M', genre: ['Comedy'] })}</head>`, 'https://films.example/paddington-2');
+  assert.equal(film.title, 'Paddington 2');
+  assert.equal(film.screen.datePublished, '2017-11-10');
+  const book = pageFacts(`<head>${ld({ '@type': 'Book', name: 'Piranesi', author: { name: 'Susanna Clarke' }, numberOfPages: 272 })}</head>`, 'https://books.example/piranesi');
+  assert.equal(book.book.numberOfPages, 272);
+  const sold = pageFacts(`<head>${ld([{ '@type': 'Book', name: 'Piranesi' }, { '@type': 'Product', name: 'Piranesi (paperback)', offers: { price: 12 } }])}</head>`, 'https://shop.example/piranesi');
+  assert.equal(sold.book, null);
+});
+
+async function aiLibrary(collections = []) {
+  const db = memoryRecordBackend();
+  await db.put('collections', collections);
+  const s = createStore(memoryBackend(), db);
+  await s.init();
+  await s.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await s.setSecret('aiApiKey', 'sk-test');
+  return s;
+}
+const shared = (url, html) => ({ sparse: true, url, canonicalUrl: url, linkBundle: { page: html }, linkUrl: url });
+
+test('a product whose page says what it is and where it goes is saved finished: no AI reading waits on it', async () => {
+  const running = makeCollection({ name: 'Running', keywords: ['pegasus'] });
+  const s = await aiLibrary([running]);
+  const asked = [];
+  const r = await saveCapture(s, shared('https://stride.example/p/pegasus-41', SHOE_PAGE), { instant: true }, { enrich: (id) => asked.push(id) });
+  assert.equal(r.item.kind, 'product');
+  assert.equal(r.item.collectionId, running.id, r.item.categorizationReason);
+  assert.equal(r.item.captureState, 'complete');
+  assert.ok(r.item.understoodAt, 'marked as read (by its own page), so nothing sweeps it up for AI later');
+  assert.deepEqual(asked, [], 'nothing sent to AI');
+  assert.equal(r.item.price, 139.99);
+  assert.deepEqual({ brand: r.item.details.brand, model: r.item.details.model, category: r.item.details.category, availability: r.item.details.availability, source: r.item.details.source },
+    { brand: 'Nike', model: 'FD2722-002', category: 'Running Shoes', availability: 'in_stock', source: 'page' });
+  assert.equal(r.item.details.shopUrl, 'https://stride.example/p/pegasus-41');
+});
+
+test('a product the sorter is not sure about still gets its AI reading', async () => {
+  const s = await aiLibrary([makeCollection({ name: 'Gifts for mum' })]);
+  await s.updateSettings({ autoCreateCollections: false });
+  const asked = [];
+  const r = await saveCapture(s, shared('https://stride.example/p/pegasus-41', SHOE_PAGE), { instant: true }, { enrich: (id) => asked.push(id) });
+  assert.equal(r.item.needsReview, true);
+  assert.equal(r.item.captureState, 'pending');
+  assert.equal(r.item.understoodAt, null);
+  assert.deepEqual(asked, [r.item.id]);
+});
+
+test('a recipe page with its ingredients and steps is finished as saved; a thin one is still read', async () => {
+  const page = (recipe) => `<head><title>Soup</title>${ld({ '@type': 'Recipe', name: 'Tomato soup', ...recipe })}</head>`;
+  const s = await aiLibrary();
+  const filled = [];
+  const full = await saveCapture(s, shared('https://cook.example/soup', page({ recipeIngredient: ['1 kg tomatoes', '1 onion', '2 tbsp olive oil'], recipeInstructions: [{ '@type': 'HowToStep', text: 'Roast the tomatoes.' }, { '@type': 'HowToStep', text: 'Blend.' }] })), {}, { fill: (id) => filled.push(id) });
+  assert.equal(full.item.kind, 'recipe');
+  assert.equal(full.item.details.ingredients.length, 3);
+  assert.ok(full.item.understoodAt);
+  assert.deepEqual(filled, [full.item.id], 'its fill-in (Lookups) still runs; the AI reading is what is skipped');
+  const thin = await saveCapture(s, shared('https://cook.example/soup-2', page({ recipeIngredient: [] })), {}, {});
+  assert.equal(thin.item.kind, 'recipe');
+  assert.equal(thin.item.understoodAt, null);
+});
+
+test('pageSaysEnough never speaks for a post, a doubtful filing or a product with no price', () => {
+  const sure = { isInbox: false, confidence: 0.9 };
+  const product = { title: 'Pegasus 41', price: 139.99, schemaTypes: ['Product'] };
+  assert.equal(pageSaysEnough(product, 'product', {}, sure), true);
+  assert.equal(pageSaysEnough({ ...product, price: null }, 'product', {}, sure), false);
+  assert.equal(pageSaysEnough(product, 'product', {}, { isInbox: false, confidence: 0.7 }), false);
+  assert.equal(pageSaysEnough(product, 'product', {}, { isInbox: true, confidence: 0.9 }), false);
+  assert.equal(pageSaysEnough({ ...product, isPost: true }, 'product', {}, sure), false);
+  assert.equal(pageSaysEnough({ ...product, schemaTypes: [] }, 'product', {}, sure), false, 'a price alone is not the page saying what it is');
+  assert.equal(pageSaysEnough({ title: 'x' }, 'article', {}, sure), false);
+  assert.equal(pageProductDetails({ title: 'Pegasus 41', url: 'https://stride.example/p', breadcrumbs: ['Home', 'Running', 'Pegasus 41'], availability: 'OutOfStock' }).category, 'Running');
+  assert.equal(pageProductDetails({ title: 'Pegasus 41', url: 'https://stride.example/p', availability: 'OutOfStock' }).availability, 'out_of_stock');
+});

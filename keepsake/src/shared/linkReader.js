@@ -291,12 +291,17 @@ export function pageFacts(html, url = '') {
   const nodes = ldNodes(src);
   const of = (re) => nodes.find((n) => typesOf(n).some((t) => re.test(t)));
   const recipe = of(/^recipe$/i);
-  const product = of(/^(?:product|productgroup|individualproduct|productmodel)$/i);
+  const isProduct = (n) => typesOf(n).some((t) => /^(?:product|productgroup|individualproduct|productmodel)$/i.test(t));
+  // The product the page is about: the one with an offer (a price), when it lists more than one.
+  const product = nodes.find((n) => isProduct(n) && n.offers) || nodes.find(isProduct);
+  const screen = of(/^(?:movie|tvseries)$/i);
+  const book = of(/^book$/i);
+  const crumbs = of(/^breadcrumblist$/i);
   const video = of(/^(?:videoobject)$/i);
   const article = of(/article$|^blogposting$|^socialmediaposting$|^discussionforumposting$/i);
   const place = of(/^(?:restaurant|foodestablishment|cafeorcoffeeshop|bakery|barorpub|localbusiness|touristattraction|museum|park|lodgingbusiness|hotel|store|winery|brewery)$/i);
   const docTitle = textOf((src.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '');
-  const title = [nameOf(recipe?.name), nameOf(product?.name), meta['og:title'], meta['twitter:title'], nameOf(article?.headline), nameOf(video?.name), docTitle].find((t) => t && !junkTitle(t)) || '';
+  const title = [nameOf(recipe?.name), nameOf(product?.name), !product ? nameOf(screen?.name) : '', !product ? nameOf(book?.name) : '', meta['og:title'], meta['twitter:title'], nameOf(article?.headline), nameOf(video?.name), docTitle].find((t) => t && !junkTitle(t)) || '';
   const description = [meta['og:description'], meta['twitter:description'], meta.description, textOf(typeof recipe?.description === 'string' ? recipe.description : ''), textOf(typeof video?.description === 'string' ? video.description : '')].find((t) => t && t.length > 3 && !junkText(t)) || '';
   const images = [];
   for (const v of [meta['og:image'], meta['og:image:url'], meta['og:image:secure_url'], meta['twitter:image'], meta['twitter:image:src'], recipe?.image, product?.image, video?.thumbnailUrl, article?.image]) {
@@ -305,10 +310,17 @@ export function pageFacts(html, url = '') {
   }
   let price = null;
   let currency = '';
+  let availability = '';
+  const stock = (v) => (/outofstock|soldout|discontinued|out of stock/i.test(String(v)) ? 'out_of_stock' : /instock|limitedavailability|preorder|in stock/i.test(String(v)) ? 'in_stock' : '');
   for (const o of [].concat(product?.offers || []).flatMap((x) => (x?.offers ? [x, ...[].concat(x.offers)] : [x])).slice(0, 10)) {
     const p = Number(String(o?.price ?? o?.lowPrice ?? '').replace(/[^\d.]/g, ''));
     if (price === null && p > 0) { price = p; currency = String(o.priceCurrency || '').toUpperCase(); }
+    if (!availability && o?.availability) availability = stock(o.availability);
   }
+  if (!availability) availability = stock(meta['product:availability'] || meta['og:availability'] || '');
+  // Where the shop files it: its own category, and the trail of pages above it ("Home > Running > Shoes").
+  const breadcrumbs = [].concat(crumbs?.itemListElement || []).slice(0, 12).map((e) => nameOf(e?.name || e?.item?.name || '')).filter(Boolean).slice(0, 8);
+  const pick = (node, keys) => plain(Object.fromEntries(keys.filter((k) => node[k] !== undefined).map((k) => [k, node[k]])));
   if (price === null && meta['product:price:amount']) {
     const p = Number(String(meta['product:price:amount']).replace(/[^\d.]/g, ''));
     if (p > 0) { price = p; currency = String(meta['product:price:currency'] || '').toUpperCase(); }
@@ -335,6 +347,17 @@ export function pageFacts(html, url = '') {
     place: place && !product ? plain({ '@type': place['@type'], name: place.name, address: place.address, geo: place.geo, telephone: place.telephone, servesCuisine: place.servesCuisine, priceRange: place.priceRange, openingHours: place.openingHours, openingHoursSpecification: [].concat(place.openingHoursSpecification || []).slice(0, 40) }) : null,
     price,
     currency: currency.slice(0, 3),
+    // What a shop's page says about the product, for sorting it without asking anyone (capture.js): the
+    // same facts Chrome and Safari read from the open page (src/extract/extract.js).
+    structuredProduct: !!product,
+    brand: sanitizeText(nameOf(product?.brand || product?.manufacturer) || meta['product:brand'] || meta['og:brand'], 60),
+    category: sanitizeText(nameOf(product?.category) || meta['product:category'], 80),
+    sku: sanitizeText(product ? textOf(product.sku || product.mpn || '') : '', 60),
+    availability,
+    breadcrumbs: breadcrumbs.map((c) => sanitizeText(c, 60)).filter(Boolean),
+    // A film, a series or a book on a page that says so (never on a shop's product page).
+    screen: screen && !product ? pick(screen, ['@type', 'name', 'datePublished', 'startDate', 'dateCreated', 'director', 'creator', 'duration', 'numberOfSeasons', 'genre']) : null,
+    book: book && !product ? pick(book, ['@type', 'name', 'author', 'datePublished', 'copyrightYear', 'numberOfPages', 'isbn', 'genre', 'workExample']) : null,
     loginWall,
     botWall: BOT_WALL.test(src.slice(0, 200_000)),
   };
@@ -803,6 +826,16 @@ export function mergeLinkRead(product, r) {
     if (!p.recipe && f.recipe) p.recipe = f.recipe;
     if (!p.place && f.place) p.place = f.place;
     if ((p.price === null || p.price === undefined || p.price === '') && f.price !== null) { p.price = f.price; if (f.currency) p.currency = f.currency; }
+    // A shop's own word for what it sells (brand, category, the trail of pages above it): what the sorter
+    // files a product by, read here as Chrome and Safari read it from the open page.
+    if (!p.brand && f.brand) p.brand = f.brand;
+    if (!p.schemaCategory && f.category) p.schemaCategory = f.category;
+    if (!p.breadcrumbs?.length && f.breadcrumbs?.length) p.breadcrumbs = f.breadcrumbs;
+    if (!p.availability && f.availability) p.availability = f.availability;
+    if (!p.sku && f.sku) p.sku = f.sku;
+    if (f.structuredProduct) p.structuredProduct = true;
+    if (!p.screen && f.screen) p.screen = f.screen;
+    if (!p.book && f.book) p.book = f.book;
     if (!p.media) p.media = { ogType: f.ogType, duration: f.duration, channel: f.channel, author: f.author, published: f.published, siteName: f.siteName, wordCount: 0 };
   }
   return p;
