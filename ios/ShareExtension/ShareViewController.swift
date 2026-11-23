@@ -122,9 +122,10 @@ final class ShareState {
     /// It wasn't sure where this goes (it's waiting in Review): the three likeliest homes, shown as
     /// tiles in place of the two library cards. Empty when it filed the save by itself.
     private(set) var picks: [Destination] = []
-    /// Whether the sorter ranked any of them; if not, they're just the places you file to most.
+    /// Whether the sorter ranked any of them; if not, they're the places you file to most, and the sheet says so.
     private(set) var picksSorted = false
-    /// Where it went is known and the groups are read, so the choices can be drawn once, in their final shape.
+    /// The choices can be drawn in their final shape: at once when it filed itself, and once the groups
+    /// are read when it's waiting in Review (the tiles need them).
     private(set) var ready = false
     var note = ""
     var finish: () -> Void = {}
@@ -215,6 +216,9 @@ final class ShareState {
             // Where it went, as far as the save itself says (the exact name follows below).
             destinationLabel = s.hasOwnView ? KindStyle(s.kind).plural
                 : (s.collectionId ?? "").isEmpty ? "Review" : (result.destination ?? "")
+            // It filed itself: the two library cards show at once, as they always have. Headed for Review:
+            // the choices wait a moment for the groups, so the three tiles are drawn once, in place.
+            ready = s.hasOwnView || !(s.collectionId ?? "").isEmpty
             phase = .saved
             ShareTrace.note(session, "saved")
             // It's in the library: from here the standby notice says so, before anything else is read or drawn.
@@ -608,7 +612,7 @@ struct ShareCard: View {
                 Text("Where does it live?").font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
                 Group {
                     if waiting {
-                        Text(state.picksSorted ? "Not sure about this one. " : "Nothing to sort it by. ").foregroundStyle(t.inkMuted)
+                        Text("Not sure about this one. ").foregroundStyle(t.inkMuted)
                         + Text(state.picksSorted ? "Tap where it goes." : "Your most used:").foregroundStyle(t.ink).fontWeight(.semibold)
                     } else {
                         Text("It's in ").foregroundStyle(t.inkMuted)
@@ -620,8 +624,8 @@ struct ShareCard: View {
             }
             let tiles = large ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
             tiles {
-                ForEach(Array(state.picks.enumerated()), id: \.element.id) { i, d in
-                    Button { state.put(d) } label: { large ? AnyView(pickRow(d)) : AnyView(pickTile(d, number: i + 1)) }
+                ForEach(state.picks) { d in
+                    Button { state.put(d) } label: { large ? AnyView(pickRow(d)) : AnyView(pickTile(d)) }
                         .buttonStyle(PressStyle())
                         .accessibilityHint("Puts it here.")
                 }
@@ -640,13 +644,13 @@ struct ShareCard: View {
         }
     }
 
-    private func pickTile(_ d: Destination, number: Int) -> some View {
+    private func pickTile(_ d: Destination) -> some View {
         let items = state.members(d), n = state.count(d)
         let k = d.kind.map(KindStyle.init)
         let here = state.destination == d.value
         return GroupTile(d.label, subtitle: n == 0 ? "Empty" : (n == 1 ? "1 save" : "\(n) saves"),
                          cover: items.first(where: \.hasImage) ?? items.first, symbol: k?.symbol ?? "bag",
-                         tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here, compact: true, number: number)
+                         tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here, compact: true)
             .overlay(alignment: .topLeading) {
                 if here {
                     Image(systemName: "checkmark.circle.fill").font(.title3)
