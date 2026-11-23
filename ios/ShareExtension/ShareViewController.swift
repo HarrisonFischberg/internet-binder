@@ -119,6 +119,13 @@ final class ShareState {
     /// The library being looked through; nil shows the two library cards.
     var shelf: Shelf?
     var touched = false
+    /// It wasn't sure where this goes (it's waiting in Review): the three likeliest homes, shown as
+    /// tiles in place of the two library cards. Empty when it filed the save by itself.
+    private(set) var picks: [Destination] = []
+    /// Whether the sorter ranked any of them; if not, they're just the places you file to most.
+    private(set) var picksSorted = false
+    /// Where it went is known and the groups are read, so the choices can be drawn once, in their final shape.
+    private(set) var ready = false
     var note = ""
     var finish: () -> Void = {}
     /// Reading and saving what was shared; Done waits on it if it's still going.
@@ -224,7 +231,10 @@ final class ShareState {
             } else {
                 destination = Self.review
                 destinationLabel = "Review"
+                picks = Library.picks(likely: result.likely, destinations: destinations, counts: shelfPreview.counts)
+                picksSorted = picks.contains { result.likely.contains($0.value) }
             }
+            ready = true
             UIAccessibility.post(notification: .announcement, argument: "Saved to \(destinationLabel)")
         } catch {
             phase = .failed(error.localizedDescription)
@@ -474,7 +484,7 @@ struct ShareCard: View {
                 } else {
                     Spacer()
                 }
-                if case .saved = state.phase {
+                if case .saved = state.phase, state.ready {
                     Group {
                         if let shelf = state.shelf { groups(shelf) } else { libraries }
                     }
@@ -582,7 +592,124 @@ struct ShareCard: View {
         }
     }
 
-    private var librariesStack: some View {
+    @ViewBuilder private var librariesStack: some View {
+        if state.picks.isEmpty { cardsStack } else { picksStack }
+    }
+
+    // MARK: not sure: the three likeliest homes
+
+    /// It couldn't decide, so the three likeliest homes are one tap away, with the two libraries and
+    /// Review as a small row underneath. When it filed the save by itself, the sheet is as it always was.
+    private var picksStack: some View {
+        let waiting = state.destination == ShareState.review
+        let large = typeSize.isAccessibilitySize
+        return VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Where does it live?").font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+                Group {
+                    if waiting {
+                        Text(state.picksSorted ? "Not sure about this one. " : "Nothing to sort it by. ").foregroundStyle(t.inkMuted)
+                        + Text(state.picksSorted ? "Tap where it goes." : "Your most used:").foregroundStyle(t.ink).fontWeight(.semibold)
+                    } else {
+                        Text("It's in ").foregroundStyle(t.inkMuted)
+                        + Text(state.destinationLabel).foregroundStyle(tint(state.destination)).fontWeight(.semibold)
+                    }
+                }
+                .font(.subheadline)
+                .contentTransition(.opacity)
+            }
+            let tiles = large ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
+            tiles {
+                ForEach(Array(state.picks.enumerated()), id: \.element.id) { i, d in
+                    Button { state.put(d) } label: { large ? AnyView(pickRow(d)) : AnyView(pickTile(d, number: i + 1)) }
+                        .buttonStyle(PressStyle())
+                        .accessibilityHint("Puts it here.")
+                }
+            }
+            Text("Somewhere else").font(.footnote.weight(.medium)).foregroundStyle(t.inkMuted).accessibilityAddTraits(.isHeader)
+            let chips = large ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
+            chips {
+                elsewhere(.collections, "Collections", symbol: "bag")
+                elsewhere(.lifestyle, "Lifestyle", symbol: "sparkles")
+                chip(waiting ? "In Review" : "Review", symbol: waiting ? "checkmark" : "tray", on: waiting) { state.toReview() }
+                    .accessibilityLabel("Review")
+                    .accessibilityValue(waiting ? "It's waiting in Review" : "")
+                    .accessibilityHint("Puts it here until you pick a home.")
+                    .accessibilityAddTraits(waiting ? [.isButton, .isSelected] : .isButton)
+            }
+        }
+    }
+
+    private func pickTile(_ d: Destination, number: Int) -> some View {
+        let items = state.members(d), n = state.count(d)
+        let k = d.kind.map(KindStyle.init)
+        let here = state.destination == d.value
+        return GroupTile(d.label, subtitle: n == 0 ? "Empty" : (n == 1 ? "1 save" : "\(n) saves"),
+                         cover: items.first(where: \.hasImage) ?? items.first, symbol: k?.symbol ?? "bag",
+                         tint: k?.color ?? KindStyle("product").color, kind: d.kind, selected: here, compact: true, number: number)
+            .overlay(alignment: .topLeading) {
+                if here {
+                    Image(systemName: "checkmark.circle.fill").font(.title3)
+                        .foregroundStyle(k?.color ?? KindStyle("product").color, t.paper)
+                        .padding(12)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .frame(maxWidth: .infinity)
+    }
+
+    /// Large text: a pick as a row, its name taking the width.
+    private func pickRow(_ d: Destination) -> some View {
+        let n = state.count(d), k = d.kind.map(KindStyle.init)
+        let here = state.destination == d.value
+        return HStack(spacing: 12) {
+            Image(systemName: k?.symbol ?? "bag").foregroundStyle(k?.color ?? KindStyle("product").color)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(d.label).font(KSFont.name(.headline)).foregroundStyle(t.ink)
+                Text(n == 1 ? "1 save" : "\(n) saves").font(.footnote).foregroundStyle(t.inkMuted)
+            }
+            Spacer(minLength: 0)
+            if here { Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(k?.color ?? KindStyle("product").color) }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .ksSurface(stroke: here ? t.ink : nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(d.label)
+        .accessibilityValue(n == 1 ? "1 save" : "\(n) saves")
+        .accessibilityAddTraits(here ? [.isButton, .isSelected] : .isButton)
+    }
+
+    /// One of the two libraries, small: opens its groups. It wears the mark when the save is in one of
+    /// its groups that isn't among the three tiles.
+    private func elsewhere(_ shelf: ShareState.Shelf, _ title: String, symbol: String) -> some View {
+        let here = state.shelfNow == shelf && !state.picks.contains { $0.value == state.destination }
+        return chip(title, symbol: here ? "checkmark" : symbol, on: here) { state.open(shelf) }
+            .accessibilityLabel(title)
+            .accessibilityValue(here ? "It's in \(state.destinationLabel)" : "")
+            .accessibilityHint("Shows its groups.")
+            .accessibilityAddTraits(here ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func chip(_ title: String, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: symbol).imageScale(.small).foregroundStyle(on ? t.accent : t.inkMuted)
+                Text(title).font(.subheadline.weight(on ? .semibold : .medium)).foregroundStyle(t.ink).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(on ? t.highlight.opacity(0.25) : t.well, in: Capsule())
+            .overlay { Capsule().strokeBorder(on ? t.ink : t.line, lineWidth: 1) }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityElement(children: .ignore)
+    }
+
+    // MARK: sure: the two libraries
+
+    private var cardsStack: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Where does it live?").font(KSFont.name(.title3)).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)

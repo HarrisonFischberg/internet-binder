@@ -220,6 +220,8 @@ final class ScreenshotTests: XCTestCase {
             // It stays open until Done or Undo (it used to drop a moment after it appeared).
             sleep(5)
             XCTAssertTrue(collections.exists, "the share sheet closed by itself")
+            // A bare link can't be sorted, so it waits in Review with three homes to tap (the demo's most used).
+            XCTAssertTrue(safari.staticTexts["Somewhere else"].exists, "no picks for a save it wasn't sure about")
             try shoot(safari, folder, "\(tag)-share-libraries")
             // A swipe down doesn't close it either.
             safari.buttons["Done"].firstMatch.swipeDown()
