@@ -16,21 +16,41 @@ struct CollectionsScreen: View {
     @State private var selected: Set<String> = []
     @State private var query = ""
     @State private var matches: PageMatches?
+    /// "All saves": every saved item in one flat list, newest first, without the collection stacks.
+    @AppStorage("collectionsShowAll") private var showAll = false
+    @AppStorage("saveSorts") private var sorts = SaveSorts()
     private var collected: [Save] { model.index.collected }
     private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    private static let allKey = "c:all"
 
     var body: some View {
+        let everything = Self.sortedAll(collected, by: sorts[view: Self.allKey])
         ZStack(alignment: .bottom) {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
+                    if !collected.isEmpty && !selecting {
+                        Picker("Show", selection: $showAll) {
+                            Text("Collections").tag(false)
+                            Text("All saves").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("collectionsShow")
+                    }
                     // Searches the saves in every collection (a collection's name counts too). Select
                     // ticks whole collections, so the box steps aside while it's on.
                     if !collected.isEmpty && !selecting {
                         PageSearchField(placeholder: "Search your collections", query: $query)
                     }
-                    if searching && !selecting {
+                    if showAll && !collected.isEmpty {
+                        if searching {
+                            PageSearchResults(query: query, matches: matches, saves: everything, place: "your collections", zoom: zoom,
+                                              selecting: selecting, selected: $selected, onSelect: startSelecting)
+                        } else {
+                            SaveGrid(saves: everything, zoom: zoom, selecting: selecting, selected: $selected, onSelect: startSelecting)
+                        }
+                    } else if searching && !selecting {
                         PageSearchResults(query: query, matches: matches, saves: collected, place: "your collections", zoom: zoom)
                     } else {
                         if !collected.isEmpty && !selecting { WishListLink() }
@@ -44,7 +64,16 @@ struct CollectionsScreen: View {
             }
             .clearsTabBar()
             .scrollDismissesKeyboard(.immediately)
-            if selecting { selectionBar.transition(KSMotion.rise(reduce: reduce)) }
+            if selecting {
+                Group {
+                    if showAll {
+                        SaveSelectionBar(all: (searching ? (matches?.pick(everything) ?? []) : everything).map(\.id), selected: $selected, selecting: $selecting)
+                    } else {
+                        selectionBar
+                    }
+                }
+                .transition(KSMotion.rise(reduce: reduce))
+            }
         }
         .animation(KSMotion.or(KSMotion.settle, reduce: reduce), value: selecting)
         .navigationBarTitleDisplayMode(.inline)
@@ -52,13 +81,17 @@ struct CollectionsScreen: View {
             if !selecting {
                 ToolbarItem(placement: .primaryAction) { Button("New collection", systemImage: "plus") { naming = true } }
             }
+            if showAll && collected.count > 1 && !selecting {
+                ToolbarItem(placement: .primaryAction) { SortMenu(sort: $sorts[view: Self.allKey], options: SaveSort.offered(for: collected)) }
+            }
             if model.aiReady && !collected.isEmpty && !selecting {
                 ToolbarItem(placement: .primaryAction) { FixWithAIButton(saves: collected, what: "all \(collected.count) saves in Collections") }
             }
-            if !collections.isEmpty && !searching {
+            if showAll ? !collected.isEmpty : (!collections.isEmpty && !searching) {
                 ToolbarItem(placement: .primaryAction) { SelectButton(selecting: $selecting, selected: $selected) }
             }
         }
+        .onChange(of: collected.isEmpty) { _, empty in if empty { selecting = false } }
         .pageSearch(query, in: collected, matches: $matches)
         .alert("New collection", isPresented: $naming) {
             TextField("Name", text: $newName)
@@ -66,6 +99,14 @@ struct CollectionsScreen: View {
             Button("Create") { Task { _ = try? await model.library?.createCollection(named: newName); newName = ""; await load() } }
         }
         .task(id: "\(model.saves.count)|\(model.collectionsChanged)") { await load() }
+    }
+
+    /// Every collected save in the order picked (Newest first unless changed).
+    private static func sortedAll(_ saves: [Save], by sort: SaveSort) -> [Save] { sort.apply(saves) }
+
+    private func startSelecting(_ id: String) {
+        selected = [id]
+        selecting = true
     }
 
     /// Delete the ticked collections. With saves inside, it asks whether they wait in Review or go too.
