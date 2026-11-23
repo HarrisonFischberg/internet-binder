@@ -175,6 +175,24 @@
   // What the screens list, decided by Chrome's own functions (the dashboard does the same).
   const K = KeepsakeCore;
   const withFact = (i) => ({ ...i, fact: factOf(i) });
+  const money = (n, cur) => K.util.formatPrice(n, cur) || String(n);
+  // One save as the Wish List (and the save's own page) shows it: prices are formatted here so the
+  // screens never do money maths.
+  const wishRow = (item, summary, names) => ({
+    item: withFact(item),
+    collection: names.get(item.collectionId) || '',
+    savedPrice: Number.isFinite(item.price) && item.price > 0 ? money(item.price, item.currency) : '',
+    state: summary.state,
+    offers: summary.offers.map((o) => ({ store: o.store, url: o.url, price: money(o.price, o.currency), sale: o.sale || '', note: o.note || '',
+      confirmed: o.confirmed === true, outOfStock: o.outOfStock === true, lowest: o === summary.best, doubt: o.doubt === true })),
+    // What the last lookup took the product to be, and your own words for it (wins; empty when unset).
+    product: item.deals?.product || '', wishName: item.wishName || '',
+    bestStore: summary.best ? summary.best.store : '',
+    bestPrice: summary.best ? money(summary.best.price, summary.best.currency) : '',
+    saving: summary.saving !== null ? money(summary.saving, summary.best.currency || item.currency) : '',
+    savingPct: summary.savingPct,
+    checkedAt: summary.checkedAt, old: summary.old,
+  });
   const placeUndo = new Map();
   globalThis.views = {
     // Review: saves that need a collection and aren't bought (dashboard.js: needsCollection && isActive).
@@ -633,22 +651,7 @@
       const [settings, secret, cols] = [await store.getSettings(), await store.getSecret('aiApiKey'), await store.getCollections()];
       const names = new Map(cols.map((c) => [c.id, c.name]));
       const items = listItems();
-      const money = (n, cur) => K.util.formatPrice(n, cur) || String(n);
-      const row = ({ item, summary }) => ({
-        item: withFact(item),
-        collection: names.get(item.collectionId) || '',
-        savedPrice: Number.isFinite(item.price) && item.price > 0 ? money(item.price, item.currency) : '',
-        state: summary.state,
-        offers: summary.offers.map((o) => ({ store: o.store, url: o.url, price: money(o.price, o.currency), sale: o.sale || '', note: o.note || '',
-          confirmed: o.confirmed === true, outOfStock: o.outOfStock === true, lowest: o === summary.best, doubt: o.doubt === true })),
-        // What the last lookup took the product to be, and your own words for it (wins; empty when unset).
-        product: item.deals?.product || '', wishName: item.wishName || '',
-        bestStore: summary.best ? summary.best.store : '',
-        bestPrice: summary.best ? money(summary.best.price, summary.best.currency) : '',
-        saving: summary.saving !== null ? money(summary.saving, summary.best.currency || item.currency) : '',
-        savingPct: summary.savingPct,
-        checkedAt: summary.checkedAt, old: summary.old,
-      });
+      const row = ({ item, summary }) => wishRow(item, summary, names);
       return {
         rows: K.wishlist.wishList(items).map(row),
         hidden: items.filter(K.wishlist.hiddenFromWishList).map(withFact),
@@ -660,6 +663,29 @@
         estimateEach: K.provider.lookupEstimate(settings),
         spend: K.wishlist.spendThisMonth(settings),
       };
+    },
+    // The same row for one save, for its own page: null when it isn't on the Wish List (bought, hidden,
+    // not something to buy). Nothing is looked up.
+    async wishRow(id) {
+      const [settings, secret, cols] = [await store.getSettings(), await store.getSecret('aiApiKey'), await store.getCollections()];
+      const item = await store.getItem(id);
+      const on = !!item && K.wishlist.onWishList(item);
+      return {
+        row: on ? wishRow(item, K.wishlist.dealSummary(item), new Map(cols.map((c) => [c.id, c.name]))) : null,
+        keyReady: !!K.provider.usableKey(settings, secret),
+        searchReady: K.provider.supportsWebLookup(settings),
+      };
+    },
+    // What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id. Only saves
+    // with a line are listed (shared/wishlist.js dealLine).
+    async dealLines() {
+      const out = {};
+      for (const item of listItems()) {
+        if (!item.deals) continue;
+        const line = K.wishlist.dealLine(item);
+        if (line) out[item.id] = line;
+      }
+      return out;
     },
     // Find deals for one save, with your key (you asked). Throws the provider's error; the save's last
     // results stay. Each store page the search found is read once without cookies (__native.fetchPage).

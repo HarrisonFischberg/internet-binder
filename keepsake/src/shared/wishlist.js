@@ -126,6 +126,19 @@ export function dealSummary(item, now = Date.now()) {
   };
 }
 
+// The one line a product's card carries about its deals (pure), or '': "Now $36.99 at Brewhaus" when the
+// lowest trusted price in stock is under the price you saved it at, or just the price and store when the
+// save has no price of its own. Nothing for a price that isn't lower, that looks too good, that is more
+// than two days old, or for a save that is bought or hidden from the Wish List.
+export function dealLine(item, now = Date.now()) {
+  if (!item?.deals || !onWishList(item)) return '';
+  const s = dealSummary(item, now);
+  if (!s.best || s.old) return '';
+  const price = formatPrice(s.best.price, s.best.currency) || String(s.best.price);
+  if (s.saving !== null) return `Now ${price} at ${s.best.store}`;
+  return Number.isFinite(item.price) && item.price > 0 ? '' : `${price} at ${s.best.store}`;
+}
+
 // The Wish List in order: the biggest savings first, then what has prices, then the rest, newest first.
 export function wishList(items, now = Date.now()) {
   const rows = (items || []).filter(onWishList).map((item) => ({ item, summary: dealSummary(item, now) }));

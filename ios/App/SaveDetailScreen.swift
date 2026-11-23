@@ -46,6 +46,8 @@ struct SaveDetailScreen: View {
                     hero
                     titleBlock
                     marks
+                    // The lowest prices found for it, and the button that finds them (also on the Wish List).
+                    if canBuy && !isPurchased { DealPanel(save: current) }
                     if current.needsCollection && current.purchased != true { FilingPanel(save: current) }
                     panel
                     if let note = current.note, !note.isEmpty {

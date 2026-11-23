@@ -121,4 +121,20 @@ final class WishListTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Searching as: Glass pour-over coffee maker, 6 cup in smoke grey'")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus'")).firstMatch.exists)
     }
+
+    /// The same prices and controls sit on the product's own page.
+    func testASavesOwnPageShowsItsPrices() {
+        let app = launch()
+        openWishList(app)
+        let save = app.buttons["Glass pour-over coffee maker, 6 cup"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Prices at other stores"].waitForExistence(timeout: 5))
+        let lowest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus, $36.99'")).firstMatch
+        for _ in 0..<3 where !lowest.exists { app.swipeUp() }
+        XCTAssertTrue(lowest.exists)
+        XCTAssertTrue(lowest.label.hasSuffix("lowest price"), lowest.label)
+        XCTAssertTrue(app.buttons["All 4 stores"].exists)
+        shot("save-prices")
+    }
 }

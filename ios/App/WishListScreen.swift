@@ -216,6 +216,8 @@ private struct WishRow: View {
     @Binding var open: Bool
     /// Opens the sheet where you say exactly which product this is.
     let name: () -> Void
+    /// False on the save's own page, which already shows its picture and name: a "Prices" title instead.
+    var showsSave = true
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.openURL) private var openURL
@@ -233,14 +235,31 @@ private struct WishRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header
+            if showsSave { header } else { pricesTitle }
             status
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .ksSurface(radius: 16)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("wishList.row")
+        .accessibilityIdentifier(showsSave ? "wishList.row" : "save.deals")
+    }
+
+    /// On the save's own page: what this card is, and the way to name the exact product.
+    private var pricesTitle: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text("Prices at other stores").font(.headline).foregroundStyle(t.ink).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            Menu {
+                Button("Name the exact product", systemImage: "pencil") { name() }.disabled(busy)
+                Button("Hide from Wish List", systemImage: "eye.slash") { Task { await model.setWishHidden(save, true) } }
+            } label: {
+                Image(systemName: "ellipsis").font(.body.weight(.bold)).foregroundStyle(t.inkMuted)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("More for prices")
+            .padding(.vertical, -8).padding(.trailing, -8)
+        }
     }
 
     private var header: some View {
@@ -464,6 +483,37 @@ private struct WishRow: View {
     private var checked: String {
         guard let s = row.checkedAt, let date = Self.iso.date(from: s) ?? ISO8601DateFormatter().date(from: s) else { return "" }
         return "Checked \(date.formatted(.relative(presentation: .named)))" + (row.old ? ". Prices may have moved." : "")
+    }
+}
+
+/// A product's deals on its own page: the same prices and controls as its row on the Wish List, which
+/// stays the place that gathers them all. Shows nothing for a save that is bought, hidden from the Wish
+/// List or not something to buy, and nothing when there are no prices yet and no key to find them with.
+struct DealPanel: View {
+    let save: Save
+    @Environment(LibraryModel.self) private var model
+    @Namespace private var zoom
+    @State private var one: WishList.One?
+    @State private var open = false
+    @State private var naming: WishList.Row?
+
+    private var canFind: Bool { one?.keyReady == true && one?.searchReady == true }
+
+    var body: some View {
+        Group {
+            if let row = one?.row, row.state != "unchecked" || canFind {
+                WishRow(row: row, zoom: zoom, canFind: canFind, open: $open, name: { naming = row }, showsSave: false)
+            }
+        }
+        .sheet(item: $naming) { row in
+            WishNameSheet(row: row, canFind: canFind && model.dealRun == nil)
+        }
+        .task(id: "\(save.id)|\(model.savesChanged)|\(model.dealsChanged)") { await load() }
+    }
+
+    private func load() async {
+        guard let lib = model.library, let next = try? await lib.wishRow(save.id) else { return }
+        if next != one { one = next }
     }
 }
 

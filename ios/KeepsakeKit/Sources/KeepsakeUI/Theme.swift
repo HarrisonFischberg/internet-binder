@@ -133,6 +133,15 @@ extension UIColor {
     }
 }
 
+private struct DealLinesKey: EnvironmentKey { static let defaultValue: [String: String] = [:] }
+extension EnvironmentValues {
+    /// What each product's card says about the deals found for it ("Now $36.99 at Brewhaus"), by save id.
+    public var dealLines: [String: String] {
+        get { self[DealLinesKey.self] }
+        set { self[DealLinesKey.self] = newValue }
+    }
+}
+
 private struct ThemeKey: EnvironmentKey { static let defaultValue = KSTheme.nocturne }
 extension EnvironmentValues {
     public var ks: KSTheme {
