@@ -292,6 +292,26 @@ public final class Library: @unchecked Sendable {
         public let duplicateOf: Save?
         public let destination: String?
         public let needsReview: Bool
+        /// The collections the sorter ranked for it, likeliest first (categorizer.js `alternatives`):
+        /// only ones that exist. Empty when it found nothing to sort by.
+        public var likely: [String] = []
+    }
+
+    /// The homes to offer for a save the sorter wasn't sure about (the Share Sheet's three tiles): the
+    /// collections it ranked, then the places you file to most (a Lifestyle view or a collection, never
+    /// an empty one), without repeats. Fewer than two is no choice, so that's none.
+    public static func picks(likely: [String], destinations: [Destination], counts: [String: Int], limit: Int = 3) -> [Destination] {
+        var out: [Destination] = []
+        for id in likely {
+            if let d = destinations.first(where: { $0.value == id }), !out.contains(d) { out.append(d) }
+        }
+        let used = destinations.filter { (counts[$0.value] ?? 0) > 0 }.sorted {
+            let a = counts[$0.value] ?? 0, b = counts[$1.value] ?? 0
+            return a != b ? a > b : $0.label.localizedStandardCompare($1.label) == .orderedAscending
+        }
+        for d in used where !out.contains(d) { out.append(d) }
+        out = Array(out.prefix(limit))
+        return out.count < 2 ? [] : out
     }
 
     /// Saves a page the way Chrome's toolbar does (src/shared/capture.js): `product` is what the page
@@ -309,8 +329,10 @@ public final class Library: @unchecked Sendable {
         }
         let classification = r["classification"] as? [String: Any]
         let item = (r["item"] as? [String: Any])?["id"].flatMap { $0 as? String }.flatMap { try? self.save($0) } ?? decoded(r["item"])
+        let likely = (classification?["alternatives"] as? [[String: Any]] ?? [])
+            .filter { $0["isNew"] as? Bool != true }.compactMap { $0["collectionId"] as? String }
         return CaptureResult(save: item, duplicateOf: nil, destination: classification?["collectionName"] as? String,
-                             needsReview: item?.needsReview ?? false)
+                             needsReview: item?.needsReview ?? false, likely: likely)
     }
 
     /// A product for `capture` from what another app shared: no page was read, so it's marked sparse
