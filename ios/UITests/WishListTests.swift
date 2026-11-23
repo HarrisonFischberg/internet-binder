@@ -126,7 +126,7 @@ final class WishListTests: XCTestCase {
     func testASavesOwnPageShowsItsPrices() {
         let app = launch()
         openWishList(app)
-        let save = app.buttons["Glass pour-over coffee maker, 6 cup"].firstMatch
+        let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Glass pour-over coffee maker, 6 cup, Saved at'")).firstMatch
         XCTAssertTrue(save.waitForExistence(timeout: 5))
         save.tap()
         XCTAssertTrue(app.staticTexts["Prices at other stores"].waitForExistence(timeout: 5))
@@ -143,7 +143,7 @@ final class WishListTests: XCTestCase {
     func testImproveMenuOffersAProductLink() {
         let app = launch()
         openWishList(app)
-        let save = app.buttons["Glass pour-over coffee maker, 6 cup"].firstMatch
+        let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Glass pour-over coffee maker, 6 cup, Saved at'")).firstMatch
         XCTAssertTrue(save.waitForExistence(timeout: 5))
         save.tap()
         let improve = app.buttons["save.improve"].firstMatch
