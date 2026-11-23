@@ -112,8 +112,12 @@ final class WishListTests: XCTestCase {
         XCTAssertTrue(priced.waitForExistence(timeout: 5))
         XCTAssertEqual(priced.label, "Priced as Glass pour-over coffee maker, 6 cup")
         priced.tap()
+        // The name sits under the link field and the keyboard: scroll the sheet to it.
+        let sheet = app.collectionViews.firstMatch
+        XCTAssertTrue(sheet.waitForExistence(timeout: 5))
         let field = app.textFields["wishList.nameField"].exists ? app.textFields["wishList.nameField"] : app.textViews["wishList.nameField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !field.isHittable { sheet.swipeUp() }
+        XCTAssertTrue(field.waitForExistence(timeout: 5) && field.isHittable)
         shot("wishlist-name")
         // The link field has the focus when the sheet opens: tap the end of the name to type there.
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
