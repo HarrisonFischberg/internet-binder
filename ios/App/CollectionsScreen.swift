@@ -33,6 +33,7 @@ struct CollectionsScreen: View {
                     if searching && !selecting {
                         PageSearchResults(query: query, matches: matches, saves: collected, place: "your collections", zoom: zoom)
                     } else {
+                        if !collected.isEmpty && !selecting { WishListLink() }
                         CollectionTiles(collections: collections, onNew: { naming = true }, selection: selecting ? $selected : nil) { id in
                             selected = [id]
                             selecting = true

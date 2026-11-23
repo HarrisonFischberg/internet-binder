@@ -87,6 +87,7 @@ struct HomeScreen: View {
                             .reorderable(section, in: $sectionOrder, dragging: $dragging, reduce: reduce) { SavedOrder.set(HomeSections.key, $0) }
                         }
                     }
+                    if !collectedSaves.isEmpty { WishListLink() }
                     if let save = comeBackTo { comeBack(save).padding(.top, 6) }
                 }
                 .padding(.horizontal, 20).padding(.bottom, 40)

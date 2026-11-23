@@ -624,6 +624,62 @@
     async undoSave(id) { await store.deleteForever([id]); },
     // Done on the share card with the save still where Internet Binder put it: the sorter learns a little.
     async confirmFiling(id) { return store.confirmFiling(id); },
+    // Wish List (shared/wishlist.js): everything still to buy, from every collection and Review, with the
+    // deals found for each. Prices are formatted here so the screen never does money maths.
+    //   keyReady: Optional AI is on with a key (Apple Intelligence can't search the web);
+    //   searchReady: that provider has web search (Anthropic or OpenAI, not a custom endpoint);
+    //   toCheck: what Check all would look up (nothing checked in the last 12 hours).
+    async wishList() {
+      const [settings, secret, cols] = [await store.getSettings(), await store.getSecret('aiApiKey'), await store.getCollections()];
+      const names = new Map(cols.map((c) => [c.id, c.name]));
+      const items = listItems();
+      const money = (n, cur) => K.util.formatPrice(n, cur) || String(n);
+      const row = ({ item, summary }) => ({
+        item: withFact(item),
+        collection: names.get(item.collectionId) || '',
+        savedPrice: Number.isFinite(item.price) && item.price > 0 ? money(item.price, item.currency) : '',
+        state: summary.state,
+        offers: summary.offers.map((o) => ({ store: o.store, url: o.url, price: money(o.price, o.currency), sale: o.sale || '', note: o.note || '',
+          confirmed: o.confirmed === true, outOfStock: o.outOfStock === true, lowest: o === summary.best, doubt: o.doubt === true })),
+        // What the last lookup took the product to be, and your own words for it (wins; empty when unset).
+        product: item.deals?.product || '', wishName: item.wishName || '',
+        bestStore: summary.best ? summary.best.store : '',
+        bestPrice: summary.best ? money(summary.best.price, summary.best.currency) : '',
+        saving: summary.saving !== null ? money(summary.saving, summary.best.currency || item.currency) : '',
+        savingPct: summary.savingPct,
+        checkedAt: summary.checkedAt, old: summary.old,
+      });
+      return {
+        rows: K.wishlist.wishList(items).map(row),
+        hidden: items.filter(K.wishlist.hiddenFromWishList).map(withFact),
+        keyReady: !!K.provider.usableKey(settings, secret),
+        searchReady: K.provider.supportsWebLookup(settings),
+        toCheck: K.wishlist.dealsToCheck(items).map((i) => i.id),
+        // Dollars one lookup probably costs on your key (null when the model's price isn't known), and
+        // this month's lookups on this device with what they cost.
+        estimateEach: K.provider.lookupEstimate(settings),
+        spend: K.wishlist.spendThisMonth(settings),
+      };
+    },
+    // Find deals for one save, with your key (you asked). Throws the provider's error; the save's last
+    // results stay. Each store page the search found is read once without cookies (__native.fetchPage).
+    async findDeals(id) {
+      const r = await K.wishlist.findDeals(store, id, { fetchShopPage: aiDeps.fetchShopPage });
+      return { state: r.summary.state, offers: r.skipped ? 0 : r.summary.offers.length, usage: r.item.deals?.usage || null };
+    },
+    async setWishHidden(ids, hidden) { await K.wishlist.setWishHidden(store, ids, hidden); },
+    // "Not the same item": takes the offer off and skips that store for this save from now on. Returns
+    // what restoreOffer needs for Undo, or null.
+    async removeOffer(id, url) {
+      const checkedAt = (await store.getItem(id))?.deals?.checkedAt || '';
+      const offer = await K.wishlist.removeOffer(store, id, url);
+      return offer ? { offer, checkedAt } : null;
+    },
+    async restoreOffer(id, undoJSON) {
+      const undo = typeof undoJSON === 'string' ? JSON.parse(undoJSON) : undoJSON;
+      await K.wishlist.restoreOffer(store, id, undo?.offer, undo?.checkedAt || '');
+    },
+    async setWishName(id, name) { await K.wishlist.setWishName(store, id, name); },
     // A workout's goals with their progress (goals.js goalProgress), and today's check-ins so a second
     // tap on Done today can take today back off the goal.
     async goals(itemId) {

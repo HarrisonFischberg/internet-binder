@@ -9,6 +9,7 @@ enum Route: Hashable {
     case collections
     case lifestyle
     case collection(String, String)
+    case wishList
 }
 
 /// The app's frame: Home, Library, Places and Search tabs, each with its own stack, and the Undo
@@ -136,6 +137,7 @@ struct Stack<Root: View>: View {
                         case .collections: CollectionsScreen(zoom: zoom)
                         case .lifestyle: LifestyleScreen(zoom: zoom)
                         case .collection(let id, let name): CollectionScreen(id: id, name: name, zoom: zoom)
+                        case .wishList: WishListScreen(zoom: zoom)
                         }
                     }
                     .modifier(PageBar(t: t))

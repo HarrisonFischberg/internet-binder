@@ -90,6 +90,8 @@ export function applyLook(node, settings) {
 export const DEFAULT_SETTINGS = {
   style: 'nocturne', // nocturne | paper | chromatic: the look, per device (see src/shared/tokens.css)
   icon: 'pantry', // toolbar icon: a style id (see ICONS and src/toolbar/icon.js)
+  // Wish List, on this device: what Find deals has cost on your key this month (src/shared/wishlist.js addSpend).
+  wish: { spend: null },
   home: { comeBack: true }, // Home's "Come back to": saves not opened in 6+ weeks (worked out on this device)
   // Lookups (off until turned on, each needs its site granted): fill in places (OpenStreetMap), films and
   // shows (Wikidata) and books (Open Library) from free public sources. See src/shared/lookups.js.
@@ -317,6 +319,13 @@ export function makeItem(input = {}) {
     ...(input.filingConfirmed ? { filingConfirmed: true } : {}),
     ...optional('filing', sanitizeFiling(input.filing)),
     ...optional('placeResolution', sanitizePlaceResolution(input.placeResolution)),
+    // Wish List: the deals found for it, and "not on my Wish List" (src/shared/wishlist.js).
+    ...optional('deals', sanitizeDeals(input.deals)),
+    ...(input.wishHidden ? { wishHidden: true } : {}),
+    // Wish List: the exact product in your words (what Find deals searches for), and stores whose listing
+    // you said wasn't this product (left out of later lookups).
+    ...optional('wishName', sanitizeText(input.wishName, 200) || null),
+    ...optional('dealSkip', uniqStrings(Array.isArray(input.dealSkip) ? input.dealSkip : [], 20).map((h) => sanitizeText(h, 80).toLowerCase()).filter((h) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h))),
     ...optional('placeChoices', (Array.isArray(input.placeChoices) ? input.placeChoices : []).slice(0, 3).map(sanitizePlaceChoice).filter(Boolean)),
     instagram: input.instagram && typeof input.instagram === 'object' ? sanitizeInstagram(input.instagram, now) : null,
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,
@@ -355,6 +364,32 @@ function sanitizePlaceChoice(c) {
     name: sanitizeText(c.name, 120), address: sanitizeText(c.address, 200), locality: sanitizeText(c.locality, 80), region: sanitizeText(c.region, 60),
     url: sanitizeUrl(c.url) || '', lat: coord(c.lat, 90), lng: coord(c.lng, 180), source: c.source === 'openstreetmap' ? 'openstreetmap' : 'web',
     confirmedBy: uniqStrings(Array.isArray(c.confirmedBy) ? c.confirmedBy : [], 3).filter((x) => ['post', 'openstreetmap', 'cited-page'].includes(x)), why: sanitizeText(c.why, 120),
+  };
+}
+
+// Wish List deals for a product (src/shared/wishlist.js findDeals): the stores and prices found the last
+// time you asked, and when. Kept on the save so they sync with it.
+export function sanitizeDeals(d) {
+  if (!d || typeof d !== 'object' || typeof d.checkedAt !== 'string' || Number.isNaN(Date.parse(d.checkedAt))) return null;
+  const offers = (Array.isArray(d.offers) ? d.offers : []).slice(0, 8).map((o) => {
+    if (!o || typeof o !== 'object') return null;
+    const url = sanitizeUrl(o.url);
+    const price = Number(o.price);
+    if (!url || !Number.isFinite(price) || price <= 0) return null;
+    return {
+      store: sanitizeText(o.store, 60) || prettyRetailer(hostnameOf(url)), url, price, currency: sanitizeText(o.currency, 8).toUpperCase(),
+      title: sanitizeText(o.title, 160), sale: sanitizeText(o.sale, 60), note: sanitizeText(o.note, 140),
+      // confirmed: the price was read from the store's own page, not only from a search result.
+      confirmed: o.confirmed === true, ...(o.outOfStock === true ? { outOfStock: true } : {}),
+    };
+  }).filter(Boolean);
+  const n = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(Number(v)) : 0);
+  return {
+    checkedAt: d.checkedAt, product: sanitizeText(d.product, 200), offers,
+    // Why there are none ("unsure": couldn't tell which product; "none": no prices found), else ''.
+    empty: offers.length ? '' : d.empty === 'unsure' ? 'unsure' : 'none',
+    provider: sanitizeText(d.provider, 20), model: sanitizeText(d.model, 60),
+    ...(d.usage && typeof d.usage === 'object' ? { usage: { inputTokens: n(d.usage.inputTokens), outputTokens: n(d.usage.outputTokens), searches: n(d.usage.searches) } } : {}),
   };
 }
 

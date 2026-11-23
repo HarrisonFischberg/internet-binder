@@ -59,8 +59,12 @@ final class LibraryModel {
         didSet {
             index = SaveIndex(saves)
             reviewCount = index.review.count
+            savesChanged &+= 1
         }
     }
+    /// Moves whenever any save changes (a price, Purchased, a sync from another device), for screens that
+    /// read their own view of the library (the Wish List).
+    private(set) var savesChanged = 0
     /// The groupings screens draw from, worked out once per library change rather than on every redraw.
     private(set) var index = SaveIndex([])
     private(set) var reviewCount = 0
@@ -90,6 +94,19 @@ final class LibraryModel {
     private(set) var aiBackup = false
     /// A Fix with AI run in progress (one save, a collection, a Lifestyle view or everything).
     var aiRun: AIRun?
+    /// Wish List: Find deals in progress (one save, or Check all), and a count that moves when a save's
+    /// deals change so the list reads them again.
+    var dealRun: DealRun?
+    var dealsChanged = 0
+    struct DealRun: Equatable {
+        var done = 0
+        let total: Int
+        /// The save being looked up right now.
+        var current: String?
+        var stopping = false
+        /// Your provider asked to slow down: the run waits a little, then carries on.
+        var waiting = false
+    }
     /// Saves a Not this kind is working on: a second tap waits.
     var notThisKindBusy: Set<String> = []
     struct AIRun: Equatable {
