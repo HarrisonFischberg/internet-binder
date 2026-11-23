@@ -10,7 +10,7 @@ import { placeNamed, placeReviewReasons, stateCode } from './places.js';
 import { lookupPlace, lookupAddressAt, lookupFilm, lookupBook, fillMissing } from './lookups.js';
 import { FILLED_KINDS } from './capture.js';
 import { cleanupWithAI, identifyForKind, keyFor, aiAvailable, prefersKey } from '../ai/provider.js';
-import { understandItem } from './understand.js';
+import { understandItem, cleanupView } from './understand.js';
 import { fileSave } from './filing.js';
 import { resolvePlaceSave } from './placeResolve.js';
 
@@ -164,7 +164,7 @@ export async function tidySave(store, id, deps = {}) {
   }
   let ai = null;
   try {
-    ai = (await cleanupWithAI([{ ref: 'new', item: read, live: null }], collections, settings, key)).get('new') || null;
+    ai = (await cleanupWithAI([{ ref: 'new', item: cleanupView(read), live: null }], collections, settings, key)).get('new') || null;
   } catch (e) {
     await store.updateItem(id, { captureState: 'complete', captureError: sanitizeText(`AI tidy skipped: ${(e && e.message) || e}`, 200) }, { by: 'machine' }).catch(() => {});
     return { kind: kindOf(read) };

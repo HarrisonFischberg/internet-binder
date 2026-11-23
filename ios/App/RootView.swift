@@ -20,6 +20,18 @@ struct RootView: View {
     @Environment(\.scenePhase) private var phase
     @Environment(\.horizontalSizeClass) private var size
     @State private var tab = "home"
+    private func learnedMessage(_ offer: LearnedOffer) -> String {
+        let one = offer.ids.count == 1
+        var who = offer.creator.isEmpty ? "from the same account" : "from @" + offer.creator
+        // A four-letter brand is the shortest the sorter matches on (understand.js mentionsBrand).
+        if offer.brand.count >= 4 { who += " or naming \(offer.brand)" }
+        let what = one ? "One other save \(who) isn't" : "\(offer.ids.count) other saves \(who) aren't"
+        return "\(what) matched to a store page yet. Your AI can read \(one ? "it" : "them") again and look on \(offer.shop) first. Every change can be undone."
+    }
+    private var learnedTitle: String {
+        let n = model.learnedOffer?.ids.count ?? 0
+        return n == 1 ? "Update one more save?" : "Update \(n) more saves?"
+    }
 
     var body: some View {
         Group {
@@ -75,6 +87,20 @@ struct RootView: View {
             }
         }
         // Once, on a device that had a library before iCloud sync arrived (new installs just turn it on).
+        // A product link taught a shop: the same account's other saves can be read again with it.
+        .alert(learnedTitle, isPresented: Binding(get: { model.learnedOffer != nil }, set: { if !$0 { model.learnedOffer = nil } }), presenting: model.learnedOffer) { offer in
+            Button(offer.ids.count == 1 ? "Fix it with AI" : "Fix \(offer.ids.count) with AI") {
+                let saves = offer.ids.compactMap { model.index.byId[$0] }
+                if model.aiRun != nil {
+                    model.failed("Your AI is busy with other saves. Use Fix with AI on these when it's done.")
+                } else {
+                    Task { await model.fixWithAI(saves) }
+                }
+            }
+            Button("Not now", role: .cancel) {}
+        } message: { offer in
+            Text(learnedMessage(offer))
+        }
         .alert("Sync this library with iCloud?", isPresented: Binding(get: { model.cloud.askToSync }, set: { model.cloud.askToSync = $0 })) {
             Button("Not Now", role: .cancel) { model.cloud.set(false) }
             Button("Turn On") { model.cloud.set(true) }

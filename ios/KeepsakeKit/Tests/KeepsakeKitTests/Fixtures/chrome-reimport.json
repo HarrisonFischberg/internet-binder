@@ -843,6 +843,7 @@
   "learnedKinds": {},
   "retailerPrefs": {},
   "corrections": [],
+  "productShops": [],
   "confidenceThreshold": 0.6,
   "autoCreateCollections": true
  },

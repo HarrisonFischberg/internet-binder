@@ -5,6 +5,7 @@
 
 import { formatPrice, uid, nowIso } from './util.js';
 import { needsCollection } from './kinds.js';
+import { unlearnLesson } from './categorizer.js';
 
 // Moving a save that is already in a collection needs more certainty than filing one from Review; saves
 // you filed yourself are never moved.
@@ -86,6 +87,11 @@ export async function undoFixes(store, entries) {
         restore.needsReview = true;
       }
       await store.updateItem(item.id, restore, { by: 'ai' });
+    }
+    // What the change taught the sorter (a product link on a save you filed, understand.js) goes with it.
+    if (e.taught?.collectionId) {
+      const next = unlearnLesson(e.taught, e.taught.collectionId, await store.getPrefs());
+      await store.updatePrefs({ learnedKeywords: next.learnedKeywords, retailerPrefs: next.retailerPrefs });
     }
     done.push(e.id);
   }

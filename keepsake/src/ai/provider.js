@@ -1037,6 +1037,10 @@ Rules:
 - name: no emoji, hashtags, "link in bio" or promo text.
 - confidence is how sure you are what the product is (0.9+ only when the brand and model are clear).`;
 
+// The same card when the person has given the product's own page: the page outranks the post's picture and words.
+const LINKED_PRODUCT_SYSTEM = PRODUCT_SYSTEM.replace(/^Look at the image first:[^\n]*\n/m,
+  'The person has given this product\'s own page (the link). That page decides what the product is. The image, title and caption come from the post it was saved from, which may show other things too: use them only to tell which colour, size or version on that page was meant, never to change what the product is.\n');
+
 function productAnswer(parsed, seen) {
   const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
   const l = parsed?.listing && typeof parsed.listing === 'object' ? parsed.listing : {};
@@ -1080,16 +1084,29 @@ export async function understandProductWithAI(input, settings, apiKey) {
     ...(input.products || []).slice(0, 5).map((p) => `Tagged product: ${cut(p.name, 160)}${p.retailer ? ` (${cut(p.retailer, 80)})` : ''}`),
     ...(input.pages || []).slice(0, 2).map((pg) => `Linked page ${cut(pg.url, 300)}:\n${cut(pg.text, 3000)}`),
     input.image ? 'The image is the saved thumbnail.' : 'There is no image.',
-    // The person pasted this page to say which product it is: the page decides, nothing else.
-    input.linked ? `The person gave the link above as this product's own page. Build the card for the product on that page only: never another product, model, size or colour. listing.url must be that same link, or empty.` : '',
+    // The person pasted this page to say which product it is: the page decides what it is, and the post it
+    // was saved from says which variant was meant.
+    ...(input.linked ? [
+      `The person gave the link above as this product's own page. Build the card for the product on that page only, never another product or model; where anything disagrees with the page, the page is right. listing.url must be that same link, or empty.`,
+      input.post ? `It was saved from this post. Compare the two: when the page offers several colours, sizes or versions, name the one the post (or the image, which is the post's picture) shows; put what the post adds about using it in the summary; and say in "reason" whether the post and the page are the same product.` : '',
+      input.post?.title ? `Post title: ${cut(input.post.title, 200)}` : '',
+      input.post?.caption ? `Post caption: ${cut(input.post.caption, 1500)}` : '',
+      input.post?.creator ? `Posted by: @${cut(input.post.creator, 80)}` : '',
+      input.post?.hashtags?.length ? `Post hashtags: ${input.post.hashtags.slice(0, 20).map((h) => `#${cut(h, 60)}`).join(' ')}` : '',
+      input.post?.from ? `Saved from: ${cut(input.post.from, 80)}` : '',
+    ] : []),
+    // What earlier links taught: this account's posts have been products from these shops.
+    ...(input.hints || []).slice(0, 3).map((h) => h.by === 'brand' && h.brand
+      ? `The person told the app earlier that a ${cut(h.brand, 60)} product they saved was on ${cut(h.site, 120)}${h.shop ? ` (${cut(h.shop, 80)})` : ''}. This save names ${cut(h.brand, 60)} too: look on that site first, and use it only if this exact product is really there.`
+      : `The person told the app earlier that a post from @${cut(h.creator, 80)} was a product on ${cut(h.site, 120)}${h.shop ? ` (${cut(h.shop, 80)})` : ''}. Posts from one account are often from the same shop: look on that site first, and use it only if this exact product is really there.`),
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
   if (!apiKey || !supportsWebLookup(settings) || input.noSearch) {
     // No search here (the device model, a custom endpoint, or a page already in hand): the text (and image) only, and no shop page.
-    const system = PRODUCT_SYSTEM.replace(/SEARCH\n[^\n]*\n/, 'You cannot search the web: leave listing empty and features and specs empty unless the text states them.\n');
+    const system = (input.linked ? LINKED_PRODUCT_SYSTEM : PRODUCT_SYSTEM).replace(/SEARCH\n[^\n]*\n/, input.linked ? 'You cannot search the web: work from the linked page\'s text given below.\n' : 'You cannot search the web: leave listing empty and features and specs empty unless the text states them.\n');
     return withReader(cfg, apiKey, async (ask) => productAnswer(parseJsonBlock(await ask({ system, userText: text, imageDataUrl: image, maxTokens: 900 })), null));
   }
-  const system = PRODUCT_SYSTEM.replace('SEARCH\n', '');
+  const system = (input.linked ? LINKED_PRODUCT_SYSTEM : PRODUCT_SYSTEM).replace('SEARCH\n', '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 90000);
   try {

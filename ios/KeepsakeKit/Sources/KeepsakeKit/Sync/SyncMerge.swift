@@ -78,13 +78,17 @@ enum SyncMerge {
     // MARK: learned words
 
     static func mergePrefs(base: [String: Any], local: [String: Any], remote: [String: Any]) -> [String: Any] {
-        var out = mergeMaps(base: base, local: local, remote: remote, skipping: ["learnedKeywords", "retailerPrefs", "corrections"])
+        var out = mergeMaps(base: base, local: local, remote: remote, skipping: ["learnedKeywords", "retailerPrefs", "corrections", "productShops"])
         out["learnedKeywords"] = mergeCounters(base: base["learnedKeywords"], local: local["learnedKeywords"], remote: remote["learnedKeywords"], cap: learnedWeightCap)
         out["retailerPrefs"] = mergeCounters(base: base["retailerPrefs"], local: local["retailerPrefs"], remote: remote["retailerPrefs"], cap: nil)
         // Corrections: the remote list plus the ones this device added since the base, newest 200.
         let b = base["corrections"] as? [Any] ?? [], l = local["corrections"] as? [Any] ?? [], r = remote["corrections"] as? [Any] ?? []
         let added = l.filter { c in !b.contains { SyncJSON.same($0, c) } && !r.contains { SyncJSON.same($0, c) } }
         out["corrections"] = Array((r + added).suffix(200))
+        // What product links taught (account → shop): the same rule, so a lesson learned on either device stays.
+        let pb = base["productShops"] as? [Any] ?? [], pl = local["productShops"] as? [Any] ?? [], pr = remote["productShops"] as? [Any] ?? []
+        let taught = pl.filter { c in !pb.contains { SyncJSON.same($0, c) } && !pr.contains { SyncJSON.same($0, c) } }
+        out["productShops"] = Array((pr + taught).suffix(200))
         return out
     }
 

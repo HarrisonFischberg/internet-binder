@@ -642,6 +642,8 @@ export function emptyPrefs() {
     learnedKeywords: {},
     learnedKinds: {},
     retailerPrefs: {},
+    // What product links taught (understand.js productLesson): { creator, site, shop, brand, at }.
+    productShops: [],
     corrections: [],
     confidenceThreshold: 0.6,
     autoCreateCollections: true,
@@ -691,6 +693,27 @@ function teach(next, product, fromId, toId, options) {
   if (options.confirm) return;
   next.corrections.push({ at: new Date().toISOString(), itemId: product?.id || null, title: String(product?.title || '').slice(0, 120), from: fromId || null, to: toId, terms, strong: !!options.strong });
   if (next.corrections.length > 200) next.corrections = next.corrections.slice(-200);
+}
+
+// Takes one light lesson back (Undo of a product link that taught one): the same words and shop, less
+// what it added.
+export function unlearnLesson(product, toId, prefs) {
+  const next = copyForLearning(prefs);
+  for (const term of salientTerms(product)) {
+    const entry = { ...(next.learnedKeywords[term] || {}) };
+    if (!entry[toId]) continue;
+    entry[toId] = Math.max(0, entry[toId] - LESSON.light);
+    if (!entry[toId]) delete entry[toId];
+    if (Object.keys(entry).length) next.learnedKeywords[term] = entry; else delete next.learnedKeywords[term];
+  }
+  const host = product?.host || '';
+  const hp = { ...(next.retailerPrefs[host] || {}) };
+  if (host && hp[toId]) {
+    hp[toId] = Math.max(0, hp[toId] - LESSON.light);
+    if (!hp[toId]) delete hp[toId];
+    if (Object.keys(hp).length) next.retailerPrefs[host] = hp; else delete next.retailerPrefs[host];
+  }
+  return next;
 }
 
 // Saves already sitting in collections, each a kept suggestion: how the sorter catches up on a

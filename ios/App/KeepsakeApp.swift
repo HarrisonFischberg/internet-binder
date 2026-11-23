@@ -26,6 +26,16 @@ struct KeepsakeApp: App {
     }
 }
 
+/// What a product link taught, as an offer: other saves from the same account that Fix with AI can now
+/// look for in the same shop.
+struct LearnedOffer: Identifiable, Equatable {
+    let id = UUID()
+    let ids: [String]
+    let creator: String
+    let brand: String
+    let shop: String
+}
+
 /// Taps on "Saved to …" notifications (SaveNotice): the link waits in `tapped` for RootView to open.
 /// Set as the delegate at launch, so a tap that starts the app isn't missed.
 @MainActor @Observable
@@ -101,6 +111,10 @@ final class LibraryModel {
     var aiRun: AIRun?
     /// Wish List: Find deals in progress (one save, or Check all), and a count that moves when a save's
     /// deals change so the list reads them again.
+    /// After a product link taught a shop: the same account's other saves, offered for another read.
+    var learnedOffer: LearnedOffer?
+    /// Counts product links: Undo of one invalidates its offer even while the offer is still on its way.
+    var offerSerial = 0
     var dealRun: DealRun?
     var dealsChanged = 0
     /// What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id.
