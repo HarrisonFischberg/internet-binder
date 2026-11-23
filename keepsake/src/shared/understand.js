@@ -532,6 +532,8 @@ export function productFromHtml(html, baseUrl = '') {
   const nameOf = (v) => text(v && typeof v === 'object' ? v.name : v);
   const abs = (v) => {
     const s = typeof v === 'string' ? v : v && typeof v === 'object' ? v.url || v.contentUrl || '' : '';
+    // Nothing there is nothing: an empty value would otherwise resolve to the page's own address.
+    if (!s.trim()) return '';
     try { const u = new URL(s.trim(), baseUrl || undefined); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch { return ''; }
   };
   let price = null;
@@ -584,12 +586,7 @@ export function productFromHtml(html, baseUrl = '') {
     currency,
     priceVaries: ranged || stated.size > 1,
     availability,
-    // A structured image that is the page's own address (some stores do this) isn't a picture: use og:image.
-    image: (() => {
-      const own = (u) => { try { const a = new URL(u), b = new URL(baseUrl); return a.origin + a.pathname.replace(/\/$/, '') === b.origin + b.pathname.replace(/\/$/, ''); } catch { return false; } };
-      const ld = abs(product ? [].concat(product.image || [])[0] : null);
-      return (ld && !(baseUrl && own(ld)) ? ld : '') || abs(meta('og:image'));
-    })(),
+    image: abs(product ? [].concat(product.image || [])[0] : null) || abs(meta('og:image')),
     siteName: meta('og:site_name').slice(0, 80),
     specs: specs.slice(0, 16),
     url: baseUrl,

@@ -585,10 +585,12 @@ test('importRecipeFromLink: a bad address, a social post or a page that won\'t o
   assert.equal((await store.getAiLog()).length, 0);
 });
 
-test("productFromHtml: a structured image that is the page's own address falls back to og:image", () => {
-  const page = (image) => `<html><head><meta property="og:image" content="https://cdn.shop.example/a.jpg"><script type="application/ld+json">{"@type":"Product","name":"Shoe 9","image":"${image}","offers":{"price":"10","priceCurrency":"USD"}}</script></head></html>`;
-  assert.equal(productFromHtml(page('https://shop.example/p/shoe-9'), 'https://shop.example/p/shoe-9/').image, 'https://cdn.shop.example/a.jpg');
+test("productFromHtml: no structured image falls back to og:image, never the page's own address", () => {
+  const page = (image) => `<html><head><meta property="og:image" content="https://cdn.shop.example/a.jpg"><script type="application/ld+json">{"@type":"Product","name":"Shoe 9",${image ? `"image":"${image}",` : ''}"offers":{"price":"10","priceCurrency":"USD"}}</script></head></html>`;
+  assert.equal(productFromHtml(page(''), 'https://shop.example/p/shoe-9').image, 'https://cdn.shop.example/a.jpg');
   assert.equal(productFromHtml(page('https://shop.example/i.jpg'), 'https://shop.example/p/shoe-9').image, 'https://shop.example/i.jpg', 'a real structured image still wins');
+  const bare = '<html><head><script type="application/ld+json">{"@type":"Product","name":"Shoe 9","offers":{"price":"10","priceCurrency":"USD"}}</script></head></html>';
+  assert.equal(productFromHtml(bare, 'https://shop.example/p/shoe-9').image, '', 'no picture on the page is no picture, not the page itself');
 });
 
 test("linkProductPage: the page's picture is fetched and kept on the device, not stored as an address", async () => {

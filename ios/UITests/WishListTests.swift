@@ -178,3 +178,13 @@ final class WishListTests: XCTestCase {
         shot("name-with-link")
     }
 }
+
+extension WishListTests {
+    func rewriteWith(_ app: XCUIApplication, _ link: String) {
+        app.buttons["save.improve"].firstMatch.tap(); app.buttons["Name the Exact Product…"].tap()
+        let f = app.textFields["wishList.nameField"].exists ? app.textFields["wishList.nameField"] : app.textViews["wishList.nameField"]
+        XCTAssertTrue(f.waitForExistence(timeout: 5))
+        f.tap(); f.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 80) + link)
+        app.buttons["wishList.nameSave"].tap()
+    }
+}

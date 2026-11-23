@@ -26,7 +26,7 @@ public struct SaveImage: View {
             }
         } else if let s = save.image, let url = URL(string: s), url.scheme == "https" || url.scheme == "http" {
             // The local copy if there is one (so the picture outlives its site), else the site's, kept as it loads.
-            picture(kind: kind, key: save.id) {
+            picture(kind: kind, key: ThumbnailStore.remoteKey(save.id, url)) {
                 await ThumbnailStore.shared.load(save.id, from: url)
             }
         } else {
