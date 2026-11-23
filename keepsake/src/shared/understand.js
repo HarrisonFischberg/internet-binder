@@ -611,7 +611,7 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
   if (!current || current.deletedAt) return { ok: false, error: 'That save no longer exists.' };
   const { patch, changes, site } = planLinkedProduct(current, url, page);
   if (!changes.length) return { ok: true, site, read: !!page, price: '', logId: null, same: true };
-  const before = Object.fromEntries(LOGGED.filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
+  const before = Object.fromEntries([...LOGGED, 'deals', 'dealSkip'].filter((f) => f in patch).map((f) => [f, current[f] === undefined ? null : current[f]]));
   await store.updateItem(id, patch, { by: 'ai' });
   const logId = uid();
   await store.appendAiLog([{ id: logId, runId: `link-product-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: `From the store page you added (${site}).`, undone: false }]);
@@ -631,12 +631,15 @@ export function planLinkedProduct(item, url, page = null) {
     patch.kind = 'product';
     changes.push({ field: 'kind', from: kindInfo(current).label, to: kindInfo('product').label });
   }
+  // What you typed yourself stays; the page only fills what you left empty.
+  const yours = old.source === 'you';
+  const pick = (mineFirst, theirs) => (yours ? mineFirst || theirs : theirs || mineFirst) || '';
   const details = sanitizeDetails('product', {
     ...old,
-    brand: page?.brand || old.brand || '',
-    model: page?.sku || old.model || '',
-    category: page?.category || old.category || '',
-    specs: page?.specs?.length ? page.specs : old.specs || [],
+    brand: pick(old.brand, page?.brand),
+    model: pick(old.model, page?.sku),
+    category: pick(old.category, page?.category),
+    specs: yours && old.specs?.length ? old.specs : page?.specs?.length ? page.specs : old.specs || [],
     shopUrl: url,
     shopName: site,
     shopTitle: page?.title || '',
@@ -647,6 +650,12 @@ export function planLinkedProduct(item, url, page = null) {
   if (JSON.stringify(details) !== JSON.stringify(old)) {
     patch.details = details;
     changes.push({ field: 'shop page', from: old.shopName || '—', to: site });
+    // Another shop page is (or may be) another product: prices found for the old one, and the stores
+    // you skipped for it, go with it. Undo brings them back.
+    if (details.shopUrl !== (old.shopUrl || '')) {
+      if (item.deals) patch.deals = null;
+      if ((item.dealSkip || []).length) patch.dealSkip = [];
+    }
   }
   const name = page?.name || '';
   const renames = isPostSave(item) || item.type === 'inspiration' || genericTitle(item.title) || current !== 'product';

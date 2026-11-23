@@ -227,9 +227,10 @@ export async function findDeals(store, id, { fetchShopPage = async () => null, r
     throw e;
   }
   await spent(found);
-  // Renamed, hidden or bought while the search ran: these prices are for the old name, so they aren't kept.
+  // Renamed, given another store link, hidden or bought while the search ran: these prices are for the
+  // old product, so they aren't kept.
   const after = await store.getItem(id);
-  if (!after || !onWishList(after) || (after.wishName || '') !== (item.wishName || '')) return { item: after || item, summary: dealSummary(after || item), skipped: true };
+  if (!after || !onWishList(after) || (after.wishName || '') !== (item.wishName || '') || (after.details?.shopUrl || '') !== (item.details?.shopUrl || '')) return { item: after || item, summary: dealSummary(after || item), skipped: true };
   const sure = found.confidence >= DEALS_CONFIDENCE;
   const offers = sure ? await Promise.all(found.offers.map(async (o) => {
     let page = null;

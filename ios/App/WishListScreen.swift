@@ -540,7 +540,10 @@ struct ProductHelpMenu: View {
                 Button("Find Deals", systemImage: "tag") { Task { await model.findDeals([save.id]) } }
                     .disabled(model.dealRun != nil)
             }
-            Button("Add Product Link…", systemImage: "link") { linking = true }
+            // Not for a recipe, a place or the like that happens to sit in a collection: those aren't one thing to buy.
+            if save.kind == "product" || one?.row != nil {
+                Button("Add Product Link…", systemImage: "link") { linking = true }
+            }
             if let row = one?.row {
                 Button("Name the Exact Product…", systemImage: "pencil") { naming = row }
                     .disabled(model.dealRun != nil)
@@ -642,6 +645,7 @@ private struct ProductLinkSheet: View {
                 guard r.ok else {
                     problem = r.error ?? "Couldn't read that page."
                     Haptic.warning()
+                    UIAccessibility.post(notification: .announcement, argument: problem)
                     return
                 }
                 Haptic.settled()
@@ -651,7 +655,7 @@ private struct ProductLinkSheet: View {
                 let site = r.site ?? "the store"
                 let said = r.read == true
                     ? "Linked to \(site)" + ((r.price ?? "").isEmpty ? "" : ": \(r.price ?? "")")
-                    : "Linked to \(site). It wouldn't share its details, so only the link was added."
+                    : "Linked to \(site). No price or details could be read from that page, so only the link was added."
                 if let id = r.logId {
                     model.show(said) {
                         try? await lib.undoAI([id])

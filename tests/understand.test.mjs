@@ -469,6 +469,16 @@ test('linkProductPage: the store page you paste becomes the save\'s shop page, f
   const linked = await store.getItem(it.id);
   assert.deepEqual([linked.title, linked.price ?? null, linked.details.shopUrl], [it.title, null, 'https://www.target.com/p/mug']);
 
+  // Details you typed stay; prices found for the old shop page go, and Undo brings them back.
+  const own = await store.addItem(post('kettle', { kind: 'product', collectionId: null, details: { brand: 'Fellow', source: 'you' } }));
+  await store.updateItem(own.id, { deals: { checkedAt: '2026-11-20T00:00:00Z', offers: [] }, dealSkip: ['x.com'] }, { by: 'deals' });
+  const r3 = await linkProductPage(store, own.id, 'brewhaus.example.com/mug', { fetchPage: async () => page });
+  const kept = await store.getItem(own.id);
+  assert.deepEqual([kept.details.brand, kept.details.source, kept.deals ?? null, kept.dealSkip ?? []], ['Fellow', 'you', null, []]);
+  await undoFixes(store, [(await store.getAiLog()).find((e) => e.id === r3.logId)]);
+  const undone = await store.getItem(own.id);
+  assert.deepEqual([undone.deals.checkedAt, undone.dealSkip], ['2026-11-20T00:00:00Z', ['x.com']]);
+
   // Not a link, or a social post: nothing changes.
   assert.equal((await linkProductPage(store, it.id, 'the blue one')).ok, false);
   assert.equal((await linkProductPage(store, it.id, 'https://www.instagram.com/p/abc/')).ok, false);
