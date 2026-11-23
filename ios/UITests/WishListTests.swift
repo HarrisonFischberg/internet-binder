@@ -68,4 +68,57 @@ final class WishListTests: XCTestCase {
         app.buttons["Undo"].tap()
         XCTAssertTrue(app.staticTexts["4 things to buy, from all your collections."].waitForExistence(timeout: 5))
     }
+
+    /// A price far under the other stores', at a store nobody knows, carries a warning and is never the lowest.
+    func testATooGoodPriceIsFlaggedAndNeverTheLowest() {
+        let app = launch()
+        openWishList(app)
+        let lowest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Hearth & Clay, $64.00'")).firstMatch
+        for _ in 0..<4 where !lowest.exists { app.swipeUp() }
+        XCTAssertTrue(lowest.waitForExistence(timeout: 5))
+        XCTAssertTrue(lowest.label.hasSuffix("lowest price"), lowest.label)
+        let all = app.buttons["All 3 stores"].firstMatch
+        for _ in 0..<4 where !all.isHittable { app.swipeUp() }
+        all.tap()
+        let doubted = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Mega Bargains, $29.00'")).firstMatch
+        XCTAssertTrue(doubted.waitForExistence(timeout: 3))
+        XCTAssertFalse(doubted.label.hasSuffix("lowest price"), doubted.label)
+        XCTAssertTrue((doubted.value as? String ?? "").contains("Unusually low"), String(describing: doubted.value))
+        shot("wishlist-too-good")
+    }
+
+    /// "Not the same item" takes a store's price away, the next one becomes the lowest, and Undo brings it back.
+    func testNotTheSameItemRemovesAStoreAndUndoRestoresIt() {
+        let app = launch()
+        openWishList(app)
+        let brewhaus = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus, $36.99'")).firstMatch
+        XCTAssertTrue(brewhaus.waitForExistence(timeout: 5))
+        app.buttons["More for Brewhaus"].firstMatch.tap()
+        shot("wishlist-offer-menu")
+        app.buttons["Not the same item"].tap()
+        let next = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Kitchen & Table, $41.50'")).firstMatch
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        XCTAssertTrue(next.label.hasSuffix("lowest price"), next.label)
+        XCTAssertFalse(brewhaus.exists)
+        app.buttons["Undo"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus, $36.99'")).firstMatch.waitForExistence(timeout: 5))
+    }
+
+    /// The row says what was priced; Fix lets you name the exact product, which the next search uses.
+    func testNamingTheExactProduct() {
+        let app = launch()
+        openWishList(app)
+        let priced = app.buttons["wishList.pricedAs"].firstMatch
+        XCTAssertTrue(priced.waitForExistence(timeout: 5))
+        XCTAssertEqual(priced.label, "Priced as Glass pour-over coffee maker, 6 cup")
+        priced.tap()
+        let field = app.textFields["wishList.nameField"].exists ? app.textFields["wishList.nameField"] : app.textViews["wishList.nameField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        shot("wishlist-name")
+        field.typeText(" in smoke grey")
+        app.buttons["wishList.nameSave"].tap()
+        // Prices found under the old name are cleared, and the row shows the words the next search uses.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Searching as: Glass pour-over coffee maker, 6 cup in smoke grey'")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus'")).firstMatch.exists)
+    }
 }

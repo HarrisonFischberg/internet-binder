@@ -90,6 +90,8 @@ export function applyLook(node, settings) {
 export const DEFAULT_SETTINGS = {
   style: 'nocturne', // nocturne | paper | chromatic: the look, per device (see src/shared/tokens.css)
   icon: 'pantry', // toolbar icon: a style id (see ICONS and src/toolbar/icon.js)
+  // Wish List, on this device: what Find deals has cost on your key this month (src/shared/wishlist.js addSpend).
+  wish: { spend: null },
   home: { comeBack: true }, // Home's "Come back to": saves not opened in 6+ weeks (worked out on this device)
   // Lookups (off until turned on, each needs its site granted): fill in places (OpenStreetMap), films and
   // shows (Wikidata) and books (Open Library) from free public sources. See src/shared/lookups.js.
@@ -320,6 +322,10 @@ export function makeItem(input = {}) {
     // Wish List: the deals found for it, and "not on my Wish List" (src/shared/wishlist.js).
     ...optional('deals', sanitizeDeals(input.deals)),
     ...(input.wishHidden ? { wishHidden: true } : {}),
+    // Wish List: the exact product in your words (what Find deals searches for), and stores whose listing
+    // you said wasn't this product (left out of later lookups).
+    ...optional('wishName', sanitizeText(input.wishName, 200) || null),
+    ...optional('dealSkip', uniqStrings(Array.isArray(input.dealSkip) ? input.dealSkip : [], 20).map((h) => sanitizeText(h, 80).toLowerCase()).filter((h) => /^[a-z0-9.-]+\.[a-z]{2,}$/.test(h))),
     ...optional('placeChoices', (Array.isArray(input.placeChoices) ? input.placeChoices : []).slice(0, 3).map(sanitizePlaceChoice).filter(Boolean)),
     instagram: input.instagram && typeof input.instagram === 'object' ? sanitizeInstagram(input.instagram, now) : null,
     ai: input.ai && typeof input.ai === 'object' ? sanitizeAi(input.ai) : null,

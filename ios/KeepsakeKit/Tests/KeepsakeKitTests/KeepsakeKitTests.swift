@@ -523,6 +523,12 @@ struct ViewsTests {
         #expect(after.rows.count == list.rows.count - 1)
         #expect(after.hidden.map(\.id) == [first.id])
         await #expect(throws: (any Error).self) { try await lib.findDeals(first.id) }
+        // Nothing looked up yet: no spend, and naming a product shows on its row.
+        #expect(after.spend.lookups == 0 && after.spend.usd == 0)
+        let second = try #require(after.rows.first)
+        try await lib.setWishName(second.id, "The exact model, in blue")
+        #expect(try await lib.wishList().rows.first { $0.id == second.id }?.wishName == "The exact model, in blue")
+        #expect(try await lib.removeOffer(second.id, url: "https://nowhere.example/p") == nil, "no such offer: nothing to undo")
     }
 
     var expected: [String: Any] { get throws { try json(fixture("views-expected")) } }

@@ -1,5 +1,6 @@
 // The demo library with Wish List deals on a few products, as Find deals leaves them (shared/wishlist.js):
-// one with a lower price at three stores, one with nothing lower, one with no prices found, one hidden.
+// one with a lower price at three stores, one with nothing lower and a price that looks too good, one with
+// no prices found, one hidden.
 // The rest are unchecked. For WishListTests and screenshots; "Checked … ago" counts from when this runs,
 // so run it again before taking screenshots.
 //
@@ -33,6 +34,8 @@ await store.updateItem(id('Glass pour-over coffee maker, 6 cup'), { deals: { che
 await store.updateItem(id('Stoneware mugs, set of 4'), { deals: { checkedAt, product: 'Stoneware mugs, set of 4', ...by, offers: [
   offer('Hearth & Clay', 'hearthandclay.example', 64, { confirmed: true }),
   offer('Table Supply', 'tablesupply.example', 68),
+  // Far under the other two, at a store nobody knows: shown with a warning, never as the lowest.
+  offer('Mega Bargains', 'megabargains.example', 29),
 ] } }, { by: 'deals' });
 await store.updateItem(id('Adjustable desk lamp'), { deals: { checkedAt, product: 'Adjustable desk lamp', ...by, offers: [], empty: 'none' } }, { by: 'deals' });
 await store.updateItem(id('Something from a newsletter'), { wishHidden: true }, { by: 'deals' });

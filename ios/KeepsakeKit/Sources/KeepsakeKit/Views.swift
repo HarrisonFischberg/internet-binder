@@ -128,6 +128,8 @@ public struct WishList: Decodable, Sendable, Equatable {
         public let outOfStock: Bool
         /// The lowest price in stock.
         public let lowest: Bool
+        /// Far below what known stores charge, at a store that isn't one: shown with a warning, never as the best price.
+        public let doubt: Bool
         public var id: String { url }
     }
     public struct Row: Decodable, Sendable, Hashable, Identifiable {
@@ -147,7 +149,18 @@ public struct WishList: Decodable, Sendable, Equatable {
         public let checkedAt: String?
         /// Checked more than two days ago.
         public let old: Bool
+        /// What the last lookup took the product to be ("Sony WH-1000XM6, black"), or empty.
+        public let product: String
+        /// The exact product in your own words, which Find deals searches for; empty when you haven't said.
+        public let wishName: String
         public var id: String { item.id }
+    }
+    public struct Spend: Decodable, Sendable, Equatable {
+        /// Dollars this month for the lookups whose model has a known price.
+        public let usd: Double
+        public let lookups: Int
+        /// Lookups this month with no known price (another provider or model): not in usd.
+        public let unpriced: Int
     }
     public let rows: [Row]
     /// Saves you took off the list, to put back.
@@ -158,6 +171,10 @@ public struct WishList: Decodable, Sendable, Equatable {
     public let searchReady: Bool
     /// What Check all would look up: nothing checked in the last 12 hours.
     public let toCheck: [String]
+    /// Dollars one lookup probably costs on your key; nil when the model's price isn't known.
+    public let estimateEach: Double?
+    /// Find deals on this device this month.
+    public let spend: Spend
 }
 
 extension Library {
@@ -173,6 +190,18 @@ extension Library {
 
     /// Takes saves off the Wish List, or puts them back. Their deals stay.
     public func setWishHidden(_ ids: [String], _ hidden: Bool) async throws { try await core.call("views.setWishHidden", [ids, hidden]) }
+
+    /// "Not the same item": removes one store's offer and leaves that store out of this save's later
+    /// lookups. Returns what `restoreOffer` needs to undo it, or nil when the offer was already gone.
+    public func removeOffer(_ id: String, url: String) async throws -> String? {
+        let undo = try await core.callJSON("views.removeOffer", argsJSON: try argsJSON([id, url]))
+        return undo == "null" ? nil : undo
+    }
+
+    public func restoreOffer(_ id: String, _ undo: String) async throws { try await core.call("views.restoreOffer", [id, undo]) }
+
+    /// The exact product in your words, for Find deals (the save's title stays). Empty goes back to the title.
+    public func setWishName(_ id: String, _ name: String) async throws { try await core.call("views.setWishName", [id, name]) }
 }
 
 public struct GoalView: Decodable, Sendable {

@@ -43,6 +43,8 @@ struct WishListScreen: View {
     @State private var confirming = false
     @State private var settings = false
     @State private var showHidden = false
+    /// The row whose product is being named.
+    @State private var naming: WishList.Row?
 
     private var rows: [WishList.Row] { list?.rows ?? [] }
     private var canFind: Bool { list?.keyReady == true && list?.searchReady == true }
@@ -64,12 +66,17 @@ struct WishListScreen: View {
                                 ForEach(rows) { row in
                                     WishRow(row: row, zoom: zoom, canFind: canFind, open: Binding(
                                         get: { open.contains(row.id) },
-                                        set: { on in if on { open.insert(row.id) } else { open.remove(row.id) } }))
+                                        set: { on in if on { open.insert(row.id) } else { open.remove(row.id) } }),
+                                        name: { naming = row })
                                 }
                             }
                             if rows.contains(where: { $0.state == "found" }) {
                                 Text("Prices are what each store showed when it was checked. Another size or colour, shipping, tax and coupons can change them, so confirm on the store's page before you buy.")
                                     .font(.footnote).foregroundStyle(t.inkMuted)
+                            }
+                            if let spent = spentLine(list) {
+                                Text(spent).font(.footnote).foregroundStyle(t.inkMuted).monospacedDigit()
+                                    .accessibilityIdentifier("wishList.spent")
                             }
                         }
                         if !list.hidden.isEmpty { hidden(list.hidden) }
@@ -84,7 +91,10 @@ struct WishListScreen: View {
         .confirmationDialog("Find deals for \(toCheck.count) \(toCheck.count == 1 ? "item" : "items")?", isPresented: $confirming, titleVisibility: .visible) {
             Button("Find deals for \(toCheck.count)") { Task { await model.findDeals(toCheck) } }
         } message: {
-            Text("Your AI provider searches the web for each one, using your key. Every item is a few searches, so a long list uses more of your key's credit. Keep the app open while it runs. You can stop any time.")
+            Text(checkAllCost + "Your AI provider searches the web for each one, using your key. Keep the app open while it runs. You can stop any time.")
+        }
+        .sheet(item: $naming) { row in
+            WishNameSheet(row: row, canFind: canFind && model.dealRun == nil)
         }
         .sheet(isPresented: $settings, onDismiss: { Task { await model.refreshAIReady(); await load() } }) { SettingsScreen() }
         // model.saves changes when any save does (a price, Purchased, a sync from another device).
@@ -95,6 +105,31 @@ struct WishListScreen: View {
     private var subtitle: String? {
         guard list != nil, !rows.isEmpty else { return nil }
         return rows.count == 1 ? "1 thing to buy, from all your collections." : "\(rows.count) things to buy, from all your collections."
+    }
+
+    /// "About 35 cents on your key (about 3 cents each). " before Check all, when the model's price is known.
+    private var checkAllCost: String {
+        guard let each = list?.estimateEach, each > 0 else { return "Every item is a few searches, so a long list uses more of your key's credit. " }
+        let n = toCheck.count
+        return n == 1 ? "\(Self.about(each).capitalizedFirst) on your key. " : "\(Self.about(each * Double(n)).capitalizedFirst) on your key (\(Self.about(each)) each). "
+    }
+
+    /// "Deal lookups this month: 14, about 42 cents on your key."
+    private func spentLine(_ list: WishList) -> String? {
+        let s = list.spend
+        guard s.lookups > 0 else { return nil }
+        let count = "Deal lookups this month: \(s.lookups)"
+        if s.usd <= 0 { return count + "." }
+        return count + ", \(Self.about(s.usd)) on your key" + (s.unpriced > 0 ? " (\(s.unpriced) not priced)." : ".")
+    }
+
+    /// "about 3 cents", "about $1.20". Never "0 cents": a lookup always costs something.
+    static func about(_ usd: Double) -> String {
+        if usd < 0.995 {
+            let cents = max(1, Int((usd * 100).rounded()))
+            return "about \(cents) \(cents == 1 ? "cent" : "cents")"
+        }
+        return "about " + usd.formatted(.currency(code: "USD").precision(.fractionLength(2)))
     }
 
     /// Check all, or how far the run has got with Stop.
@@ -179,6 +214,8 @@ private struct WishRow: View {
     let zoom: Namespace.ID
     let canFind: Bool
     @Binding var open: Bool
+    /// Opens the sheet where you say exactly which product this is.
+    let name: () -> Void
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.openURL) private var openURL
@@ -228,6 +265,7 @@ private struct WishRow: View {
             .accessibilityValue(meta)
             .accessibilityHint("Opens the save")
             Menu {
+                Button("Name the exact product", systemImage: "pencil") { name() }
                 Button("Mark purchased", systemImage: "bag.badge.checkmark") { Task { await model.markPurchased(save) } }
                 Button("Hide from Wish List", systemImage: "eye.slash") { Task { await model.setWishHidden(save, true) } }
             } label: {
@@ -255,19 +293,59 @@ private struct WishRow: View {
             .frame(minHeight: 44)
             .accessibilityElement(children: .combine)
         } else {
+            if row.state != "found", !row.wishName.isEmpty {
+                // Your own words for it, which the next search uses.
+                Text("Searching as: \(row.wishName)").font(.footnote).foregroundStyle(t.inkMuted)
+                    .accessibilityIdentifier("wishList.searchingAs")
+            }
             switch row.state {
             case "found": found
             case "none": nothing("No current prices found for this one.")
-            case "unsure": nothing("Couldn't tell exactly which product this is. Open the save, give it a clearer name, then try again.")
+            case "unsure": unsure
             default:
                 if canFind { findButton("Find deals", symbol: "tag") }
             }
         }
     }
 
+    /// "Priced as: Sony WH-1000XM6, black" with the way to correct it.
+    @ViewBuilder private var pricedAs: some View {
+        let what = row.wishName.isEmpty ? row.product : row.wishName
+        if !what.isEmpty {
+            Button { name() } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Priced as: \(what)").font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading)
+                    Text("Fix").font(.footnote.weight(.semibold)).foregroundStyle(t.ink)
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(PressStyle())
+            .accessibilityLabel("Priced as \(what)")
+            .accessibilityHint("Say exactly which product this is")
+            .accessibilityIdentifier("wishList.pricedAs")
+        }
+    }
+
+    /// The search couldn't tell which product the save is: say which, right here.
+    private var unsure: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Couldn't tell exactly which product this is.").font(.subheadline).foregroundStyle(t.ink)
+            Button { name() } label: {
+                Label("Say which product", systemImage: "pencil").font(.subheadline.weight(.semibold)).frame(minHeight: 32)
+            }
+            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
+            .accessibilityIdentifier("wishList.sayWhich")
+        }
+    }
+
     private var found: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !row.saving.isEmpty {
+            pricedAs
+            if row.bestPrice.isEmpty && row.offers.contains(where: { !$0.outOfStock }) {
+                Label("Only unusually low prices turned up. Check each store carefully before you buy.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote).foregroundStyle(t.ink)
+            } else if !row.saving.isEmpty {
                 Text("\(row.saving) less than you saved it at" + (row.savingPct.map { " (\($0)% off)" } ?? ""))
                     .font(.footnote.weight(.bold)).foregroundStyle(t.onAccent)
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -312,27 +390,43 @@ private struct WishRow: View {
     private func offerRow(_ offer: WishList.Offer) -> some View {
         let detail = [offer.outOfStock ? "Out of stock" : nil, offer.sale.isEmpty ? nil : offer.sale,
                       offer.confirmed ? "Price on the store's page" : "Price from search results"].compactMap { $0 }.joined(separator: " · ")
-        return Button {
-            if let url = URL(string: offer.url) { openURL(url) }
-        } label: {
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(offer.store).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
-                    Text(detail).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading)
+        let warning = "Unusually low, and not a store we know. Check it before you buy."
+        return HStack(alignment: .center, spacing: 0) {
+            Button {
+                if let url = URL(string: offer.url) { openURL(url) }
+            } label: {
+                HStack(alignment: .center, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(offer.store).font(.subheadline.weight(.semibold)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                        Text(detail).font(.footnote).foregroundStyle(t.inkMuted).multilineTextAlignment(.leading)
+                        if offer.doubt {
+                            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                                .font(.footnote.weight(.medium)).foregroundStyle(t.ink).multilineTextAlignment(.leading)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Text(offer.price).font(offer.lowest ? .headline : .subheadline.weight(.medium)).foregroundStyle(offer.outOfStock ? t.inkMuted : t.ink)
+                        .monospacedDigit().strikethrough(offer.outOfStock)
                 }
-                Spacer(minLength: 8)
-                Text(offer.price).font(offer.lowest ? .headline : .subheadline.weight(.medium)).foregroundStyle(offer.outOfStock ? t.inkMuted : t.ink)
-                    .monospacedDigit().strikethrough(offer.outOfStock)
-                Image(systemName: "arrow.up.right").font(.footnote.weight(.bold)).foregroundStyle(t.inkMuted).accessibilityHidden(true)
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
             }
-            .frame(minHeight: 52)
-            .contentShape(Rectangle())
+            .buttonStyle(PressStyle())
+            .accessibilityLabel("\(offer.store), \(offer.price)\(offer.lowest ? ", lowest price" : "")")
+            .accessibilityValue(offer.doubt ? "\(detail). \(warning)" : detail)
+            .accessibilityHint("Opens the store's page")
+            .accessibilityIdentifier("wishList.offer")
+            Menu {
+                Button("Open the store's page", systemImage: "arrow.up.right") { if let url = URL(string: offer.url) { openURL(url) } }
+                Button("Not the same item", systemImage: "hand.thumbsdown", role: .destructive) { Task { await model.removeOffer(save, offer) } }
+            } label: {
+                Image(systemName: "ellipsis").font(.footnote.weight(.bold)).foregroundStyle(t.inkMuted)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .accessibilityLabel("More for \(offer.store)")
+            .accessibilityIdentifier("wishList.offerMenu")
+            .padding(.trailing, -10)
         }
-        .buttonStyle(PressStyle())
-        .accessibilityLabel("\(offer.store), \(offer.price)\(offer.lowest ? ", lowest price" : "")")
-        .accessibilityValue(detail)
-        .accessibilityHint("Opens the store's page")
-        .accessibilityIdentifier("wishList.offer")
     }
 
     private func nothing(_ text: String) -> some View {
@@ -367,6 +461,66 @@ private struct WishRow: View {
         guard let s = row.checkedAt, let date = Self.iso.date(from: s) ?? ISO8601DateFormatter().date(from: s) else { return "" }
         return "Checked \(date.formatted(.relative(presentation: .named)))" + (row.old ? ". Prices may have moved." : "")
     }
+}
+
+/// Where you say exactly which product a save is: brand, model, size, colour. Find deals searches for
+/// these words instead of the save's title, which doesn't change.
+private struct WishNameSheet: View {
+    let row: WishList.Row
+    let canFind: Bool
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var current: String { row.wishName.isEmpty ? row.item.title : row.wishName }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Brand, model, size, colour", text: $text, axis: .vertical)
+                        .lineLimit(2...5).focused($focused)
+                        .accessibilityIdentifier("wishList.nameField")
+                } header: {
+                    Text("Exactly which product?")
+                } footer: {
+                    Text("Find deals searches for these words, so include the model and the size or colour you want. Your save keeps its own title. Prices found under the old name are cleared.")
+                }
+                if !row.product.isEmpty && row.product != text {
+                    Section("The last search priced it as") {
+                        Button(row.product) { text = row.product }.foregroundStyle(.primary)
+                    }
+                }
+                if !row.wishName.isEmpty {
+                    Section {
+                        Button("Go back to the save's title") { save(row.item.title, find: false) }
+                    }
+                }
+            }
+            .navigationTitle("Name the product").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(canFind ? "Save and find deals" : "Save") { save(trimmed, find: canFind) }
+                        .disabled(trimmed.isEmpty || (trimmed == current && row.state != "unsure" && row.state != "unchecked" && row.state != "none"))
+                        .accessibilityIdentifier("wishList.nameSave")
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .onAppear { text = current; focused = true }
+    }
+
+    private func save(_ name: String, find: Bool) {
+        dismiss()
+        Task { await model.setWishName(row.item, name, find: find) }
+    }
+}
+
+private extension String {
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
 
 extension LibraryModel {
@@ -428,6 +582,25 @@ extension LibraryModel {
             Haptic.settled()
             show("Checked \(done) of \(ids.count). Found prices for \(found)\(failed > 0 ? ", \(failed) couldn't be checked" : "").")
         }
+    }
+
+    /// "Not the same item": that store's price goes (with Undo), and the store is skipped for this save from now on.
+    func removeOffer(_ save: Save, _ offer: WishList.Offer) async {
+        guard let lib = library, let undo = try? await lib.removeOffer(save.id, url: offer.url) else { return }
+        dealsChanged += 1
+        show("Removed. \(offer.store) is skipped for this one from now on.", undo: { @MainActor in
+            try? await lib.restoreOffer(save.id, undo)
+            self.dealsChanged += 1
+        })
+    }
+
+    /// Says exactly which product a save is, for Find deals; the save's own title stays. Prices found
+    /// under the old name are dropped, and `find` looks again straight away.
+    func setWishName(_ save: Save, _ name: String, find: Bool) async {
+        guard let lib = library else { return }
+        try? await lib.setWishName(save.id, name)
+        dealsChanged += 1
+        if find { await findDeals([save.id]) }
     }
 
     /// Takes a save off the Wish List (with Undo), or puts it back. Its deals stay.

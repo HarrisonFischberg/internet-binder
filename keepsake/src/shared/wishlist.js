@@ -14,7 +14,7 @@ import { formatPrice, hostnameOf } from './util.js';
 import { kindOf } from './kinds.js';
 import { isSocialHost } from './categorizer.js';
 import { isShopping, productFromHtml, regionNow } from './understand.js';
-import { findDealsWithAI, supportsWebLookup, usableKey, DEAL_FLOOR } from '../ai/provider.js';
+import { findDealsWithAI, supportsWebLookup, usableKey, lookupCost, DEAL_FLOOR } from '../ai/provider.js';
 
 // How sure the provider must be that it priced the product you saved before its offers are shown.
 export const DEALS_CONFIDENCE = 0.5;
@@ -25,6 +25,67 @@ export const DEAL_PAGE_DRIFT = 0.25;
 export const DEALS_OLD_HOURS = 48;
 // A store page's price this far under the search result's price is taken for another variant's.
 export const CONFIRM_FLOOR = 0.8;
+
+// A price this far under what stores you know charge (or under the other stores' middle price), at a store
+// that isn't one of them, is shown with a warning and never as the best price.
+export const DOUBT_BELOW = 0.75;
+// With nothing else to compare with, the same for a price this far under the price you saved it at.
+export const DOUBT_BELOW_SAVED = 0.6;
+
+// Large retailers people know. Not a seal of approval and not complete: it only decides which stores'
+// prices the others are measured against. A store off this list is never hidden, only flagged when its
+// price is far below theirs.
+const KNOWN_STORES = new Set(`amazon.com amazon.co.uk amazon.ca amazon.de amazon.fr amazon.it amazon.es amazon.com.au amazon.co.jp
+walmart.com target.com bestbuy.com bestbuy.ca costco.com costco.ca samsclub.com bjs.com bhphotovideo.com adorama.com newegg.com
+apple.com homedepot.com lowes.com wayfair.com macys.com nordstrom.com nordstromrack.com kohls.com rei.com backcountry.com
+dickssportinggoods.com zappos.com sephora.com ulta.com gamestop.com staples.com officedepot.com crutchfield.com chewy.com
+petco.com petsmart.com ikea.com crateandbarrel.com williams-sonoma.com surlatable.com potterybarn.com westelm.com
+bloomingdales.com saksfifthavenue.com neimanmarcus.com jcpenney.com qvc.com hsn.com microcenter.com
+argos.co.uk currys.co.uk johnlewis.com boots.com very.co.uk ao.com selfridges.com marksandspencer.com
+canadiantire.ca thebay.com londondrugs.com mediamarkt.de saturn.de otto.de fnac.com darty.com bol.com coolblue.nl
+elcorteingles.es zalando.com zalando.de zalando.co.uk jbhifi.com.au harveynorman.com.au thegoodguys.com.au kmart.com.au
+bigw.com.au officeworks.com.au`.split(/\s+/));
+
+const storeHost = (url) => hostnameOf(url || '').toLowerCase();
+// The registrable-looking end of a host: shop.dyson.com → dyson.com, www2.hm.co.uk → hm.co.uk.
+const siteOf = (host) => {
+  const parts = host.split('.');
+  const two = parts.slice(-2).join('.');
+  return /^(co|com|org|net)\.[a-z]{2}$/.test(two) ? parts.slice(-3).join('.') : two;
+};
+const slug = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// A store whose prices the others are measured against: a large retailer, the shop the save came from,
+// or the brand's own site (dyson.com for a Dyson).
+export function knownStore(host, item = null) {
+  const site = siteOf(String(host || '').toLowerCase());
+  if (!site) return false;
+  if (KNOWN_STORES.has(site)) return true;
+  const d = item?.details || {};
+  const own = [d.shopUrl, item?.type === 'instagram' ? '' : item?.url].map((u) => siteOf(storeHost(u))).filter(Boolean);
+  if (own.includes(site) && !isSocialHost(site)) return true;
+  const brand = slug(d.brand);
+  return brand.length >= 3 && slug(site.split('.')[0]) === brand;
+}
+
+// Offers with doubt: true on the ones that look too good (pure). Only stores in stock set the bar.
+export function markDoubt(offers, item = null) {
+  const list = offers || [];
+  const live = list.filter((o) => !o.outOfStock);
+  const known = live.filter((o) => knownStore(storeHost(o.url), item));
+  const saved = Number.isFinite(item?.price) && item.price > 0 && item.currency ? item.price : null;
+  return list.map((o) => {
+    if (known.includes(o)) return o;
+    let bar = null;
+    if (known.length) bar = Math.min(...known.map((k) => k.price)) * DOUBT_BELOW;
+    else {
+      const others = live.filter((x) => x !== o).map((x) => x.price).sort((a, b) => a - b);
+      if (others.length >= 2) bar = (others.length % 2 ? others[(others.length - 1) / 2] : (others[others.length / 2 - 1] + others[others.length / 2]) / 2) * DOUBT_BELOW;
+      else if (saved !== null && (!o.currency || o.currency === item.currency)) bar = saved * DOUBT_BELOW_SAVED;
+    }
+    return bar !== null && o.price < bar ? { ...o, doubt: true } : o;
+  });
+}
 
 // On the Wish List: something to buy (a product anywhere, or a page saved into a collection), not bought
 // yet, not in the Trash and not taken off the list by you.
@@ -39,20 +100,20 @@ export function hiddenFromWishList(item) {
 
 const hoursSince = (iso, now) => (iso ? (now - Date.parse(iso)) / 36e5 : Infinity);
 
-// Offers as shown: in stock first, then lowest price.
+// Offers as shown: in stock first, the ones that look too good last, then lowest price.
 export function sortOffers(offers) {
-  return [...(offers || [])].sort((a, b) => (a.outOfStock === true) - (b.outOfStock === true) || a.price - b.price);
+  return [...(offers || [])].sort((a, b) => (a.outOfStock === true) - (b.outOfStock === true) || (a.doubt === true) - (b.doubt === true) || a.price - b.price);
 }
 
 // What a Wish List row says about a save (pure).
 //   state: 'unchecked' | 'found' | 'none' (no prices found) | 'unsure' (couldn't tell which product)
-//   best: the lowest offer in stock; saving / savingPct: how far it is below the price you saved it at
+//   best: the lowest offer in stock that doesn't look too good to be true (markDoubt); saving / savingPct: how far it is below the price you saved it at
 //   (null when the save has no price, the currencies differ, or it isn't lower).
 export function dealSummary(item, now = Date.now()) {
   const deals = item?.deals || null;
   if (!deals) return { state: 'unchecked', offers: [], best: null, saving: null, savingPct: null, checkedAt: null, old: false };
-  const offers = sortOffers(deals.offers);
-  const best = offers.find((o) => !o.outOfStock) || null;
+  const offers = sortOffers(markDoubt(deals.offers, item));
+  const best = offers.find((o) => !o.outOfStock && !o.doubt) || null;
   const saved = Number.isFinite(item.price) && item.price > 0 ? item.price : null;
   // Only prices in the same, known currency can be compared.
   const comparable = best && saved !== null && !!item.currency && item.currency === best.currency;
@@ -113,12 +174,16 @@ export function dealsInput(item, { region = '', today = '' } = {}) {
   const d = kindOf(item) === 'product' ? item.details || {} : {};
   const social = item.type === 'instagram' || isSocialHost(item.host || hostnameOf(item.url || ''));
   const saved = Number.isFinite(item.price) && item.price > 0 ? item.price : null;
+  // Your own words for the product win over what was read from the page: its model and specs could be
+  // the very thing you corrected.
+  const named = String(item.wishName || '').trim();
   return {
-    title: item.title || '', listing: d.shopTitle || '', brand: d.brand || '', model: d.model || '',
-    specs: (d.specs || []).filter((s) => /^(colou?r|size|capacity|storage|style|edition|version|material)$/i.test(s.label || '')),
+    title: named || item.title || '', listing: named ? '' : d.shopTitle || '', brand: d.brand || '', model: named ? '' : d.model || '',
+    specs: named ? [] : (d.specs || []).filter((s) => /^(colou?r|size|capacity|storage|style|edition|version|material)$/i.test(s.label || '')),
     // amount (what offers are measured against) only with its currency: a bare number can't be compared.
     price: saved !== null ? formatPrice(saved, item.currency) : '', amount: item.currency ? saved : null, currency: item.currency || '',
     retailer: d.shopName || (social ? '' : item.retailer || ''), url: d.shopUrl || (social ? '' : item.url || ''),
+    skip: Array.isArray(item.dealSkip) ? item.dealSkip : [],
     region, today,
   };
 }
@@ -138,6 +203,8 @@ export async function findDeals(store, id, { fetchShopPage = async () => null, r
   const at = now();
   const input = dealsInput(item, { region: region || regionNow(), today: at.toISOString().slice(0, 10) });
   const found = await findDealsWithAI(input, settings, key);
+  // The provider was paid for this lookup whatever it found: it goes on this month's total.
+  await store.updateSettings({ wish: { spend: addSpend(settings.wish?.spend, found.usage, found.provider, found.model, at.toISOString().slice(0, 7)) } });
   const sure = found.confidence >= DEALS_CONFIDENCE;
   const offers = sure ? await Promise.all(found.offers.map(async (o) => {
     let page = null;
@@ -157,6 +224,60 @@ export async function findDeals(store, id, { fetchShopPage = async () => null, r
   // by 'deals': not an edit of yours, so no field is marked as hand-edited.
   const next = await store.updateItem(id, { deals }, { by: 'deals' });
   return { item: next, summary: dealSummary(next, at.getTime()) };
+}
+
+// This month's spend on Find deals with one more lookup added (pure). usd counts the lookups whose model
+// has a known price; unpriced counts the rest, so a total is never passed off as complete.
+export function addSpend(spend, usage, provider, model, month) {
+  const now = spend && spend.month === month ? spend : { month, usd: 0, lookups: 0, unpriced: 0 };
+  const cost = lookupCost(usage, provider, model);
+  return {
+    month, lookups: (Number(now.lookups) || 0) + 1,
+    usd: Math.round(((Number(now.usd) || 0) + (cost || 0)) * 1e4) / 1e4,
+    unpriced: (Number(now.unpriced) || 0) + (cost === null ? 1 : 0),
+  };
+}
+// This month's spend as stored, or zeroes when the stored one is another month's.
+export function spendThisMonth(settings, now = new Date()) {
+  const sp = settings?.wish?.spend;
+  const month = now.toISOString().slice(0, 7);
+  return sp && sp.month === month ? { month, usd: Number(sp.usd) || 0, lookups: Number(sp.lookups) || 0, unpriced: Number(sp.unpriced) || 0 } : { month, usd: 0, lookups: 0, unpriced: 0 };
+}
+
+// "Not the same item": the offer goes, and that store is left out of this save's later lookups. Returns
+// the offer taken away (for Undo), or null when it was already gone.
+export async function removeOffer(store, id, url) {
+  const item = await store.getItem(id);
+  const gone = (item?.deals?.offers || []).find((o) => o.url === url);
+  if (!item || !gone) return null;
+  const host = storeHost(url);
+  await store.updateItem(id, {
+    deals: { ...item.deals, offers: item.deals.offers.filter((o) => o !== gone) },
+    dealSkip: [...new Set([...(item.dealSkip || []), host].filter(Boolean))].slice(-20),
+  }, { by: 'deals' });
+  return gone;
+}
+// Undo of removeOffer: the offer is back (if this is still the lookup it came from) and its store is
+// searched again.
+export async function restoreOffer(store, id, offer, checkedAt = '') {
+  const item = await store.getItem(id);
+  if (!item || !offer?.url) return;
+  const host = storeHost(offer.url);
+  const same = item.deals && (!checkedAt || item.deals.checkedAt === checkedAt) && !item.deals.offers.some((o) => o.url === offer.url);
+  await store.updateItem(id, {
+    ...(same ? { deals: { ...item.deals, offers: sortOffers([...item.deals.offers, offer]) } } : {}),
+    dealSkip: (item.dealSkip || []).filter((h) => h !== host),
+  }, { by: 'deals' });
+}
+
+// The exact product in your words, for Find deals. The save's own title stays as it is. Empty clears it.
+// Prices found for the old name are dropped: they were for whatever the search took it to be.
+export async function setWishName(store, id, name) {
+  const item = await store.getItem(id);
+  if (!item) return;
+  const next = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (next === (item.wishName || '')) return;
+  await store.updateItem(id, { wishName: next === (item.title || '').trim() ? '' : next, deals: null }, { by: 'deals' });
 }
 
 // Take saves off the Wish List, or put them back. Their deals stay.

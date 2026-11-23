@@ -392,6 +392,29 @@ export const DEAL_OFFERS = 5;
 // Below this share of the saved price an offer is taken for a different item, not a sale.
 export const DEAL_FLOOR = 0.3;
 
+// What a lookup costs on your key, so the app can say so before Check all and keep a monthly total.
+// US dollars per million tokens [input, output] at Anthropic's list prices (Nov 2026), plus its web search
+// at $10 per 1,000 searches. Other models and providers have no price here: the app then counts lookups
+// and names no amount, rather than guess.
+export const DEAL_PRICES = {
+  'claude-haiku-5-5': [0.1, 0.5], 'claude-sonnet-5-5': [2, 10], 'claude-opus-5-5': [4, 20], 'claude-fable-5-1': [10, 50],
+};
+const SEARCH_USD = 0.01;
+// A typical lookup, measured over real ones: the search results are most of what the model reads.
+export const TYPICAL_LOOKUP = { inputTokens: 30000, outputTokens: 600, searches: 2.5 };
+// Dollars for one lookup's usage, or null when the model's price isn't known.
+export function lookupCost(usage, provider, model) {
+  const price = provider === 'anthropic' ? DEAL_PRICES[model] : null;
+  if (!price || !usage) return null;
+  const n = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 0);
+  return (n(usage.inputTokens) * price[0] + n(usage.outputTokens) * price[1]) / 1e6 + n(usage.searches) * SEARCH_USD;
+}
+// What the next lookup will probably cost with these settings, or null.
+export function lookupEstimate(settings) {
+  const cfg = providerConfig(settings);
+  return lookupCost(TYPICAL_LOOKUP, cfg.provider, cfg.model);
+}
+
 const DEALS_SYSTEM = `You find where one specific product can be bought for the lowest price right now. The shopper saved it to a wish list and wants today's prices at different stores, sales included.
 Search the web (at most ${DEAL_SEARCHES} searches) for current prices of exactly this product at online stores that sell to the shopper's country.
 Return ONLY JSON: {"product":"the exact product you priced: brand, model and variant","offers":[{"store":"the store's name","price":number,"currency":"ISO code","url":"","title":"the listing's title","sale":"what the store calls the offer, e.g. Black Friday deal, or empty","note":"one short caveat, or empty"}],"confidence":0-1}
@@ -401,6 +424,8 @@ Rules:
 - price is what one costs to buy now, as the search result shows it, in that listing's currency. Never estimate or work a price out. Not a monthly instalment, not a price per unit, not a members-only or coupon price, not the low end of a range for other variants. If a result shows no price, leave that store out.
 - url is the exact address of that store's page for this product, copied from your search results. Never a search page, a category page or a price comparison site.
 - One offer per store, up to 6 stores, lowest price first. Fewer real offers are better than doubtful ones.
+- Prefer stores people know: large retailers and the brand's own shop. Include a shop you have not heard of only when its page clearly sells this exact product, and never a marketplace seller you cannot name.
+- If the shopper lists stores to leave out, never return them.
 - confidence is how sure you are that you priced exactly the product the shopper saved. If you cannot tell which product this is, return an empty offers list and a low confidence.`;
 
 export async function findDealsWithAI(input, settings, apiKey) {
@@ -416,6 +441,7 @@ export async function findDealsWithAI(input, settings, apiKey) {
     ...(input.specs || []).slice(0, 6).map((sp) => `${cut(sp.label, 40)}: ${cut(sp.value, 80)}`),
     input.price ? `Saved at: ${cut(input.price, 40)}${input.retailer ? ` from ${cut(input.retailer, 80)}` : ''}` : input.retailer ? `Saved from: ${cut(input.retailer, 80)}` : '',
     input.url ? `Saved link: ${cut(input.url, 300)}` : '',
+    (input.skip || []).length ? `Leave out these stores (the shopper said their listing was not this product): ${input.skip.slice(0, 20).map((h) => cut(h, 80)).join(', ')}.` : '',
     input.currency ? `The shopper pays in ${cut(input.currency, 8)}: only stores that sell in ${cut(input.currency, 8)}.` : '',
     input.region ? `The shopper's country: ${cut(input.region, 8)}.` : '',
     `Today is ${cut(input.today || new Date().toISOString().slice(0, 10), 10)}.`,
@@ -460,6 +486,7 @@ export function dealsAnswer(p, seen, input = {}) {
   const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
   const want = String(input.currency || '').toUpperCase();
   const saved = Number(input.amount) > 0 ? Number(input.amount) : null;
+  const skip = new Set((input.skip || []).map((h) => String(h).toLowerCase()));
   const byStore = new Map();
   for (const o of (Array.isArray(p.offers) ? p.offers : []).slice(0, 12)) {
     if (!o || typeof o !== 'object') continue;
@@ -469,7 +496,7 @@ export function dealsAnswer(p, seen, input = {}) {
     // A number, or a plain "$259.00" / "259". Anything else ("1.299,00", "from 99") isn't guessed at.
     const price = typeof o.price === 'number' ? o.price : /^\s*[^\d\s]{0,3}\s*\d+(\.\d{1,2})?\s*[A-Za-z]{0,3}\s*$/.test(String(o.price ?? '')) ? Number(String(o.price).replace(/[^0-9.]/g, '')) : NaN;
     const currency = cut(o.currency, 8).toUpperCase() || want;
-    if (!host || !/^https:/i.test(url) || NOT_A_LISTING.test(url)) continue;
+    if (!host || !/^https:/i.test(url) || NOT_A_LISTING.test(url) || skip.has(host)) continue;
     if (!Number.isFinite(price) || price <= 0) continue;
     if (want && currency !== want) continue;
     if (saved !== null && price < saved * DEAL_FLOOR) continue;

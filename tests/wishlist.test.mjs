@@ -118,7 +118,7 @@ test('the list puts the biggest savings first, and Check all skips what was chec
   const items = [
     product({ id: 'plain', createdAt: '2026-11-01T00:00:00Z' }),
     product({ id: 'small', deals: { checkedAt: fresh, offers: [offer('A', 269)] } }),
-    product({ id: 'big', deals: { checkedAt: '2026-11-25T11:00:00Z', offers: [offer('A', 139)] } }),
+    product({ id: 'big', deals: { checkedAt: '2026-11-25T11:00:00Z', offers: [offer('A', 139, { url: 'https://www.target.com/p/arc-2' })] } }),
     product({ id: 'bought', purchased: true }),
     product({ id: 'newer', createdAt: '2026-11-20T00:00:00Z' }),
   ];
@@ -255,4 +255,141 @@ test('review, comparison and search pages are not offers', () => {
   const offers = urls.map((url, i) => ({ store: `S${i}`, price: 250 + i, currency: 'USD', url }));
   const kept = dealsAnswer({ product: 'Arc 2', offers, confidence: 0.9 }, new Set(urls), { currency: 'USD', amount: 279 }).offers;
   assert.deepEqual(kept.map((o) => o.url), ['https://shop.example/p/arc-2']);
+});
+
+// --- Naming the product, "Not the same item", too-good prices, cost ---------------------------------
+import { markDoubt, knownStore, removeOffer, restoreOffer, setWishName, addSpend, spendThisMonth } from '../keepsake/src/shared/wishlist.js';
+import { lookupCost, lookupEstimate, TYPICAL_LOOKUP } from '../keepsake/src/ai/provider.js';
+
+const at = (host, price, extra = {}) => ({ store: host, url: `https://${host}/p`, price, currency: 'USD', title: '', sale: '', note: '', confirmed: false, ...extra });
+
+test('a store you know sets the bar: a far lower price elsewhere is doubted and never the best', () => {
+  const item = product({ deals: { checkedAt: new Date().toISOString(), offers: [at('tedstore.example', 150, { confirmed: true }), at('www.amazon.com', 248), at('bestbuy.com', 259)] } });
+  const s = dealSummary(item);
+  assert.equal(s.best.url, 'https://www.amazon.com/p');
+  assert.equal(s.saving, 31);
+  assert.deepEqual(s.offers.map((o) => [hostOf(o.url), !!o.doubt]), [['www.amazon.com', false], ['bestbuy.com', false], ['tedstore.example', true]], 'the doubted one sorts last');
+  // Close to the known stores' price: no warning, and it can be the best.
+  const near = dealSummary(product({ deals: { checkedAt: new Date().toISOString(), offers: [at('tedstore.example', 230), at('amazon.com', 248)] } }));
+  assert.equal(near.best.price, 230);
+});
+const hostOf = (u) => new URL(u).hostname;
+
+test('with no store you know, the other stores or your saved price set the bar', () => {
+  const marked = markDoubt([at('a.example', 100), at('b.example', 250), at('c.example', 260)], product());
+  assert.deepEqual(marked.map((o) => !!o.doubt), [true, false, false], 'far under the others');
+  assert.equal(markDoubt([at('a.example', 150)], product())[0].doubt, true, 'alone, and far under the 279 it was saved at');
+  assert.equal(markDoubt([at('a.example', 200)], product())[0].doubt, undefined);
+  assert.equal(markDoubt([at('a.example', 20)], product({ price: null }))[0].doubt, undefined, 'nothing to compare with: no claim');
+  // Every price doubted: nothing is called the best, and no saving is claimed.
+  const s = dealSummary(product({ deals: { checkedAt: new Date().toISOString(), offers: [at('a.example', 150)] } }));
+  assert.equal(s.state, 'found');
+  assert.equal(s.best, null);
+  assert.equal(s.saving, null);
+});
+
+test('known stores: big retailers, the shop it was saved from, and the brand’s own site', () => {
+  assert.equal(knownStore('www.amazon.com'), true);
+  assert.equal(knownStore('smile.amazon.co.uk'), true);
+  assert.equal(knownStore('amazon.com.evil.example'), false);
+  assert.equal(knownStore('notamazon.com'), false);
+  assert.equal(knownStore('soundfield.example', product()), true, 'where you saved it');
+  assert.equal(knownStore('shop.dyson.com', product({ details: { brand: 'Dyson' } })), true);
+  assert.equal(knownStore('dyson-outlet.example', product({ details: { brand: 'Dyson' } })), false);
+  assert.equal(knownStore('instagram.com', makeItem({ id: 'i', type: 'instagram', kind: 'product', title: 'x', url: 'https://instagram.com/p/1' })), false);
+});
+
+test('your own name for the product is what gets searched, and old prices are cleared', async () => {
+  const store = await newStore();
+  await store.addItem(product({ details: { brand: 'Soundfield', model: 'ARC1', specs: [{ label: 'Color', value: 'white' }] }, deals: { checkedAt: new Date().toISOString(), offers: [at('amazon.com', 248)] } }));
+  await setWishName(store, 'w1', '  Soundfield Arc 2 Pro,   midnight blue ');
+  let it = await store.getItem('w1');
+  assert.equal(it.wishName, 'Soundfield Arc 2 Pro, midnight blue');
+  assert.equal(it.deals, undefined, 'prices for the old name are gone');
+  assert.equal(it.title, 'Soundfield Arc 2 headphones, black', 'the save keeps its title');
+  assert.equal((it.userFields || []).includes('title'), false);
+  const input = dealsInput(it);
+  assert.equal(input.title, 'Soundfield Arc 2 Pro, midnight blue');
+  assert.equal(input.model, '', 'the model read from the page could be what you corrected');
+  assert.deepEqual(input.specs, []);
+  assert.equal(input.brand, 'Soundfield');
+  // Back to the title clears it.
+  await setWishName(store, 'w1', it.title);
+  it = await store.getItem('w1');
+  assert.equal('wishName' in it, false);
+});
+
+test('Not the same item: the offer goes, its store is skipped next time, and Undo puts both back', async () => {
+  const store = await newStore();
+  const checkedAt = new Date().toISOString();
+  await store.addItem(product({ deals: { checkedAt, offers: [at('www.wrong.example', 199), at('amazon.com', 248)] } }));
+  const gone = await removeOffer(store, 'w1', 'https://www.wrong.example/p');
+  assert.equal(gone.price, 199);
+  let it = await store.getItem('w1');
+  assert.deepEqual(it.deals.offers.map((o) => o.price), [248]);
+  assert.deepEqual(it.dealSkip, ['wrong.example']);
+  assert.deepEqual(dealsInput(it).skip, ['wrong.example']);
+  assert.equal(await removeOffer(store, 'w1', 'https://www.wrong.example/p'), null, 'already gone');
+  // The provider returning that store again doesn't bring it back.
+  const answer = dealsAnswer({ offers: [offer('Wrong', 190, { url: 'https://www.wrong.example/p' }), offer('Other', 240)], confidence: 0.9 }, new Set(['https://www.wrong.example/p', 'https://other.example/arc-2']), dealsInput(it));
+  assert.deepEqual(answer.offers.map((o) => o.host), ['other.example']);
+  await restoreOffer(store, 'w1', gone, checkedAt);
+  it = await store.getItem('w1');
+  assert.deepEqual(it.deals.offers.map((o) => o.price), [199, 248]);
+  assert.equal('dealSkip' in it, false);
+  // Undo after a newer lookup: the store is searched again, but old prices aren't mixed into new ones.
+  const again = await removeOffer(store, 'w1', 'https://amazon.com/p');
+  await store.updateItem('w1', { deals: { checkedAt: new Date(Date.now() + 1000).toISOString(), offers: [at('target.com', 250)] } }, { by: 'deals' });
+  await restoreOffer(store, 'w1', again, checkedAt);
+  it = await store.getItem('w1');
+  assert.deepEqual(it.deals.offers.map((o) => o.price), [250]);
+  assert.equal('dealSkip' in it, false);
+});
+
+test('the last removed offer leaves the save saying no prices were found', async () => {
+  const store = await newStore();
+  await store.addItem(product({ deals: { checkedAt: new Date().toISOString(), offers: [at('wrong.example', 199)] } }));
+  await removeOffer(store, 'w1', 'https://wrong.example/p');
+  assert.equal(dealSummary(await store.getItem('w1')).state, 'none');
+});
+
+test('what a lookup costs: known for Claude models, never guessed for others', () => {
+  const usage = { inputTokens: 30000, outputTokens: 600, searches: 3 };
+  assert.equal(Math.round(lookupCost(usage, 'anthropic', 'claude-haiku-5-5') * 1e4) / 1e4, 0.0333);
+  assert.equal(Math.round(lookupCost(usage, 'anthropic', 'claude-sonnet-5-5') * 1e4) / 1e4, 0.096);
+  assert.equal(lookupCost(usage, 'openai', 'gpt-x'), null);
+  assert.equal(lookupCost(usage, 'anthropic', 'claude-some-future-model'), null);
+  assert.equal(lookupCost(null, 'anthropic', 'claude-haiku-5-5'), null);
+  const est = lookupEstimate({ ai: { on: true, provider: 'anthropic', model: 'claude-haiku-5-5' } });
+  assert.ok(est > 0.02 && est < 0.04, `about 3 cents on Haiku, was ${est}`);
+  assert.equal(lookupEstimate({ ai: { on: true, provider: 'openai', model: 'gpt-x' } }), null);
+  assert.ok(TYPICAL_LOOKUP.searches > 0);
+});
+
+test('the monthly total adds each lookup, starts again each month, and counts what it cannot price', () => {
+  const u = { inputTokens: 30000, outputTokens: 600, searches: 3 };
+  let s = addSpend(null, u, 'anthropic', 'claude-haiku-5-5', '2026-11');
+  s = addSpend(s, u, 'anthropic', 'claude-haiku-5-5', '2026-11');
+  assert.deepEqual(s, { month: '2026-11', lookups: 2, usd: 0.0666, unpriced: 0 });
+  s = addSpend(s, u, 'openai', 'gpt-x', '2026-11');
+  assert.deepEqual(s, { month: '2026-11', lookups: 3, usd: 0.0666, unpriced: 1 });
+  s = addSpend(s, u, 'anthropic', 'claude-haiku-5-5', '2026-12');
+  assert.deepEqual(s, { month: '2026-12', lookups: 1, usd: 0.0333, unpriced: 0 });
+  assert.deepEqual(spendThisMonth({ wish: { spend: s } }, new Date('2026-12-05T00:00:00Z')), s);
+  assert.equal(spendThisMonth({ wish: { spend: s } }, new Date('2027-01-05T00:00:00Z')).lookups, 0);
+  assert.equal(spendThisMonth({}).lookups, 0);
+});
+
+test('Find deals puts the lookup on this month’s total, even when it finds nothing', async () => {
+  const store = await newStore({ ai: { on: true, provider: 'anthropic', model: 'claude-haiku-5-5' } });
+  await store.addItem(product());
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => reply({ product: 'Soundfield Arc 2', offers: [], confidence: 0.9 }, []);
+  try {
+    await findDeals(store, 'w1', { now: () => new Date('2026-11-23T10:00:00Z') });
+    await findDeals(store, 'w1', { now: () => new Date('2026-11-23T11:00:00Z') });
+  } finally { globalThis.fetch = real; }
+  const sp = spendThisMonth(await store.getSettings(), new Date('2026-11-24T00:00:00Z'));
+  assert.equal(sp.lookups, 2);
+  assert.ok(sp.usd > 0.05 && sp.usd < 0.07, `two lookups at about 3 cents, was ${sp.usd}`);
 });

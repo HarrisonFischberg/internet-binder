@@ -640,7 +640,9 @@
         savedPrice: Number.isFinite(item.price) && item.price > 0 ? money(item.price, item.currency) : '',
         state: summary.state,
         offers: summary.offers.map((o) => ({ store: o.store, url: o.url, price: money(o.price, o.currency), sale: o.sale || '', note: o.note || '',
-          confirmed: o.confirmed === true, outOfStock: o.outOfStock === true, lowest: o === summary.best })),
+          confirmed: o.confirmed === true, outOfStock: o.outOfStock === true, lowest: o === summary.best, doubt: o.doubt === true })),
+        // What the last lookup took the product to be, and your own words for it (wins; empty when unset).
+        product: item.deals?.product || '', wishName: item.wishName || '',
         bestStore: summary.best ? summary.best.store : '',
         bestPrice: summary.best ? money(summary.best.price, summary.best.currency) : '',
         saving: summary.saving !== null ? money(summary.saving, summary.best.currency || item.currency) : '',
@@ -653,6 +655,10 @@
         keyReady: !!K.provider.usableKey(settings, secret),
         searchReady: K.provider.supportsWebLookup(settings),
         toCheck: K.wishlist.dealsToCheck(items).map((i) => i.id),
+        // Dollars one lookup probably costs on your key (null when the model's price isn't known), and
+        // this month's lookups on this device with what they cost.
+        estimateEach: K.provider.lookupEstimate(settings),
+        spend: K.wishlist.spendThisMonth(settings),
       };
     },
     // Find deals for one save, with your key (you asked). Throws the provider's error; the save's last
@@ -662,6 +668,18 @@
       return { state: r.summary.state, offers: r.skipped ? 0 : r.summary.offers.length, usage: r.item.deals?.usage || null };
     },
     async setWishHidden(ids, hidden) { await K.wishlist.setWishHidden(store, ids, hidden); },
+    // "Not the same item": takes the offer off and skips that store for this save from now on. Returns
+    // what restoreOffer needs for Undo, or null.
+    async removeOffer(id, url) {
+      const checkedAt = (await store.getItem(id))?.deals?.checkedAt || '';
+      const offer = await K.wishlist.removeOffer(store, id, url);
+      return offer ? { offer, checkedAt } : null;
+    },
+    async restoreOffer(id, undoJSON) {
+      const undo = typeof undoJSON === 'string' ? JSON.parse(undoJSON) : undoJSON;
+      await K.wishlist.restoreOffer(store, id, undo?.offer, undo?.checkedAt || '');
+    },
+    async setWishName(id, name) { await K.wishlist.setWishName(store, id, name); },
     // A workout's goals with their progress (goals.js goalProgress), and today's check-ins so a second
     // tap on Done today can take today back off the goal.
     async goals(itemId) {
