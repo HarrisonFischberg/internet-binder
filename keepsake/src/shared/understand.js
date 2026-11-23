@@ -629,11 +629,15 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
     const key = keyFor(settings, await store.getSecret('aiApiKey'));
     if (aiAvailable(settings, key) && (html || supportsWebLookup(settings))) {
       try {
-        // The page is the truth here, not the post it was saved from: no caption, no thumbnail.
+        // The saved post and the page side by side: the page says what the product is, the post (its
+        // caption and picture) says which colour or size was meant and what was said about it.
+        const ig = current.instagram || {};
         ai = await understandProductWithAI({
           title: page?.name || read?.title || current.title || '', description: read?.description || '', site: read?.siteName || prettyRetailer(hostnameOf(url)),
           url, price: page && page.price !== null ? formatPrice(page.price, page.currency) || String(page.price) : '',
-          pages: html ? [{ url, text: pageText(html) }] : [], image: '',
+          pages: html ? [{ url, text: pageText(html) }] : [],
+          post: { title: current.title || '', caption: ig.caption || (current.description && current.description !== read?.description ? current.description : ''), creator: ig.creator || '', hashtags: ig.hashtags || [], from: current.retailer || current.host || '' },
+          image: await pictureOf(current, loadImage),
           // The page's text is in hand: nothing is searched, so the answer can't wander to another product.
           linked: true, noSearch: !!html,
         }, settings, key);
@@ -650,12 +654,59 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
   const latest = rewrite ? await store.getItem(id) : current;
   if (!latest || latest.deletedAt) return { ok: false, error: 'That save no longer exists.' };
   const { patch, changes, site } = planLinkedProduct(latest, url, page, { ai, rewrite: rebuild });
-  if (!changes.length) return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: latest.title, price: '', logId: null, same: true };
+  // What this teaches: posts from this account come from this shop. Later reads of its other posts look
+  // there first (shopHintsFor), and the saves of its that no shop page has confirmed yet are offered for
+  // another read now (related).
+  const lesson = productLesson(latest, url, site, patch.details?.brand || latest.details?.brand || '');
+  let related = [];
+  if (lesson) {
+    await store.updatePrefs({ productShops: addProductLesson((await store.getPrefs()).productShops, lesson) });
+    related = relatedToLesson(await store.getItems(), latest, lesson);
+  }
+  const learned = lesson ? { creator: lesson.creator, related } : { creator: '', related: [] };
+  if (!changes.length) return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: latest.title, price: '', logId: null, same: true, ...learned };
   const before = Object.fromEntries([...LOGGED, 'deals', 'dealSkip', 'wishName'].filter((f) => f in patch).map((f) => [f, latest[f] === undefined ? null : latest[f]]));
   await store.updateItem(id, patch, { by: 'ai' });
   const logId = uid();
   await store.appendAiLog([{ id: logId, runId: `link-product-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: ai?.reason || `From the store page you added (${site}).`, undone: false }]);
-  return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: patch.title || latest.title, price: 'price' in patch ? formatPrice(patch.price, patch.currency) || String(patch.price) : '', logId };
+  return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: patch.title || latest.title, price: 'price' in patch ? formatPrice(patch.price, patch.currency) || String(patch.price) : '', logId, ...learned };
+}
+
+// --- What a product link teaches -------------------------------------------------------------------
+
+// Who posted a save (an Instagram or X account), lower case, or ''.
+const creatorOf = (item) => String(item?.instagram?.creator || '').replace(/^@/, '').trim().toLowerCase();
+
+// The lesson in a link you gave for a post (pure), or null when the save has no account to learn about:
+// { creator, site, shop, brand, at }.
+export function productLesson(item, url, shop = '', brand = '', at = nowIso()) {
+  const creator = creatorOf(item);
+  const site = siteKey(url);
+  if (!creator || !site) return null;
+  return { creator, site, shop: String(shop || '').slice(0, 80), brand: String(brand || '').slice(0, 60), at };
+}
+
+// The lessons with one more (pure): one per account and site, newest last, at most 200.
+export function addProductLesson(lessons, lesson) {
+  const kept = (Array.isArray(lessons) ? lessons : []).filter((l) => l && !(l.creator === lesson.creator && l.site === lesson.site));
+  return [...kept, lesson].slice(-200);
+}
+
+// The shops learned for the account that posted this save, newest first, at most 3 (pure).
+export function shopHintsFor(item, prefs) {
+  const creator = creatorOf(item);
+  if (!creator) return [];
+  return (Array.isArray(prefs?.productShops) ? prefs.productShops : []).filter((l) => l && l.creator === creator && l.site)
+    .slice(-3).reverse().map((l) => ({ creator: l.creator, site: l.site, shop: l.shop || '', brand: l.brand || '' }));
+}
+
+// Other saves the lesson may fix (pure): things to buy from the same account that no shop page has
+// confirmed (no shop page yet, or one only AI found) and that you haven't described yourself. Ids, at most 25.
+export function relatedToLesson(items, item, lesson) {
+  return (items || []).filter((o) => o && o.id !== item.id && !o.deletedAt && !o.purchased && creatorOf(o) === lesson.creator
+    && !hasOwnView(kindOf(o)) && (kindOf(o) === 'product' || isShopping(o))
+    && !(kindOf(o) === 'product' && ['page', 'you'].includes(o.details?.source) && o.details?.shopUrl))
+    .slice(0, 25).map((o) => o.id);
 }
 
 // A link's site, for telling whether two addresses are the same shop ("www." aside).
@@ -812,7 +863,7 @@ export function planProduct(item, ai, page = null) {
 }
 
 // What the provider is told about a product.
-function productInput(item, pages, image) {
+function productInput(item, pages, image, hints = []) {
   const ig = item.instagram || {};
   return {
     title: item.title || '',
@@ -826,6 +877,7 @@ function productInput(item, pages, image) {
     products: ig.products || [],
     pages,
     image,
+    hints,
   };
 }
 
@@ -843,8 +895,8 @@ async function pictureOf(item, loadImage) {
 }
 
 // The product read: the picture, what it is, its own page. Returns the plan, or null when nothing changes.
-async function readProduct(item, settings, key, pages, image, { fetchShopPage }) {
-  const ai = await understandProductWithAI(productInput(item, pages, image), settings, key);
+async function readProduct(item, settings, key, pages, image, { fetchShopPage, hints = [] }) {
+  const ai = await understandProductWithAI(productInput(item, pages, image, hints), settings, key);
   let page = null;
   if (ai.listing?.url && ai.confidence >= PRODUCT_CONFIDENCE) {
     try {
@@ -900,7 +952,9 @@ export async function understandItem(store, id, { force = false, runId = '' } = 
   let reason = ai?.reason || '';
   let confidence = ai?.confidence ?? null;
   if (!hasOwnView(kind) && isShopping(current, ai)) {
-    const { ai: found, page } = await readProduct(current, settings, key, pages, image, { fetchShopPage });
+    // Shops you linked this account's other posts to: the search looks there first.
+    const hints = shopHintsFor(current, await store.getPrefs());
+    const { ai: found, page } = await readProduct(current, settings, key, pages, image, { fetchShopPage, hints });
     current = (await store.getItem(id)) || current;
     const product = planProduct({ ...current, ...patch }, found, page);
     patch = { ...patch, ...product.patch };

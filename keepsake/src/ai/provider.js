@@ -1080,8 +1080,19 @@ export async function understandProductWithAI(input, settings, apiKey) {
     ...(input.products || []).slice(0, 5).map((p) => `Tagged product: ${cut(p.name, 160)}${p.retailer ? ` (${cut(p.retailer, 80)})` : ''}`),
     ...(input.pages || []).slice(0, 2).map((pg) => `Linked page ${cut(pg.url, 300)}:\n${cut(pg.text, 3000)}`),
     input.image ? 'The image is the saved thumbnail.' : 'There is no image.',
-    // The person pasted this page to say which product it is: the page decides, nothing else.
-    input.linked ? `The person gave the link above as this product's own page. Build the card for the product on that page only: never another product, model, size or colour. listing.url must be that same link, or empty.` : '',
+    // The person pasted this page to say which product it is: the page decides what it is, and the post it
+    // was saved from says which variant was meant.
+    ...(input.linked ? [
+      `The person gave the link above as this product's own page. Build the card for the product on that page only, never another product or model; where anything disagrees with the page, the page is right. listing.url must be that same link, or empty.`,
+      input.post ? `It was saved from this post. Compare the two: when the page offers several colours, sizes or versions, name the one the post (or the image, which is the post's picture) shows; put what the post adds about using it in the summary; and say in "reason" whether the post and the page are the same product.` : '',
+      input.post?.title ? `Post title: ${cut(input.post.title, 200)}` : '',
+      input.post?.caption ? `Post caption: ${cut(input.post.caption, 1500)}` : '',
+      input.post?.creator ? `Posted by: @${cut(input.post.creator, 80)}` : '',
+      input.post?.hashtags?.length ? `Post hashtags: ${input.post.hashtags.slice(0, 20).map((h) => `#${cut(h, 60)}`).join(' ')}` : '',
+      input.post?.from ? `Saved from: ${cut(input.post.from, 80)}` : '',
+    ] : []),
+    // What earlier links taught: this account's posts have been products from these shops.
+    ...(input.hints || []).slice(0, 3).map((h) => `The person told the app earlier that a post from @${cut(h.creator, 80)} was a product on ${cut(h.site, 120)}${h.shop ? ` (${cut(h.shop, 80)})` : ''}. Posts from one account are often from the same shop: look on that site first, and use it only if this exact product is really there.`),
   ].filter(Boolean).join('\n');
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
   if (!apiKey || !supportsWebLookup(settings) || input.noSearch) {

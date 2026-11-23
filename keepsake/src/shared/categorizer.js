@@ -642,6 +642,8 @@ export function emptyPrefs() {
     learnedKeywords: {},
     learnedKinds: {},
     retailerPrefs: {},
+    // What product links taught (understand.js productLesson): { creator, site, shop, brand, at }.
+    productShops: [],
     corrections: [],
     confidenceThreshold: 0.6,
     autoCreateCollections: true,

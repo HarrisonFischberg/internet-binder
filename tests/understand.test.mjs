@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
 import { undoFixes } from '../keepsake/src/shared/aiFix.js';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink, linkProductPage } from '../keepsake/src/shared/understand.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink, linkProductPage, productLesson, addProductLesson, shopHintsFor, relatedToLesson } from '../keepsake/src/shared/understand.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
@@ -515,7 +515,9 @@ test('linkProductPage rewrite: a link where you say which product it is rebuilds
     r = await linkProductPage(store, it.id, 'brewhaus.example.com/mug', { fetchPage: async () => page, rewrite: true });
     assert.deepEqual([r.ok, r.ai, r.aiError], [true, true, '']);
     assert.match(bodies[0], /Hand-thrown stoneware/);
-    assert.doesNotMatch(bodies[0], /obsessed with this mug/);
+    // The post goes along with the page, to be compared with it.
+    assert.match(bodies[0], /Post caption: obsessed with this mug/);
+    assert.match(bodies[0], /Compare the two/);
     saved = await store.getItem(it.id);
     assert.deepEqual([saved.title, saved.details.summary, saved.details.features, saved.details.category, saved.details.specs.map((x) => x.label)], ['Stoneware Mug 12 oz', 'A hand-thrown stoneware mug.', ['Dishwasher safe'], 'mug', ['Capacity']]);
 
@@ -538,6 +540,45 @@ test('linkProductPage rewrite: a link where you say which product it is rebuilds
   } finally {
     globalThis.fetch = real;
   }
+});
+
+test('a product link teaches: the account\'s shop is remembered, its other unconfirmed saves are offered, and later reads look there first', async () => {
+  const store = await linkStore();
+  const mug = await store.addItem(post('obsessed with this mug ☕', { id: 'mug', kind: 'product', collectionId: null }));
+  const bowl = await store.addItem(post('new bowls in the shop', { id: 'bowl', kind: 'product', collectionId: null, url: 'https://www.instagram.com/p/BOWL/' }));
+  // Already confirmed by a shop page, another account's, a recipe, and one that is bought: none is offered.
+  await store.addItem(post('plate', { id: 'plate', kind: 'product', collectionId: null, url: 'https://www.instagram.com/p/PLATE/', details: { shopUrl: 'https://brewhaus.example.com/plate', shopName: 'Brewhaus', source: 'page' } }));
+  await store.addItem({ ...post('lamp', { id: 'lamp', kind: 'product', collectionId: null, url: 'https://www.instagram.com/p/LAMP/' }), instagram: { caption: 'lamp', creator: 'someoneelse', hashtags: [] } });
+  await store.addItem(post('soup', { id: 'soup', kind: 'recipe', collectionId: null, url: 'https://www.instagram.com/p/SOUP/' }));
+  await store.addItem(post('cup', { id: 'cup', kind: 'product', collectionId: null, purchased: true, url: 'https://www.instagram.com/p/CUP/' }));
+  const page = `<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Stoneware Mug 12 oz', brand: { name: 'Brewhaus' }, offers: { price: '24.00', priceCurrency: 'USD' } })}</script></head></html>`;
+  const r = await linkProductPage(store, mug.id, 'https://www.brewhaus.example.com/mug', { fetchPage: async () => page, rewrite: true });
+  assert.deepEqual([r.ok, r.creator, r.related], [true, 'cook', [bowl.id]]);
+  const prefs = await store.getPrefs();
+  assert.deepEqual(prefs.productShops.map((l) => [l.creator, l.site, l.shop, l.brand]), [['cook', 'brewhaus.example.com', 'Brewhaus', 'Brewhaus']]);
+  assert.deepEqual(shopHintsFor(bowl, prefs), [{ creator: 'cook', site: 'brewhaus.example.com', shop: 'Brewhaus', brand: 'Brewhaus' }]);
+  assert.deepEqual(shopHintsFor({ instagram: { creator: 'someoneelse' } }, prefs), []);
+  // The same account and site again replaces its lesson; a save with no account teaches nothing.
+  assert.equal(addProductLesson(prefs.productShops, productLesson(mug, 'https://brewhaus.example.com/other', 'Brewhaus')).length, 1);
+  assert.equal(productLesson({ title: 'x' }, 'https://brewhaus.example.com/mug'), null);
+  assert.deepEqual(relatedToLesson(await store.getItems(), mug, { creator: 'cook', site: 'brewhaus.example.com' }), [bowl.id]);
+
+  // Fix with AI on the other save: the provider is told where this account's products were before.
+  await store.updateSettings({ ai: { on: true, provider: 'anthropic', model: 'm' } });
+  await store.setSecret('aiApiKey', 'sk');
+  const real = globalThis.fetch;
+  const bodies = [];
+  try {
+    globalThis.fetch = async (url, opts) => {
+      bodies.push(String(opts?.body || ''));
+      const text = JSON.stringify({ kind: 'product', name: 'Stoneware Bowl', confidence: 0.9, title: 'Stoneware Bowl', details: {}, drafted: [], reason: 'a bowl' });
+      return { ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text }] }), json: async () => ({ content: [{ type: 'text', text }] }) };
+    };
+    await understandItem(store, bowl.id, { force: true });
+  } finally {
+    globalThis.fetch = real;
+  }
+  assert.ok(bodies.some((b) => /a post from @cook was a product on brewhaus\.example\.com \(Brewhaus\)/.test(b)), 'the hint reaches the product read');
 });
 
 test('importRecipeFromLink: a page with no recipe card is read by AI; without AI, or with no recipe, it says so and changes nothing', async () => {

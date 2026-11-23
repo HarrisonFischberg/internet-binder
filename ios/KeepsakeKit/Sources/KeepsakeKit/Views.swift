@@ -127,6 +127,10 @@ public struct ProductLink: Decodable, Sendable {
     public let title: String?
     public let price: String?
     public let logId: String?
+    /// What the link taught: the account that posted the save, and its other saves (ids) that no shop page
+    /// has confirmed yet, which a new read can now look for in the same shop.
+    public let creator: String?
+    public let related: [String]?
 }
 
 /// The Wish List (shared/wishlist.js): everything still to buy, from every collection and Review, with the

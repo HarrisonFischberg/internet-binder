@@ -1324,6 +1324,12 @@ function mergePrefs(base, incoming, idMap) {
     out.retailerPrefs[host] = e;
   }
   out.corrections = [...(out.corrections || []), ...(incoming.corrections || [])].slice(-200);
+  // Product links' lessons: one per account and site, the incoming one winning.
+  const lessons = (list) => (Array.isArray(list) ? list : []).filter((l) => l && typeof l.creator === 'string' && typeof l.site === 'string')
+    .map((l) => ({ creator: sanitizeText(l.creator, 80).toLowerCase(), site: sanitizeText(l.site, 120).toLowerCase(), shop: sanitizeText(l.shop, 80), brand: sanitizeText(l.brand, 60), at: sanitizeText(l.at, 40) }));
+  const seen = new Map();
+  for (const l of [...lessons(out.productShops), ...lessons(incoming.productShops)]) seen.set(`${l.creator} ${l.site}`, l);
+  out.productShops = [...seen.values()].slice(-200);
   if (Number.isFinite(Number(incoming.confidenceThreshold))) out.confidenceThreshold = Number(incoming.confidenceThreshold);
   if (typeof incoming.autoCreateCollections === 'boolean') out.autoCreateCollections = incoming.autoCreateCollections;
   return out;
@@ -1403,6 +1409,7 @@ export function validateExport(payload) {
       learnedKeywords: {},
       retailerPrefs: {},
       corrections: (Array.isArray(p.corrections) ? p.corrections : []).slice(-200).filter((c) => c && typeof c === 'object'),
+      productShops: (Array.isArray(p.productShops) ? p.productShops : []).slice(-200).filter((l) => l && typeof l === 'object' && typeof l.creator === 'string' && typeof l.site === 'string'),
       confidenceThreshold: Number.isFinite(Number(p.confidenceThreshold)) ? Math.max(0.2, Math.min(0.95, Number(p.confidenceThreshold))) : 0.6,
       autoCreateCollections: p.autoCreateCollections !== false,
     };
