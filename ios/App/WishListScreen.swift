@@ -708,7 +708,7 @@ private struct WishNameSheet: View {
                     }
                 }
             }
-            .navigationTitle("Name the product").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Product name").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // Cancel stays live while a page is read: the read carries on and its result shows as a toast.
                 ToolbarItem(placement: .cancellationAction) { Button(working ? "Close" : "Cancel") { dismiss() } }

@@ -479,7 +479,7 @@
     // summary, features and specs (the page's text goes to your provider, or stays on device with Apple Intelligence).
     async linkProduct(id, link, rewrite) {
       try {
-        return await K.understand.linkProductPage(store, id, link, { fetchPage: viaNative('fetchAskedPage'), rewrite: !!rewrite });
+        return await K.understand.linkProductPage(store, id, link, { fetchPage: viaNative('fetchAskedPage'), loadImage: viaNative('loadImage'), rewrite: !!rewrite });
       } catch (e) {
         return { ok: false, error: String((e && e.message) || e) || 'Something went wrong.' };
       }

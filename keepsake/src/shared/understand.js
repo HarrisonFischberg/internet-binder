@@ -584,7 +584,12 @@ export function productFromHtml(html, baseUrl = '') {
     currency,
     priceVaries: ranged || stated.size > 1,
     availability,
-    image: abs(product ? [].concat(product.image || [])[0] : null) || abs(meta('og:image')),
+    // A structured image that is the page's own address (some stores do this) isn't a picture: use og:image.
+    image: (() => {
+      const own = (u) => { try { const a = new URL(u), b = new URL(baseUrl); return a.origin + a.pathname.replace(/\/$/, '') === b.origin + b.pathname.replace(/\/$/, ''); } catch { return false; } };
+      const ld = abs(product ? [].concat(product.image || [])[0] : null);
+      return (ld && !(baseUrl && own(ld)) ? ld : '') || abs(meta('og:image'));
+    })(),
     siteName: meta('og:site_name').slice(0, 80),
     specs: specs.slice(0, 16),
     url: baseUrl,
@@ -602,7 +607,7 @@ export function productFromHtml(html, baseUrl = '') {
 // AI, or when it fails, the page's own facts still go on (aiError says why); with neither a readable page
 // nor a sure answer, only the link is kept, as without rewrite. Your own words for the
 // product (wishName) are dropped: the page says it better.
-export async function linkProductPage(store, id, link, { fetchPage = async () => null, rewrite = false } = {}) {
+export async function linkProductPage(store, id, link, { fetchPage = async () => null, loadImage = async () => null, rewrite = false } = {}) {
   const url = recipeLink(link);
   if (!url) return { ok: false, error: 'That doesn’t look like a web address. Paste the link to the product’s page in a store.' };
   if (SOCIAL.test(hostOf(url))) return { ok: false, error: 'That’s a social post, not a store page. Paste the link to the product’s page in a store.' };
@@ -612,7 +617,12 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
   let html = null;
   try { html = await fetchPage(url); } catch { html = null; }
   const read = html ? productFromHtml(html, url) : null;
-  const page = read && (read.structured || read.price !== null) ? read : null;
+  let page = read && (read.structured || read.price !== null) ? read : null;
+  // The card shows a small copy kept on the device, not an address: fetch the page's picture now.
+  if (page?.image) {
+    const picture = await pictureOf({ image: page.image }, loadImage);
+    if (picture) page = { ...page, image: picture };
+  }
   const current = await store.getItem(id);
   if (!current || current.deletedAt) return { ok: false, error: 'That save no longer exists.' };
   let ai = null;

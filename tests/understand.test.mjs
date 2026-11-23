@@ -584,3 +584,19 @@ test('importRecipeFromLink: a bad address, a social post or a page that won\'t o
   assert.match((await importRecipeFromLink(store, it.id, 'https://gone.example.com/x', { fetchPage })).error, /Couldn’t read that page/);
   assert.equal((await store.getAiLog()).length, 0);
 });
+
+test("productFromHtml: a structured image that is the page's own address falls back to og:image", () => {
+  const page = (image) => `<html><head><meta property="og:image" content="https://cdn.shop.example/a.jpg"><script type="application/ld+json">{"@type":"Product","name":"Shoe 9","image":"${image}","offers":{"price":"10","priceCurrency":"USD"}}</script></head></html>`;
+  assert.equal(productFromHtml(page('https://shop.example/p/shoe-9'), 'https://shop.example/p/shoe-9/').image, 'https://cdn.shop.example/a.jpg');
+  assert.equal(productFromHtml(page('https://shop.example/i.jpg'), 'https://shop.example/p/shoe-9').image, 'https://shop.example/i.jpg', 'a real structured image still wins');
+});
+
+test("linkProductPage: the page's picture is fetched and kept on the device, not stored as an address", async () => {
+  const store = await linkStore();
+  const it = await store.addItem(post('obsessed with this mug ☕', { kind: 'product', collectionId: null }));
+  const page = `<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Stoneware Mug 12 oz', image: 'https://cdn.brewhaus.example.com/mug.jpg', offers: { price: '24.00', priceCurrency: 'USD' } })}</script></head></html>`;
+  const asked = [];
+  await linkProductPage(store, it.id, 'https://brewhaus.example.com/mug', { fetchPage: async () => page, loadImage: async (u) => { asked.push(u); return 'data:image/jpeg;base64,AAAA'; } });
+  assert.deepEqual(asked, ['https://cdn.brewhaus.example.com/mug.jpg']);
+  assert.equal((await store.getItem(it.id)).image, 'data:image/jpeg;base64,AAAA');
+});
