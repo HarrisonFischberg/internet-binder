@@ -112,6 +112,8 @@ final class LibraryModel {
     /// deals change so the list reads them again.
     /// After a product link taught a shop: the same account's other saves, offered for another read.
     var learnedOffer: LearnedOffer?
+    /// Counts product links: Undo of one invalidates its offer even while the offer is still on its way.
+    var offerSerial = 0
     var dealRun: DealRun?
     var dealsChanged = 0
     /// What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id.

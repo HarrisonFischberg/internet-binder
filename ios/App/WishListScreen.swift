@@ -579,6 +579,9 @@ private struct ProductDetailsSheet: View {
     private var current: String { (row?.wishName.isEmpty ?? true) ? save.title : (row?.wishName ?? "") }
     /// A link in either field: the page the save is rebuilt from.
     private var theLink: String? { !trimmedLink.isEmpty ? trimmedLink : ProductLinkText.isLink(trimmed) ? trimmed : nil }
+    private var captionOnly: Bool {
+        (row?.wishName.isEmpty ?? true) && save.title.count > 40 && (InstagramPage.isPost(save.url) || XPost.isPost(save.url))
+    }
     private var nameChanged: Bool {
         guard let row else { return false }
         return !trimmed.isEmpty && (trimmed != current || row.state == "unsure" || row.state == "unchecked" || row.state == "none")
@@ -666,7 +669,8 @@ private struct ProductDetailsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .onAppear { text = current; focus = .link }
+        // A post's caption isn't a product name: it stays out of the field until the AI or you have named it.
+        .onAppear { text = captionOnly ? "" : current; focus = .link }
     }
 
     /// The save is rebuilt from the linked page. The sheet stays up while it reads, and says why if it can't.
@@ -795,6 +799,8 @@ extension LibraryModel {
             refresh()
             dealsChanged += 1
             let site = r.site ?? "the store"
+            offerSerial += 1
+            let serial = offerSerial
             var said = "Updated from \(site)"
             if let price = r.price, !price.isEmpty { said += ": \(price)" }
             if r.read != true {
@@ -811,6 +817,7 @@ extension LibraryModel {
                     if let creator = r.creator, let taught = r.lessonSite, !creator.isEmpty, !taught.isEmpty {
                         try? await lib.forgetProductLesson(creator: creator, site: taught)
                     }
+                    if self.offerSerial == serial { self.offerSerial += 1 }
                     self.learnedOffer = nil
                     self.refresh()
                     self.dealsChanged += 1
@@ -823,6 +830,7 @@ extension LibraryModel {
                 let offer = LearnedOffer(ids: related, creator: r.creator ?? "", shop: site)
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(0.9))
+                    guard self.offerSerial == serial else { return }
                     self.learnedOffer = offer
                 }
             }
