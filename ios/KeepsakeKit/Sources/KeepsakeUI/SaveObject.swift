@@ -53,6 +53,7 @@ struct SaveCard: View {
     var shelf = false
     @Environment(\.ks) private var t
     @Environment(\.dealLines) private var dealLines
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// The lowest price found for it, when that beats what it was saved at ("Now $36.99 at Brewhaus").
     private var deal: String { compact || shelf ? "" : dealLines[save.id] ?? "" }
     /// Room kept under the name for the state badge, so the badge never sits on the words.
@@ -103,7 +104,9 @@ struct SaveCard: View {
                 if !fact.isEmpty && !compact && !shelf {
                     Text(fact).font(KSFont.fact(t)).foregroundStyle(save.hasImage ? .white.opacity(0.88) : t.inkMuted).lineLimit(1)
                 }
-                if !deal.isEmpty {
+                // Not at the largest text sizes: the card's words already fill its picture there, and the line
+                // would cut off the price. VoiceOver and the save's page still say it.
+                if !deal.isEmpty && !typeSize.isAccessibilitySize {
                     Label(deal, systemImage: "tag.fill").labelStyle(.titleAndIcon)
                         .font(KSFont.fact(t).weight(.semibold)).foregroundStyle(save.hasImage ? .white : t.ink).lineLimit(1)
                 }
