@@ -401,7 +401,8 @@ export const DEAL_PRICES = {
 };
 const SEARCH_USD = 0.01;
 // A typical lookup, measured over real ones: the search results are most of what the model reads.
-export const TYPICAL_LOOKUP = { inputTokens: 30000, outputTokens: 600, searches: 2.5 };
+// Output includes the model's thinking, which is billed as output.
+export const TYPICAL_LOOKUP = { inputTokens: 30000, outputTokens: 2500, searches: 2.5 };
 // Dollars for one lookup's usage, or null when the model's price isn't known.
 export function lookupCost(usage, provider, model) {
   const price = provider === 'anthropic' ? DEAL_PRICES[model] : null;
@@ -454,7 +455,8 @@ export async function findDealsWithAI(input, settings, apiKey) {
       ? await findViaAnthropic(cfg, apiKey, text, '', controller, opts)
       : await findViaOpenAI(cfg, apiKey, text, '', controller, opts);
     const parsed = parseJsonBlock(out);
-    if (!parsed || typeof parsed !== 'object') throw new Error('The provider didn’t return a usable answer.');
+    // An answer that can't be used was still paid for: its usage rides on the error for the monthly total.
+    if (!parsed || typeof parsed !== 'object') throw Object.assign(new Error('The provider didn’t return a usable answer.'), { usage: usage || null, provider: cfg.provider, model: cfg.model });
     return { ...dealsAnswer(parsed, seen, input), provider: cfg.provider, model: cfg.model, usage: usage || null };
   } finally {
     clearTimeout(timer);
@@ -463,6 +465,12 @@ export async function findDealsWithAI(input, settings, apiKey) {
 
 // Review, comparison and search pages show other products' prices.
 const NOT_A_LISTING = /\/(reviews?|compare|comparison|search)(\/|\?|$)|[?&](q|query|k)=/i;
+// The registrable-looking end of a host: shop.dyson.com → dyson.com, www2.hm.co.uk → hm.co.uk.
+export const siteOfHost = (host) => {
+  const parts = String(host || '').toLowerCase().split('.').filter(Boolean);
+  const two = parts.slice(-2).join('.');
+  return /^(co|com|org|net)\.[a-z]{2}$/.test(two) ? parts.slice(-3).join('.') : two;
+};
 const hostOfUrl = (url) => { try { return new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } };
 
 // The search result this address is (same host and path), exactly as the search returned it, or ''.
@@ -486,7 +494,8 @@ export function dealsAnswer(p, seen, input = {}) {
   const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
   const want = String(input.currency || '').toUpperCase();
   const saved = Number(input.amount) > 0 ? Number(input.amount) : null;
-  const skip = new Set((input.skip || []).map((h) => String(h).toLowerCase()));
+  // By site, so skipping wrong.example also skips shop.wrong.example.
+  const skip = new Set((input.skip || []).map(siteOfHost));
   const byStore = new Map();
   for (const o of (Array.isArray(p.offers) ? p.offers : []).slice(0, 12)) {
     if (!o || typeof o !== 'object') continue;
@@ -496,7 +505,7 @@ export function dealsAnswer(p, seen, input = {}) {
     // A number, or a plain "$259.00" / "259". Anything else ("1.299,00", "from 99") isn't guessed at.
     const price = typeof o.price === 'number' ? o.price : /^\s*[^\d\s]{0,3}\s*\d+(\.\d{1,2})?\s*[A-Za-z]{0,3}\s*$/.test(String(o.price ?? '')) ? Number(String(o.price).replace(/[^0-9.]/g, '')) : NaN;
     const currency = cut(o.currency, 8).toUpperCase() || want;
-    if (!host || !/^https:/i.test(url) || NOT_A_LISTING.test(url) || skip.has(host)) continue;
+    if (!host || !/^https:/i.test(url) || NOT_A_LISTING.test(url) || skip.has(siteOfHost(host))) continue;
     if (!Number.isFinite(price) || price <= 0) continue;
     if (want && currency !== want) continue;
     if (saved !== null && price < saved * DEAL_FLOOR) continue;

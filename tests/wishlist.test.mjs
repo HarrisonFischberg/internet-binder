@@ -296,6 +296,9 @@ test('known stores: big retailers, the shop it was saved from, and the brand’s
   assert.equal(knownStore('soundfield.example', product()), true, 'where you saved it');
   assert.equal(knownStore('shop.dyson.com', product({ details: { brand: 'Dyson' } })), true);
   assert.equal(knownStore('dyson-outlet.example', product({ details: { brand: 'Dyson' } })), false);
+  assert.equal(knownStore('dyson.co.uk', product({ details: { brand: 'Dyson' } })), true);
+  assert.equal(knownStore('dyson.top', product({ details: { brand: 'Dyson' } })), false, 'a lookalike ending is not the brand');
+  assert.equal(knownStore('dyson.shop', product({ details: { brand: 'Dyson' } })), false);
   assert.equal(knownStore('instagram.com', makeItem({ id: 'i', type: 'instagram', kind: 'product', title: 'x', url: 'https://instagram.com/p/1' })), false);
 });
 
@@ -313,6 +316,13 @@ test('your own name for the product is what gets searched, and old prices are cl
   assert.equal(input.model, '', 'the model read from the page could be what you corrected');
   assert.deepEqual(input.specs, []);
   assert.equal(input.brand, 'Soundfield');
+  // Stores skipped under the old name get another chance under the new one.
+  await store.updateItem('w1', { deals: { checkedAt: new Date().toISOString(), offers: [at('amazon.com', 248)] } }, { by: 'deals' });
+  await removeOffer(store, 'w1', 'https://amazon.com/p');
+  assert.deepEqual((await store.getItem('w1')).dealSkip, ['amazon.com']);
+  await setWishName(store, 'w1', 'Soundfield Arc 2 Pro, silver');
+  assert.equal('dealSkip' in (await store.getItem('w1')), false);
+  it = await store.getItem('w1');
   // Back to the title clears it.
   await setWishName(store, 'w1', it.title);
   it = await store.getItem('w1');
@@ -333,6 +343,8 @@ test('Not the same item: the offer goes, its store is skipped next time, and Und
   // The provider returning that store again doesn't bring it back.
   const answer = dealsAnswer({ offers: [offer('Wrong', 190, { url: 'https://www.wrong.example/p' }), offer('Other', 240)], confidence: 0.9 }, new Set(['https://www.wrong.example/p', 'https://other.example/arc-2']), dealsInput(it));
   assert.deepEqual(answer.offers.map((o) => o.host), ['other.example']);
+  const sub = dealsAnswer({ offers: [offer('Wrong', 190, { url: 'https://shop.wrong.example/p' })], confidence: 0.9 }, new Set(['https://shop.wrong.example/p']), dealsInput(it));
+  assert.deepEqual(sub.offers, [], 'the same store on another subdomain is skipped too');
   await restoreOffer(store, 'w1', gone, checkedAt);
   it = await store.getItem('w1');
   assert.deepEqual(it.deals.offers.map((o) => o.price), [199, 248]);
@@ -356,6 +368,7 @@ test('the last removed offer leaves the save saying no prices were found', async
 test('what a lookup costs: known for Claude models, never guessed for others', () => {
   const usage = { inputTokens: 30000, outputTokens: 600, searches: 3 };
   assert.equal(Math.round(lookupCost(usage, 'anthropic', 'claude-haiku-5-5') * 1e4) / 1e4, 0.0333);
+  assert.equal(markDoubt([at('a.example', 100, { currency: 'EUR' }), at('amazon.com', 250)], product({ price: null, currency: '' }))[0].doubt, undefined, 'prices in two currencies are not measured against each other');
   assert.equal(Math.round(lookupCost(usage, 'anthropic', 'claude-sonnet-5-5') * 1e4) / 1e4, 0.096);
   assert.equal(lookupCost(usage, 'openai', 'gpt-x'), null);
   assert.equal(lookupCost(usage, 'anthropic', 'claude-some-future-model'), null);
@@ -392,4 +405,25 @@ test('Find deals puts the lookup on this month’s total, even when it finds not
   const sp = spendThisMonth(await store.getSettings(), new Date('2026-11-24T00:00:00Z'));
   assert.equal(sp.lookups, 2);
   assert.ok(sp.usd > 0.05 && sp.usd < 0.07, `two lookups at about 3 cents, was ${sp.usd}`);
+});
+
+test('a rename while the search runs keeps the old name’s prices off the save, and an unusable answer still counts as spent', async () => {
+  const store = await newStore({ ai: { on: true, provider: 'anthropic', model: 'claude-haiku-5-5' } });
+  await store.addItem(product());
+  const real = globalThis.fetch;
+  const offers = [offer('Amazon', 248, { url: 'https://www.amazon.com/arc-2' })];
+  globalThis.fetch = async () => {
+    await setWishName(store, 'w1', 'Soundfield Arc 2 Pro');   // you renamed it mid-search
+    return reply({ product: 'Soundfield Arc 2', offers, confidence: 0.9 }, offers.map((o) => o.url));
+  };
+  try {
+    const r = await findDeals(store, 'w1');
+    assert.equal(r.skipped, true);
+    const it = await store.getItem('w1');
+    assert.equal(it.deals, undefined);
+    assert.equal(it.wishName, 'Soundfield Arc 2 Pro');
+    globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ content: [{ type: 'text', text: 'Sorry, no.' }], usage: { input_tokens: 9000, output_tokens: 50, server_tool_use: { web_search_requests: 1 } } }) });
+    await assert.rejects(findDeals(store, 'w1'), /usable answer/);
+  } finally { globalThis.fetch = real; }
+  assert.equal(spendThisMonth(await store.getSettings()).lookups, 2);
 });

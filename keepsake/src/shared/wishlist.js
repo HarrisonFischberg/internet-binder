@@ -14,7 +14,7 @@ import { formatPrice, hostnameOf } from './util.js';
 import { kindOf } from './kinds.js';
 import { isSocialHost } from './categorizer.js';
 import { isShopping, productFromHtml, regionNow } from './understand.js';
-import { findDealsWithAI, supportsWebLookup, usableKey, lookupCost, DEAL_FLOOR } from '../ai/provider.js';
+import { findDealsWithAI, supportsWebLookup, usableKey, lookupCost, siteOfHost, DEAL_FLOOR } from '../ai/provider.js';
 
 // How sure the provider must be that it priced the product you saved before its offers are shown.
 export const DEALS_CONFIDENCE = 0.5;
@@ -46,13 +46,9 @@ canadiantire.ca thebay.com londondrugs.com mediamarkt.de saturn.de otto.de fnac.
 elcorteingles.es zalando.com zalando.de zalando.co.uk jbhifi.com.au harveynorman.com.au thegoodguys.com.au kmart.com.au
 bigw.com.au officeworks.com.au`.split(/\s+/));
 
+const BRAND_ENDINGS = /^(com|ca|de|fr|it|es|nl|se|dk|no|fi|ie|at|ch|be|pl|pt|jp|eu|co\.uk|com\.au|co\.jp|co\.nz|com\.mx|com\.br)$/;
 const storeHost = (url) => hostnameOf(url || '').toLowerCase();
-// The registrable-looking end of a host: shop.dyson.com → dyson.com, www2.hm.co.uk → hm.co.uk.
-const siteOf = (host) => {
-  const parts = host.split('.');
-  const two = parts.slice(-2).join('.');
-  return /^(co|com|org|net)\.[a-z]{2}$/.test(two) ? parts.slice(-3).join('.') : two;
-};
+const siteOf = siteOfHost;
 const slug = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // A store whose prices the others are measured against: a large retailer, the shop the save came from,
@@ -64,8 +60,10 @@ export function knownStore(host, item = null) {
   const d = item?.details || {};
   const own = [d.shopUrl, item?.type === 'instagram' ? '' : item?.url].map((u) => siteOf(storeHost(u))).filter(Boolean);
   if (own.includes(site) && !isSocialHost(site)) return true;
+  // The brand's own site, on the endings brands actually use: nike.com or dyson.co.uk, not nike.top or sony.shop.
   const brand = slug(d.brand);
-  return brand.length >= 3 && slug(site.split('.')[0]) === brand;
+  const [name, ...ending] = site.split('.');
+  return brand.length >= 3 && slug(name) === brand && BRAND_ENDINGS.test(ending.join('.'));
 }
 
 // Offers with doubt: true on the ones that look too good (pure). Only stores in stock set the bar.
@@ -73,13 +71,16 @@ export function markDoubt(offers, item = null) {
   const list = offers || [];
   const live = list.filter((o) => !o.outOfStock);
   const known = live.filter((o) => knownStore(storeHost(o.url), item));
+  // Only prices in the same currency are measured against each other.
+  const like = (o, list_) => list_.filter((x) => (x.currency || '') === (o.currency || ''));
   const saved = Number.isFinite(item?.price) && item.price > 0 && item.currency ? item.price : null;
   return list.map((o) => {
     if (known.includes(o)) return o;
     let bar = null;
-    if (known.length) bar = Math.min(...known.map((k) => k.price)) * DOUBT_BELOW;
+    const peers = like(o, known);
+    if (peers.length) bar = Math.min(...peers.map((k) => k.price)) * DOUBT_BELOW;
     else {
-      const others = live.filter((x) => x !== o).map((x) => x.price).sort((a, b) => a - b);
+      const others = like(o, live).filter((x) => x !== o).map((x) => x.price).sort((a, b) => a - b);
       if (others.length >= 2) bar = (others.length % 2 ? others[(others.length - 1) / 2] : (others[others.length / 2 - 1] + others[others.length / 2]) / 2) * DOUBT_BELOW;
       else if (saved !== null && (!o.currency || o.currency === item.currency)) bar = saved * DOUBT_BELOW_SAVED;
     }
@@ -202,9 +203,20 @@ export async function findDeals(store, id, { fetchShopPage = async () => null, r
   if (!supportsWebLookup(settings)) throw new Error('Finding deals needs Anthropic or OpenAI: a custom endpoint has no web search.');
   const at = now();
   const input = dealsInput(item, { region: region || regionNow(), today: at.toISOString().slice(0, 10) });
-  const found = await findDealsWithAI(input, settings, key);
-  // The provider was paid for this lookup whatever it found: it goes on this month's total.
-  await store.updateSettings({ wish: { spend: addSpend(settings.wish?.spend, found.usage, found.provider, found.model, at.toISOString().slice(0, 7)) } });
+  // A lookup the provider answered was paid for whatever it found, usable or not: it goes on this month's
+  // total. (One that timed out or was refused isn't counted: whether it was billed can't be known here.)
+  const spent = async (r) => store.updateSettings({ wish: { spend: addSpend((await store.getSettings()).wish?.spend, r.usage, r.provider, r.model, monthOf(at)) } });
+  let found;
+  try {
+    found = await findDealsWithAI(input, settings, key);
+  } catch (e) {
+    if (e && e.usage) await spent(e);
+    throw e;
+  }
+  await spent(found);
+  // Renamed, hidden or bought while the search ran: these prices are for the old name, so they aren't kept.
+  const after = await store.getItem(id);
+  if (!after || !onWishList(after) || (after.wishName || '') !== (item.wishName || '')) return { item: after || item, summary: dealSummary(after || item), skipped: true };
   const sure = found.confidence >= DEALS_CONFIDENCE;
   const offers = sure ? await Promise.all(found.offers.map(async (o) => {
     let page = null;
@@ -226,6 +238,9 @@ export async function findDeals(store, id, { fetchShopPage = async () => null, r
   return { item: next, summary: dealSummary(next, at.getTime()) };
 }
 
+// The month on this device's clock: "2026-11".
+const monthOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
 // This month's spend on Find deals with one more lookup added (pure). usd counts the lookups whose model
 // has a known price; unpriced counts the rest, so a total is never passed off as complete.
 export function addSpend(spend, usage, provider, model, month) {
@@ -240,7 +255,7 @@ export function addSpend(spend, usage, provider, model, month) {
 // This month's spend as stored, or zeroes when the stored one is another month's.
 export function spendThisMonth(settings, now = new Date()) {
   const sp = settings?.wish?.spend;
-  const month = now.toISOString().slice(0, 7);
+  const month = monthOf(now);
   return sp && sp.month === month ? { month, usd: Number(sp.usd) || 0, lookups: Number(sp.lookups) || 0, unpriced: Number(sp.unpriced) || 0 } : { month, usd: 0, lookups: 0, unpriced: 0 };
 }
 
@@ -250,7 +265,7 @@ export async function removeOffer(store, id, url) {
   const item = await store.getItem(id);
   const gone = (item?.deals?.offers || []).find((o) => o.url === url);
   if (!item || !gone) return null;
-  const host = storeHost(url);
+  const host = siteOf(storeHost(url));
   await store.updateItem(id, {
     deals: { ...item.deals, offers: item.deals.offers.filter((o) => o !== gone) },
     dealSkip: [...new Set([...(item.dealSkip || []), host].filter(Boolean))].slice(-20),
@@ -262,7 +277,7 @@ export async function removeOffer(store, id, url) {
 export async function restoreOffer(store, id, offer, checkedAt = '') {
   const item = await store.getItem(id);
   if (!item || !offer?.url) return;
-  const host = storeHost(offer.url);
+  const host = siteOf(storeHost(offer.url));
   const same = item.deals && (!checkedAt || item.deals.checkedAt === checkedAt) && !item.deals.offers.some((o) => o.url === offer.url);
   await store.updateItem(id, {
     ...(same ? { deals: { ...item.deals, offers: sortOffers([...item.deals.offers, offer]) } } : {}),
@@ -271,13 +286,14 @@ export async function restoreOffer(store, id, offer, checkedAt = '') {
 }
 
 // The exact product in your words, for Find deals. The save's own title stays as it is. Empty clears it.
-// Prices found for the old name are dropped: they were for whatever the search took it to be.
+// Prices found for the old name are dropped: they were for whatever the search took it to be. So are the
+// stores you skipped, whose listings were wrong for the old name and may be right for this one.
 export async function setWishName(store, id, name) {
   const item = await store.getItem(id);
   if (!item) return;
   const next = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   if (next === (item.wishName || '')) return;
-  await store.updateItem(id, { wishName: next === (item.title || '').trim() ? '' : next, deals: null }, { by: 'deals' });
+  await store.updateItem(id, { wishName: next === (item.title || '').trim() ? '' : next, deals: null, dealSkip: [] }, { by: 'deals' });
 }
 
 // Take saves off the Wish List, or put them back. Their deals stay.

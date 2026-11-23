@@ -93,7 +93,7 @@ final class WishListTests: XCTestCase {
         openWishList(app)
         let brewhaus = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus, $36.99'")).firstMatch
         XCTAssertTrue(brewhaus.waitForExistence(timeout: 5))
-        app.buttons["More for Brewhaus"].firstMatch.tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'More for Brewhaus'")).firstMatch.tap()
         shot("wishlist-offer-menu")
         app.buttons["Not the same item"].tap()
         let next = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Kitchen & Table, $41.50'")).firstMatch

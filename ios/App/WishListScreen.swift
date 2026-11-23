@@ -114,11 +114,11 @@ struct WishListScreen: View {
         return n == 1 ? "\(Self.about(each).capitalizedFirst) on your key. " : "\(Self.about(each * Double(n)).capitalizedFirst) on your key (\(Self.about(each)) each). "
     }
 
-    /// "Deal lookups this month: 14, about 42 cents on your key."
+    /// "Deal lookups on this device this month: 14, about 42 cents on your key."
     private func spentLine(_ list: WishList) -> String? {
         let s = list.spend
         guard s.lookups > 0 else { return nil }
-        let count = "Deal lookups this month: \(s.lookups)"
+        let count = "Deal lookups on this device this month: \(s.lookups)"
         if s.usd <= 0 { return count + "." }
         return count + ", \(Self.about(s.usd)) on your key" + (s.unpriced > 0 ? " (\(s.unpriced) not priced)." : ".")
     }
@@ -265,7 +265,7 @@ private struct WishRow: View {
             .accessibilityValue(meta)
             .accessibilityHint("Opens the save")
             Menu {
-                Button("Name the exact product", systemImage: "pencil") { name() }
+                Button("Name the exact product", systemImage: "pencil") { name() }.disabled(busy)
                 Button("Mark purchased", systemImage: "bag.badge.checkmark") { Task { await model.markPurchased(save) } }
                 Button("Hide from Wish List", systemImage: "eye.slash") { Task { await model.setWishHidden(save, true) } }
             } label: {
@@ -310,7 +310,8 @@ private struct WishRow: View {
 
     /// "Priced as: Sony WH-1000XM6, black" with the way to correct it.
     @ViewBuilder private var pricedAs: some View {
-        let what = row.wishName.isEmpty ? row.product : row.wishName
+        // What the search says it priced, so a mismatch with what you meant shows; your words when it didn't say.
+        let what = row.product.isEmpty ? row.wishName : row.product
         if !what.isEmpty {
             Button { name() } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -423,7 +424,7 @@ private struct WishRow: View {
                 Image(systemName: "ellipsis").font(.footnote.weight(.bold)).foregroundStyle(t.inkMuted)
                     .frame(width: 44, height: 44).contentShape(Rectangle())
             }
-            .accessibilityLabel("More for \(offer.store)")
+            .accessibilityLabel("More for \(offer.store), \(save.title)")
             .accessibilityIdentifier("wishList.offerMenu")
             .padding(.trailing, -10)
         }
