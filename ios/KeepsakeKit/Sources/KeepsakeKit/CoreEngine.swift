@@ -69,6 +69,7 @@ public final class KeepsakeCore: @unchecked Sendable {
         native.setObject(pageBridge(), forKeyedSubscript: "fetchPage" as NSString)
         native.setObject(pageBridge(asked: true), forKeyedSubscript: "fetchAskedPage" as NSString)
         native.setObject(imageBridge(), forKeyedSubscript: "loadImage" as NSString)
+        native.setObject(imageBridge(asked: true), forKeyedSubscript: "loadAskedImage" as NSString)
         native.setObject(recordBridge(in: ctx), forKeyedSubscript: "db" as NSString)
         native.setObject(settingsBridge(in: ctx), forKeyedSubscript: "kv" as NSString)
         native.setObject(appleAIBridge(in: ctx), forKeyedSubscript: "appleAI" as NSString)
@@ -152,10 +153,11 @@ public final class KeepsakeCore: @unchecked Sendable {
     }
 
     /// __native.loadImage(url, done(dataURL | null)): a JPEG of at most 640 px, made on this device.
-    private func imageBridge() -> @convention(block) (String, JSValue) -> Void {
+    /// `asked`: the picture of a page you pasted yourself (a product's link), read whether or not Optional AI is on.
+    private func imageBridge(asked: Bool = false) -> @convention(block) (String, JSValue) -> Void {
         return { [unowned self] url, done in
             let callback = JSBox(done)
-            self.readOnce(url, accept: "image/*", limit: 15_000_000) { data in
+            self.readOnce(url, accept: "image/*", limit: 15_000_000, asked: asked) { data in
                 let small = data.flatMap(KeepsakeCore.thumbnailDataURL)
                 self.queue.async { callback.value.call(withArguments: [small ?? NSNull()]) }
             }
