@@ -41,7 +41,7 @@ struct CollectionsScreen: View {
                     // Searches the saves in every collection (a collection's name counts too). Select
                     // ticks whole collections, so the box steps aside while it's on.
                     if !collected.isEmpty && !selecting {
-                        PageSearchField(placeholder: "Search your collections", query: $query)
+                        PageSearchField(placeholder: showAll ? "Search all \(collected.count) saves" : "Search your collections", query: $query)
                     }
                     if showAll && !collected.isEmpty {
                         if searching {
