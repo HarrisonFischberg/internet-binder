@@ -657,13 +657,14 @@ export async function linkProductPage(store, id, link, { fetchPage = async () =>
   // What this teaches: posts from this account come from this shop. Later reads of its other posts look
   // there first (shopHintsFor), and the saves of its that no shop page has confirmed yet are offered for
   // another read now (related).
-  const lesson = productLesson(latest, url, site, patch.details?.brand || latest.details?.brand || '');
+  // Only a link the card was really rebuilt from teaches: one whose page couldn't be read proves nothing.
+  const lesson = rebuild ? productLesson(latest, url, site, patch.details?.brand || latest.details?.brand || '') : null;
   let related = [];
   if (lesson) {
     await store.updatePrefs({ productShops: addProductLesson((await store.getPrefs()).productShops, lesson) });
     related = relatedToLesson(await store.getItems(), latest, lesson);
   }
-  const learned = lesson ? { creator: lesson.creator, related } : { creator: '', related: [] };
+  const learned = lesson ? { creator: lesson.creator, lessonSite: lesson.site, related } : { creator: '', lessonSite: '', related: [] };
   if (!changes.length) return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: latest.title, price: '', logId: null, same: true, ...learned };
   const before = Object.fromEntries([...LOGGED, 'deals', 'dealSkip', 'wishName'].filter((f) => f in patch).map((f) => [f, latest[f] === undefined ? null : latest[f]]));
   await store.updateItem(id, patch, { by: 'ai' });
@@ -692,6 +693,11 @@ export function addProductLesson(lessons, lesson) {
   return [...kept, lesson].slice(-200);
 }
 
+// Undo of a link: what it taught goes too (pure).
+export function dropProductLesson(lessons, creator, site) {
+  return (Array.isArray(lessons) ? lessons : []).filter((l) => l && !(l.creator === creator && l.site === site));
+}
+
 // The shops learned for the account that posted this save, newest first, at most 3 (pure).
 export function shopHintsFor(item, prefs) {
   const creator = creatorOf(item);
@@ -701,11 +707,12 @@ export function shopHintsFor(item, prefs) {
 }
 
 // Other saves the lesson may fix (pure): things to buy from the same account that no shop page has
-// confirmed (no shop page yet, or one only AI found) and that you haven't described yourself. Ids, at most 25.
+// matched to a shop page yet. Ids, at most 25. (One your AI already matched to some page isn't offered
+// again with every link; Fix with AI on it still gets the hint.)
 export function relatedToLesson(items, item, lesson) {
   return (items || []).filter((o) => o && o.id !== item.id && !o.deletedAt && !o.purchased && creatorOf(o) === lesson.creator
     && !hasOwnView(kindOf(o)) && (kindOf(o) === 'product' || isShopping(o))
-    && !(kindOf(o) === 'product' && ['page', 'you'].includes(o.details?.source) && o.details?.shopUrl))
+    && !(kindOf(o) === 'product' && (o.details?.shopUrl || o.details?.source === 'you')))
     .slice(0, 25).map((o) => o.id);
 }
 

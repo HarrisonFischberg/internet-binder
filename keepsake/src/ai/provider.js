@@ -1037,6 +1037,10 @@ Rules:
 - name: no emoji, hashtags, "link in bio" or promo text.
 - confidence is how sure you are what the product is (0.9+ only when the brand and model are clear).`;
 
+// The same card when the person has given the product's own page: the page outranks the post's picture and words.
+const LINKED_PRODUCT_SYSTEM = PRODUCT_SYSTEM.replace(/^Look at the image first:[^\n]*\n/m,
+  'The person has given this product\'s own page (the link). That page decides what the product is. The image, title and caption come from the post it was saved from, which may show other things too: use them only to tell which colour, size or version on that page was meant, never to change what the product is.\n');
+
 function productAnswer(parsed, seen) {
   const cut = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
   const l = parsed?.listing && typeof parsed.listing === 'object' ? parsed.listing : {};
@@ -1097,10 +1101,10 @@ export async function understandProductWithAI(input, settings, apiKey) {
   const image = typeof input.image === 'string' && input.image.startsWith('data:image/') ? input.image : '';
   if (!apiKey || !supportsWebLookup(settings) || input.noSearch) {
     // No search here (the device model, a custom endpoint, or a page already in hand): the text (and image) only, and no shop page.
-    const system = PRODUCT_SYSTEM.replace(/SEARCH\n[^\n]*\n/, 'You cannot search the web: leave listing empty and features and specs empty unless the text states them.\n');
+    const system = (input.linked ? LINKED_PRODUCT_SYSTEM : PRODUCT_SYSTEM).replace(/SEARCH\n[^\n]*\n/, input.linked ? 'You cannot search the web: work from the linked page\'s text given below.\n' : 'You cannot search the web: leave listing empty and features and specs empty unless the text states them.\n');
     return withReader(cfg, apiKey, async (ask) => productAnswer(parseJsonBlock(await ask({ system, userText: text, imageDataUrl: image, maxTokens: 900 })), null));
   }
-  const system = PRODUCT_SYSTEM.replace('SEARCH\n', '');
+  const system = (input.linked ? LINKED_PRODUCT_SYSTEM : PRODUCT_SYSTEM).replace('SEARCH\n', '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 90000);
   try {

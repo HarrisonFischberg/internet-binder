@@ -206,9 +206,9 @@
     },
     // Returns what restoreLearned needs to bring it all back.
     async clearLearned() {
-      const { learnedKeywords, retailerPrefs, corrections } = await store.getPrefs();
-      await store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [] });
-      return { all: { learnedKeywords, retailerPrefs, corrections } };
+      const { learnedKeywords, retailerPrefs, corrections, productShops } = await store.getPrefs();
+      await store.updatePrefs({ learnedKeywords: {}, retailerPrefs: {}, corrections: [], productShops: [] });
+      return { all: { learnedKeywords, retailerPrefs, corrections, productShops: productShops || [] } };
     },
     // Forget one learned word ('term') or shop ('shop'); returns what restoreLearned needs to undo it.
     async forgetLearned(kind, key) {
@@ -475,6 +475,12 @@
     },
     // Add product link: the store page you pasted becomes this save's shop page (understand.js
     // linkProductPage). Read once, without cookies. { ok, error, site, read, ai, aiError, title, price, logId } for Undo.
+    // Undo of a product link: the shop it taught for that account is forgotten too.
+    async forgetProductLesson(creator, site) {
+      const prefs = await store.getPrefs();
+      await store.updatePrefs({ productShops: K.understand.dropProductLesson(prefs.productShops, String(creator || ''), String(site || '')) });
+      return true;
+    },
     // rewrite: the page is the product, so the card is rebuilt from it and your AI reads the page for the
     // summary, features and specs (the page's text goes to your provider, or stays on device with Apple Intelligence).
     async linkProduct(id, link, rewrite) {

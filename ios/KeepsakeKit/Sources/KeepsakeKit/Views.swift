@@ -130,6 +130,8 @@ public struct ProductLink: Decodable, Sendable {
     /// What the link taught: the account that posted the save, and its other saves (ids) that no shop page
     /// has confirmed yet, which a new read can now look for in the same shop.
     public let creator: String?
+    /// The shop's site the link taught for that account (empty when it taught nothing).
+    public let lessonSite: String?
     public let related: [String]?
 }
 
@@ -212,6 +214,12 @@ extension Library {
 
     /// Add product link: the store page you paste becomes this save's shop page. Read once, without
     /// cookies.
+    /// Undo of a product link: the shop it taught for that account is forgotten too.
+    public func forgetProductLesson(creator: String, site: String) async throws {
+        try await prepare()
+        _ = try await core.call("views.forgetProductLesson", [creator, site])
+    }
+
     /// `rewrite`: the page is the product, so the card is rebuilt from it (name, price, picture) and your AI
     /// reads the page for the summary, features and specs.
     public func linkProduct(_ id: String, link: String, rewrite: Bool = false) async throws -> ProductLink {

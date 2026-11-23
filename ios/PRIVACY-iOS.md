@@ -60,7 +60,7 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
   saved post's title, caption, account name, hashtags and picture are read by your own AI key's provider,
   or by Apple Intelligence on the device when you have no key. When the page can't be read, your provider
   searches the web for that page instead. The name, price, picture, details and link are stored on the
-  save; one Undo puts it back. The app also remembers, on the device and in your library's export, that
+  save; one Undo puts it back. The app also remembers, on the device, in your library's export and in your own iCloud when sync is on, that
   this account's posts came from that shop, and tells your AI so when it reads that account's other saves.
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and

@@ -89,7 +89,11 @@ struct RootView: View {
         .alert(learnedTitle, isPresented: Binding(get: { model.learnedOffer != nil }, set: { if !$0 { model.learnedOffer = nil } }), presenting: model.learnedOffer) { offer in
             Button(offer.ids.count == 1 ? "Fix it with AI" : "Fix \(offer.ids.count) with AI") {
                 let saves = offer.ids.compactMap { model.index.byId[$0] }
-                Task { await model.fixWithAI(saves) }
+                if model.aiRun != nil {
+                    model.failed("Your AI is busy with other saves. Use Fix with AI on these when it's done.")
+                } else {
+                    Task { await model.fixWithAI(saves) }
+                }
             }
             Button("Not now", role: .cancel) {}
         } message: { offer in

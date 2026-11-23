@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
 import { undoFixes } from '../keepsake/src/shared/aiFix.js';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink, linkProductPage, productLesson, addProductLesson, shopHintsFor, relatedToLesson } from '../keepsake/src/shared/understand.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink, linkProductPage, productLesson, addProductLesson, dropProductLesson, shopHintsFor, relatedToLesson } from '../keepsake/src/shared/understand.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
@@ -553,7 +553,12 @@ test('a product link teaches: the account\'s shop is remembered, its other uncon
   await store.addItem(post('cup', { id: 'cup', kind: 'product', collectionId: null, purchased: true, url: 'https://www.instagram.com/p/CUP/' }));
   const page = `<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Stoneware Mug 12 oz', brand: { name: 'Brewhaus' }, offers: { price: '24.00', priceCurrency: 'USD' } })}</script></head></html>`;
   const r = await linkProductPage(store, mug.id, 'https://www.brewhaus.example.com/mug', { fetchPage: async () => page, rewrite: true });
-  assert.deepEqual([r.ok, r.creator, r.related], [true, 'cook', [bowl.id]]);
+  assert.deepEqual([r.ok, r.creator, r.lessonSite, r.related], [true, 'cook', 'brewhaus.example.com', [bowl.id]]);
+  // A link whose page couldn't be read teaches nothing; Undo forgets a lesson.
+  const blocked = await linkProductPage(store, bowl.id, 'https://blocked.example.org/bowl', { fetchPage: async () => null, rewrite: true });
+  assert.deepEqual([blocked.ok, blocked.creator, blocked.related], [true, '', []]);
+  await undoFixes(store, [(await store.getAiLog()).find((e) => e.id === blocked.logId)]);
+  assert.deepEqual(dropProductLesson((await store.getPrefs()).productShops, 'cook', 'brewhaus.example.com'), []);
   const prefs = await store.getPrefs();
   assert.deepEqual(prefs.productShops.map((l) => [l.creator, l.site, l.shop, l.brand]), [['cook', 'brewhaus.example.com', 'Brewhaus', 'Brewhaus']]);
   assert.deepEqual(shopHintsFor(bowl, prefs), [{ creator: 'cook', site: 'brewhaus.example.com', shop: 'Brewhaus', brand: 'Brewhaus' }]);

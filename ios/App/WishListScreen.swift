@@ -534,7 +534,6 @@ struct ProductHelpMenu: View {
             // Not for a recipe, a place or the like that happens to sit in a collection: those aren't one thing to buy.
             if save.kind == "product" || one?.row != nil {
                 Button("Provide Product Details…", systemImage: "link") { detailing = true }
-                    .disabled(model.dealRun != nil)
             }
             if model.aiReady {
                 Button("Fix with AI", systemImage: "sparkles") { Task { await model.fixWithAI([save]) } }
@@ -808,6 +807,11 @@ extension LibraryModel {
             if let id = r.logId {
                 show(said) { @MainActor in
                     try? await lib.undoAI([id])
+                    // What the link taught goes with it, and so does the offer made on its strength.
+                    if let creator = r.creator, let taught = r.lessonSite, !creator.isEmpty, !taught.isEmpty {
+                        try? await lib.forgetProductLesson(creator: creator, site: taught)
+                    }
+                    self.learnedOffer = nil
                     self.refresh()
                     self.dealsChanged += 1
                 }
@@ -815,7 +819,7 @@ extension LibraryModel {
                 show("Already up to date with \(site)")
             }
             // Other saves from the same account: offered once the sheet has gone.
-            if aiReady, let related = r.related, !related.isEmpty {
+            if aiReady, r.logId != nil, let related = r.related, !related.isEmpty {
                 let offer = LearnedOffer(ids: related, creator: r.creator ?? "", shop: site)
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(0.9))
