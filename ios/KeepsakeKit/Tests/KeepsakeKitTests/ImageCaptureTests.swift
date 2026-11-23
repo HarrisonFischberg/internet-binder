@@ -37,13 +37,14 @@ struct ImageCaptureTests {
         #expect((ocr.first?["text"] as? String) == "Brown butter pasta")
     }
 
-    @Test func aBigPhotoIsReadSmallAndUpright() throws {
+    @Test func aBigPhotoIsReadSmall() throws {
         let big = UIGraphicsImageRenderer(size: CGSize(width: 4000, height: 3000), format: { let f = UIGraphicsImageRendererFormat(); f.scale = 1; return f }()).image { ctx in
             UIColor.gray.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 4000, height: 3000))
         }
         let data = try #require(big.jpegData(compressionQuality: 0.6))
         let small = try #require(ImageCapture.load(data))
-        #expect(max(small.size.width * small.scale, small.size.height * small.scale) <= ImageCapture.maxSide)
+        #expect(Double(small.size.width * small.scale * small.size.height * small.scale) <= ImageCapture.maxPixels * 1.01)
+        #expect(small.size.width * small.scale < 4000)
         #expect(small.size.width > small.size.height)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("ks-big-\(UUID().uuidString).jpg")
         try data.write(to: url)

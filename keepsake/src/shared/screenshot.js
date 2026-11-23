@@ -32,7 +32,10 @@ const FURNITURE = new RegExp(`^(?:${[
 const POST_SIGNS = /^(?:liked by .*|view (?:all )?[\d,.]+[km]? comments?|add a comment.*|[\d,.]+[km]? likes?|suggested for you|original audio|see translation|paid partnership.*)$/i;
 // Signs of a shop's product page.
 const SHOP_SIGNS = /\b(?:add to (?:cart|bag|basket)|buy now|in stock|out of stock|sold out|free (?:shipping|delivery|returns)|select (?:a )?size|size guide|ships? (?:in|by|free)|check ?out|qty|\d+ reviews?|write a review|add to wish ?list)\b/i;
-const PRICE = /(?:[$£€]\s?\d{1,3}(?:[,.]\d{3})*(?:\.\d{2})?|\b\d{1,3}(?:[,.]\d{3})*(?:\.\d{2})?\s?(?:USD|EUR|GBP|CAD|AUD)\b)/;
+// "$139.99", "$1,299", "£45": a whole amount (never the first digits of a longer one).
+const PRICE = /[$£€]\s?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?(?![\d,.]*\d)/;
+// A line whose amount is about delivery or a discount, not what the thing costs.
+const NOT_THE_PRICE = /\b(?:shipping|delivery|orders? (?:over|above)|spend|save|off|was|reg(?:ular)?\.?|compare at|msrp|per month|\/mo|points|rewards)\b/i;
 
 const clean = (t) => String(t ?? '').replace(/\s+/g, ' ').trim();
 
@@ -44,6 +47,8 @@ function linesOf(ocr) {
   return raw.slice(0, 400)
     .map((l) => (typeof l === 'string' ? { text: clean(l), x: null, y: null, w: null, h: null } : l && typeof l === 'object' ? { text: clean(l.text), x: num(l.x), y: num(l.y), w: num(l.w), h: num(l.h) } : null))
     .filter((l) => l && l.text)
+    // "thatchef • Follow", "@coach.kim · 2h": each part is its own piece of the header.
+    .flatMap((l) => l.text.split(/\s+[•·]\s+/).map((t) => ({ ...l, text: clean(t) })).filter((x) => x.text))
     .sort((a, b) => (a.y === null || b.y === null ? 0 : a.y - b.y));
 }
 
@@ -65,7 +70,8 @@ export function screenshotFacts(ocr) {
 
   // Who posted it: an @handle anywhere, or (on a post) the account's name above the picture.
   let creator = '';
-  const tagged = all.map((l) => l.text.match(/^@([a-z0-9._]{2,30})\b/i)).find(Boolean);
+  // (A line that is only the handle. "@sam can you review this?" in a message is a mention, not who posted it.)
+  const tagged = all.map((l) => l.text.match(/^@([a-z0-9._]{2,30})$/i)).find(Boolean);
   if (tagged) creator = tagged[1].toLowerCase();
   if (!creator && post) {
     const head = all.find((l) => !isStatus(l) && HANDLE.test(l.text) && /[._\d]|^[a-z]{5,}$/.test(l.text) && !FURNITURE.test(l.text) && (!placed || l.y < 0.3));
@@ -77,12 +83,27 @@ export function screenshotFacts(ocr) {
     && !(placed && l.y > 0.93 && l.text.length <= 14));
   // A caption starts with the account's name ("thatchef Slow braised short ribs…"): the name isn't the caption.
   const strip = (t) => (creator && t.toLowerCase().startsWith(`${creator} `) ? t.slice(creator.length + 1).trim() : t);
-  const texts = content.map((l) => ({ ...l, text: strip(l.text) })).filter((l) => l.text);
+  // On a post the caption starts at the line that opens with the account's name, or else under the likes:
+  // what sits above it (a location tag, the music credit) is the header, not the caption.
+  let from = 0;
+  if (post) {
+    const opens = creator ? content.findIndex((l) => l.text.toLowerCase().startsWith(`${creator} `)) : -1;
+    const likes = all.find((l) => /^(?:liked by .*|[\d,.]+[km]? likes?)$/i.test(l.text));
+    const under = likes && likes.y !== null ? content.findIndex((l) => l.y !== null && l.y > likes.y) : -1;
+    from = opens >= 0 ? opens : under >= 0 ? under : 0;
+  }
+  const texts = content.slice(from).map((l) => ({ ...l, text: strip(l.text) })).filter((l) => l.text);
   const body = texts.map((l) => l.text).join('\n');
   if (!texts.length) return { text: false, title: '', description: '' };
 
-  // A price counts only on a shop's page (its buttons or its address show), never on a post or a menu.
-  const priced = !post && (shopSign || host) ? texts.map((l) => l.text.match(PRICE)).find(Boolean) : null;
+  // A price counts only on a shop's page (its own buttons show: Add to Bag, In stock…), never on a post, a
+  // menu or an article that mentions money. The biggest one that isn't about delivery or a discount.
+  let priced = null;
+  if (!post && shopSign) {
+    const prices = texts.filter((l) => PRICE.test(l.text) && !NOT_THE_PRICE.test(l.text));
+    const best = prices.reduce((b, l) => (!b || (l.h !== null && b.h !== null && l.h > b.h * 1.08) ? l : b), null);
+    priced = best ? best.text.match(PRICE) : null;
+  }
 
   // The name: on a post, the caption's first line. Elsewhere the biggest text, with the lines it wraps onto.
   let title = texts[0].text;

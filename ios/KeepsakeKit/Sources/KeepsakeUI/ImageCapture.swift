@@ -15,9 +15,10 @@ public enum ImageCapture {
         public let x: Double, y: Double, w: Double, h: Double
     }
 
-    /// The longest side a shared picture is read at. A screenshot is about this size already; a 48 MP photo
-    /// decoded whole would take most of the memory the share sheet is allowed.
-    public static let maxSide: CGFloat = 2400
+    /// How many pixels a shared picture is read at, at most (about 24 MB decoded). A screenshot is under
+    /// this already; a 48 MP photo decoded whole would take most of the memory the share sheet is allowed.
+    /// A budget of pixels, not a longest side, so a long stitched screenshot keeps its width and stays legible.
+    public static let maxPixels: Double = 6_000_000
 
     /// The product to save. The title and description are the plain reading (first line, all of it); the
     /// shared rules replace them with what `ocr` says once they've set the furniture aside.
@@ -32,25 +33,30 @@ public enum ImageCapture {
         return p
     }
 
-    /// A shared picture file, decoded no bigger than `maxSide` (ImageIO reads it at that size; the whole
-    /// picture is never in memory) and turned upright.
-    public static func load(_ url: URL, maxSide: CGFloat = maxSide) -> UIImage? {
+    /// A shared picture file, decoded within `maxPixels` (ImageIO reads it at that size; the whole picture
+    /// is never in memory) and turned upright.
+    public static func load(_ url: URL) -> UIImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
-        return downsampled(source, maxSide: maxSide)
+        return downsampled(source)
     }
 
     /// The same for picture data an app handed over directly.
-    public static func load(_ data: Data, maxSide: CGFloat = maxSide) -> UIImage? {
+    public static func load(_ data: Data) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
-        return downsampled(source, maxSide: maxSide)
+        return downsampled(source)
     }
 
-    private static func downsampled(_ source: CGImageSource, maxSide: CGFloat) -> UIImage? {
+    private static func downsampled(_ source: CGImageSource) -> UIImage? {
+        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let w = (props?[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue ?? 0
+        let h = (props?[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue ?? 0
+        // Unknown size: a side no picture within the budget would exceed by much.
+        let side = w > 0 && h > 0 ? max(w, h) * min(1, (maxPixels / (w * h)).squareRoot()) : 2800
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxSide,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, side.rounded()),
         ]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
         return UIImage(cgImage: cg)

@@ -404,12 +404,14 @@ function taughtElsewhere(matched, candidateId, learned) {
 function collectMatches(candidate, candidateIndex, fields, prefs, recent = new Map()) {
   const matches = [];
   // What a learned word is worth here: its weight, more while your latest move of a save with that word
-  // is fresh and came here, less while it's fresh and went somewhere else (recentLessons).
+  // is fresh and came here, less while it's fresh and was moved out of here (recentLessons).
   const learnedHere = (g) => {
     const w = learnedWeight((prefs?.learnedKeywords || {})[g], candidate.id);
     const last = recent.get(g);
     if (!last || !(w > 0)) return w;
-    return last.to === candidate.id ? w + RECENT_WEIGHT * last.fresh : w * (1 - last.fresh);
+    if (last.to === candidate.id) return w + RECENT_WEIGHT * last.fresh;
+    // Only the collection you moved it out of is held back; the others keep what they learned.
+    return last.from === candidate.id ? w * (1 - last.fresh) : w;
   };
   const learnedWords = prefs?.learnedKeywords || {};
   const hasLearned = Object.keys(learnedWords).length > 0;
@@ -540,7 +542,7 @@ export function classify(product, context = {}) {
   const topicHits = candidates.map(() => new Set());
   const seen = new Set();
   const tally = (m) => {
-        const key = `${m.candidateIndex}|${m.field}|${m.keyword}`;
+    const key = `${m.candidateIndex}|${m.field}|${m.keyword}`;
     if (seen.has(key)) return;
     seen.add(key);
     const fw = FIELD_WEIGHTS[m.field] || 1;
@@ -626,14 +628,22 @@ export function classify(product, context = {}) {
 
   // A post is filed on more than one everyday word. Its text is a caption, where a single learned word
   // ("step", "guess") turns up by chance; a product's title is its name, where one word ("headlamp") says
-  // what it is. So a post needs two different words for the winner, or one that names it outright (your
-  // keyword, the collection's name or topic, a built-in strong word, the account it's from). Otherwise the
-  // pick waits in Review as the suggestion.
+  // what it is. So a post needs two different words for the winner, one of them in its title (its first
+  // line: words deeper in a caption are too often filler, "honestly", "sooner") or the account it's from.
+  // One that names it outright is enough: your keyword, the collection's name or topic, a built-in
+  // strong word, or an account you've filed here at least twice and nowhere else to speak of. Otherwise
+  // the pick waits in Review as the suggestion.
   if ((product?.instagram || isSocialHost(product?.host || '')) && top.userScore === 0 && top.topicHits === 0) {
     const mine = all.filter((m) => candidates[m.candidateIndex] === top.cand);
-    const words = new Set(mine.filter((m) => !(m.kind === 'learned' && m.keyword.includes(' '))).map((m) => m.keyword));
-    const named = mine.some((m) => m.field === 'creator' || m.kind === 'strong' || m.kind === 'name' || m.field === 'instagramCollection');
-    if (words.size < 2 && !named) confidence = Math.min(confidence, threshold - 0.05);
+    const single = (m) => !(m.kind === 'learned' && m.keyword.includes(' '));
+    const words = new Set(mine.filter(single).map((m) => m.keyword));
+    const leading = mine.some((m) => single(m) && (m.field === 'title' || m.field === 'creator' || m.kind !== 'learned'));
+    const who = (prefs.learnedKeywords || {})[fields.creator];
+    const account = !!who && top.cand.id && who[top.cand.id] >= 2 * LESSON.light && learnedWeight(who, top.cand.id) >= 0.75 * who[top.cand.id];
+    const named = account || mine.some((m) => m.kind === 'strong' || m.kind === 'name' || m.field === 'instagramCollection');
+    if (!named && (words.size < 2 || !leading)) confidence = Math.min(confidence, threshold - 0.05);
+    // An account you always file in one place is as good as your own keyword, when nothing else argues.
+    else if (account && confidence >= threshold) confidence = Math.max(confidence, AUTO_FILE_CONFIDENCE);
   }
   const reason = describeWhy(top.why);
   if (confidence < threshold) {
@@ -691,10 +701,11 @@ function learnedWeight(entry, collectionId) {
 }
 
 // Your latest moves count for more than old habits. A save "like one you just moved" shares at least two
-// of that save's words (a phrase counts: "sleeping bag" is the phrase and both words), or is from the same
-// account. For each such word, the newest move that had it (prefs.corrections, the log of moves): where
+// of that save's words (a phrase counts: "sleeping bag" is the phrase and both words; so does the account
+// it's from, with one word). For each such word, the newest move that had it (prefs.corrections, the log of moves): where
 // it went and how fresh it is, 1 just after the move and halving every RECENT_HALF_LIFE_DAYS. While
-// fresh, the word pulls harder toward where you just put it and its older pull elsewhere is held back, so
+// fresh, the word pulls harder toward where you just put it and its pull toward where you moved it from is
+// held back, so
 // the next save like the one you moved follows it at once instead of after several more moves. Nothing
 // new is stored: as the move ages, the learned weights alone decide again.
 // `has(term)` says whether the save being sorted has a learned word.
@@ -711,9 +722,9 @@ export function recentLessons(prefs, now = Date.now(), has = () => true) {
     const fresh = 0.5 ** (Math.max(0, at - then) / (RECENT_HALF_LIFE_DAYS * 864e5));
     if (fresh < 0.05) continue;
     const shared = c.terms.filter((t) => typeof t === 'string' && has(t));
-    if (shared.length < 2 && !shared.some((t) => t.startsWith('@'))) continue;
+    if (shared.length < 2) continue;
     // The newest move with the word speaks for it (a library merged from two devices isn't in time order).
-    for (const t of shared) if (!(out.get(t)?.then >= then)) out.set(t, { to: c.to, fresh, then });
+    for (const t of shared) if (!(out.get(t)?.then >= then)) out.set(t, { to: c.to, from: c.from || null, fresh, then });
   }
   return out;
 }
@@ -759,9 +770,7 @@ function teach(next, product, fromId, toId, options) {
   for (const term of terms) {
     const entry = { ...(next.learnedKeywords[term] || {}) };
     entry[toId] = Math.min(MAX_LEARNED_WEIGHT, (entry[toId] || 0) + inc);
-    // Moved out of where it was filed: that collection's hold on the word is halved and then some, so one
-    // move is enough to end an old habit (it used to take as many moves as the habit had saves).
-    if (fromId && fromId !== toId && entry[fromId]) entry[fromId] = Math.max(0, entry[fromId] * (options.confirm ? 1 : 0.5) - 0.5 * inc);
+    if (fromId && fromId !== toId && entry[fromId]) entry[fromId] = Math.max(0, entry[fromId] - 0.5 * inc);
     for (const k of Object.keys(entry)) if (!entry[k]) delete entry[k];
     next.learnedKeywords[term] = entry;
   }

@@ -85,10 +85,40 @@ test('an @handle anywhere names the account, so what you file from it is learned
 
 test('a picture with no readable text keeps the title it came with; plain lines (no positions) still work', () => {
   assert.equal(screenshotFacts({ lines: [] }).text, false);
-  const p = normalizeProduct({ sparse: true, title: 'Picture', ocr: { lines: [{ text: '9:41', x: 0.1, y: 0.02, w: 0.1, h: 0.02 }] } });
-  assert.equal(p.title, 'Picture');
+  const p = normalizeProduct({ sparse: true, title: '9:41', description: '9:41', ocr: { lines: [{ text: '9:41', x: 0.1, y: 0.02, w: 0.1, h: 0.02 }] } });
+  assert.equal(p.title, 'Picture', 'never named after the clock');
+  assert.equal(p.description, undefined);
   assert.equal(p.ocr, undefined);
   assert.equal(p.isScreenshot, true);
   const plain = screenshotFacts({ lines: ['9:41', 'Banana bread that never fails', 'Liked by sam and others'] });
   assert.equal(plain.title, 'Banana bread that never fails');
+});
+
+test('a post’s header (name • Follow, a location tag) is not its caption', () => {
+  const f = screenshotFacts(shot([
+    ['9:41', 0.02], ['thatchef • Follow', 0.09], ['Brooklyn, New York', 0.11],
+    ['1,204 likes', 0.62], ['thatchef Crispy smashed potatoes', 0.66], ['with garlic and dill', 0.68], ['View all 31 comments', 0.8],
+  ]));
+  assert.equal(f.instagram.creator, 'thatchef');
+  assert.equal(f.title, 'Crispy smashed potatoes');
+  assert.ok(!f.description.includes('Brooklyn'));
+  // No account line opens the caption: it starts under the likes.
+  const g = screenshotFacts(shot([['Brooklyn, New York', 0.11], ['Liked by sam and others', 0.62], ['Crispy smashed potatoes', 0.66]]));
+  assert.equal(g.title, 'Crispy smashed potatoes');
+});
+
+test('money on a web page is a price only on a shop’s page, and the right one', () => {
+  const article = screenshotFacts(shot([['news.example', 0.05], ['Budget talks stall', 0.2, 0.04], ['Officials said the $40 billion program would continue.', 0.3]]));
+  assert.equal(article.kind, undefined);
+  assert.equal(article.priceText, undefined);
+  const shop = (rows) => screenshotFacts(shot([['stride.example', 0.05], ['Free shipping on orders over $50', 0.09], ['Trail Runner 2', 0.3, 0.04], ...rows, ['Add to Cart', 0.8]]));
+  assert.equal(shop([['$139.95', 0.4, 0.03]]).priceText, '$139.95', 'not the delivery banner above it');
+  assert.equal(shop([['From $1299', 0.4, 0.03]]).priceText, '$1299', 'the whole amount');
+  assert.equal(shop([['$1,299.00', 0.4, 0.03]]).priceText, '$1,299.00');
+  assert.equal(shop([['Was $180', 0.38], ['$139.95', 0.42, 0.03]]).priceText, '$139.95');
+});
+
+test('an @mention in a message is not who posted it', () => {
+  const f = screenshotFacts(shot([['Budget review', 0.1, 0.03], ['@sam can you review the budget?', 0.3]]));
+  assert.equal(f.instagram, undefined);
 });

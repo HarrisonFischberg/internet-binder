@@ -251,9 +251,14 @@ test('one move ends an old habit: the next save like it follows the move at once
   const after = classify({ title: 'Gooseneck kettle matte' }, { collections, prefs: p });
   assert.equal(after.collectionId, coffee.id, 'filed where you just moved one like it');
   assert.ok(after.confidence >= 0.75, `sure enough to file without asking (${after.confidence})`);
-  // Long after, with nothing fresh, the move still holds: the old habit lost its grip when you moved it.
+  // Long after, with nothing fresh, one odd move hasn't erased the habit: the five kept saves speak again.
   const later = classify({ title: 'Gooseneck kettle matte' }, { collections, prefs: p, now: Date.now() + 400 * DAY });
-  assert.equal(later.collectionId || later.suggested?.collectionId, coffee.id);
+  assert.equal(later.collectionId || later.suggested?.collectionId, desk.id);
+  // Only the collection it was moved out of was held back: another collection's learning is untouched.
+  let q = learnFromConfirmation({ title: 'Gooseneck kettle travel' }, camp.id, emptyPrefs());
+  q = learnFromCorrection({ title: 'Gooseneck kettle copper' }, desk.id, coffee.id, q);
+  const score = (prefs, id) => classify({ title: 'Gooseneck kettle matte' }, { collections, prefs }).alternatives.find((a) => a.collectionId === id)?.score || 0;
+  assert.ok(score(q, camp.id) > 0, 'Trip prep still pulls');
 });
 
 test('recent moves count more than old ones, and fade with time', () => {
@@ -268,10 +273,11 @@ test('recent moves count more than old ones, and fade with time', () => {
   assert.ok(score(at + 60 * DAY) > score(at + 365 * DAY));
 });
 
-test('a recent move only speaks for saves like the one you moved (two shared words, or the same account)', () => {
+test('a recent move only speaks for saves like the one you moved (two shared words)', () => {
   const p = learnFromCorrection({ title: 'Black leather wallet' }, null, clothes.id, emptyPrefs());
   const at = Date.parse(p.corrections[0].at);
   assert.equal(recentLessons(p, at, (t) => t === 'black').size, 0, 'one shared word is not "like it"');
+  assert.equal(recentLessons({ corrections: [{ at: new Date(at).toISOString(), to: 'x', terms: ['@a', 'soup'] }] }, at, (t) => t === '@a').size, 0, 'nor is the account alone');
   assert.ok(recentLessons(p, at, (t) => ['leather wallet', 'leather', 'wallet'].includes(t)).has('wallet'));
   // The newest move with a word speaks for it, whatever order a merged library lists them in.
   const two = { corrections: [
@@ -282,7 +288,7 @@ test('a recent move only speaks for saves like the one you moved (two shared wor
   function has2() { return true; }
 });
 
-test('the account a post is from is learned: move one post, and the next from that account follows', async () => {
+test('the account a post is from is learned: one move makes it the suggestion, two make its posts follow', async () => {
   const store = await freshStore();
   const { collection: food } = await store.createCollection({ name: 'Dinner ideas' });
   const post = (caption, creator, n) => ({ ...igPost(caption), url: `https://www.instagram.com/p/${n}/`, canonicalUrl: `https://www.instagram.com/p/${n}/`, instagram: { ...igPost(caption).instagram, creator } });
@@ -290,13 +296,29 @@ test('the account a post is from is learned: move one post, and the next from th
   assert.equal(first.item.collectionId, null, 'nothing to go on yet: Review');
   await store.moveItems([first.item.id], food.id, { learn: 'light' });
   assert.equal((await store.getPrefs()).learnedKeywords['@thatchef'][food.id], 1);
-  const next = await saveCapture(store, post('Back at it with something new', 'thatchef', 'a2'), { instant: true });
-  assert.equal(next.item.collectionId, food.id, 'the next post from @thatchef goes where you put the last one');
+  // One move: an unrelated post from the account waits in Review with that collection suggested (a news
+  // account's recipe doesn't send its headlines to Dinner ideas)…
+  const second = await saveCapture(store, post('Back at it with something new', 'thatchef', 'a2'), { instant: true });
+  assert.equal(second.item.collectionId, null);
+  assert.equal(second.classification.suggested?.collectionId, food.id);
+  // …but one that shares a word with the post you moved follows at once.
+  const like = await saveCapture(store, post('Another Tuesday special', 'thatchef', 'a2b'), { instant: true });
+  assert.equal(like.item.collectionId, food.id, like.item.categorizationReason);
+  // Twice in the same place and nowhere else: the account itself is enough.
+  await store.moveItems([second.item.id], food.id, { learn: 'light' });
+  const next = await saveCapture(store, post('Completely different words here', 'thatchef', 'a3'), { instant: true });
+  assert.equal(next.item.collectionId, food.id, next.item.categorizationReason);
   assert.match(next.item.categorizationReason, /you file posts from @thatchef here/);
-  const other = await saveCapture(store, post('Back at it with something new', 'someoneelse', 'a3'), { instant: true });
+  const other = await saveCapture(store, post('Completely different words here', 'someoneelse', 'a4'), { instant: true });
   assert.equal(other.item.collectionId, null, 'another account’s post is not “like it”');
   assert.equal(creatorTerm({ instagram: { creator: '@That.Chef' } }), '@that.chef');
   assert.equal(creatorTerm({ instagram: { creator: 'not a handle!' } }), '');
+});
+
+test('filler words deep in a caption never file a post by themselves', () => {
+  const p = learnFromCorrection(igPost('The one tip I needed\nHonestly I wish someone told me sooner, thanks coach'), null, camp.id, emptyPrefs());
+  const r = classify(igPost('Sourdough loaf day\nHonestly I wish I had started sooner. Thanks for all the love'), { collections, prefs: p });
+  assert.equal(r.isInbox, true, r.reason);
 });
 
 test('an account whose posts you turn into Workouts teaches the kind', () => {

@@ -60,6 +60,8 @@ export function normalizeProduct(raw) {
     const { text, ...facts } = screenshotFacts(p.ocr);
     p.isScreenshot = true;
     if (text) Object.assign(p, facts);
+    // Nothing but the clock and buttons in it: a picture, not a save named "9:41".
+    else { p.title = 'Picture'; delete p.description; }
   }
   delete p.ocr;
   if (p.price === null || p.price === undefined || p.price === '' || Number.isNaN(Number(p.price))) {
