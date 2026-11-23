@@ -10,6 +10,7 @@ import KeepsakeUI
 struct KeepsakeApp: App {
     @UIApplicationDelegateAdaptor private var notices: NoticeDelegate
     @State private var model = LibraryModel()
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
@@ -17,8 +18,9 @@ struct KeepsakeApp: App {
                 .environment(model)
                 .environment(notices)
                 .environment(\.dealLines, model.dealLines)
-                // Cards carry the lowest price found: read again when a save or its deals change.
-                .task(id: "\(model.savesChanged)|\(model.dealsChanged)") { await model.loadDealLines() }
+                // Cards carry the lowest price found: read again when a save or its deals change, and on
+                // coming back to the app, because a price older than two days leaves the card.
+                .task(id: "\(model.savesChanged)|\(model.dealsChanged)|\(phase == .active)") { await model.loadDealLines() }
                 .keepsakeAppearance(model.appearance)
         }
     }

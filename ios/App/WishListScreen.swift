@@ -500,7 +500,8 @@ struct DealPanel: View {
     private var canFind: Bool { one?.keyReady == true && one?.searchReady == true }
 
     var body: some View {
-        Group {
+        // A stack, not a Group: it exists before the row loads, so the task below has a view to run on.
+        VStack(spacing: 0) {
             if let row = one?.row, row.state != "unchecked" || canFind {
                 WishRow(row: row, zoom: zoom, canFind: canFind, open: $open, name: { naming = row }, showsSave: false)
             }
