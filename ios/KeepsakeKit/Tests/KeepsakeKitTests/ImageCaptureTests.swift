@@ -23,5 +23,34 @@ struct ImageCaptureTests {
         #expect(image.hasPrefix("data:image/jpeg;base64,"))
         #expect(image.count < 400 * 1024 * 14 / 10, "under Chrome's thumbnail limit")
     }
+
+    @Test func everyLineComesWithWhereItSits() async throws {
+        let lines = await ImageCapture.recognizeLines(in: screenshot())
+        let title = try #require(lines.first)
+        #expect(title.text == "Brown butter pasta")
+        #expect(title.y < 0.2, "measured from the top")
+        #expect(title.h > 0.02 && title.h < 0.2)
+        #expect(lines.map(\.y) == lines.map(\.y).sorted(), "top to bottom")
+        let p = await ImageCapture.product(from: screenshot())
+        let ocr = try #require((p["ocr"] as? [String: Any])?["lines"] as? [[String: Any]])
+        #expect(ocr.count == lines.count)
+        #expect((ocr.first?["text"] as? String) == "Brown butter pasta")
+    }
+
+    @Test func aBigPhotoIsReadSmall() throws {
+        let big = UIGraphicsImageRenderer(size: CGSize(width: 4000, height: 3000), format: { let f = UIGraphicsImageRendererFormat(); f.scale = 1; return f }()).image { ctx in
+            UIColor.gray.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 4000, height: 3000))
+        }
+        let data = try #require(big.jpegData(compressionQuality: 0.6))
+        let small = try #require(ImageCapture.load(data))
+        #expect(Double(small.size.width * small.scale * small.size.height * small.scale) <= ImageCapture.maxPixels * 1.01)
+        #expect(small.size.width * small.scale < 4000)
+        #expect(small.size.width > small.size.height)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("ks-big-\(UUID().uuidString).jpg")
+        try data.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(ImageCapture.load(url) != nil)
+        #expect(ImageCapture.load(Data("not a picture".utf8)) == nil)
+    }
 }
 #endif
