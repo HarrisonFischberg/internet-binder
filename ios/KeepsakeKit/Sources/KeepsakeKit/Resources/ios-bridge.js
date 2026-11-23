@@ -474,10 +474,12 @@
       }
     },
     // Add product link: the store page you pasted becomes this save's shop page (understand.js
-    // linkProductPage). Read once, without cookies; no AI. { ok, error, site, read, price, logId } for Undo.
-    async linkProduct(id, link) {
+    // linkProductPage). Read once, without cookies. { ok, error, site, read, ai, aiError, title, price, logId } for Undo.
+    // rewrite: the page is the product, so the card is rebuilt from it and your AI reads the page for the
+    // summary, features and specs (the page's text goes to your provider, or stays on device with Apple Intelligence).
+    async linkProduct(id, link, rewrite) {
       try {
-        return await K.understand.linkProductPage(store, id, link, { fetchPage: viaNative('fetchAskedPage') });
+        return await K.understand.linkProductPage(store, id, link, { fetchPage: viaNative('fetchAskedPage'), rewrite: !!rewrite });
       } catch (e) {
         return { ok: false, error: String((e && e.message) || e) || 'Something went wrong.' };
       }

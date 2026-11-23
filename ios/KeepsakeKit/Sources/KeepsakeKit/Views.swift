@@ -120,6 +120,11 @@ public struct ProductLink: Decodable, Sendable {
     public let error: String?
     public let site: String?
     public let read: Bool?
+    /// Your AI read the page too (a rewrite); `aiError` says why it didn't when it was asked and failed.
+    public let ai: Bool?
+    public let aiError: String?
+    /// The save's title afterwards.
+    public let title: String?
     public let price: String?
     public let logId: String?
 }
@@ -202,10 +207,12 @@ extension Library {
     public func wishRow(_ id: String) async throws -> WishList.One { try await prepare(); return try await core.call("views.wishRow", [id], as: WishList.One.self) }
 
     /// Add product link: the store page you paste becomes this save's shop page. Read once, without
-    /// cookies and without AI.
-    public func linkProduct(_ id: String, link: String) async throws -> ProductLink {
+    /// cookies.
+    /// `rewrite`: the page is the product, so the card is rebuilt from it (name, price, picture) and your AI
+    /// reads the page for the summary, features and specs.
+    public func linkProduct(_ id: String, link: String, rewrite: Bool = false) async throws -> ProductLink {
         try await prepare()
-        return try await core.call("views.linkProduct", [id, link], as: ProductLink.self)
+        return try await core.call("views.linkProduct", [id, link, rewrite], as: ProductLink.self)
     }
 
     /// What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id.
