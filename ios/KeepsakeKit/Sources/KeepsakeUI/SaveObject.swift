@@ -11,6 +11,7 @@ public struct SaveObject: View {
     let compact: Bool
     public init(_ save: Save, compact: Bool = false) { self.save = save; self.compact = compact }
 
+    @Environment(\.dealLines) private var dealLines
     private var done: Bool { save.status == "done" || save.purchased == true }
 
     public var body: some View {
@@ -18,7 +19,7 @@ public struct SaveObject: View {
             .fixedSize(horizontal: false, vertical: true)
             .saturation(done ? 0.4 : 1)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(SaveCard.spoken(save))
+            .accessibilityLabel(SaveCard.spoken(save, deal: compact ? "" : dealLines[save.id] ?? ""))
     }
 }
 
@@ -51,6 +52,10 @@ struct SaveCard: View {
     /// Home's Recent shelf.
     var shelf = false
     @Environment(\.ks) private var t
+    @Environment(\.dealLines) private var dealLines
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// The lowest price found for it, when that beats what it was saved at ("Now $36.99 at Brewhaus").
+    private var deal: String { compact || shelf ? "" : dealLines[save.id] ?? "" }
     /// Room kept under the name for the state badge, so the badge never sits on the words.
     @ScaledMetric(relativeTo: .caption2) private var badgeHeight: CGFloat = 24
     private var badgeRoom: CGFloat { Self.state(save).isEmpty ? 0 : badgeHeight }
@@ -58,8 +63,8 @@ struct SaveCard: View {
     private var kind: KindStyle { KindStyle(save.kind) }
     private var fact: String { save.fact ?? "" }
 
-    static func spoken(_ save: Save) -> String {
-        [save.title, KindStyle(save.kind).label, save.fact ?? "", state(save)].filter { !$0.isEmpty }.joined(separator: ", ")
+    static func spoken(_ save: Save, deal: String = "") -> String {
+        [save.title, KindStyle(save.kind).label, save.fact ?? "", deal, state(save)].filter { !$0.isEmpty }.joined(separator: ", ")
     }
     static func state(_ save: Save) -> String {
         if save.isFinishing { return "Finishing details" }
@@ -99,6 +104,12 @@ struct SaveCard: View {
                 if !fact.isEmpty && !compact && !shelf {
                     Text(fact).font(KSFont.fact(t)).foregroundStyle(save.hasImage ? .white.opacity(0.88) : t.inkMuted).lineLimit(1)
                 }
+                // Not at the largest text sizes: the card's words already fill its picture there, and the line
+                // would cut off the price. VoiceOver and the save's page still say it.
+                if !deal.isEmpty && !typeSize.isAccessibilitySize {
+                    Label(deal, systemImage: "tag.fill").labelStyle(.titleAndIcon)
+                        .font(KSFont.fact(t).weight(.semibold)).foregroundStyle(save.hasImage ? .white : t.ink).lineLimit(1)
+                }
             }
             .padding(.horizontal, compact ? 10 : 12).padding(.bottom, (compact ? 10 : 12) + badgeRoom)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -125,6 +136,10 @@ struct SaveCard: View {
                     .lineLimit(shelf || compact ? 2 : 3).fixedSize(horizontal: false, vertical: true)
                 if !fact.isEmpty && !compact && !shelf {
                     Text(fact).font(KSFont.fact(t)).foregroundStyle(t.inkMuted).lineLimit(2)
+                }
+                if !deal.isEmpty {
+                    Label(deal, systemImage: "tag.fill").labelStyle(.titleAndIcon)
+                        .font(KSFont.fact(t).weight(.semibold)).foregroundStyle(t.ink).lineLimit(2)
                 }
             }
             .padding(.horizontal, shelf ? 2 : (compact ? 10 : 12)).padding(.vertical, shelf ? 0 : (compact ? 8 : 10))

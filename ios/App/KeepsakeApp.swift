@@ -10,12 +10,17 @@ import KeepsakeUI
 struct KeepsakeApp: App {
     @UIApplicationDelegateAdaptor private var notices: NoticeDelegate
     @State private var model = LibraryModel()
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(model)
                 .environment(notices)
+                .environment(\.dealLines, model.dealLines)
+                // Cards carry the lowest price found: read again when a save or its deals change, and on
+                // coming back to the app, because a price older than two days leaves the card.
+                .task(id: "\(model.savesChanged)|\(model.dealsChanged)|\(phase == .active)") { await model.loadDealLines() }
                 .keepsakeAppearance(model.appearance)
         }
     }
@@ -98,6 +103,12 @@ final class LibraryModel {
     /// deals change so the list reads them again.
     var dealRun: DealRun?
     var dealsChanged = 0
+    /// What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id.
+    private(set) var dealLines: [String: String] = [:]
+    func loadDealLines() async {
+        guard let library, let next = try? await library.dealLines() else { return }
+        if next != dealLines { dealLines = next }
+    }
     struct DealRun: Equatable {
         var done = 0
         let total: Int

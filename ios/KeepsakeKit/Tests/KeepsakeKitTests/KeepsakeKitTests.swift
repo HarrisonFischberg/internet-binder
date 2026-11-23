@@ -509,6 +509,20 @@ struct ViewsTests {
         return lib
     }
 
+    /// A save's own page reads the same row the Wish List shows; cards have a line only once deals exist.
+    @Test func aSavesOwnDealsRow() async throws {
+        let lib = try await imported()
+        let list = try await lib.wishList()
+        let first = try #require(list.rows.first)
+        let one = try await lib.wishRow(first.id)
+        #expect(one.row?.id == first.id && one.row?.state == "unchecked")
+        #expect(one.keyReady == false)
+        #expect(try await lib.dealLines().isEmpty, "nothing has been looked up")
+        try await lib.setWishHidden([first.id], true)
+        #expect(try await lib.wishRow(first.id).row == nil, "hidden from the Wish List: no prices card either")
+        #expect(try await lib.wishRow("no-such-save").row == nil)
+    }
+
     /// Wish List: what's still to buy from every collection, never what's bought; hiding takes one off it.
     @Test func wishListGathersWhatIsLeftToBuy() async throws {
         let lib = try await imported()

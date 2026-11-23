@@ -427,3 +427,22 @@ test('a rename while the search runs keeps the old name’s prices off the save,
   } finally { globalThis.fetch = real; }
   assert.equal(spendThisMonth(await store.getSettings()).lookups, 2);
 });
+
+// --- The line on a product's card ---------------------------------------------------------------------
+import { dealLine } from '../keepsake/src/shared/wishlist.js';
+
+test('a card says the lowest trusted price only when it beats what you saved it at', () => {
+  const now = Date.parse('2026-11-27T12:00:00Z');
+  const fresh = '2026-11-27T11:00:00Z';
+  const deals = (offers, checkedAt = fresh) => ({ deals: { checkedAt, offers } });
+  assert.equal(dealLine(product(deals([at('amazon.com', 248, { store: 'Amazon' }), at('bestbuy.com', 259)])), now), 'Now $248.00 at Amazon');
+  assert.equal(dealLine(product(deals([at('amazon.com', 299, { store: 'Amazon' })])), now), '', 'not lower than the 279 it was saved at');
+  assert.equal(dealLine(product({ price: null, ...deals([at('amazon.com', 248, { store: 'Amazon' })]) }), now), '$248.00 at Amazon', 'no saved price: just the price');
+  assert.equal(dealLine(product(deals([at('tedstore.example', 150), at('amazon.com', 290, { store: 'Amazon' })])), now), '', 'a too-good price is never put on the card');
+  assert.equal(dealLine(product(deals([at('amazon.com', 248, { outOfStock: true })])), now), '', 'out of stock');
+  assert.equal(dealLine(product(deals([at('amazon.com', 248)], '2026-11-24T11:00:00Z')), now), '', 'three days old: prices may have moved');
+  assert.equal(dealLine(product({ purchased: true, ...deals([at('amazon.com', 248)]) }), now), '');
+  assert.equal(dealLine(product({ wishHidden: true, ...deals([at('amazon.com', 248)]) }), now), '');
+  assert.equal(dealLine(product(), now), '');
+  assert.equal(dealLine(null, now), '');
+});

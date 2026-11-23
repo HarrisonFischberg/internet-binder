@@ -113,6 +113,17 @@ public struct RecipeImport: Decodable, Sendable {
     public let logId: String?
 }
 
+/// What "Add product link" did (understand.js linkProductPage). `read` is false when the store wouldn't let
+/// the page be read: the link is kept and nothing else changed. `price` is set when the save had none.
+public struct ProductLink: Decodable, Sendable {
+    public let ok: Bool
+    public let error: String?
+    public let site: String?
+    public let read: Bool?
+    public let price: String?
+    public let logId: String?
+}
+
 /// The Wish List (shared/wishlist.js): everything still to buy, from every collection and Review, with the
 /// deals found for each. Prices arrive formatted ("$199.99").
 public struct WishList: Decodable, Sendable, Equatable {
@@ -171,6 +182,13 @@ public struct WishList: Decodable, Sendable, Equatable {
     public let searchReady: Bool
     /// What Check all would look up: nothing checked in the last 12 hours.
     public let toCheck: [String]
+    /// One save's row, for its own page.
+    public struct One: Decodable, Sendable, Equatable {
+        /// Nil when the save isn't on the Wish List (bought, hidden, not something to buy).
+        public let row: Row?
+        public let keyReady: Bool
+        public let searchReady: Bool
+    }
     /// Dollars one lookup probably costs on your key; nil when the model's price isn't known.
     public let estimateEach: Double?
     /// Find deals on this device this month.
@@ -179,6 +197,19 @@ public struct WishList: Decodable, Sendable, Equatable {
 
 extension Library {
     public func wishList() async throws -> WishList { try await prepare(); return try await core.call("views.wishList", as: WishList.self) }
+
+    /// One save's Wish List row, for its own page. Nothing is looked up.
+    public func wishRow(_ id: String) async throws -> WishList.One { try await prepare(); return try await core.call("views.wishRow", [id], as: WishList.One.self) }
+
+    /// Add product link: the store page you paste becomes this save's shop page. Read once, without
+    /// cookies and without AI.
+    public func linkProduct(_ id: String, link: String) async throws -> ProductLink {
+        try await prepare()
+        return try await core.call("views.linkProduct", [id, link], as: ProductLink.self)
+    }
+
+    /// What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id.
+    public func dealLines() async throws -> [String: String] { try await prepare(); return try await core.call("views.dealLines", as: [String: String].self) }
 
     /// Find deals for one save with your own key (you asked): your provider searches the web, then each
     /// store page it found is read once, without cookies, for its price. Returns how many offers it kept.

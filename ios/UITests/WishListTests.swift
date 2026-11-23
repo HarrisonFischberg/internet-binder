@@ -121,4 +121,39 @@ final class WishListTests: XCTestCase {
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Searching as: Glass pour-over coffee maker, 6 cup in smoke grey'")).firstMatch.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus'")).firstMatch.exists)
     }
+
+    /// The same prices and controls sit on the product's own page.
+    func testASavesOwnPageShowsItsPrices() {
+        let app = launch()
+        openWishList(app)
+        let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Glass pour-over coffee maker, 6 cup, Saved at'")).firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Prices at other stores"].waitForExistence(timeout: 5))
+        let lowest = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Brewhaus, $36.99'")).firstMatch
+        for _ in 0..<3 where !lowest.exists { app.swipeUp() }
+        XCTAssertTrue(lowest.exists)
+        XCTAssertTrue(lowest.label.hasSuffix("lowest price"), lowest.label)
+        XCTAssertTrue(app.buttons["All 4 stores"].exists)
+        shot("save-prices")
+    }
+
+    /// The button at the top right of something to buy: the ways to give it more to go on, with the
+    /// sheet where a store link is pasted.
+    func testImproveMenuOffersAProductLink() {
+        let app = launch()
+        openWishList(app)
+        let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Glass pour-over coffee maker, 6 cup, Saved at'")).firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        let improve = app.buttons["save.improve"].firstMatch
+        XCTAssertTrue(improve.waitForExistence(timeout: 5))
+        improve.tap()
+        XCTAssertTrue(app.buttons["Name the Exact Product…"].waitForExistence(timeout: 5))
+        shot("save-improve-menu")
+        app.buttons["Add Product Link…"].tap()
+        XCTAssertTrue(app.textFields["productLink.field"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["productLink.add"].isEnabled)
+        shot("save-product-link")
+    }
 }
