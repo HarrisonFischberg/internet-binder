@@ -118,6 +118,8 @@ final class LibraryModel {
         /// Your provider asked to slow down: the run waits a little, then carries on.
         var waiting = false
     }
+    /// Play (SwipeScreen): the run in progress, kept on the device so it survives a trip to the browser.
+    var swipe = SwipeSession.stored { didSet { if swipe != oldValue { SwipeSession.stored = swipe } } }
     /// Saves a Not this kind is working on: a second tap waits.
     var notThisKindBusy: Set<String> = []
     struct AIRun: Equatable {
