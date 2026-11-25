@@ -143,6 +143,12 @@ struct SwipeScreen: View {
     private var session: SwipeSession { model.swipe ?? SwipeSession(title: "", queue: []) }
     private var cards: [Save] { session.queue.compactMap { model.index.byId[$0] } }
     private let far: CGFloat = 110
+    /// How far the card leans toward Keep (up to 1) or Trash (down to -1): the stamp and the button on that
+    /// side grow with it.
+    private var lean: CGFloat { max(-1, min(1, drag.width / far)) }
+    /// Far enough that letting go decides: 1 keeps, -1 trashes.
+    private var armed: Int { lean >= 1 ? 1 : lean <= -1 ? -1 : 0 }
+    private let no = Color(red: 0.86, green: 0.21, blue: 0.2)
 
     var body: some View {
         let cards = cards
@@ -231,8 +237,8 @@ struct SwipeScreen: View {
             SwipeCard(save: top, addURL: top.kind == "product" ? { model.swipe?.linking = true } : nil,
                       update: top.kind == "product" ? Self.storePage(top).map { link in { update(top, from: link) } } : nil,
                       updating: updating == top.id)
-                .overlay(alignment: .topLeading) { stamp("Keep", symbol: "checkmark", shown: drag.width > 0 ? pull : 0) }
-                .overlay(alignment: .topTrailing) { stamp("Trash", symbol: "trash", shown: drag.width < 0 ? pull : 0) }
+                .overlay(alignment: .topLeading) { stamp("Keep", symbol: "checkmark", color: t.primary, on: t.onPrimary, tilt: -12, shown: max(0, lean)) }
+                .overlay(alignment: .topTrailing) { stamp("Trash", symbol: "trash", color: no, on: .white, tilt: 12, shown: max(0, -lean)) }
                 .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .onTapGesture { path.append(top) }
                 .offset(x: reduce && leaving != nil ? 0 : drag.width, y: reduce ? 0 : drag.height * 0.25)
@@ -254,40 +260,61 @@ struct SwipeScreen: View {
     }
 
     /// "Keep" or "Trash" on the card's corner as it's pulled that way.
-    private func stamp(_ text: String, symbol: String, shown: CGFloat) -> some View {
-        Label(text, systemImage: symbol)
-            .font(.headline).foregroundStyle(t.onPrimary)
-            .padding(.horizontal, 14).frame(minHeight: 40)
-            .background(t.primary, in: Capsule())
-            .padding(16)
-            .opacity(shown)
+    /// It grows as the card goes, and lands at full size, tilted like a rubber stamp, once letting go decides.
+    private func stamp(_ text: String, symbol: String, color: Color, on: Color, tilt: Double, shown: CGFloat) -> some View {
+        Label(text.uppercased(), systemImage: symbol)
+            .font(.title2.weight(.heavy)).foregroundStyle(on)
+            .symbolEffect(.bounce, value: armed)
+            .padding(.horizontal, 18).frame(minHeight: 52)
+            .background(color, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(on.opacity(0.5), lineWidth: 2))
+            .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+            .rotationEffect(.degrees(reduce ? 0 : tilt))
+            .scaleEffect(reduce ? 1 : 0.5 + 0.5 * shown + (shown >= 1 ? 0.12 : 0), anchor: tilt < 0 ? .topLeading : .topTrailing)
+            .padding(20)
+            .opacity(min(1, shown * 1.4))
+            .animation(KSMotion.or(KSMotion.stamp, reduce: reduce), value: armed)
             .accessibilityHidden(true)
     }
 
     private func controls(_ top: Save) -> some View {
         HStack(alignment: .top, spacing: 0) {
-            round("Trash", symbol: "trash", size: 64, id: "swipe.trash") { decide(top, keep: false) }
+            round("Trash", symbol: "trash", size: 64, id: "swipe.trash", grow: max(0, -lean), glow: no) { decide(top, keep: false) }
+                .opacity(1 - 0.6 * max(0, lean))
                 .accessibilityLabel("Move to Trash").accessibilityHint("Undo brings it back")
             Spacer(minLength: 8)
             round("Undo", symbol: "arrow.uturn.backward", size: 48, id: "swipe.undo") { undo() }
                 .disabled(session.steps.isEmpty || undoing)
                 .padding(.top, 8)
+                .opacity(1 - 0.6 * abs(lean))
             Spacer(minLength: 8)
-            round("Keep", symbol: "checkmark", size: 64, id: "swipe.keep", filled: true) { decide(top, keep: true) }
+            round("Keep", symbol: "checkmark", size: 64, id: "swipe.keep", filled: true, grow: max(0, lean)) { decide(top, keep: true) }
+                .opacity(1 - 0.6 * max(0, -lean))
         }
         .padding(.horizontal, 28)
         .disabled(leaving != nil)
+        // The tick as the card passes the point where letting go decides.
+        .onChange(of: armed) { _, now in if now != 0, leaving == nil { Haptic.detent() } }
     }
 
-    private func round(_ title: String, symbol: String, size: CGFloat, id: String, filled: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    /// grow: how far the card leans this button's way (0 to 1): it swells with the card, and pops past its
+    /// full size once letting go decides. glow: the colour it takes on as it grows (Trash turns red).
+    private func round(_ title: String, symbol: String, size: CGFloat, id: String, filled: Bool = false, grow: CGFloat = 0, glow: Color? = nil, action: @escaping () -> Void) -> some View {
+        let full = grow >= 1
+        return Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: symbol).font(size > 50 ? .title2.weight(.semibold) : .body.weight(.semibold))
-                    .foregroundStyle(filled ? t.onPrimary : t.ink)
+                    .foregroundStyle(filled ? t.onPrimary : glow != nil && grow > 0.5 ? .white : t.ink)
+                    .symbolEffect(.bounce, value: full)
                     .frame(width: size, height: size)
-                    .ksGlass(Circle(), tint: filled ? t.primary : nil)
+                    .ksGlass(Circle(), tint: filled ? t.primary : glow.map { $0.opacity(Double(grow)) })
+                    .scaleEffect(reduce ? 1 : 1 + 0.3 * grow + (full ? 0.15 : 0))
+                    .animation(KSMotion.or(KSMotion.stamp, reduce: reduce), value: full)
                 // The largest text sizes leave the room to the card; the symbols and VoiceOver still say which is which.
-                if !typeSize.isAccessibilitySize { Text(title).font(.footnote.weight(.medium)).foregroundStyle(t.inkMuted) }
+                if !typeSize.isAccessibilitySize {
+                    Text(title).font(.footnote.weight(full ? .bold : .medium)).foregroundStyle(grow > 0.5 ? t.ink : t.inkMuted)
+                        .offset(y: reduce ? 0 : 14 * grow)
+                }
             }
         }
         .buttonStyle(PressStyle())
