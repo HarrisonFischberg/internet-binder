@@ -269,14 +269,14 @@ struct SwipeScreen: View {
     /// It grows as the card goes, and lands at full size, tilted like a rubber stamp, once letting go decides.
     private func stamp(_ text: String, symbol: String, color: Color, on: Color, tilt: Double, shown: CGFloat) -> some View {
         Label(text.uppercased(), systemImage: symbol)
-            .font(.title2.weight(.heavy)).foregroundStyle(on)
+            .font(.largeTitle.weight(.heavy)).foregroundStyle(on)
             .symbolEffect(.bounce, value: armed)
-            .padding(.horizontal, 18).frame(minHeight: 52)
-            .background(color, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(on.opacity(0.5), lineWidth: 2))
+            .padding(.horizontal, 22).frame(minHeight: 68)
+            .background(color, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(on.opacity(0.5), lineWidth: 3))
             .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
             .rotationEffect(.degrees(reduce ? 0 : tilt))
-            .scaleEffect(reduce ? 1 : 0.5 + 0.5 * shown + (shown >= 1 ? 0.12 : 0), anchor: tilt < 0 ? .topLeading : .topTrailing)
+            .scaleEffect(reduce ? 1 : 0.45 + 0.55 * shown + (shown >= 1 ? 0.15 : 0), anchor: tilt < 0 ? .topLeading : .topTrailing)
             .padding(20)
             .opacity(min(1, shown * 1.4))
             .animation(KSMotion.or(KSMotion.stamp, reduce: reduce), value: armed)
@@ -314,12 +314,12 @@ struct SwipeScreen: View {
                     .symbolEffect(.bounce, value: full)
                     .frame(width: size, height: size)
                     .ksGlass(Circle(), tint: filled ? t.primary : glow.map { $0.opacity(Double(grow)) })
-                    .scaleEffect(reduce ? 1 : 1 + 0.3 * grow + (full ? 0.15 : 0))
+                    .scaleEffect(reduce ? 1 : 1 + 0.5 * grow + (full ? 0.2 : 0))
                     .animation(KSMotion.or(KSMotion.stamp, reduce: reduce), value: full)
                 // The largest text sizes leave the room to the card; the symbols and VoiceOver still say which is which.
                 if !typeSize.isAccessibilitySize {
                     Text(title).font(.footnote.weight(full ? .bold : .medium)).foregroundStyle(grow > 0.5 ? t.ink : t.inkMuted)
-                        .offset(y: reduce ? 0 : 14 * grow)
+                        .offset(y: reduce ? 0 : 24 * grow)
                 }
             }
         }
