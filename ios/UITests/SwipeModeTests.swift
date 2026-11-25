@@ -64,6 +64,28 @@ final class SwipeModeTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["3 things to buy, from all your collections."].waitForExistence(timeout: 5))
     }
 
+    /// Play is on the Library too, for every kind of save; a recipe's card offers its own link field.
+    func testPlayTheWholeLibraryAndFixARecipe() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["wishList.link"].waitForExistence(timeout: 10))
+        app.tabBars.buttons["Library"].tap()
+        let play = app.buttons["swipe.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        play.tap()
+        XCTAssertTrue(app.navigationBars.matching(NSPredicate(format: "identifier BEGINSWITH '1 of '")).firstMatch.waitForExistence(timeout: 5))
+        let recipe = app.buttons["Add recipe URL"]
+        for _ in 0..<40 where !recipe.exists { app.buttons["swipe.keep"].tap() }
+        XCTAssertTrue(recipe.exists, "a recipe card offers its own link")
+        shot("swipe-recipe")
+        app.buttons["swipe.more"].tap()
+        XCTAssertTrue(app.buttons["Edit title or note"].waitForExistence(timeout: 3))
+        app.buttons["Edit title or note"].tap()
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 3))
+        app.buttons["Cancel"].tap()
+        recipe.tap()
+        XCTAssertTrue(app.textFields["recipeLink.field"].waitForExistence(timeout: 5))
+    }
+
     /// Add URL stays open, on the same card and with what was typed, after leaving the app for the browser,
     /// and even when iOS closed the app meanwhile.
     func testAddURLIsStillOpenAfterLeavingTheApp() {

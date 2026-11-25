@@ -137,6 +137,9 @@ struct SwipeScreen: View {
     @State private var undoing = false
     /// The save being rebuilt from its own store page (Update from its page).
     @State private var updating: String?
+    /// The save Fix with AI is reading.
+    @State private var fixing: String?
+    @State private var editing: Save?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private enum Page: Hashable { case kept }
@@ -210,10 +213,15 @@ struct SwipeScreen: View {
             if !on { model.swipe?.draft = "" }
         })) {
             if let top {
-                ProductLinkSheet(save: top, link: Binding(get: { session.draft }, set: { model.swipe?.draft = $0 }),
-                                 title: "Add URL", action: "Save")
+                let draft = Binding(get: { session.draft }, set: { model.swipe?.draft = $0 })
+                if top.kind == "recipe" {
+                    RecipeLinkSheet(save: top, done: {}, draft: draft)
+                } else {
+                    ProductLinkSheet(save: top, link: draft, title: "Add URL", action: "Save")
+                }
             }
         }
+        .sheet(item: $editing) { EditSaveSheet(save: $0) }
         // A run restored after iOS closed the app: nothing left of it (every save gone meanwhile) ends it.
         .task(id: model.loaded) {
             if model.loaded, cards.isEmpty, session.steps.isEmpty { model.swipe = nil }
@@ -227,16 +235,14 @@ struct SwipeScreen: View {
         let pull = min(abs(drag.width) / far, 1)
         return ZStack {
             if let next {
-                SwipeCard(save: next, addURL: nil, update: nil, updating: false)
+                SwipeCard(save: next, actions: [])
                     .scaleEffect(reduce ? 1 : 0.94 + 0.06 * pull)
                     .opacity(0.55 + 0.45 * pull)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                     .id(next.id)
             }
-            SwipeCard(save: top, addURL: top.kind == "product" ? { model.swipe?.linking = true } : nil,
-                      update: top.kind == "product" ? Self.storePage(top).map { link in { update(top, from: link) } } : nil,
-                      updating: updating == top.id)
+            SwipeCard(save: top, actions: actions(top))
                 .overlay(alignment: .topLeading) { stamp("Keep", symbol: "checkmark", color: t.primary, on: t.onPrimary, tilt: -12, shown: max(0, lean)) }
                 .overlay(alignment: .topTrailing) { stamp("Trash", symbol: "trash", color: no, on: .white, tilt: 12, shown: max(0, -lean)) }
                 .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -366,6 +372,40 @@ struct SwipeScreen: View {
         return social ? nil : link
     }
 
+    /// The ways to put a card right, by what it is: the first two show on the card, the rest under More.
+    private func actions(_ save: Save) -> [SwipeAction] {
+        var list: [SwipeAction] = []
+        let busy = updating == save.id || fixing == save.id
+        if save.kind == "product", let link = Self.storePage(save) {
+            list.append(SwipeAction(id: "swipe.update", title: "Update", symbol: "arrow.clockwise", busyTitle: "Reading the page…",
+                                    busy: updating == save.id, disabled: busy,
+                                    hint: "Reads the store page this save links to and rewrites the card from it. You can undo it.") { update(save, from: link) })
+        }
+        if save.kind == "recipe" {
+            list.append(SwipeAction(id: "swipe.addURL", title: "Add recipe URL", symbol: "link", disabled: busy,
+                                    hint: "Paste the page with the full recipe, and its ingredients and steps go on this save.") { model.swipe?.linking = true })
+        } else if save.kind == "product" || save.kind == "link" {
+            list.append(SwipeAction(id: "swipe.addURL", title: "Add URL", symbol: "link", disabled: busy,
+                                    hint: "Paste the product's page, and this save is rewritten from it.") { model.swipe?.linking = true })
+        }
+        if model.aiReady {
+            list.append(SwipeAction(id: "swipe.fix", title: "Fix with AI", symbol: "sparkles", busyTitle: "Fixing…",
+                                    busy: fixing == save.id, disabled: busy || model.aiRun != nil,
+                                    hint: "Your AI reads this save again and fills in what's missing or wrong. You can undo it.") { fix(save) })
+        }
+        list.append(SwipeAction(id: "swipe.edit", title: "Edit title or note", symbol: "pencil", disabled: busy, hint: "") { editing = save })
+        return list
+    }
+
+    private func fix(_ save: Save) {
+        guard fixing == nil else { return }
+        fixing = save.id
+        Task {
+            await model.fixWithAI([save])
+            fixing = nil
+        }
+    }
+
     /// Update from its page: the same rebuild as Add URL, from the link the save already has.
     private func update(_ save: Save, from link: String) {
         guard updating == nil else { return }
@@ -389,11 +429,8 @@ struct SwipeScreen: View {
 /// One save, as big as the screen allows: its picture, name, price and where it's from.
 private struct SwipeCard: View {
     let save: Save
-    /// Opens the Add URL field; nil for a card that isn't something to buy (or the one waiting underneath).
-    let addURL: (() -> Void)?
-    /// Rebuilds the card from the store page the save already links to; nil when it has none.
-    let update: (() -> Void)?
-    let updating: Bool
+    /// The ways to put this card right; none for the one waiting underneath.
+    let actions: [SwipeAction]
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -422,10 +459,10 @@ private struct SwipeCard: View {
                 if let about = save.description, !about.isEmpty, !typeSize.isAccessibilitySize {
                     Text(about).font(.subheadline).foregroundStyle(t.inkMuted).lineLimit(3).padding(.top, 2)
                 }
-                if addURL != nil || update != nil {
+                if !actions.isEmpty {
                     ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 10) { fixes }
-                        VStack(alignment: .leading, spacing: 8) { fixes }
+                        HStack(spacing: 10) { fixes(shown: 2) }
+                        HStack(spacing: 10) { fixes(shown: 1) }
                     }
                     .padding(.top, 8)
                 }
@@ -440,30 +477,45 @@ private struct SwipeCard: View {
     }
 }
 
+/// One way to put a card right (Update from its page, Add URL, Fix with AI, Edit).
+struct SwipeAction: Identifiable {
+    let id: String
+    let title: String
+    let symbol: String
+    var busyTitle = ""
+    var busy = false
+    var disabled = false
+    let hint: String
+    let run: () -> Void
+}
+
 extension SwipeCard {
-    /// The ways to correct a card: read the store page it already links to again, or give it another link.
-    @ViewBuilder fileprivate var fixes: some View {
-        if let update {
-            Button(action: update) {
+    /// The first few as buttons, the rest under More.
+    @ViewBuilder fileprivate func fixes(shown: Int) -> some View {
+        ForEach(actions.prefix(shown)) { a in
+            Button(action: a.run) {
                 HStack(spacing: 8) {
-                    if updating { ProgressView().controlSize(.small).tint(t.ink) } else { Image(systemName: "arrow.clockwise") }
-                    Text(updating ? "Reading the page…" : "Update from its page")
+                    if a.busy { ProgressView().controlSize(.small).tint(t.ink) } else { Image(systemName: a.symbol) }
+                    Text(a.busy ? a.busyTitle : a.title).lineLimit(1)
                 }
                 .font(.subheadline.weight(.semibold)).frame(minHeight: 32)
             }
             .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
-            .disabled(updating)
-            .accessibilityHint("Reads the store page this save links to and rewrites the card from it. You can undo it.")
-            .accessibilityIdentifier("swipe.update")
+            .disabled(a.disabled)
+            .accessibilityHint(a.hint)
+            .accessibilityIdentifier(a.id)
         }
-        if let addURL {
-            Button(action: addURL) {
-                Label("Add URL", systemImage: "link").font(.subheadline.weight(.semibold)).frame(minHeight: 32)
+        if actions.count > shown {
+            Menu {
+                ForEach(actions.dropFirst(shown)) { a in
+                    Button(a.busy ? a.busyTitle : a.title, systemImage: a.symbol, action: a.run).disabled(a.disabled)
+                }
+            } label: {
+                Image(systemName: "ellipsis").font(.subheadline.weight(.bold)).frame(minWidth: 20, minHeight: 32)
             }
             .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
-            .disabled(updating)
-            .accessibilityHint("Paste the product's page, and this save is rewritten from it.")
-            .accessibilityIdentifier("swipe.addURL")
+            .accessibilityLabel("More ways to fix this save")
+            .accessibilityIdentifier("swipe.more")
         }
     }
 }

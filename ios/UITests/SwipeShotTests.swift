@@ -11,6 +11,10 @@ final class SwipeShotTests: XCTestCase {
         app.launch()
         let link = app.buttons["wishList.link"]
         XCTAssertTrue(link.waitForExistence(timeout: 10))
+        app.tabBars.buttons["Library"].tap()
+        XCTAssertTrue(app.buttons["swipe.play"].waitForExistence(timeout: 5))
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent("swipe-library.png"))
+        app.tabBars.buttons["Home"].tap()
         for _ in 0..<6 where !link.isHittable { app.swipeUp() }
         link.tap()
         app.buttons["swipe.play"].tap()

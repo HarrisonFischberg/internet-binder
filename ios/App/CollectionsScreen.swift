@@ -29,7 +29,10 @@ struct CollectionsScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
+                    HStack(alignment: .bottom, spacing: 12) {
+                        ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
+                        if showAll && !everything.isEmpty && !selecting { SwipePlayButton(title: "All saves", ids: everything.map(\.id)) }
+                    }
                     if !collected.isEmpty && !selecting {
                         Picker("Show", selection: $showAll) {
                             Text("Collections").tag(false)

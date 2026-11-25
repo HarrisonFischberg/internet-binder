@@ -837,6 +837,8 @@ struct EditSaveSheet: View {
 struct RecipeLinkSheet: View {
     let save: Save
     let done: () -> Void
+    /// Play keeps what's typed here, so it is still there after a trip to the browser.
+    var draft: Binding<String>?
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.dismiss) private var dismiss
@@ -899,7 +901,11 @@ struct RecipeLinkSheet: View {
         }
         .presentationDetents([.medium, .large])
         .interactiveDismissDisabled(working)
-        .onAppear { focused = true }
+        .onAppear {
+            if let draft, link.isEmpty { link = draft.wrappedValue }
+            focused = true
+        }
+        .onChange(of: link) { draft?.wrappedValue = link }
     }
 
     private func start() {
