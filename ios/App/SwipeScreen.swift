@@ -135,6 +135,8 @@ struct SwipeScreen: View {
     /// The card on top is on its way out, kept or not.
     @State private var leaving: Bool?
     @State private var undoing = false
+    /// The save being rebuilt from its own store page (Update from its page).
+    @State private var updating: String?
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private enum Page: Hashable { case kept }
@@ -219,14 +221,16 @@ struct SwipeScreen: View {
         let pull = min(abs(drag.width) / far, 1)
         return ZStack {
             if let next {
-                SwipeCard(save: next, addURL: nil)
+                SwipeCard(save: next, addURL: nil, update: nil, updating: false)
                     .scaleEffect(reduce ? 1 : 0.94 + 0.06 * pull)
                     .opacity(0.55 + 0.45 * pull)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                     .id(next.id)
             }
-            SwipeCard(save: top, addURL: top.kind == "product" ? { model.swipe?.linking = true } : nil)
+            SwipeCard(save: top, addURL: top.kind == "product" ? { model.swipe?.linking = true } : nil,
+                      update: top.kind == "product" ? Self.storePage(top).map { link in { update(top, from: link) } } : nil,
+                      updating: updating == top.id)
                 .overlay(alignment: .topLeading) { stamp("Keep", symbol: "checkmark", shown: drag.width > 0 ? pull : 0) }
                 .overlay(alignment: .topTrailing) { stamp("Trash", symbol: "trash", shown: drag.width < 0 ? pull : 0) }
                 .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -326,6 +330,25 @@ struct SwipeScreen: View {
         }
     }
 
+    /// The store page a save already points to: the shop page found for it, else its own link unless that is
+    /// a social post (which says little about the product, and needs a login to read).
+    static func storePage(_ save: Save) -> String? {
+        if let shop = save.details?["shopUrl"]?.string, shop.hasPrefix("http") { return shop }
+        guard let link = save.url, link.hasPrefix("http"), let host = URL(string: link)?.host()?.lowercased() else { return nil }
+        let social = host.range(of: #"(^|\.)(instagram\.com|tiktok\.com|youtube\.com|youtu\.be|facebook\.com|fb\.watch|x\.com|twitter\.com|threads\.net|pinterest\.[a-z.]+|reddit\.com|linkedin\.com)$"#, options: .regularExpression) != nil
+        return social ? nil : link
+    }
+
+    /// Update from its page: the same rebuild as Add URL, from the link the save already has.
+    private func update(_ save: Save, from link: String) {
+        guard updating == nil else { return }
+        updating = save.id
+        Task {
+            if let failed = await model.rewriteProduct(save, from: link) { model.failed(failed) }
+            updating = nil
+        }
+    }
+
     private func undo() {
         guard !undoing else { return }
         undoing = true
@@ -341,6 +364,9 @@ private struct SwipeCard: View {
     let save: Save
     /// Opens the Add URL field; nil for a card that isn't something to buy (or the one waiting underneath).
     let addURL: (() -> Void)?
+    /// Rebuilds the card from the store page the save already links to; nil when it has none.
+    let update: (() -> Void)?
+    let updating: Bool
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -369,14 +395,12 @@ private struct SwipeCard: View {
                 if let about = save.description, !about.isEmpty, !typeSize.isAccessibilitySize {
                     Text(about).font(.subheadline).foregroundStyle(t.inkMuted).lineLimit(3).padding(.top, 2)
                 }
-                if let addURL {
-                    Button(action: addURL) {
-                        Label("Add URL", systemImage: "link").font(.subheadline.weight(.semibold)).frame(minHeight: 32)
+                if addURL != nil || update != nil {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { fixes }
+                        VStack(alignment: .leading, spacing: 8) { fixes }
                     }
-                    .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
                     .padding(.top, 8)
-                    .accessibilityHint("Paste the product's page, and this save is rewritten from it.")
-                    .accessibilityIdentifier("swipe.addURL")
                 }
             }
             .padding(18)
@@ -386,6 +410,34 @@ private struct SwipeCard: View {
         .ksSurface(radius: 24)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityIdentifier("swipe.card")
+    }
+}
+
+extension SwipeCard {
+    /// The ways to correct a card: read the store page it already links to again, or give it another link.
+    @ViewBuilder fileprivate var fixes: some View {
+        if let update {
+            Button(action: update) {
+                HStack(spacing: 8) {
+                    if updating { ProgressView().controlSize(.small).tint(t.ink) } else { Image(systemName: "arrow.clockwise") }
+                    Text(updating ? "Reading the page…" : "Update from its page")
+                }
+                .font(.subheadline.weight(.semibold)).frame(minHeight: 32)
+            }
+            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
+            .disabled(updating)
+            .accessibilityHint("Reads the store page this save links to and rewrites the card from it. You can undo it.")
+            .accessibilityIdentifier("swipe.update")
+        }
+        if let addURL {
+            Button(action: addURL) {
+                Label("Add URL", systemImage: "link").font(.subheadline.weight(.semibold)).frame(minHeight: 32)
+            }
+            .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
+            .disabled(updating)
+            .accessibilityHint("Paste the product's page, and this save is rewritten from it.")
+            .accessibilityIdentifier("swipe.addURL")
+        }
     }
 }
 
