@@ -89,8 +89,9 @@ final class SwipeModeTests: XCTestCase {
         play.tap()
         XCTAssertTrue(app.navigationBars.matching(NSPredicate(format: "identifier BEGINSWITH '1 of '")).firstMatch.waitForExistence(timeout: 5))
         let recipe = app.buttons["Add recipe URL"]
-        for _ in 0..<40 where !recipe.exists { app.buttons["swipe.keep"].tap() }
-        XCTAssertTrue(recipe.exists, "a recipe card offers its own link")
+        // Hittable, not just there: the card waiting underneath is laid out with its buttons too.
+        for _ in 0..<40 where !(recipe.exists && recipe.isHittable) { app.buttons["swipe.keep"].tap(); usleep(400_000) }
+        XCTAssertTrue(recipe.exists && recipe.isHittable, "a recipe card offers its own link")
         shot("swipe-recipe")
         app.buttons["swipe.more"].tap()
         XCTAssertTrue(app.buttons["Edit title or note"].waitForExistence(timeout: 3))

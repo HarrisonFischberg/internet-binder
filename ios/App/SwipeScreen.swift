@@ -265,38 +265,46 @@ struct SwipeScreen: View {
 
     // MARK: The cards
 
+    /// The card on top and the one waiting under it. Each keeps its own view as it moves up (the one under
+    /// is laid out exactly as it will be on top, fix buttons included), so nothing shifts or reloads when
+    /// the top card goes.
     private func deck(_ top: Save, next: Save?) -> some View {
-        let pull = min(abs(drag.width) / far, 1)
-        return ZStack {
-            if let next {
-                SwipeCard(save: next, actions: [])
-                    .scaleEffect(reduce ? 1 : 0.94 + 0.06 * pull)
-                    .opacity(0.55 + 0.45 * pull)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                    .id(next.id)
+        ZStack {
+            ForEach([next, top].compactMap { $0 }) { save in
+                card(save, isTop: save.id == top.id)
             }
-            SwipeCard(save: top, actions: actions(top))
-                .overlay(alignment: .topLeading) { stamp("Keep", symbol: "checkmark", color: t.primary, on: t.onPrimary, tilt: -12, shown: max(0, lean)) }
-                .overlay(alignment: .topTrailing) { stamp("Trash", symbol: "trash", color: no, on: .white, tilt: 12, shown: max(0, -lean)) }
-                .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .onTapGesture { path.append(top) }
-                .offset(x: reduce && leaving != nil ? 0 : drag.width, y: reduce ? 0 : drag.height * 0.25)
-                .rotationEffect(.degrees(reduce ? 0 : Double(drag.width / 24)), anchor: .bottom)
-                .opacity(reduce && leaving != nil ? 0 : 1)
-                .gesture(DragGesture(minimumDistance: 12)
-                    .onChanged { v in if leaving == nil { drag = v.translation } }
-                    .onEnded { v in
-                        guard leaving == nil else { return }
-                        let w = abs(v.translation.width) > far ? v.translation.width : v.predictedEndTranslation.width
-                        if abs(w) > far, abs(v.translation.width) > 40, (w > 0) == (v.translation.width > 0) { decide(top, keep: w > 0) }
-                        else { withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { drag = .zero } }
-                    })
-                .accessibilityElement(children: .contain)
-                .accessibilityAction(named: "Keep") { decide(top, keep: true) }
-                .accessibilityAction(named: "Move to Trash") { decide(top, keep: false) }
-                .id(top.id)
         }
+    }
+
+    private func card(_ save: Save, isTop: Bool) -> some View {
+        let pull = min(abs(drag.width) / far, 1)
+        let gone = reduce && leaving != nil
+        let swipe = DragGesture(minimumDistance: 12)
+            .onChanged { v in if leaving == nil { drag = v.translation } }
+            .onEnded { v in
+                guard leaving == nil else { return }
+                let w = abs(v.translation.width) > far ? v.translation.width : v.predictedEndTranslation.width
+                if abs(w) > far, abs(v.translation.width) > 40, (w > 0) == (v.translation.width > 0) { decide(save, keep: w > 0) }
+                else { withAnimation(KSMotion.or(KSMotion.settle, reduce: reduce)) { drag = .zero } }
+            }
+        return SwipeCard(save: save, actions: actions(save), live: isTop)
+            // The card underneath is there to look at only: VoiceOver and UI tests see the top one.
+            .accessibilityHidden(!isTop)
+            .overlay(alignment: .topLeading) { stamp("Keep", symbol: "checkmark", color: t.primary, on: t.onPrimary, tilt: -12, shown: isTop ? max(0, lean) : 0) }
+            .overlay(alignment: .topTrailing) { stamp("Trash", symbol: "trash", color: no, on: .white, tilt: 12, shown: isTop ? max(0, -lean) : 0) }
+            .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .onTapGesture { if isTop { path.append(save) } }
+            // Under the top card: a little smaller and dimmer, coming forward as the top one is pulled away.
+            .scaleEffect(isTop || reduce ? 1 : 0.94 + 0.06 * pull)
+            .opacity(isTop ? (gone ? 0 : 1) : 0.55 + 0.45 * pull)
+            .offset(x: isTop && !gone ? drag.width : 0)
+            .rotationEffect(.degrees(isTop && !reduce ? Double(drag.width / 24) : 0), anchor: .bottom)
+            .gesture(isTop ? swipe : nil)
+            .allowsHitTesting(isTop)
+            .accessibilityElement(children: .contain)
+            .accessibilityAction(named: "Keep") { decide(save, keep: true) }
+            .accessibilityAction(named: "Move to Trash") { decide(save, keep: false) }
+            .accessibilityHidden(!isTop)
     }
 
     /// "Keep" or "Trash" on the card's corner as it's pulled that way.
@@ -465,6 +473,8 @@ private struct SwipeCard: View {
     let save: Save
     /// The ways to put this card right; none for the one waiting underneath.
     let actions: [SwipeAction]
+    /// The card on top. The one underneath is laid out the same, but only to look at.
+    var live = true
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -484,7 +494,7 @@ private struct SwipeCard: View {
                     .lineLimit(typeSize.isAccessibilitySize ? 2 : 3).multilineTextAlignment(.leading)
                     .minimumScaleFactor(0.8)
                     .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("swipe.title")
+                    .accessibilityIdentifier(live ? "swipe.title" : "")
                 if let fact = save.fact, !fact.isEmpty {
                     Text(fact).font(.headline).foregroundStyle(t.ink).monospacedDigit()
                 }
@@ -507,7 +517,7 @@ private struct SwipeCard: View {
         }
         .ksSurface(radius: 24)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .accessibilityIdentifier("swipe.card")
+        .accessibilityIdentifier(live ? "swipe.card" : "")
     }
 }
 
@@ -537,7 +547,8 @@ extension SwipeCard {
             .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
             .disabled(a.disabled)
             .accessibilityHint(a.hint)
-            .accessibilityIdentifier(a.id)
+            .accessibilityIdentifier(live ? a.id : "")
+            .accessibilityHidden(!live)
         }
         if actions.count > shown {
             Menu {
@@ -549,7 +560,8 @@ extension SwipeCard {
             }
             .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(t.ink)
             .accessibilityLabel("More ways to fix this save")
-            .accessibilityIdentifier("swipe.more")
+            .accessibilityIdentifier(live ? "swipe.more" : "")
+            .accessibilityHidden(!live)
         }
     }
 }
