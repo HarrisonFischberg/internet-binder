@@ -120,6 +120,8 @@ final class LibraryModel {
     }
     /// Play (SwipeScreen): the run in progress, kept on the device so it survives a trip to the browser.
     var swipe = SwipeSession.stored { didSet { if swipe != oldValue { SwipeSession.stored = swipe } } }
+    /// Saves kept in Play before: they stay out of later runs until you ask to go through everything again.
+    var swipeKept = SwipeSession.storedKept { didSet { if swipeKept != oldValue { SwipeSession.storedKept = swipeKept } } }
     /// Saves a Not this kind is working on: a second tap waits.
     var notThisKindBusy: Set<String> = []
     struct AIRun: Equatable {

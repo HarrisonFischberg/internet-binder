@@ -62,6 +62,21 @@ final class SwipeModeTests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["swipe.done"].tap()
         XCTAssertTrue(app.staticTexts["3 things to buy, from all your collections."].waitForExistence(timeout: 5))
+        // Everything left was kept, so Play offers to go through it again.
+        let again = app.buttons["swipe.play"]
+        XCTAssertEqual(again.label, "Play Wish List again")
+        again.tap()
+        XCTAssertTrue(app.navigationBars["1 of 3"].waitForExistence(timeout: 5))
+        // Keep one and stop: the next Play starts after it, not from the top again.
+        let first = app.staticTexts["swipe.title"].firstMatch.label
+        app.buttons["swipe.keep"].tap()
+        XCTAssertTrue(app.navigationBars["2 of 3"].waitForExistence(timeout: 3))
+        app.buttons["swipe.close"].tap()
+        app.buttons["swipe.done"].tap()
+        XCTAssertEqual(app.buttons["swipe.play"].label, "Play Wish List")
+        app.buttons["swipe.play"].tap()
+        XCTAssertTrue(app.navigationBars["1 of 2"].waitForExistence(timeout: 5))
+        XCTAssertNotEqual(app.staticTexts["swipe.title"].firstMatch.label, first)
     }
 
     /// Play is on the Library too, for every kind of save; a recipe's card offers its own link field.

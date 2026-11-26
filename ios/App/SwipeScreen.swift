@@ -14,6 +14,8 @@ struct SwipeSession: Codable, Equatable {
     var title: String
     /// Saves still to decide; the first is the card on top.
     var queue: [String]
+    /// Every save of the list this run is for, the ones kept in earlier runs included (for starting over).
+    var all: [String] = []
     var kept: [String] = []
     var steps: [Step] = []
     /// The Add URL field is open on the top card, with what's typed so far.
@@ -29,6 +31,12 @@ struct SwipeSession: Codable, Equatable {
 
     static var libraryName: String { ProcessInfo.processInfo.environment["KEEPSAKE_DB"] ?? "" }
     private static let key = "swipeSession"
+    private static var keptKey: String { "swipeKept." + libraryName }
+    /// What was kept in earlier runs, on this device.
+    static var storedKept: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: keptKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: keptKey) }
+    }
     static var stored: SwipeSession? {
         get {
             guard let data = UserDefaults.standard.data(forKey: key), let s = try? JSONDecoder().decode(SwipeSession.self, from: data),
@@ -43,11 +51,17 @@ struct SwipeSession: Codable, Equatable {
 }
 
 extension LibraryModel {
-    /// Play: these saves, one card at a time.
-    func startSwipe(_ title: String, ids: [String]) {
+    /// Play: these saves, one card at a time. What you kept in an earlier run is left out, so a run picks up
+    /// where the last one stopped; `again` (or nothing left to decide) forgets that and shows them all.
+    func startSwipe(_ title: String, ids: [String], again: Bool = false) {
         guard !ids.isEmpty else { return }
+        var queue = again ? [] : ids.filter { !swipeKept.contains($0) }
+        if queue.isEmpty {
+            swipeKept.subtract(ids)
+            queue = ids
+        }
         Haptic.pageTurned()
-        swipe = SwipeSession(title: title, queue: ids)
+        swipe = SwipeSession(title: title, queue: queue, all: ids)
     }
 
     /// Keep leaves the save as it is. Otherwise it goes to the Trash, and Undo brings it back.
@@ -55,7 +69,7 @@ extension LibraryModel {
         guard var s = swipe, let i = s.queue.firstIndex(of: id) else { return }
         s.queue.remove(at: i)
         s.steps.append(.init(id: id, kept: keep))
-        if keep { s.kept.append(id) }
+        if keep { s.kept.append(id); swipeKept.insert(id) }
         swipe = s
         guard !keep, let library else { return }
         Task {
@@ -83,7 +97,7 @@ extension LibraryModel {
         }
         guard var s = swipe, s.steps.last == last else { return }
         s.steps.removeLast()
-        if last.kept { s.kept.removeAll { $0 == last.id } }
+        if last.kept { s.kept.removeAll { $0 == last.id }; swipeKept.remove(last.id) }
         s.queue.insert(last.id, at: 0)
         swipe = s
         Haptic.undo()
@@ -107,9 +121,23 @@ struct SwipePlayButton: View {
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
 
+    /// Not kept in an earlier run: what Play shows.
+    private var left: Int { ids.count(where: { !model.swipeKept.contains($0) }) }
+    /// You kept everything here: Play goes through them all again.
+    private var again: Bool { left == 0 }
+    private var value: String {
+        if again || left == ids.count { return "" }
+        return "\(left) left to decide, \(ids.count - left) kept before"
+    }
+    private var hint: String {
+        if again { return "You kept everything here. Shows all \(ids.count) again, one at a time." }
+        let what = left == 1 ? "the save" : "\(left) saves"
+        return "Shows \(what) one at a time. Swipe right to keep, left to move to the Trash."
+    }
+
     var body: some View {
         Button { model.startSwipe(title, ids: ids) } label: {
-            Label("Play", systemImage: "play.fill")
+            Label(again ? "Play again" : "Play", systemImage: again ? "arrow.counterclockwise" : "play.fill")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(t.onPrimary)
                 .frame(minHeight: 30)
         }
@@ -117,8 +145,14 @@ struct SwipePlayButton: View {
         .buttonBorderShape(.capsule)
         .tint(t.primary)
         .frame(minHeight: 44)
-        .accessibilityLabel("Play \(title)")
-        .accessibilityHint("Shows \(ids.count == 1 ? "the save" : "all \(ids.count) saves") one at a time. Swipe right to keep, left to move to the Trash.")
+        .contextMenu {
+            if left < ids.count {
+                Button("Start over with all \(ids.count)", systemImage: "arrow.counterclockwise") { model.startSwipe(title, ids: ids, again: true) }
+            }
+        }
+        .accessibilityLabel(again ? "Play \(title) again" : "Play \(title)")
+        .accessibilityValue(value)
+        .accessibilityHint(hint)
         .accessibilityIdentifier("swipe.play")
     }
 }
@@ -562,6 +596,24 @@ private struct SwipeKept: View {
                     }
                 }
             }
+            startOver
+        }
+    }
+
+    /// At the end: what you kept won't come up next time, and the way to see everything again anyway.
+    @ViewBuilder private var startOver: some View {
+        let all = session.all.filter { model.index.byId[$0] != nil }
+        if finished, left == 0, !all.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What you kept stays out of the next Play, so it picks up where you stopped.")
+                    .font(.footnote).foregroundStyle(t.inkMuted)
+                Button("Go through all \(all.count) again", systemImage: "arrow.counterclockwise") {
+                    model.startSwipe(session.title, ids: all, again: true)
+                }
+                .font(.subheadline.weight(.semibold)).tint(t.ink).frame(minHeight: 44)
+                .accessibilityIdentifier("swipe.again")
+            }
+            .padding(.top, 4)
         }
     }
 
