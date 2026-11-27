@@ -313,6 +313,14 @@ public final class KeepsakeCore: @unchecked Sendable {
         }
     }
 
+    /// Frees what finished calls left behind in JavaScript (parsed settings, a page that was read). For
+    /// the Share Extension, which iOS stops when it runs out of its small share of memory.
+    public func trim() {
+        queue.async { [self] in
+            if let context { JSGarbageCollect(context.jsGlobalContextRef) }
+        }
+    }
+
     /// `callJSON` with Foundation values in and out.
     @discardableResult
     public func call(_ path: String, _ args: [Any] = []) async throws -> Any {

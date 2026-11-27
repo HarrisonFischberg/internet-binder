@@ -117,6 +117,9 @@ public final class Library: @unchecked Sendable {
     /// Waits for the store's first-run setup (default collections, migrations).
     public func prepare() async throws { try await ready.value }
 
+    /// Gives back the memory finished work left behind (KeepsakeCore.trim).
+    public func trim() { core.trim() }
+
     // MARK: reads
 
     public func saves(trash: Bool = false) throws -> [Save] {
