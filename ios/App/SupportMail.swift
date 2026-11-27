@@ -1,6 +1,7 @@
 import OSLog
 import SwiftUI
 import UIKit
+import KeepsakeKit
 
 /// Settings → "Send Debug Logs to support@rarecreatures.app": a draft in the user's own email app with what
 /// they typed, the app and device, and the errors logged since the app opened. The app sends nothing itself;
@@ -8,7 +9,9 @@ import UIKit
 enum SupportMail {
     nonisolated static let address = "support@rarecreatures.app"
     /// Most log text put in the mailto: link; some email apps refuse or cut much longer links.
-    private nonisolated static let logLimit = 6_000
+    private nonisolated static let logLimit = 4_000
+    /// How many of the share sheet diary's newest lines go in the draft (about the last six shares).
+    private nonisolated static let diaryLines = 45
 
     /// Opens the draft. If no email app opens, copies it instead and returns false.
     @MainActor static func send(problem: String) async -> Bool {
@@ -31,7 +34,20 @@ enum SupportMail {
             "",
             "Errors logged since the app opened:",
             recentErrors(),
+            "",
+            "Share sheet diary (times in UTC; opened, saved, closed and so on, nothing from your saves):",
+            shareDiary(),
         ].joined(separator: "\n")
+    }
+
+    /// The newest lines of the diary the share sheet keeps beside the library (ShareTrace in the Share
+    /// Extension): when each sheet opened, saved and went, never a link or a title.
+    nonisolated static func shareDiary() -> String {
+        guard let path = try? RecordDatabase.defaultPath(),
+              let text = try? String(contentsOf: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("share-trace.log"), encoding: .utf8)
+        else { return "none" }
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: true).suffix(diaryLines)
+        return lines.isEmpty ? "none" : lines.joined(separator: "\n")
     }
 
     nonisolated static func url(body: String) -> URL? {
@@ -101,7 +117,7 @@ struct SendDebugLogsSection: View {
         } footer: {
             Text(sendFailed
                  ? "No email app opened. The report is copied: paste it into an email to \(SupportMail.address)."
-                 : "Opens your email app with what you wrote, the app version, your device and this session's error logs. Nothing is sent until you tap Send.")
+                 : "Opens your email app with what you wrote, the app version, your device, this session's error logs and the share sheet's diary (when it opened and closed, nothing from your saves). Nothing is sent until you tap Send.")
         }
     }
 }
