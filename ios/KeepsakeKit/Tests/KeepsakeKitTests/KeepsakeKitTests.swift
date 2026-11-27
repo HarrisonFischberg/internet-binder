@@ -263,6 +263,32 @@ struct CaptureTests {
         #expect(r.save?.kind == "link")
     }
 
+    /// The Share Sheet's three tiles: what the sorter ranked comes first, then where you file most.
+    @Test func picksAreTheSortersThenTheMostUsed() async throws {
+        let d = { (v: String, l: String, g: String) in try! JSONDecoder().decode(Destination.self, from: Data(#"{"value":"\#(v)","label":"\#(l)","group":"\#(g)"}"#.utf8)) }
+        let all = [d("kind:recipe", "Recipes", "lifestyle"), d("kind:place", "Places", "lifestyle"), d("a", "Coffee", "collection"), d("b", "Kitchen", "collection"), d("c", "Gifts", "collection")]
+        let counts = ["kind:recipe": 40, "a": 9, "b": 9, "c": 0]
+        // Ranked collections first (even an empty one), then the most used; a tie goes A to Z; no repeats.
+        #expect(Library.picks(likely: ["c", "gone", "a"], destinations: all, counts: counts).map(\.value) == ["c", "a", "kind:recipe"])
+        // Nothing to sort by: the three most used, and never an empty one.
+        #expect(Library.picks(likely: [], destinations: all, counts: counts).map(\.value) == ["kind:recipe", "a", "b"])
+        // One home is no choice: the sheet keeps its two library cards.
+        #expect(Library.picks(likely: [], destinations: all, counts: ["a": 2]).isEmpty)
+        #expect(Library.picks(likely: [], destinations: all, counts: [:]).isEmpty)
+    }
+
+    /// A save the sorter can't place waits in Review and brings back the collections it weighed.
+    @Test func anUnsureCaptureSaysWhatItWeighed() async throws {
+        let lib = try library()
+        let kitchen = try await lib.createCollection(named: "Kitchen")
+        let r = try await lib.capture(product: ["url": "https://shop.example.com/p/9", "title": "Thing", "description": "Looks nice in a kitchen", "schemaTypes": ["Product"]])
+        #expect((r.save?.collectionId ?? "").isEmpty)
+        #expect(r.likely == [kitchen.id])
+        // Nothing to go on: nothing weighed.
+        let bare = try await lib.capture(product: Library.sharedProduct(url: "https://example.com/", title: "Example Domain", text: nil))
+        #expect(bare.likely.isEmpty)
+    }
+
     @Test func addressDecidesTheKind() async throws {
         let lib = try library()
         #expect(try await lib.capture(product: Library.sharedProduct(url: "https://www.youtube.com/watch?v=abcdefghijk", title: "Dumplings", text: nil)).save?.kind == "video")
@@ -507,6 +533,42 @@ struct ViewsTests {
         let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets())
         _ = try await lib.importExport(try fixture("chrome-export"), replace: true)
         return lib
+    }
+
+    /// A save's own page reads the same row the Wish List shows; cards have a line only once deals exist.
+    @Test func aSavesOwnDealsRow() async throws {
+        let lib = try await imported()
+        let list = try await lib.wishList()
+        let first = try #require(list.rows.first)
+        let one = try await lib.wishRow(first.id)
+        #expect(one.row?.id == first.id && one.row?.state == "unchecked")
+        #expect(one.keyReady == false)
+        #expect(try await lib.dealLines().isEmpty, "nothing has been looked up")
+        try await lib.setWishHidden([first.id], true)
+        #expect(try await lib.wishRow(first.id).row == nil, "hidden from the Wish List: no prices card either")
+        #expect(try await lib.wishRow("no-such-save").row == nil)
+    }
+
+    /// Wish List: what's still to buy from every collection, never what's bought; hiding takes one off it.
+    @Test func wishListGathersWhatIsLeftToBuy() async throws {
+        let lib = try await imported()
+        let list = try await lib.wishList()
+        #expect(!list.rows.isEmpty)
+        #expect(list.rows.allSatisfy { $0.item.purchased != true && !$0.item.hasOwnView && $0.state == "unchecked" })
+        #expect(list.keyReady == false, "no key: nothing can be looked up")
+        #expect(list.toCheck.count == list.rows.count)
+        let first = try #require(list.rows.first)
+        // Without a key a lookup says so; nothing has been looked up, so no spend. Naming a product shows on its row.
+        await #expect(throws: (any Error).self) { try await lib.findDeals(first.id) }
+        #expect(list.spend.lookups == 0 && list.spend.usd == 0)
+        try await lib.setWishName(first.id, "The exact model, in blue")
+        #expect(try await lib.wishList().rows.first { $0.id == first.id }?.wishName == "The exact model, in blue")
+        #expect(try await lib.removeOffer(first.id, url: "https://nowhere.example/p") == nil, "no such offer: nothing to undo")
+        try await lib.setWishHidden([first.id], true)
+        let after = try await lib.wishList()
+        #expect(after.rows.count == list.rows.count - 1)
+        #expect(after.hidden.map(\.id) == [first.id])
+        #expect(try await lib.findDeals(first.id) == 0, "hidden since you asked: nothing is sent for it")
     }
 
     var expected: [String: Any] { get throws { try json(fixture("views-expected")) } }

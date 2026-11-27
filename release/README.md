@@ -14,8 +14,8 @@ One command, from the repo root. The target defaults to `ios`.
 | Chrome Web Store upload and publish | `./release.sh chrome --live` |
 | Copy the App Store Connect listing into `store/ios` (read-only) | `./release.sh pull-listing` |
 
-Extra flags: `--version X.Y.Z` sets the version first, `--first` for the app's first App Store version
-(Apple refuses What's New on it; the app has never been on the App Store yet, so the first release needs it),
+Extra flags: `--version X.Y.Z` sets the version first, `--first` for an app's first App Store version
+(Apple refuses What's New on it; Internet Binder is already live, so its releases don't need it),
 `--no-screenshots` keeps the current store images instead of retaking them.
 
 Each `--live` run ends by printing where it went: the TestFlight page, the App Store link (works once Apple approves) or the Chrome Web Store page.

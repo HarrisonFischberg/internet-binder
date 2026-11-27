@@ -28,6 +28,9 @@ import { useLifestyleViews, openRecipe, openWorkout } from './lifestyleViews.js'
 
 const store = createStore(chromeBackend(), idbBackend(undefined, undefined, { journal: syncCapable() }));
 followColorScheme();
+// Safari draws a card black for a moment when a hover turns it into its own layer inside the column grid
+// (dashboard.css, ".safari .grid"), so the page says when it is running there.
+if (location.protocol === 'safari-web-extension:') document.documentElement.classList.add('safari');
 const $ = (id) => document.getElementById(id);
 
 // Labels for the "import method" filter — keys match item.type in shared/storage.js.

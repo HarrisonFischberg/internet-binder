@@ -30,6 +30,10 @@ When the owner says the build is good for release ("Internet Binder is good for 
    notes and screenshots, open a PR and merge it. Tell the owner one line: the version, the build number,
    and that it's waiting for review.
 
+## Status notes (vault)
+
+This app's status note is `Apps/Internet Binder.md` in the Obsidian vault at `~/projects/vault` (private repo `HarrisonFischberg/vault`; cloud sessions can clone it). Read it, and the vault's `CLAUDE.md`, for current state, builds, open PRs and past decisions before starting work. After a release or TestFlight upload, an App Review change or a notable decision, update that note following the vault's `CLAUDE.md` and commit to the vault. This repo stays the source of truth for code.
+
 ## Model Routing and Sub-Agents
 
 The main session is the orchestrator. It plans, makes judgment calls, edits small things itself, and merges results. Sub-agents live in `.claude/agents/`.

@@ -236,7 +236,7 @@ export function titlePicture(html, baseUrl = '') {
 }
 
 const today = () => nowIso().slice(0, 10);
-const regionNow = () => { try { return (new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region || 'US').toUpperCase(); } catch { return 'US'; } };
+export const regionNow = () => { try { return (new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).maximize().region || 'US').toUpperCase(); } catch { return 'US'; } };
 
 // The change the provider's title answer (and the picture found on a page about it) makes to a save (pure).
 export function planTitle(item, ai, picture = '', { on = today() } = {}) {
@@ -532,17 +532,25 @@ export function productFromHtml(html, baseUrl = '') {
   const nameOf = (v) => text(v && typeof v === 'object' ? v.name : v);
   const abs = (v) => {
     const s = typeof v === 'string' ? v : v && typeof v === 'object' ? v.url || v.contentUrl || '' : '';
+    // Nothing there is nothing: an empty value would otherwise resolve to the page's own address.
+    if (!s.trim()) return '';
     try { const u = new URL(s.trim(), baseUrl || undefined); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch { return ''; }
   };
   let price = null;
   let currency = '';
   let availability = '';
   const offers = product ? [].concat(product.offers || []).flatMap((o) => (o && o.offers ? [o, ...[].concat(o.offers)] : [o])) : [];
+  // Every price the page's offers state: more than one (a variant each, or a "from" price) means the page
+  // alone can't say what this exact item costs (priceVaries; Wish List then doesn't call a price confirmed).
+  const stated = new Set();
+  let ranged = false;
   for (const o of offers.slice(0, 20)) {
     if (!o || typeof o !== 'object') continue;
     const cur = String(o.priceCurrency || o.priceSpecification?.priceCurrency || '').toUpperCase();
+    if (o.lowPrice !== undefined && o.lowPrice !== null && o.lowPrice !== '' && String(o.lowPrice) !== String(o.highPrice ?? o.lowPrice)) ranged = true;
     for (const v of [o.price, o.lowPrice, o.priceSpecification?.price]) {
       const p = parsePrice(v, cur);
+      if (p && p.amount > 0) stated.add(p.amount);
       if (price === null && p && p.amount > 0) { price = p.amount; currency = cur || p.currency || ''; }
     }
     if (!availability && o.availability) availability = /outofstock|soldout|discontinued/i.test(String(o.availability)) ? 'out_of_stock' : /instock|limitedavailability|preorder/i.test(String(o.availability)) ? 'in_stock' : '';
@@ -576,6 +584,7 @@ export function productFromHtml(html, baseUrl = '') {
     sku: product ? text(product.sku || product.mpn || product.model?.name || product.model || '').slice(0, 60) : '',
     price,
     currency,
+    priceVaries: ranged || stated.size > 1,
     availability,
     image: abs(product ? [].concat(product.image || [])[0] : null) || abs(meta('og:image')),
     siteName: meta('og:site_name').slice(0, 80),
@@ -583,6 +592,152 @@ export function productFromHtml(html, baseUrl = '') {
     url: baseUrl,
     structured: !!product,
   };
+}
+
+// "Add product link": the store page you paste becomes this save's shop page, read once without cookies.
+// Its own name, price (only when the save has none), picture (the same), brand, specs and stock go on the
+// save, and Find deals then knows exactly which product it is. A page the store won't let apps read is
+// still linked, with nothing else changed. { ok, error, site, read, price, logId } for Undo.
+// rewrite (the link typed where you say which product it is): you are saying "this page IS the product",
+// so the card is rebuilt from it: the page's name, price and picture replace the save's, and your AI
+// (Apple Intelligence, or your key: you asked) reads the page for the summary, features and specs. Without
+// AI, or when it fails, the page's own facts still go on (aiError says why); with neither a readable page
+// nor a sure answer, only the link is kept, as without rewrite. Your own words for the
+// product (wishName) are dropped: the page says it better.
+export async function linkProductPage(store, id, link, { fetchPage = async () => null, loadImage = async () => null, rewrite = false } = {}) {
+  const url = recipeLink(link);
+  if (!url) return { ok: false, error: 'That doesn’t look like a web address. Paste the link to the product’s page in a store.' };
+  if (SOCIAL.test(hostOf(url))) return { ok: false, error: 'That’s a social post, not a store page. Paste the link to the product’s page in a store.' };
+  const item = await store.getItem(id);
+  if (!item || item.deletedAt) return { ok: false, error: 'That save no longer exists.' };
+  if (hasOwnView(kindOf(item))) return { ok: false, error: 'This save isn’t something to buy.' };
+  let html = null;
+  try { html = await fetchPage(url); } catch { html = null; }
+  const read = html ? productFromHtml(html, url) : null;
+  let page = read && (read.structured || read.price !== null) ? read : null;
+  // The card shows a small copy kept on the device, not an address: fetch the page's picture now.
+  if (page?.image) {
+    const picture = await pictureOf({ image: page.image }, loadImage);
+    if (picture) page = { ...page, image: picture };
+  }
+  const current = await store.getItem(id);
+  if (!current || current.deletedAt) return { ok: false, error: 'That save no longer exists.' };
+  let ai = null;
+  let aiError = '';
+  if (rewrite) {
+    const settings = await store.getSettings();
+    const key = keyFor(settings, await store.getSecret('aiApiKey'));
+    if (aiAvailable(settings, key) && (html || supportsWebLookup(settings))) {
+      try {
+        // The page is the truth here, not the post it was saved from: no caption, no thumbnail.
+        ai = await understandProductWithAI({
+          title: page?.name || read?.title || current.title || '', description: read?.description || '', site: read?.siteName || prettyRetailer(hostnameOf(url)),
+          url, price: page && page.price !== null ? formatPrice(page.price, page.currency) || String(page.price) : '',
+          pages: html ? [{ url, text: pageText(html) }] : [], image: '',
+          // The page's text is in hand: nothing is searched, so the answer can't wander to another product.
+          linked: true, noSearch: !!html,
+        }, settings, key);
+        // The page couldn't be read, so the provider searched: its answer counts only when the page it
+        // found is on the site you linked.
+        if (!html && siteKey(ai.listing?.url) !== siteKey(url)) ai = { ...ai, confidence: 0 };
+      } catch (e) {
+        aiError = String((e && e.message) || e);
+      }
+    }
+  }
+  // Nothing to rebuild the card from (the page wouldn't be read and no AI was sure): only the link is kept.
+  const rebuild = rewrite && (!!page || (!!ai && ai.confidence >= PRODUCT_CONFIDENCE));
+  const latest = rewrite ? await store.getItem(id) : current;
+  if (!latest || latest.deletedAt) return { ok: false, error: 'That save no longer exists.' };
+  const { patch, changes, site } = planLinkedProduct(latest, url, page, { ai, rewrite: rebuild });
+  if (!changes.length) return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: latest.title, price: '', logId: null, same: true };
+  const before = Object.fromEntries([...LOGGED, 'deals', 'dealSkip', 'wishName'].filter((f) => f in patch).map((f) => [f, latest[f] === undefined ? null : latest[f]]));
+  await store.updateItem(id, patch, { by: 'ai' });
+  const logId = uid();
+  await store.appendAiLog([{ id: logId, runId: `link-product-${id}`, at: nowIso(), itemId: id, itemTitle: patch.title || current.title, changes, before, after: patch, reason: ai?.reason || `From the store page you added (${site}).`, undone: false }]);
+  return { ok: true, site, read: !!page, ai: rebuild && !!ai && ai.confidence >= PRODUCT_CONFIDENCE, aiError, title: patch.title || latest.title, price: 'price' in patch ? formatPrice(patch.price, patch.currency) || String(patch.price) : '', logId };
+}
+
+// A link's site, for telling whether two addresses are the same shop ("www." aside).
+const siteKey = (u) => hostnameOf(u || '').toLowerCase().replace(/^www\./, '');
+
+// A linked page's specs with the AI's added (the page's own win), or what was there.
+function linkedSpecs(page, sure, old) {
+  const specs = [...(page?.specs || [])];
+  for (const sp of sure?.specs || []) if (!specs.some((x) => x.label.toLowerCase() === sp.label.toLowerCase())) specs.push(sp);
+  return specs.length ? specs : old;
+}
+
+// The change a store page you linked makes to a save (pure). page: productFromHtml's answer, or null when
+// the page couldn't be read (the link alone is kept).
+export function planLinkedProduct(item, url, page = null, { ai = null, rewrite = false } = {}) {
+  const mine = new Set(item.userFields || []);
+  const current = kindOf(item);
+  const old = current === 'product' ? item.details || {} : {};
+  const site = page?.siteName || prettyRetailer(hostnameOf(url));
+  // Your AI's read of the page, when it is sure what the product is.
+  const sure = ai && ai.confidence >= PRODUCT_CONFIDENCE ? ai : null;
+  const patch = {};
+  const changes = [];
+  if (current !== 'product') {
+    patch.kind = 'product';
+    changes.push({ field: 'kind', from: kindInfo(current).label, to: kindInfo('product').label });
+  }
+  // What you typed yourself stays; the page only fills what you left empty.
+  const yours = old.source === 'you';
+  const pick = (mineFirst, theirs) => (yours ? mineFirst || theirs : theirs || mineFirst) || '';
+  const details = sanitizeDetails('product', {
+    ...old,
+    brand: pick(old.brand, page?.brand || sure?.brand),
+    model: pick(old.model, page?.sku || sure?.model),
+    category: pick(old.category, page?.category || sure?.category),
+    specs: yours && old.specs?.length ? old.specs : linkedSpecs(page, sure, rewrite ? [] : old.specs || []),
+    // The summary and features were about whatever the save was taken to be: on a rewrite they are the
+    // AI's read of this page, or nothing.
+    ...(rewrite && !yours ? { summary: sure?.summary || '', features: sure?.features || [] } : {}),
+    shopUrl: url,
+    shopName: site,
+    shopTitle: page?.title || '',
+    shopDescription: page?.description || '',
+    availability: page?.availability || '',
+    source: old.source === 'you' ? 'you' : page ? 'page' : sure ? 'ai' : old.source || '',
+  });
+  if (JSON.stringify(details) !== JSON.stringify(old)) {
+    patch.details = details;
+    changes.push({ field: 'shop page', from: old.shopName || '—', to: site });
+    // Another shop page is (or may be) another product: prices found for the old one, and the stores
+    // you skipped for it, go with it. Undo brings them back.
+    if (details.shopUrl !== (old.shopUrl || '')) {
+      if (item.deals) patch.deals = null;
+      if ((item.dealSkip || []).length) patch.dealSkip = [];
+    }
+  }
+  const name = page?.name || (rewrite && sure ? sure.name : '');
+  const renames = rewrite || isPostSave(item) || item.type === 'inspiration' || genericTitle(item.title) || current !== 'product';
+  // A rewrite replaces even what you typed by hand: you gave the page to correct the card (Undo puts it back).
+  if (name.length >= 3 && name !== item.title && (rewrite || !mine.has('title')) && renames) {
+    patch.title = name;
+    changes.push({ field: 'title', from: item.title, to: name });
+  }
+  const unpriced = item.price === null || item.price === undefined;
+  const newPrice = page && page.price !== null && !page.priceVaries && (rewrite || !mine.has('price')) && (unpriced || (rewrite && (page.price !== item.price || (page.currency || '') !== (item.currency || ''))));
+  const listed = rewrite && !page && sure?.listing?.price != null && sure.listing.price !== item.price ? sure.listing : null;
+  if (listed) {
+    patch.price = listed.price;
+    patch.currency = listed.currency || item.currency || '';
+    changes.push({ field: 'price', from: unpriced ? 'none' : formatPrice(item.price, item.currency) || String(item.price), to: formatPrice(patch.price, patch.currency) || String(patch.price) });
+  }
+  if (newPrice) {
+    patch.price = page.price;
+    patch.currency = page.currency || item.currency || '';
+    changes.push({ field: 'price', from: unpriced ? 'none' : formatPrice(item.price, item.currency) || String(item.price), to: formatPrice(patch.price, patch.currency) || String(patch.price) });
+  }
+  if (page?.image && (!item.image || (rewrite && page.image !== item.image))) {
+    patch.image = page.image;
+    changes.push({ field: 'picture', from: item.image ? 'the old picture' : 'none', to: site });
+  }
+  if (rewrite && item.wishName && changes.length) patch.wishName = '';
+  return { patch, changes, site };
 }
 
 // Shopping saves the provider reads as a product: anything already a product, a post or link saved into

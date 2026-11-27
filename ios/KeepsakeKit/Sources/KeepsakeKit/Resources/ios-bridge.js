@@ -175,6 +175,24 @@
   // What the screens list, decided by Chrome's own functions (the dashboard does the same).
   const K = KeepsakeCore;
   const withFact = (i) => ({ ...i, fact: factOf(i) });
+  const money = (n, cur) => K.util.formatPrice(n, cur) || String(n);
+  // One save as the Wish List (and the save's own page) shows it: prices are formatted here so the
+  // screens never do money maths.
+  const wishRow = (item, summary, names) => ({
+    item: withFact(item),
+    collection: names.get(item.collectionId) || '',
+    savedPrice: Number.isFinite(item.price) && item.price > 0 ? money(item.price, item.currency) : '',
+    state: summary.state,
+    offers: summary.offers.map((o) => ({ store: o.store, url: o.url, price: money(o.price, o.currency), sale: o.sale || '', note: o.note || '',
+      confirmed: o.confirmed === true, outOfStock: o.outOfStock === true, lowest: o === summary.best, doubt: o.doubt === true })),
+    // What the last lookup took the product to be, and your own words for it (wins; empty when unset).
+    product: item.deals?.product || '', wishName: item.wishName || '',
+    bestStore: summary.best ? summary.best.store : '',
+    bestPrice: summary.best ? money(summary.best.price, summary.best.currency) : '',
+    saving: summary.saving !== null ? money(summary.saving, summary.best.currency || item.currency) : '',
+    savingPct: summary.savingPct,
+    checkedAt: summary.checkedAt, old: summary.old,
+  });
   const placeUndo = new Map();
   globalThis.views = {
     // Review: saves that need a collection and aren't bought (dashboard.js: needsCollection && isActive).
@@ -455,6 +473,17 @@
         return { ok: false, error: /\((401|403|429)\)|API key/i.test(msg) ? `Your AI provider didn’t answer: ${msg}` : msg || 'Something went wrong.' };
       }
     },
+    // Add product link: the store page you pasted becomes this save's shop page (understand.js
+    // linkProductPage). Read once, without cookies. { ok, error, site, read, ai, aiError, title, price, logId } for Undo.
+    // rewrite: the page is the product, so the card is rebuilt from it and your AI reads the page for the
+    // summary, features and specs (the page's text goes to your provider, or stays on device with Apple Intelligence).
+    async linkProduct(id, link, rewrite) {
+      try {
+        return await K.understand.linkProductPage(store, id, link, { fetchPage: viaNative('fetchAskedPage'), loadImage: viaNative('loadAskedImage'), rewrite: !!rewrite });
+      } catch (e) {
+        return { ok: false, error: String((e && e.message) || e) || 'Something went wrong.' };
+      }
+    },
     // Optional AI is on with a key: your provider backs Apple Intelligence up.
     async aiBackupReady() {
       const settings = await store.getSettings();
@@ -624,6 +653,70 @@
     async undoSave(id) { await store.deleteForever([id]); },
     // Done on the share card with the save still where Internet Binder put it: the sorter learns a little.
     async confirmFiling(id) { return store.confirmFiling(id); },
+    // Wish List (shared/wishlist.js): everything still to buy, from every collection and Review, with the
+    // deals found for each. Prices are formatted here so the screen never does money maths.
+    //   keyReady: Optional AI is on with a key (Apple Intelligence can't search the web);
+    //   searchReady: that provider has web search (Anthropic or OpenAI, not a custom endpoint);
+    //   toCheck: what Check all would look up (nothing checked in the last 12 hours).
+    async wishList() {
+      const [settings, secret, cols] = [await store.getSettings(), await store.getSecret('aiApiKey'), await store.getCollections()];
+      const names = new Map(cols.map((c) => [c.id, c.name]));
+      const items = listItems();
+      const row = ({ item, summary }) => wishRow(item, summary, names);
+      return {
+        rows: K.wishlist.wishList(items).map(row),
+        hidden: items.filter(K.wishlist.hiddenFromWishList).map(withFact),
+        keyReady: !!K.provider.usableKey(settings, secret),
+        searchReady: K.provider.supportsWebLookup(settings),
+        toCheck: K.wishlist.dealsToCheck(items).map((i) => i.id),
+        // Dollars one lookup probably costs on your key (null when the model's price isn't known), and
+        // this month's lookups on this device with what they cost.
+        estimateEach: K.provider.lookupEstimate(settings),
+        spend: K.wishlist.spendThisMonth(settings),
+      };
+    },
+    // The same row for one save, for its own page: null when it isn't on the Wish List (bought, hidden,
+    // not something to buy). Nothing is looked up.
+    async wishRow(id) {
+      const [settings, secret, cols] = [await store.getSettings(), await store.getSecret('aiApiKey'), await store.getCollections()];
+      const item = await store.getItem(id);
+      const on = !!item && K.wishlist.onWishList(item);
+      return {
+        row: on ? wishRow(item, K.wishlist.dealSummary(item), new Map(cols.map((c) => [c.id, c.name]))) : null,
+        keyReady: !!K.provider.usableKey(settings, secret),
+        searchReady: K.provider.supportsWebLookup(settings),
+      };
+    },
+    // What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id. Only saves
+    // with a line are listed (shared/wishlist.js dealLine).
+    async dealLines() {
+      const out = {};
+      for (const item of listItems()) {
+        if (!item.deals) continue;
+        const line = K.wishlist.dealLine(item);
+        if (line) out[item.id] = line;
+      }
+      return out;
+    },
+    // Find deals for one save, with your key (you asked). Throws the provider's error; the save's last
+    // results stay. Each store page the search found is read once without cookies (__native.fetchPage).
+    async findDeals(id) {
+      const r = await K.wishlist.findDeals(store, id, { fetchShopPage: aiDeps.fetchShopPage });
+      return { state: r.summary.state, offers: r.skipped ? 0 : r.summary.offers.length, usage: r.item.deals?.usage || null };
+    },
+    async setWishHidden(ids, hidden) { await K.wishlist.setWishHidden(store, ids, hidden); },
+    // "Not the same item": takes the offer off and skips that store for this save from now on. Returns
+    // what restoreOffer needs for Undo, or null.
+    async removeOffer(id, url) {
+      const checkedAt = (await store.getItem(id))?.deals?.checkedAt || '';
+      const offer = await K.wishlist.removeOffer(store, id, url);
+      return offer ? { offer, checkedAt } : null;
+    },
+    async restoreOffer(id, undoJSON) {
+      const undo = typeof undoJSON === 'string' ? JSON.parse(undoJSON) : undoJSON;
+      await K.wishlist.restoreOffer(store, id, undo?.offer, undo?.checkedAt || '');
+    },
+    async setWishName(id, name) { await K.wishlist.setWishName(store, id, name); },
     // A workout's goals with their progress (goals.js goalProgress), and today's check-ins so a second
     // tap on Done today can take today back off the goal.
     async goals(itemId) {

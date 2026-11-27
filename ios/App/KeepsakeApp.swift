@@ -10,12 +10,17 @@ import KeepsakeUI
 struct KeepsakeApp: App {
     @UIApplicationDelegateAdaptor private var notices: NoticeDelegate
     @State private var model = LibraryModel()
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(model)
                 .environment(notices)
+                .environment(\.dealLines, model.dealLines)
+                // Cards carry the lowest price found: read again when a save or its deals change, and on
+                // coming back to the app, because a price older than two days leaves the card.
+                .task(id: "\(model.savesChanged)|\(model.dealsChanged)|\(phase == .active)") { await model.loadDealLines() }
                 .keepsakeAppearance(model.appearance)
         }
     }
@@ -59,8 +64,12 @@ final class LibraryModel {
         didSet {
             index = SaveIndex(saves)
             reviewCount = index.review.count
+            savesChanged &+= 1
         }
     }
+    /// Moves whenever any save changes (a price, Purchased, a sync from another device), for screens that
+    /// read their own view of the library (the Wish List).
+    private(set) var savesChanged = 0
     /// The groupings screens draw from, worked out once per library change rather than on every redraw.
     private(set) var index = SaveIndex([])
     private(set) var reviewCount = 0
@@ -90,6 +99,25 @@ final class LibraryModel {
     private(set) var aiBackup = false
     /// A Fix with AI run in progress (one save, a collection, a Lifestyle view or everything).
     var aiRun: AIRun?
+    /// Wish List: Find deals in progress (one save, or Check all), and a count that moves when a save's
+    /// deals change so the list reads them again.
+    var dealRun: DealRun?
+    var dealsChanged = 0
+    /// What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id.
+    private(set) var dealLines: [String: String] = [:]
+    func loadDealLines() async {
+        guard let library, let next = try? await library.dealLines() else { return }
+        if next != dealLines { dealLines = next }
+    }
+    struct DealRun: Equatable {
+        var done = 0
+        let total: Int
+        /// The save being looked up right now.
+        var current: String?
+        var stopping = false
+        /// Your provider asked to slow down: the run waits a little, then carries on.
+        var waiting = false
+    }
     /// Saves a Not this kind is working on: a second tap waits.
     var notThisKindBusy: Set<String> = []
     struct AIRun: Equatable {

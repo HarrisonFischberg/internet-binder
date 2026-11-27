@@ -113,6 +113,135 @@ public struct RecipeImport: Decodable, Sendable {
     public let logId: String?
 }
 
+/// What "Add product link" did (understand.js linkProductPage). `read` is false when the store wouldn't let
+/// the page be read: the link is kept and nothing else changed. `price` is set when the save had none.
+public struct ProductLink: Decodable, Sendable {
+    public let ok: Bool
+    public let error: String?
+    public let site: String?
+    public let read: Bool?
+    /// Your AI read the page too (a rewrite); `aiError` says why it didn't when it was asked and failed.
+    public let ai: Bool?
+    public let aiError: String?
+    /// The save's title afterwards.
+    public let title: String?
+    public let price: String?
+    public let logId: String?
+}
+
+/// The Wish List (shared/wishlist.js): everything still to buy, from every collection and Review, with the
+/// deals found for each. Prices arrive formatted ("$199.99").
+public struct WishList: Decodable, Sendable, Equatable {
+    public struct Offer: Decodable, Sendable, Hashable, Identifiable {
+        public let store: String
+        public let url: String
+        public let price: String
+        /// What the store calls the offer ("Black Friday deal"), or empty.
+        public let sale: String
+        public let note: String
+        /// The price was read from the store's own page, not only from a search result.
+        public let confirmed: Bool
+        public let outOfStock: Bool
+        /// The lowest price in stock.
+        public let lowest: Bool
+        /// Far below what known stores charge, at a store that isn't one: shown with a warning, never as the best price.
+        public let doubt: Bool
+        public var id: String { url }
+    }
+    public struct Row: Decodable, Sendable, Hashable, Identifiable {
+        public let item: Save
+        /// The collection it's in, or empty (Review).
+        public let collection: String
+        /// The price it was saved at, or empty.
+        public let savedPrice: String
+        /// "unchecked", "found", "none" (no prices found) or "unsure" (couldn't tell which product).
+        public let state: String
+        public let offers: [Offer]
+        public let bestStore: String
+        public let bestPrice: String
+        /// How far the lowest price is below the saved one ("$79.01"), or empty when it isn't lower.
+        public let saving: String
+        public let savingPct: Int?
+        public let checkedAt: String?
+        /// Checked more than two days ago.
+        public let old: Bool
+        /// What the last lookup took the product to be ("Sony WH-1000XM6, black"), or empty.
+        public let product: String
+        /// The exact product in your own words, which Find deals searches for; empty when you haven't said.
+        public let wishName: String
+        public var id: String { item.id }
+    }
+    public struct Spend: Decodable, Sendable, Equatable {
+        /// Dollars this month for the lookups whose model has a known price.
+        public let usd: Double
+        public let lookups: Int
+        /// Lookups this month with no known price (another provider or model): not in usd.
+        public let unpriced: Int
+    }
+    public let rows: [Row]
+    /// Saves you took off the list, to put back.
+    public let hidden: [Save]
+    /// Optional AI is on with a key (Apple Intelligence can't search the web).
+    public let keyReady: Bool
+    /// That provider can search the web (Anthropic or OpenAI, not a custom endpoint).
+    public let searchReady: Bool
+    /// What Check all would look up: nothing checked in the last 12 hours.
+    public let toCheck: [String]
+    /// One save's row, for its own page.
+    public struct One: Decodable, Sendable, Equatable {
+        /// Nil when the save isn't on the Wish List (bought, hidden, not something to buy).
+        public let row: Row?
+        public let keyReady: Bool
+        public let searchReady: Bool
+    }
+    /// Dollars one lookup probably costs on your key; nil when the model's price isn't known.
+    public let estimateEach: Double?
+    /// Find deals on this device this month.
+    public let spend: Spend
+}
+
+extension Library {
+    public func wishList() async throws -> WishList { try await prepare(); return try await core.call("views.wishList", as: WishList.self) }
+
+    /// One save's Wish List row, for its own page. Nothing is looked up.
+    public func wishRow(_ id: String) async throws -> WishList.One { try await prepare(); return try await core.call("views.wishRow", [id], as: WishList.One.self) }
+
+    /// Add product link: the store page you paste becomes this save's shop page. Read once, without
+    /// cookies.
+    /// `rewrite`: the page is the product, so the card is rebuilt from it (name, price, picture) and your AI
+    /// reads the page for the summary, features and specs.
+    public func linkProduct(_ id: String, link: String, rewrite: Bool = false) async throws -> ProductLink {
+        try await prepare()
+        return try await core.call("views.linkProduct", [id, link, rewrite], as: ProductLink.self)
+    }
+
+    /// What each product's card says about its deals ("Now $36.99 at Brewhaus"), by save id.
+    public func dealLines() async throws -> [String: String] { try await prepare(); return try await core.call("views.dealLines", as: [String: String].self) }
+
+    /// Find deals for one save with your own key (you asked): your provider searches the web, then each
+    /// store page it found is read once, without cookies, for its price. Returns how many offers it kept.
+    /// Throws the provider's error ("Provider error (429): …"); the save's last results stay.
+    @discardableResult public func findDeals(_ id: String) async throws -> Int {
+        try await prepare()
+        return ((try await core.call("views.findDeals", [id]) as? [String: Any])?["offers"] as? Int) ?? 0
+    }
+
+    /// Takes saves off the Wish List, or puts them back. Their deals stay.
+    public func setWishHidden(_ ids: [String], _ hidden: Bool) async throws { try await core.call("views.setWishHidden", [ids, hidden]) }
+
+    /// "Not the same item": removes one store's offer and leaves that store out of this save's later
+    /// lookups. Returns what `restoreOffer` needs to undo it, or nil when the offer was already gone.
+    public func removeOffer(_ id: String, url: String) async throws -> String? {
+        let undo = try await core.callJSON("views.removeOffer", argsJSON: try argsJSON([id, url]))
+        return undo == "null" ? nil : undo
+    }
+
+    public func restoreOffer(_ id: String, _ undo: String) async throws { try await core.call("views.restoreOffer", [id, undo]) }
+
+    /// The exact product in your words, for Find deals (the save's title stays). Empty goes back to the title.
+    public func setWishName(_ id: String, _ name: String) async throws { try await core.call("views.setWishName", [id, name]) }
+}
+
 public struct GoalView: Decodable, Sendable {
     public struct Goal: Decodable, Sendable { public let id: String; public let itemId: String; public let kind: String; public let startsOn: String; public let endsOn: String? }
     public struct Week: Decodable, Sendable, Hashable { public let week: Int; public let count: Int; public let target: Int; public let met: Bool; public let current: Bool; public let past: Bool }

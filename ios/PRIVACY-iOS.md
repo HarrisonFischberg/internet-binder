@@ -38,11 +38,29 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
   *Understanding a book, film or show* lets the provider search the web for the title (with your country,
   for where it streams), then reads one page about it (the save's own page, else one the search returned),
   without cookies, for its cover or poster.
+- **Wish List: Find deals**, only when you tap Find deals on a save or Check all, and only with your own AI
+  key (Anthropic or OpenAI; Apple Intelligence can't search the web, so without a key nothing is sent):
+  the product's name, brand, model, colour or size, the price and shop it was saved from, its shop link,
+  the currency and your country go to your chosen provider, which searches the web for current prices.
+  If you named the exact product, your words go instead of the model and colour read from the page, and the
+  stores you marked "Not the same item" are listed so they are left out.
+  Each store page its search returned (five at most) is then fetched once over https without cookies, for
+  the price in that page's structured product data. The stores, prices and links found are kept on the
+  save, on your devices and in your own iCloud if sync is on. Nothing runs by itself. What the lookups
+  have cost on your key this month is worked out on the device from the provider's own usage figures and
+  kept there; it is sent nowhere.
 - **Import recipe from a link**, only when you paste a link into it on a recipe: that one page, fetched once over
   https without cookies, for its recipe card (schema.org Recipe). When the page has none, its visible text
   (up to 12,000 characters) and the dish's name are read by Apple Intelligence on the device, or, with no
   Apple Intelligence, by your own AI key's provider. The ingredients, steps and link are stored on the save;
   one Undo puts it back.
+- **A product's link** (Add Product Link, or a link typed where you say which product a save is), only when
+  you paste one: that one page, fetched once over https without cookies, for its product details
+  (schema.org Product). The link, the page's product name and its visible text (up to 3,000 characters) are
+  then read by your own AI key's provider, or by Apple Intelligence on the device when you have no key.
+  When the page can't be read, your provider is given the link and the save's title and searches the web
+  for that page instead. The post's caption and picture are not sent. The name,
+  price, picture, details and link are stored on the save; one Undo puts it back.
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and
   covers load from Wikimedia Commons and `covers.openlibrary.org`.
