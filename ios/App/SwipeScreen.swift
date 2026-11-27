@@ -9,6 +9,9 @@ struct SwipeSession: Codable, Equatable {
     struct Step: Codable, Equatable {
         let id: String
         let kept: Bool
+        /// Moved somewhere else rather than kept or trashed: the save as it was before (the fields a move
+        /// changes, as JSON), so Undo puts it back exactly.
+        var before: String?
     }
     /// "Wish List", or the collection's name.
     var title: String
@@ -26,9 +29,12 @@ struct SwipeSession: Codable, Equatable {
     /// Which library this belongs to (UI tests open a fresh one each launch).
     var library = SwipeSession.libraryName
 
-    var trashed: Int { steps.count(where: { !$0.kept }) }
+    var trashed: Int { steps.count(where: { !$0.kept && $0.before == nil }) }
+    var moved: Int { steps.count(where: { $0.before != nil }) }
     var total: Int { queue.count + steps.count }
 
+    /// The Wish List's run: a card moved out of it leaves the Wish List as well.
+    static let wishList = "Wish List"
     static var libraryName: String { ProcessInfo.processInfo.environment["KEEPSAKE_DB"] ?? "" }
     private static let key = "swipeSession"
     private static var keptKey: String { "swipeKept." + libraryName }
@@ -88,10 +94,59 @@ extension LibraryModel {
         }
     }
 
-    /// Takes back the last card: out of the Trash or off the kept list, and on top again.
+    /// Move to…: the card on top goes to another collection or Lifestyle view and leaves the run. It won't
+    /// come up in a later run either. Returns where it went, or nil when it couldn't be moved.
+    func swipeMove(_ id: String, to destination: String) async -> String? {
+        guard let library, swipe?.queue.contains(id) == true else { return nil }
+        // What a move changes, as it is now, for Undo.
+        let fields = ["kind", "details", "collectionId", "needsReview", "categorizationSource", "categorizationReason", "confidence", "previousCollections", "userFields"]
+        var before = "{}"
+        if let item = try? await library.core.call("store.getItem", [id]) as? [String: Any] {
+            let was = Dictionary(uniqueKeysWithValues: fields.map { ($0, item[$0] ?? NSNull()) })
+            if let data = try? JSONSerialization.data(withJSONObject: was) { before = String(decoding: data, as: UTF8.self) }
+        }
+        guard let name = try? await library.put([id], in: destination) else {
+            failed("Couldn't move it. Try again.")
+            return nil
+        }
+        // Moved out of a run of the Wish List: it leaves that list too (Hidden there has Put back).
+        if swipe?.title == SwipeSession.wishList { try? await library.setWishHidden([id], true) }
+        guard var s = swipe, let i = s.queue.firstIndex(of: id) else { return name }
+        s.queue.remove(at: i)
+        s.steps.append(.init(id: id, kept: false, before: before))
+        swipe = s
+        swipeKept.insert(id)
+        Haptic.dropped()
+        refresh()
+        dealsChanged += 1
+        return name
+    }
+
+    /// New collection…: made (or found, when one has that name), then the card goes in.
+    func swipeMove(_ id: String, toNew name: String) async -> String? {
+        let name = name.trimmingCharacters(in: .whitespaces)
+        guard let library, !name.isEmpty else { return nil }
+        guard let c = try? await library.createCollection(named: name) else {
+            failed("Couldn't make that collection. Try again.")
+            return nil
+        }
+        await loadDestinations()
+        collectionsChanged += 1
+        return await swipeMove(id, to: c.id)
+    }
+
+    /// Takes back the last card: out of the Trash, off the kept list or back where it was moved from, and
+    /// on top again.
     func swipeUndo() async {
         guard let last = swipe?.steps.last else { return }
-        if !last.kept {
+        if let before = last.before {
+            guard let library, let was = try? JSONSerialization.jsonObject(with: Data(before.utf8)) as? [String: Any] else { return }
+            do { _ = try await library.core.call("store.updateItem", [last.id, was, ["by": "undo"]]) } catch { return failed("Couldn't put it back. Try again.") }
+            if swipe?.title == SwipeSession.wishList { try? await library.setWishHidden([last.id], false) }
+            swipeKept.remove(last.id)
+            await reload()
+            dealsChanged += 1
+        } else if !last.kept {
             do { try await library?.restore([last.id]) } catch { return failed("Couldn't bring it back. Try again.") }
             await reload()
         }
@@ -174,6 +229,11 @@ struct SwipeScreen: View {
     /// The save Fix with AI is reading.
     @State private var fixing: String?
     @State private var editing: Save?
+    /// The card a new collection is being named for, and the name so far.
+    @State private var naming: Save?
+    @State private var newName = ""
+    /// The top card is on its way to another collection.
+    @State private var moving = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private enum Page: Hashable { case kept }
@@ -256,6 +316,15 @@ struct SwipeScreen: View {
             }
         }
         .sheet(item: $editing) { EditSaveSheet(save: $0) }
+        .alert("New collection", isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil; newName = "" } })) {
+            TextField("Name", text: $newName)
+            Button("Cancel", role: .cancel) {}
+            Button("Create") { if let save = naming { move(save, to: newName, new: true) } }
+                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+        } message: {
+            Text("This save goes straight in.")
+        }
+        .task { if model.destinations.isEmpty { await model.loadDestinations() } }
         // A run restored after iOS closed the app: nothing left of it (every save gone meanwhile) ends it.
         .task(id: model.loaded) {
             if model.loaded, cards.isEmpty, session.steps.isEmpty { model.swipe = nil }
@@ -295,8 +364,8 @@ struct SwipeScreen: View {
             .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             .onTapGesture { if isTop { path.append(save) } }
             // Under the top card: a little smaller and dimmer, coming forward as the top one is pulled away.
-            .scaleEffect(isTop || reduce ? 1 : 0.94 + 0.06 * pull)
-            .opacity(isTop ? (gone ? 0 : 1) : 0.55 + 0.45 * pull)
+            .scaleEffect(isTop ? (moving && !reduce ? 0.8 : 1) : reduce ? 1 : 0.94 + 0.06 * pull)
+            .opacity(isTop ? (gone || moving ? 0 : 1) : 0.55 + 0.45 * pull)
             .offset(x: isTop && !gone ? drag.width : 0)
             .rotationEffect(.degrees(isTop && !reduce ? Double(drag.width / 24) : 0), anchor: .bottom)
             .gesture(isTop ? swipe : nil)
@@ -336,6 +405,10 @@ struct SwipeScreen: View {
                 .padding(.top, 8)
                 .opacity(1 - 0.6 * abs(lean))
             Spacer(minLength: 8)
+            moveMenu(top)
+                .padding(.top, 8)
+                .opacity(1 - 0.6 * abs(lean))
+            Spacer(minLength: 8)
             round("Keep", symbol: "checkmark", size: 64, id: "swipe.keep", filled: true, grow: max(0, lean)) { decide(top, keep: true) }
                 .opacity(1 - 0.6 * max(0, -lean))
         }
@@ -343,6 +416,46 @@ struct SwipeScreen: View {
         .disabled(leaving != nil)
         // The tick as the card passes the point where letting go decides.
         .onChange(of: armed) { _, now in if now != 0, leaving == nil { Haptic.detent() } }
+    }
+
+    /// Move: for a card that's in the wrong place. Every collection and Lifestyle view, and a new collection.
+    private func moveMenu(_ top: Save) -> some View {
+        let places = model.destinations.filter { $0.value != top.collectionId && $0.value != "kind:\(top.kind)" }
+        return Menu {
+            Button("New collection…", systemImage: "plus") { naming = top }
+            Section("Collections") {
+                ForEach(places.filter { $0.group == "collection" }) { d in Button(d.label) { move(top, to: d.value) } }
+            }
+            Section("Lifestyle") {
+                ForEach(places.filter { $0.group != "collection" }) { d in Button(d.label) { move(top, to: d.value) } }
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "folder").font(.body.weight(.semibold)).foregroundStyle(t.ink)
+                    .frame(width: 48, height: 48)
+                    .ksGlass(Circle())
+                if !typeSize.isAccessibilitySize { Text("Move").font(.footnote.weight(.medium)).foregroundStyle(t.inkMuted) }
+            }
+        }
+        .disabled(moving)
+        .accessibilityLabel("Move to another collection")
+        .accessibilityHint("For a save that's in the wrong place. Undo puts it back.")
+        .accessibilityIdentifier("swipe.move")
+    }
+
+    /// The card shrinks away while it's moved; `new` makes the collection first.
+    private func move(_ save: Save, to destination: String, new: Bool = false) {
+        guard !moving, leaving == nil else { return }
+        withAnimation(KSMotion.or(.easeIn(duration: 0.2), reduce: reduce)) { moving = true }
+        Task {
+            let name = new ? await model.swipeMove(save.id, toNew: destination) : await model.swipeMove(save.id, to: destination)
+            moving = false
+            if let name {
+                let said = session.title == SwipeSession.wishList ? "Moved to \(name), and off your Wish List" : "Moved to \(name)"
+                model.show(said)
+                UIAccessibility.post(notification: .announcement, argument: said)
+            }
+        }
     }
 
     /// grow: how far the card leans this button's way (0 to 1): it swells with the card, and pops past its
@@ -631,9 +744,10 @@ private struct SwipeKept: View {
 
     /// "Kept 5. Moved 3 to the Trash. 2 left."
     private var summary: String {
-        let k = kept.count, x = session.trashed
+        let k = kept.count, x = session.trashed, m = session.moved
         var parts: [String] = []
         if finished || k > 0 { parts.append("Kept \(k).") }
+        if m > 0 { parts.append("Moved \(m) somewhere else.") }
         if x > 0 { parts.append("Moved \(x) to the Trash.") }
         if left > 0 { parts.append("\(left) left.") }
         return parts.joined(separator: " ")

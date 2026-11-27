@@ -79,6 +79,37 @@ final class SwipeModeTests: XCTestCase {
         XCTAssertNotEqual(app.staticTexts["swipe.title"].firstMatch.label, first)
     }
 
+    /// A card in the wrong place moves to a new collection from Play, leaves the run, and Undo puts it back.
+    func testMoveACardToANewCollection() {
+        let app = launch()
+        play(app)
+        let title = app.staticTexts["swipe.title"].firstMatch.label
+        app.buttons["swipe.move"].tap()
+        shot("swipe-move-menu")
+        app.buttons["New collection…"].tap()
+        let name = app.textFields["Name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 3))
+        name.typeText("Gift ideas")
+        app.buttons["Create"].tap()
+        XCTAssertTrue(app.navigationBars["2 of 4"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Moved to Gift ideas, and off your Wish List"].waitForExistence(timeout: 3))
+        XCTAssertNotEqual(app.staticTexts["swipe.title"].firstMatch.label, title)
+        // The new collection is offered for the next card, and Undo brings the moved one back on top.
+        app.buttons["swipe.undo"].tap()
+        XCTAssertTrue(app.navigationBars["1 of 4"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["swipe.title"].firstMatch.label, title)
+        app.buttons["swipe.move"].tap()
+        XCTAssertTrue(app.buttons["Gift ideas"].waitForExistence(timeout: 3))
+        app.buttons["Gift ideas"].tap()
+        XCTAssertTrue(app.navigationBars["2 of 4"].waitForExistence(timeout: 5))
+        for _ in 0..<3 { app.buttons["swipe.keep"].tap(); usleep(500_000) }
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Kept 3. Moved 1 somewhere else.'")).firstMatch.waitForExistence(timeout: 5))
+        shot("swipe-moved-end")
+        // Moved out of the Wish List's run, it left the Wish List too.
+        app.buttons["swipe.done"].tap()
+        XCTAssertTrue(app.staticTexts["3 things to buy, from all your collections."].waitForExistence(timeout: 5))
+    }
+
     /// Play is on the Library too, for every kind of save; a recipe's card offers its own link field.
     func testPlayTheWholeLibraryAndFixARecipe() {
         let app = launch()

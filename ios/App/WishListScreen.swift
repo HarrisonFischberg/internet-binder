@@ -57,7 +57,7 @@ struct WishListScreen: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .bottom, spacing: 12) {
                         ScreenHeader(title: "Wish List", subtitle: subtitle)
-                        if !rows.isEmpty { SwipePlayButton(title: "Wish List", ids: rows.map(\.id)) }
+                        if !rows.isEmpty { SwipePlayButton(title: SwipeSession.wishList, ids: rows.map(\.id)) }
                     }
                     if let list {
                         if rows.isEmpty {
