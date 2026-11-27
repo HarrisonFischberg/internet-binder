@@ -503,7 +503,11 @@ struct ShareCard: View {
     var body: some View {
         @Bindable var state = state
         ZStack {
-            TableBackground()
+            // The page's plain colour, not the app's moving table (TableBackground): that one is redrawn 24
+            // times a second into full-screen buffers, tens of MB on a phone, and with the shared code loaded
+            // it left a save so little room that iOS sometimes stopped the sheet as it saved. OrbitLines
+            // (still, drawn once) carries the look here.
+            t.table.ignoresSafeArea()
             OrbitLines()
             VStack(alignment: .leading, spacing: 16) {
                 status
