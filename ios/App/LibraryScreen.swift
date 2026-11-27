@@ -125,6 +125,7 @@ struct LibraryScreen: View {
                     .font(KSFont.note).foregroundStyle(t.inkMuted).monospacedDigit()
             }
             Spacer()
+            if !model.saves.isEmpty && !selecting { SwipePlayButton(title: "Library", ids: model.saves.map(\.id)) }
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) {
                     if !model.saves.isEmpty { HeaderSelectButton(selecting: $selecting, selected: $selected) }

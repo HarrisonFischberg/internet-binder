@@ -371,7 +371,11 @@
       const waitForLater = K.provider.localModelReady() && resting();
       if (!waitForLater || keyFirst) for (const it of await K.fill.pendingToTidy(store)) { await K.fill.tidySave(store, it.id, autoDeps); tidied++; }
       const read = await views.readOnDevice();
-      if ((!aiOn && !lookupsOn) || waitForLater) return { tidied, filled: 0, read };
+      // A product saved from a store's own page: that page is read once, so the card has the page's real
+      // name, price, picture and details without your pasting a link the save already has.
+      let pages = 0;
+      if (settings.links?.readShared !== false && (!waitForLater || keyFirst || !aiOn)) pages = await views.readOwnPages();
+      if ((!aiOn && !lookupsOn) || waitForLater) return { tidied, filled: 0, read, pages };
       const raw = await store.backend.get(['keepsake_ios_filled']);
       const filled = new Set(raw.keepsake_ios_filled || []);
       // Read again: a save the tidy found to be a recipe or place is filled in now. A save your provider
@@ -384,7 +388,37 @@
         filled.add(it.id);
       }
       await store.backend.set({ keepsake_ios_filled: [...filled].slice(-5000) });
-      return { tidied, filled: todo.length, read };
+      return { tidied, filled: todo.length, read, pages };
+    },
+    // Products saved (from now on) from a store's own page get that page read once, a few each time the app
+    // opens or a save finishes: fetched without cookies, its product data put on the card, and its text read
+    // for the summary and specs by Apple Intelligence on the device (your provider instead with Prefer my
+    // key). What you typed stays; each change is logged with Undo. Off with Read links you share.
+    // Saves from before this existed aren't swept: Update from its page (Play) does those one at a time.
+    async readOwnPages() {
+      const raw = await store.backend.get(['keepsake_ios_page_since', 'keepsake_ios_page_read']);
+      let since = raw.keepsake_ios_page_since;
+      if (!since) {
+        since = new Date().toISOString();
+        await store.backend.set({ keepsake_ios_page_since: since });
+      }
+      const tried = new Set(raw.keepsake_ios_page_read || []);
+      const todo = listItems().filter((i) => !i.deletedAt && !tried.has(i.id) && !i.needsAi && i.captureState !== 'pending' && (i.createdAt || '') >= since && K.understand.ownStorePage(i)).slice(0, 6);
+      if (!todo.length) return 0;
+      // Marked first, so a page that stops the run (or the app) isn't tried again and again.
+      for (const i of todo) tried.add(i.id);
+      await store.backend.set({ keepsake_ios_page_read: [...tried].slice(-5000) });
+      const deviceOnly = !K.provider.prefersKey(await store.getSettings(), await store.getSecret('aiApiKey'));
+      let changed = 0;
+      for (const i of todo) {
+        try {
+          const r = await K.understand.linkProductPage(store, i.id, K.understand.ownStorePage(i), { fetchPage: viaNative('fetchAskedPage'), loadImage: viaNative('loadAskedImage'), rewrite: true, auto: true, deviceOnly });
+          if (r && r.logId) changed++;
+        } catch {
+          /* unreadable: the save stays as it was */
+        }
+      }
+      return changed;
     },
     // Apple Intelligence reads every save it hasn't yet, a few at a time (each app open and finished save),
     // newest first, imports included: what it is, its details, a tidier title and a collection (Fix with

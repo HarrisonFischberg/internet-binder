@@ -861,6 +861,49 @@ struct NetworkTests {
         #expect(net.requests.count == count)
     }
 
+    /// Answers one store page with its product data; anything else gets a 404.
+    final class StorePage: NetworkTransport, @unchecked Sendable {
+        private let lock = NSLock()
+        private var _requests: [URLRequest] = []
+        var requests: [URLRequest] { lock.withLock { _requests } }
+        func send(_ request: URLRequest) async throws -> (status: Int, body: Data) {
+            lock.withLock { _requests.append(request) }
+            guard request.url?.absoluteString == "https://brewhaus.example.com/mug" else { return (404, Data()) }
+            let html = #"<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">{"@type":"Product","name":"Stoneware Mug 12 oz","brand":{"name":"Brewhaus"},"offers":{"price":"24.00","priceCurrency":"USD"}}</script></head><body>Hand-thrown stoneware.</body></html>"#
+            return (200, Data(html.utf8))
+        }
+    }
+
+    /// A product saved from a store's own page gets that page read once, without cookies, and its card
+    /// rebuilt from it; not with Read links you share off, and not for saves from before the feature.
+    @Test func aSavedProductsOwnPageIsReadOnce() async throws {
+        let net = StorePage()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("keepsake-net-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let lib = try Library(path: dir.appendingPathComponent("library.sqlite").path, secrets: MemorySecrets(), transport: net)
+        let old = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://brewhaus.example.com/mug", title: "brewhaus.example.com", text: nil)).save)
+        // The first run only notes when the feature started: what's already here is left alone.
+        try await lib.finishSaves()
+        #expect(net.requests.isEmpty)
+        try await lib.trash([old.id])
+        try await Task.sleep(for: .milliseconds(20))
+        try await lib.updateSettings(["links": ["readShared": false]])
+        let s = try #require(try await lib.capture(product: Library.sharedProduct(url: "https://brewhaus.example.com/mug", title: "brewhaus.example.com", text: nil)).save)
+        try await lib.finishSaves()
+        #expect(net.requests.isEmpty, "off with Read links you share")
+        try await lib.updateSettings(["links": ["readShared": true]])
+        try await lib.finishSaves()
+        #expect(net.requests.map { $0.url?.absoluteString } == ["https://brewhaus.example.com/mug"])
+        #expect(net.requests.allSatisfy { $0.value(forHTTPHeaderField: "Cookie") == nil })
+        let after = try #require(try lib.save(s.id))
+        #expect(after.kind == "product")
+        #expect(after.title == "Stoneware Mug 12 oz")
+        #expect(after.price == 24)
+        // Read once.
+        try await lib.finishSaves()
+        #expect(net.requests.count == 1)
+    }
+
     @Test func allowlistFollowsSettings() {
         #expect(NetworkPolicy.allowedHosts(settings: [:], hasAIKey: true).isEmpty)
         #expect(NetworkPolicy.allowedHosts(settings: ["ai": ["on": true, "provider": "anthropic"]], hasAIKey: false).isEmpty, "no key, no AI")

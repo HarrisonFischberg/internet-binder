@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import 'fake-indexeddb/auto';
 import { undoFixes } from '../keepsake/src/shared/aiFix.js';
-import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink, linkProductPage } from '../keepsake/src/shared/understand.js';
+import { planUnderstanding, pageText, pagesToRead, contextFor, statedShare, understandItem, productFromHtml, planProduct, planTitle, titlePicture, planRecipe, recipeFromHtml, thinRecipe, wantsWebRecipe, recipeLink, recipePageText, importRecipeFromLink, linkProductPage, ownStorePage } from '../keepsake/src/shared/understand.js';
 import { understandWithAI, understandProductWithAI, understandTitleWithAI, findRecipeWithAI } from '../keepsake/src/ai/provider.js';
 import { sanitizeDetails } from '../keepsake/src/shared/kinds.js';
 import { createStore, memoryRecordBackend } from '../keepsake/src/shared/storage.js';
@@ -486,6 +486,37 @@ test('linkProductPage: the store page you paste becomes the save\'s shop page, f
   const priced = await store.addItem(post('lamp', { kind: 'product', collectionId: null, price: 80, currency: 'USD' }));
   await linkProductPage(store, priced.id, 'brewhaus.example.com/mug', { fetchPage: async () => page });
   assert.equal((await store.getItem(priced.id)).price, 80);
+});
+
+test('linkProductPage auto: the store page a product was saved from rebuilds the card once saved, keeps what you typed, and leaves an unreadable page alone', async () => {
+  const store = await linkStore();
+  const page = `<html><head><meta property="og:site_name" content="Brewhaus"><script type="application/ld+json">${JSON.stringify({ '@type': 'Product', name: 'Stoneware Mug 12 oz', brand: { name: 'Brewhaus' }, image: 'https://brewhaus.example.com/mug.jpg', offers: { price: '24.00', priceCurrency: 'USD' } })}</script></head><body>Hand-thrown stoneware.</body></html>`;
+  const it = await store.addItem({ type: 'product', kind: 'product', title: 'Mug | Brewhaus', url: 'https://brewhaus.example.com/mug', host: 'brewhaus.example.com', price: 20, currency: 'USD' });
+  assert.equal(ownStorePage(await store.getItem(it.id)), 'https://brewhaus.example.com/mug');
+  // A page that can't be read changes nothing and logs nothing.
+  let r = await linkProductPage(store, it.id, it.url, { fetchPage: async () => null, rewrite: true, auto: true });
+  assert.deepEqual([r.ok, r.read, r.logId], [true, false, null]);
+  assert.equal((await store.getItem(it.id)).details?.shopUrl ?? '', '');
+  r = await linkProductPage(store, it.id, it.url, { fetchPage: async () => page, rewrite: true, auto: true, deviceOnly: true });
+  let saved = await store.getItem(it.id);
+  assert.deepEqual([r.ok, r.read, saved.title, saved.price, saved.details.brand, saved.details.source], [true, true, 'Stoneware Mug 12 oz', 24, 'Brewhaus', 'page']);
+  // Built from its page now: not read again.
+  assert.equal(ownStorePage(saved), '');
+  // A title and price you typed stay.
+  const mine = await store.addItem({ type: 'product', kind: 'product', title: 'Mug | Brewhaus', url: 'https://brewhaus.example.com/mug2', host: 'brewhaus.example.com' });
+  await store.updateItem(mine.id, { title: 'Mum\'s birthday mug', price: 19, currency: 'USD' }, { by: 'user' });
+  await linkProductPage(store, mine.id, mine.url, { fetchPage: async () => page, rewrite: true, auto: true });
+  saved = await store.getItem(mine.id);
+  assert.deepEqual([saved.title, saved.price, saved.details.brand], ['Mum\'s birthday mug', 19, 'Brewhaus']);
+  // A store page the share sheet saved as a plain link becomes a product once its page says so.
+  const plain = await store.addItem({ type: 'product', kind: 'link', title: 'brewhaus.example.com', url: 'https://brewhaus.example.com/mug3', host: 'brewhaus.example.com' });
+  assert.equal(ownStorePage(await store.getItem(plain.id)), plain.url);
+  await linkProductPage(store, plain.id, plain.url, { fetchPage: async () => page, rewrite: true, auto: true });
+  saved = await store.getItem(plain.id);
+  assert.deepEqual([saved.kind, saved.title, saved.price], ['product', 'Stoneware Mug 12 oz', 24]);
+  assert.equal(ownStorePage({ kind: 'link', userFields: ['kind'], url: 'https://brewhaus.example.com/x' }), '');
+  // A social post isn't a store page.
+  assert.equal(ownStorePage({ kind: 'product', type: 'product', url: 'https://www.tiktok.com/@a/video/1' }), '');
 });
 
 test('linkProductPage rewrite: a link where you say which product it is rebuilds the card from that page, with AI details, and Undo', async () => {

@@ -36,6 +36,7 @@ struct RootView: View {
         }
         .overlay { CelebrationView() }
         .modifier(WorkCover(host: .root))
+        .modifier(SwipeCover())
         .modifier(NewCollectionPrompt())
         .task { await model.start() }
         .task { IconPicker.retireOldIcons() }
