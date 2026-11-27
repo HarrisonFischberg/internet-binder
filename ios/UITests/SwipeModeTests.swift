@@ -85,10 +85,13 @@ final class SwipeModeTests: XCTestCase {
         play(app)
         let title = app.staticTexts["swipe.title"].firstMatch.label
         app.buttons["swipe.move"].tap()
-        shot("swipe-move-menu")
-        app.buttons["New collection…"].tap()
-        let name = app.textFields["Name"]
+        let name = app.textFields["swipe.newCollection"]
         XCTAssertTrue(name.waitForExistence(timeout: 3))
+        // Every collection is listed, with how many there are, and the one it's in is marked.
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH[c] 'Your collections (6)'")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["It's here now"].exists)
+        shot("swipe-move-menu")
+        name.tap()
         name.typeText("Gift ideas")
         app.buttons["Create"].tap()
         XCTAssertTrue(app.navigationBars["2 of 4"].waitForExistence(timeout: 5))

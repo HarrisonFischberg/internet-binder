@@ -229,9 +229,8 @@ struct SwipeScreen: View {
     /// The save Fix with AI is reading.
     @State private var fixing: String?
     @State private var editing: Save?
-    /// The card a new collection is being named for, and the name so far.
-    @State private var naming: Save?
-    @State private var newName = ""
+    /// The card Move to is open for.
+    @State private var placing: Save?
     /// The top card is on its way to another collection.
     @State private var moving = false
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -316,15 +315,10 @@ struct SwipeScreen: View {
             }
         }
         .sheet(item: $editing) { EditSaveSheet(save: $0) }
-        .alert("New collection", isPresented: Binding(get: { naming != nil }, set: { if !$0 { naming = nil; newName = "" } })) {
-            TextField("Name", text: $newName)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") { if let save = naming { move(save, to: newName, new: true) } }
-                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
-        } message: {
-            Text("This save goes straight in.")
+        .sheet(item: $placing) { save in
+            SwipeMoveSheet(save: save) { destination, new in move(save, to: destination, new: new) }
         }
-        .task { if model.destinations.isEmpty { await model.loadDestinations() } }
+        .task { await model.loadDestinations() }
         // A run restored after iOS closed the app: nothing left of it (every save gone meanwhile) ends it.
         .task(id: model.loaded) {
             if model.loaded, cards.isEmpty, session.steps.isEmpty { model.swipe = nil }
@@ -418,29 +412,12 @@ struct SwipeScreen: View {
         .onChange(of: armed) { _, now in if now != 0, leaving == nil { Haptic.detent() } }
     }
 
-    /// Move: for a card that's in the wrong place. Every collection and Lifestyle view, and a new collection.
+    /// Move: for a card that's in the wrong place. Opens the list of every collection and Lifestyle view.
     private func moveMenu(_ top: Save) -> some View {
-        let places = model.destinations.filter { $0.value != top.collectionId && $0.value != "kind:\(top.kind)" }
-        return Menu {
-            Button("New collection…", systemImage: "plus") { naming = top }
-            Section("Collections") {
-                ForEach(places.filter { $0.group == "collection" }) { d in Button(d.label) { move(top, to: d.value) } }
-            }
-            Section("Lifestyle") {
-                ForEach(places.filter { $0.group != "collection" }) { d in Button(d.label) { move(top, to: d.value) } }
-            }
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: "folder").font(.body.weight(.semibold)).foregroundStyle(t.ink)
-                    .frame(width: 48, height: 48)
-                    .ksGlass(Circle())
-                if !typeSize.isAccessibilitySize { Text("Move").font(.footnote.weight(.medium)).foregroundStyle(t.inkMuted) }
-            }
-        }
-        .disabled(moving)
-        .accessibilityLabel("Move to another collection")
-        .accessibilityHint("For a save that's in the wrong place. Undo puts it back.")
-        .accessibilityIdentifier("swipe.move")
+        round("Move", symbol: "folder", size: 48, id: "swipe.move") { placing = top }
+            .disabled(moving)
+            .accessibilityLabel("Move to another collection")
+            .accessibilityHint("For a save that's in the wrong place. Undo puts it back.")
     }
 
     /// The card shrinks away while it's moved; `new` makes the collection first.
@@ -751,5 +728,100 @@ private struct SwipeKept: View {
         if x > 0 { parts.append("Moved \(x) to the Trash.") }
         if left > 0 { parts.append("\(left) left.") }
         return parts.joined(separator: " ")
+    }
+}
+
+/// Move to: every collection (A to Z, with search), a field to name a new one, and the Lifestyle views.
+private struct SwipeMoveSheet: View {
+    let save: Save
+    /// Where it goes: a destination's value, or the name of a collection to make first.
+    let move: (_ destination: String, _ new: Bool) -> Void
+    @Environment(LibraryModel.self) private var model
+    @Environment(\.ks) private var t
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var newName = ""
+
+    private var collections: [Destination] {
+        model.destinations.filter { $0.group == "collection" }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+    }
+    private var lifestyle: [Destination] { model.destinations.filter { $0.group != "collection" } }
+    private func matching(_ list: [Destination]) -> [Destination] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty ? list : list.filter { $0.label.localizedCaseInsensitiveContains(q) }
+    }
+    private func isHere(_ d: Destination) -> Bool { d.value == save.collectionId || d.value == "kind:\(save.kind)" }
+
+    var body: some View {
+        let found = matching(collections), kinds = matching(lifestyle)
+        NavigationStack {
+            List {
+                if query.isEmpty {
+                    Section("New collection") {
+                        HStack(spacing: 12) {
+                            TextField("Name", text: $newName)
+                                .submitLabel(.done)
+                                .onSubmit(create)
+                                .accessibilityIdentifier("swipe.newCollection")
+                            Button("Create", action: create)
+                                .font(.body.weight(.semibold))
+                                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                        .frame(minHeight: 44)
+                    }
+                }
+                if !found.isEmpty {
+                    Section(query.isEmpty ? "Your collections (\(collections.count))" : "Collections") {
+                        ForEach(found) { row($0) }
+                    }
+                }
+                if !kinds.isEmpty {
+                    Section("Lifestyle") { ForEach(kinds) { row($0) } }
+                }
+                if found.isEmpty && kinds.isEmpty {
+                    Section {
+                        Button("Create \u{201C}\(query.trimmingCharacters(in: .whitespaces))\u{201D}", systemImage: "plus") {
+                            dismiss()
+                            move(query, true)
+                        }
+                    } footer: {
+                        Text("No collection has that name yet.")
+                    }
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search collections")
+            .navigationTitle("Move to")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+        .tint(t.ink)
+        .presentationDetents([.large])
+        // Collections made or synced since the app opened are here too.
+        .task { await model.loadDestinations() }
+    }
+
+    private func row(_ d: Destination) -> some View {
+        Button {
+            dismiss()
+            move(d.value, false)
+        } label: {
+            HStack {
+                Text(d.label).foregroundStyle(t.ink)
+                Spacer(minLength: 8)
+                if isHere(d) { Text("It's here now").font(.footnote).foregroundStyle(t.inkMuted) }
+            }
+            .frame(minHeight: 30)
+            .contentShape(Rectangle())
+        }
+        .disabled(isHere(d))
+        .accessibilityIdentifier("swipe.moveRow")
+    }
+
+    private func create() {
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        dismiss()
+        move(name, true)
     }
 }
