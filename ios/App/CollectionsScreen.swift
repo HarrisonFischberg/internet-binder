@@ -29,7 +29,10 @@ struct CollectionsScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
+                    HStack(alignment: .bottom, spacing: 12) {
+                        ScreenHeader(title: "Collections", subtitle: "Your saves, sorted.")
+                        if showAll && !everything.isEmpty && !selecting { SwipePlayButton(title: "All saves", ids: everything.map(\.id)) }
+                    }
                     if !collected.isEmpty && !selecting {
                         Picker("Show", selection: $showAll) {
                             Text("Collections").tag(false)
@@ -169,7 +172,10 @@ struct CollectionScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    ScreenHeader(title: name, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
+                    HStack(alignment: .bottom, spacing: 12) {
+                        ScreenHeader(title: name, subtitle: saves.count == 1 ? "1 save" : "\(saves.count) saves")
+                        if !toBuy.isEmpty && !selecting { SwipePlayButton(title: name, ids: toBuy.map(\.id)) }
+                    }
                     if saves.isEmpty {
                         EmptyNote(symbol: "bag", text: "Nothing here yet. Move a save here from Review or its own screen.")
                     } else {

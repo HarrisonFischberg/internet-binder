@@ -122,6 +122,11 @@ struct KindScreen: View {
                 .accessibilityAddTraits(showMap ? .isSelected : [])
                 .accessibilityIdentifier("placesMapToggle")
             }
+            if !saves.isEmpty && !selecting && !onMap {
+                let sorted = sorts[view: "kind:\(kind)"].apply(saves)
+                SwipePlayButton(title: k.plural, ids: (sorted.filter { $0.status != "done" } + sorted.filter { $0.status == "done" }).map(\.id))
+                    .padding(.top, 8)
+            }
         }
     }
 }
@@ -142,7 +147,10 @@ struct ReviewScreen: View {
             TableBackground()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ScreenHeader(title: "Review", subtitle: "Internet Binder wasn't sure where these go")
+                    HStack(alignment: .bottom, spacing: 12) {
+                        ScreenHeader(title: "Review", subtitle: "Internet Binder wasn't sure where these go")
+                        if !saves.isEmpty { SwipePlayButton(title: "Review", ids: saves.map(\.id)) }
+                    }
                     if model.aiReady && !saves.isEmpty {
                         let asking = model.aiRun != nil
                         Button {

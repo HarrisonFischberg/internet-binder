@@ -55,7 +55,10 @@ struct WishListScreen: View {
             TableBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ScreenHeader(title: "Wish List", subtitle: subtitle)
+                    HStack(alignment: .bottom, spacing: 12) {
+                        ScreenHeader(title: "Wish List", subtitle: subtitle)
+                        if !rows.isEmpty { SwipePlayButton(title: "Wish List", ids: rows.map(\.id)) }
+                    }
                     if let list {
                         if rows.isEmpty {
                             EmptyNote(symbol: "gift", text: "Nothing to buy yet. Products you save show up here, with a button to find where each one costs least.")
@@ -527,6 +530,7 @@ struct ProductHelpMenu: View {
     @State private var one: WishList.One?
     @State private var naming: WishList.Row?
     @State private var linking = false
+    @State private var link = ""
 
     private var canFind: Bool { one?.keyReady == true && one?.searchReady == true }
 
@@ -560,18 +564,21 @@ struct ProductHelpMenu: View {
         .sheet(item: $naming) { row in
             WishNameSheet(row: row, canFind: canFind && model.dealRun == nil)
         }
-        .sheet(isPresented: $linking) { ProductLinkSheet(save: save) }
+        .sheet(isPresented: $linking, onDismiss: { link = "" }) { ProductLinkSheet(save: save, link: $link) }
     }
 }
 
 /// Add Product Link: paste the product's page in a store. The page is read once and becomes the save's shop
-/// page, and the card is rewritten from it (LibraryModel.rewriteProduct). Undo on the toast.
-private struct ProductLinkSheet: View {
+/// page, and the card is rewritten from it (LibraryModel.rewriteProduct). Undo on the toast. Play shows
+/// the same sheet as Add URL, and holds what's typed so it is still there after a trip to the browser.
+struct ProductLinkSheet: View {
     let save: Save
+    @Binding var link: String
+    var title = "Add Product Link"
+    var action = "Add Link"
     @Environment(LibraryModel.self) private var model
     @Environment(\.ks) private var t
     @Environment(\.dismiss) private var dismiss
-    @State private var link = ""
     @State private var working = false
     @State private var problem = ""
     @FocusState private var focused: Bool
@@ -614,7 +621,7 @@ private struct ProductLinkSheet: View {
                         .accessibilityIdentifier("productLink.problem")
                 }
                 Spacer(minLength: 0)
-                PrimarySlab(working ? "Reading the page…" : "Add Link", symbol: "link", kind: "product") { start() }
+                PrimarySlab(working ? "Reading the page…" : action, symbol: "link", kind: "product") { start() }
                     .overlay(alignment: .leading) {
                         if working { ProgressView().tint(t.onPrimary).padding(.leading, 24).accessibilityHidden(true) }
                     }
@@ -623,7 +630,7 @@ private struct ProductLinkSheet: View {
             }
             .padding(20)
             .background(TableBackground())
-            .navigationTitle("Add Product Link")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(working) } }
         }

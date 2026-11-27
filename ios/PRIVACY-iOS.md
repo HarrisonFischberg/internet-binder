@@ -61,6 +61,14 @@ Internet Binder has no server, no account, no analytics and no advertising. It c
   When the page can't be read, your provider is given the link and the save's title and searches the web
   for that page instead. The post's caption and picture are not sent. The name,
   price, picture, details and link are stored on the save; one Undo puts it back.
+- **A product's own store page**, for a product you save from a store's page (not a social post): after
+  the save, that one page is fetched once over https without cookies, for its product details (schema.org
+  Product), and the card's name, price, picture and details are rebuilt from it. The page's product name
+  and its visible text (up to 3,000 characters) are read for the summary and specs by Apple Intelligence
+  on the device; with Prefer my key on, by your own AI key's provider instead; with neither, by nothing.
+  What you typed yourself stays, and one Undo in the AI change log puts the save back. Settings → Links →
+  Read links you share turns it off. Update from its page (in Play) does the same when you tap it, read by
+  your own AI key's provider, or by Apple Intelligence when you have no key.
 - **Lookups** (each off until turned on): `nominatim.openstreetmap.org` (a place's name and city),
   `www.wikidata.org` (a film's title and year), `openlibrary.org` (a book's title and author); posters and
   covers load from Wikimedia Commons and `covers.openlibrary.org`.
