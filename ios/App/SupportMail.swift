@@ -11,7 +11,7 @@ enum SupportMail {
     /// Most log text put in the mailto: link; some email apps refuse or cut much longer links.
     private nonisolated static let logLimit = 4_000
     /// How many of the share sheet diary's newest lines go in the draft (about the last six shares).
-    private nonisolated static let diaryLines = 45
+    private nonisolated static let diaryLines = 60
 
     /// Opens the draft. If no email app opens, copies it instead and returns false.
     @MainActor static func send(problem: String) async -> Bool {

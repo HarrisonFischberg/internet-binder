@@ -69,6 +69,7 @@ final class ShareViewController: UIViewController {
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         ShareTrace.note(state.session, "memory warning")
+        ShareLibrary.trim()
     }
 }
 
@@ -88,7 +89,7 @@ enum ShareTrace {
     private static let logger = Logger(subsystem: "com.harrisonfischberg.keepsake.share", category: "sheet")
 
     static func note(_ session: String, _ event: String) {
-        let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(session.prefix(6)) \(event) (\(os_proc_available_memory() >> 20) MB left)"
+        let line = "\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(session.prefix(6)) \(event) (\(used()) MB used, \(os_proc_available_memory() >> 20) left)"
         logger.notice("\(line, privacy: .public)")
         queue.async {
             guard let file else { return }
@@ -98,6 +99,44 @@ enum ShareTrace {
             if lines.count > 300 { text = lines.suffix(200).joined(separator: "\n") + "\n" }
             try? Data(text.utf8).write(to: file, options: .atomic)
         }
+    }
+}
+
+extension ShareTrace {
+    /// What this process holds now, in MB, as iOS counts it against the extension's limit.
+    static func used() -> Int {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let ok = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        return ok == KERN_SUCCESS ? Int(info.phys_footprint >> 20) : 0
+    }
+}
+
+/// The one library this process reads and writes through. iOS keeps the extension running between
+/// shares, and each share used to open its own: the shared code (JavaScript, tens of MB once loaded)
+/// was then in memory twice while the last share's was still held, which left a share made soon after
+/// another with too little room, and iOS stopped it the moment it saved (the sheet blinked away).
+@MainActor
+enum ShareLibrary {
+    private static var kept: Library?
+
+    static func open() throws -> Library {
+        if let kept { return kept }
+        let library = try Library(tidy: false)
+        ThumbnailStore.shared.use(library)
+        kept = library
+        return library
+    }
+
+    /// It failed: the next share opens a new one.
+    static func drop() { kept = nil }
+
+    /// Gives back what finished work left behind: after a save, and when iOS says memory is short.
+    static func trim() {
+        kept?.trim()
+        URLCache.shared.removeAllCachedResponses()
     }
 }
 
@@ -178,8 +217,7 @@ final class ShareState {
         let shared = await SharedContent.read(from: items)
         ShareTrace.note(session, "read what was shared")
         do {
-            let library = try Library(tidy: false)
-            ThumbnailStore.shared.use(library)
+            let library = try ShareLibrary.open()
             self.library = library
             var product: [String: Any]
             // A post on X opened in Safari: X's page has no text until its script runs, so its embed data is read too.
@@ -239,10 +277,12 @@ final class ShareState {
                 picksSorted = picks.contains { result.likely.contains($0.value) }
             }
             ready = true
+            library.trim()
             UIAccessibility.post(notification: .announcement, argument: "Saved to \(destinationLabel)")
         } catch {
             phase = .failed(error.localizedDescription)
             ShareTrace.note(session, "failed")
+            ShareLibrary.drop()
             Haptic.refused()
             await endNotice()
         }
@@ -463,7 +503,11 @@ struct ShareCard: View {
     var body: some View {
         @Bindable var state = state
         ZStack {
-            TableBackground()
+            // The page's plain colour, not the app's moving table (TableBackground): that one is redrawn 24
+            // times a second into full-screen buffers, tens of MB on a phone, and with the shared code loaded
+            // it left a save so little room that iOS sometimes stopped the sheet as it saved. OrbitLines
+            // (still, drawn once) carries the look here.
+            t.table.ignoresSafeArea()
             OrbitLines()
             VStack(alignment: .leading, spacing: 16) {
                 status
