@@ -79,6 +79,30 @@ final class SwipeModeTests: XCTestCase {
         XCTAssertNotEqual(app.staticTexts["swipe.title"].firstMatch.label, first)
     }
 
+    /// Skip leaves a card for later: it goes without being kept or trashed, Undo brings it back, and it is
+    /// first again the next time you play.
+    func testSkipLeavesACardForNextTime() {
+        let app = launch()
+        play(app)
+        let first = app.staticTexts["swipe.title"].firstMatch.label
+        app.buttons["swipe.skip"].tap()
+        XCTAssertTrue(app.navigationBars["2 of 4"].waitForExistence(timeout: 3))
+        app.buttons["swipe.undo"].tap()
+        XCTAssertTrue(app.navigationBars["1 of 4"].waitForExistence(timeout: 3))
+        XCTAssertEqual(app.staticTexts["swipe.title"].firstMatch.label, first)
+        app.buttons["swipe.skip"].tap()
+        XCTAssertTrue(app.navigationBars["2 of 4"].waitForExistence(timeout: 3))
+        for _ in 0..<3 { app.buttons["swipe.keep"].tap(); usleep(500_000) }
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Kept 3. Skipped 1 for next time.'")).firstMatch.waitForExistence(timeout: 5))
+        shot("swipe-skipped-end")
+        app.buttons["swipe.done"].tap()
+        // Only the skipped one is left to decide.
+        XCTAssertEqual(app.buttons["swipe.play"].label, "Play Wish List")
+        app.buttons["swipe.play"].tap()
+        XCTAssertTrue(app.navigationBars["1 of 1"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["swipe.title"].firstMatch.label, first)
+    }
+
     /// A card in the wrong place moves to a new collection from Play, leaves the run, and Undo puts it back.
     func testMoveACardToANewCollection() {
         let app = launch()

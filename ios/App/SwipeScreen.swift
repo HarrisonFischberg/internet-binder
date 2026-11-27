@@ -12,6 +12,8 @@ struct SwipeSession: Codable, Equatable {
         /// Moved somewhere else rather than kept or trashed: the save as it was before (the fields a move
         /// changes, as JSON), so Undo puts it back exactly.
         var before: String?
+        /// Skipped: left as it is for now. It comes up again the next time you play.
+        var skipped: Bool?
     }
     /// "Wish List", or the collection's name.
     var title: String
@@ -29,7 +31,8 @@ struct SwipeSession: Codable, Equatable {
     /// Which library this belongs to (UI tests open a fresh one each launch).
     var library = SwipeSession.libraryName
 
-    var trashed: Int { steps.count(where: { !$0.kept && $0.before == nil }) }
+    var trashed: Int { steps.count(where: { !$0.kept && $0.before == nil && $0.skipped != true }) }
+    var skipped: Int { steps.count(where: { $0.skipped == true }) }
     var moved: Int { steps.count(where: { $0.before != nil }) }
     var total: Int { queue.count + steps.count }
 
@@ -135,11 +138,22 @@ extension LibraryModel {
         return await swipeMove(id, to: c.id)
     }
 
+    /// Skip: not now. The card leaves this run untouched and comes up again the next time you play.
+    func swipeSkip(_ id: String) {
+        guard var s = swipe, let i = s.queue.firstIndex(of: id) else { return }
+        s.queue.remove(at: i)
+        s.steps.append(.init(id: id, kept: false, skipped: true))
+        swipe = s
+        Haptic.pageTurned()
+    }
+
     /// Takes back the last card: out of the Trash, off the kept list or back where it was moved from, and
     /// on top again.
     func swipeUndo() async {
         guard let last = swipe?.steps.last else { return }
-        if let before = last.before {
+        if last.skipped == true {
+            // Nothing happened to the save: it only comes back on top.
+        } else if let before = last.before {
             guard let library, let was = try? JSONSerialization.jsonObject(with: Data(before.utf8)) as? [String: Any] else { return }
             do { _ = try await library.core.call("store.updateItem", [last.id, was, ["by": "undo"]]) } catch { return failed("Couldn't put it back. Try again.") }
             if swipe?.title == SwipeSession.wishList { try? await library.setWishHidden([last.id], false) }
@@ -399,6 +413,12 @@ struct SwipeScreen: View {
                 .padding(.top, 8)
                 .opacity(1 - 0.6 * abs(lean))
             Spacer(minLength: 8)
+            round("Skip", symbol: "forward.end", size: 48, id: "swipe.skip") { skip(top) }
+                .disabled(moving)
+                .padding(.top, 8)
+                .opacity(1 - 0.6 * abs(lean))
+                .accessibilityHint("Leaves it for now. It comes up again the next time you play.")
+            Spacer(minLength: 8)
             moveMenu(top)
                 .padding(.top, 8)
                 .opacity(1 - 0.6 * abs(lean))
@@ -406,7 +426,7 @@ struct SwipeScreen: View {
             round("Keep", symbol: "checkmark", size: 64, id: "swipe.keep", filled: true, grow: max(0, lean)) { decide(top, keep: true) }
                 .opacity(1 - 0.6 * max(0, -lean))
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 16)
         .disabled(leaving != nil)
         // The tick as the card passes the point where letting go decides.
         .onChange(of: armed) { _, now in if now != 0, leaving == nil { Haptic.detent() } }
@@ -421,6 +441,18 @@ struct SwipeScreen: View {
     }
 
     /// The card shrinks away while it's moved; `new` makes the collection first.
+    /// The card shrinks away, untouched.
+    private func skip(_ save: Save) {
+        guard !moving, leaving == nil else { return }
+        withAnimation(KSMotion.or(.easeIn(duration: 0.2), reduce: reduce)) { moving = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            model.swipeSkip(save.id)
+            moving = false
+            UIAccessibility.post(notification: .announcement, argument: "Skipped")
+        }
+    }
+
     private func move(_ save: Save, to destination: String, new: Bool = false) {
         guard !moving, leaving == nil else { return }
         withAnimation(KSMotion.or(.easeIn(duration: 0.2), reduce: reduce)) { moving = true }
@@ -721,11 +753,12 @@ private struct SwipeKept: View {
 
     /// "Kept 5. Moved 3 to the Trash. 2 left."
     private var summary: String {
-        let k = kept.count, x = session.trashed, m = session.moved
+        let k = kept.count, x = session.trashed, m = session.moved, later = session.skipped
         var parts: [String] = []
         if finished || k > 0 { parts.append("Kept \(k).") }
         if m > 0 { parts.append("Moved \(m) somewhere else.") }
         if x > 0 { parts.append("Moved \(x) to the Trash.") }
+        if later > 0 { parts.append("Skipped \(later) for next time.") }
         if left > 0 { parts.append("\(left) left.") }
         return parts.joined(separator: " ")
     }
